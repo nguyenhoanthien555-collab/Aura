@@ -1,0 +1,68 @@
+app:
+  name: Aura
+  version: 0.2.0
+
+llm:
+  provider: gemini
+  model: gemini-3.5-flash
+  temperature: 0.7
+  max_output_tokens: 4096
+
+memory:
+  history_limit: 20
+  # Long term memory. Profile facts are always worth their tokens;
+  # keyword recall is worth enabling once the transcript is long.
+  profile: true
+  recall: false
+  max_facts: 8
+  max_recalled: 3
+
+voice:
+  tts:
+    enabled: true
+    # auto = SAPI on Windows, pyttsx3 if installed, otherwise silent.
+    # Nothing is downloaded or installed.
+    provider: auto
+    voice: ""
+    rate: 0
+    volume: 100
+
+  stt:
+    enabled: false
+    provider: mock          # mock | whisper
+    model: base
+    language: ""
+    record_seconds: 5.0
+    wake_word: ""           # e.g. "aura" for hands free listening
+
+  microphone:
+    sample_rate: 16000
+    channels: 1
+    device: null
+
+vision:
+  # Off by default. Aura does not look at your screen unless told to.
+  enabled: true
+  min_interval: 2.0
+  capture_screen: false     # window titles only; true needs `mss`
+  monitor: 1
+
+avatar:
+  enabled: true
+  size: 160
+  scale: 1.0
+  opacity: 0.95
+  position: null            # null = bottom right
+  sprites_dir: ""           # idle.png / listening.png / thinking.png / speaking.png
+
+tools:
+  # Two locks, both must be opened: enable the system, then name each
+  # tool you permit. An empty allow list grants nothing.
+  enabled: false
+  allowed: []               # e.g. [current_time, read_file]
+  auto_approve: [safe]      # anything else asks first
+  allowed_paths: []         # directories read_file may touch
+  applications: {}          # nickname: executable
+
+logging:
+  level: INFO

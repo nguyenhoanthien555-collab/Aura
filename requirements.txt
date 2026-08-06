@@ -1,0 +1,25 @@
+# Core. Aura runs as a text companion with nothing but these.
+rich
+python-dotenv
+pyyaml
+sqlalchemy
+google-genai
+pytest
+
+# ----------------------------------------------------------------------
+# Optional extras
+#
+# Every one of these is imported lazily, inside the function that needs
+# it, and falls back to a mock when missing. Install only what you want.
+#
+#   sounddevice      microphone capture       voice.stt.enabled
+#   faster-whisper   local speech recognition voice.stt.provider: whisper
+#   pyttsx3          cross-platform speech    voice.tts.provider: pyttsx3
+#   mss              screen pixel capture     vision.capture_screen
+#
+# Windows speech output needs nothing extra: voice.tts.provider "auto"
+# uses the SAPI voices already on the machine.
+#
+# The avatar needs tkinter, which ships with the official Python
+# installer. Without a display it degrades to a null renderer.
+# ----------------------------------------------------------------------
