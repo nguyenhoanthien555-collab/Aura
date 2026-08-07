@@ -15,6 +15,7 @@ from core.logger import logger
 from voice.stt.microphone import Microphone, MockMicrophone, SystemMicrophone
 from voice.stt.provider import SpeechToTextProvider
 from voice.tts.provider import TTSProvider, is_provider_available
+from voice.tts.values import number_in
 
 
 # ----------------------------------------------------------------------
@@ -76,20 +77,143 @@ def _build_sapi(options: dict):
     from voice.tts.providers.sapi import SapiTTSProvider
 
     return SapiTTSProvider(
-        rate=options.get("rate", 0),
-        volume=options.get("volume", 100),
+        rate=_as_int(options.get("rate"), 0),
+        volume=_as_int(options.get("volume"), 100),
         voice=options.get("voice", ""),
     )
 
 
+def _as_int(value, fallback: int) -> int:
+    """
+    Read a number out of a setting that may have been written for Edge.
+
+    `voice.tts.rate` is one key shared by every provider, so it can hold
+    "+5%" when the user has been running Edge and then switches back to
+    SAPI. Reading the number out of it beats refusing to start, and "+5%"
+    genuinely does mean "a little faster" to both.
+
+    The parsing itself is `voice.tts.values.number_in`, which the Edge
+    provider uses to shift its own settings. Two forgiving number readers
+    in one package would eventually disagree about "+5%".
+    """
+
+    return number_in(value, fallback)
+
+
+def _as_float(value, fallback: float) -> float:
+    """
+    A seconds value out of config, falling back rather than raising.
+
+    Used for timeouts, where a nonsense value should cost the setting and
+    a negative one should not mean "give up instantly".
+    """
+
+    if isinstance(value, bool) or value is None:
+        return fallback
+
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        logger.warning("Unusable timeout %r, using %s", value, fallback)
+        return fallback
+
+    return seconds if seconds > 0 else fallback
+
+
 def _build_pyttsx(options: dict):
+    """
+    pyttsx3, with the shared rate setting translated into its units.
+
+    `voice.tts.rate` is written in SAPI's scale (-10..10, 0 = normal).
+    pyttsx3 wants words per minute, where 0 is not "normal" but silence,
+    so the value is mapped rather than passed through.
+    """
 
     from voice.tts.providers.pyttsx import Pyttsx3TTSProvider
 
+    volume = _as_int(options.get("volume"), 100)
+
     return Pyttsx3TTSProvider(
-        rate=options.get("rate"),
-        volume=options.get("volume"),
+        rate=_words_per_minute(options.get("rate")),
+        volume=max(0.0, min(1.0, volume / 100.0)),
         voice=options.get("voice", ""),
+    )
+
+
+# pyttsx3's own default, and roughly conversational speech.
+BASE_WORDS_PER_MINUTE = 200
+WORDS_PER_MINUTE_PER_STEP = 20
+
+
+def _words_per_minute(value) -> int | None:
+    """
+    Turn a shared rate setting into words per minute.
+
+    A value already in that range is taken literally; a small one is read
+    as a SAPI-style offset. Anything unusable returns None, which leaves
+    pyttsx3 on its own default.
+    """
+
+    rate = _as_int(value, 0)
+
+    if rate >= 50:
+        return rate
+
+    if rate == 0:
+        return None
+
+    return max(
+        50,
+        BASE_WORDS_PER_MINUTE + rate * WORDS_PER_MINUTE_PER_STEP,
+    )
+
+
+def _build_edge(options: dict):
+    """
+    Edge's neural voices.
+
+    Every value comes from config; the provider supplies the defaults so
+    that a half filled `voice.tts` section still produces Aura's voice
+    rather than a neutral one. `rate` and `pitch` are normalised inside
+    the provider, so a SAPI-era `rate: 0` is understood rather than
+    rejected.
+
+    Both timeouts are injected rather than left at their defaults. They
+    are the two ways this provider can hang - a network round trip that
+    never returns, and a player process that never exits - and a value
+    that cannot be reached from config is a value nobody can fix without
+    editing the source.
+    """
+
+    from voice.tts.audio import (
+        MAX_PLAYBACK_SECONDS,
+        SystemAudioPlayer,
+        create_audio_player,
+    )
+    from voice.tts.providers.edge import (
+        DEFAULT_VOICE,
+        SYNTHESIS_TIMEOUT,
+        EdgeTTSProvider,
+    )
+
+    playback_timeout = _as_float(
+        options.get("playback_timeout"), MAX_PLAYBACK_SECONDS
+    )
+
+    player = create_audio_player(enabled=bool(options.get("playback", True)))
+
+    # Only the real player has a timeout to set. A NullAudioPlayer is
+    # already instant.
+    if isinstance(player, SystemAudioPlayer):
+        player.timeout = playback_timeout
+
+    return EdgeTTSProvider(
+        voice=(options.get("voice") or "").strip() or DEFAULT_VOICE,
+        rate=options.get("rate", ""),
+        pitch=options.get("pitch", ""),
+        volume=options.get("volume", ""),
+        player=player,
+        timeout=_as_float(options.get("timeout"), SYNTHESIS_TIMEOUT),
     )
 
 
@@ -99,10 +223,16 @@ _TTS_BUILDERS = {
     "windows": _build_sapi,
     "pyttsx": _build_pyttsx,
     "pyttsx3": _build_pyttsx,
+    "edge": _build_edge,
+    "edge-tts": _build_edge,
+    "edge_tts": _build_edge,
 }
 
 
-# Order matters: SAPI first because on Windows it needs no install.
+# Order matters, and Edge is deliberately not in it. It is the best
+# sounding voice Aura has, but it needs a network round trip per reply,
+# and "auto" has to keep working on a machine that is offline. Ask for
+# it by name: `provider: edge`.
 _TTS_AUTO_ORDER = ["sapi", "pyttsx"]
 
 

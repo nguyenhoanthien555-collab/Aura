@@ -90,6 +90,12 @@ class AuraRuntime:
 
         self._stopping = True
 
+        # Plugins first: one may hold a subscription to something below,
+        # and an event delivered to a half torn down plugin is a crash
+        # nobody asked for.
+        if self.services.plugins is not None:
+            self.services.plugins.shutdown()
+
         if self.services.avatar is not None:
             self.services.avatar.stop()
 
@@ -250,3 +256,21 @@ class AuraRuntime:
 
         if self.services.tools is not None:
             self.services.tools.confirm = confirm
+
+    # ------------------------------------------------------------------
+    # Plugins
+    # ------------------------------------------------------------------
+
+    def plugin_status(self) -> dict[str, str]:
+        """
+        What each discovered plugin is doing: enabled, disabled or broken.
+
+        Read only. Enabling a plugin at runtime is deliberately not
+        offered - a plugin registers tools and subscribes to events during
+        `initialize`, and doing that half way through a conversation means
+        a capability appearing between one turn and the next.
+        """
+
+        plugins = self.services.plugins
+
+        return plugins.status() if plugins is not None else {}

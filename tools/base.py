@@ -9,11 +9,19 @@ The risk level is not decoration. ToolExecutor refuses to run anything
 above SAFE without an explicit approval, so a tool author cannot opt out
 of the permission system by forgetting to ask for it - the default for
 an unlabelled tool is the strictest one that still runs.
+
+Two shapes exist for the same reason LLM and StreamingLLM both do: the
+ABC is the convenience base class every builtin inherits from, and the
+Protocol is the structural contract that lets a plain object with the
+right attributes qualify without subclassing anything.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol, runtime_checkable
+
+from core.logger import logger
 
 
 class ToolRisk(str, Enum):
@@ -74,6 +82,72 @@ class Parameter:
     required: bool = True
 
 
+@runtime_checkable
+class ToolProtocol(Protocol):
+    """
+    Structural contract for anything that can act as a tool.
+
+    A plain object with these three members qualifies - no subclassing,
+    no import of this module at all. The ABC below is a convenience base
+    class, not the interface; this is the interface, and it is what the
+    registry and the executor type against.
+
+    Three members, and the shortness is the design. Every name here is a
+    constraint on every tool that will ever exist, including ones written
+    outside this repository, so the list is what the framework genuinely
+    reads:
+
+        name       the registry key, and what appears in logs and events
+        risk       gate 4 - what approval this call needs
+        execute    gate 5 - the call itself
+
+    Everything else a tool may offer is optional by absence, looked up
+    with getattr where it is used, exactly as `set_pacing` is on a TTS
+    provider and `stop` is on an audio player:
+
+        description           read by describe_tool()
+        parameters            read by describe_tool()
+        describe()            preferred over describe_tool() when present
+        required_parameters() consulted by gate 5 when present
+        timeout               overrides the policy timeout when present
+
+    runtime_checkable, so the registry can reject a malformed tool at the
+    boundary rather than failing halfway through a call. isinstance only
+    - a Protocol with non-method members cannot be used with issubclass,
+    and it checks that the attributes exist, never their types.
+    """
+
+    name: str
+    risk: ToolRisk
+
+    def execute(self, **arguments):
+        """Do the thing. Called only through ToolExecutor."""
+        ...
+
+
+def describe_tool(tool) -> str:
+    """
+    A tool's signature, whether or not it inherits `describe`.
+
+    The Protocol does not require `describe`, so the registry cannot
+    assume it. A tool that has one knows itself best and is asked first;
+    anything else gets the name and description the framework can see.
+    """
+
+    own = getattr(tool, "describe", None)
+
+    if callable(own):
+        try:
+            return own()
+        except Exception as error:
+            logger.debug("Tool %r could not describe itself: %s", tool, error)
+
+    name = getattr(tool, "name", "") or "unnamed"
+    description = getattr(tool, "description", "") or ""
+
+    return f"{name}: {description}".rstrip(": ")
+
+
 class Tool(ABC):
     """
     Base class for every tool.
@@ -81,6 +155,11 @@ class Tool(ABC):
     Subclasses set `name`, `description` and `risk`, then implement
     `execute`. `execute` may return a ToolResult or a plain string; the
     executor normalises both.
+
+    Convenience, not obligation. Everything the framework requires is in
+    ToolProtocol above, so a tool that would rather not inherit anything
+    does not have to; what this class adds is sensible defaults and the
+    parameter handling most tools would otherwise write themselves.
     """
 
     name: str = ""
@@ -91,6 +170,12 @@ class Tool(ABC):
     # instance, and an immutable default cannot be appended to by
     # accident from one instance and observed by another.
     parameters: tuple[Parameter, ...] = ()
+
+    # How long this tool may take, when the policy's limit is wrong for
+    # it. None defers to the policy, which is what almost every tool
+    # wants. 0 means unbounded, for the rare tool that legitimately
+    # blocks and gains nothing from a deadline it cannot enforce.
+    timeout: float | None = None
 
     @abstractmethod
     def execute(self, **arguments):

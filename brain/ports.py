@@ -10,7 +10,7 @@ Rules:
 - Any subsystem that satisfies one of these shapes can be plugged in.
 """
 
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Iterator, Protocol, Sequence, runtime_checkable
 
 
 @runtime_checkable
@@ -22,6 +22,30 @@ class LLM(Protocol):
     """
 
     def generate(self, prompt: str) -> str:
+        ...
+
+
+@runtime_checkable
+class StreamingLLM(Protocol):
+    """
+    An LLM that can also yield its reply in pieces.
+
+    A separate protocol rather than a second method on LLM, and that is
+    load bearing: LLM is runtime_checkable, so adding `stream` to it
+    would make isinstance fail for every provider that does not
+    implement one - including a user's own. Streaming is a capability
+    some providers have, not part of the contract all of them meet.
+
+    `brain.streaming.stream_of` is the usual way to consume either kind
+    without branching. The canonical definition lives there, next to the
+    helpers; it is re-exported here so the full set of brain contracts is
+    readable in one file.
+    """
+
+    def generate(self, prompt: str) -> str:
+        ...
+
+    def stream(self, prompt: str) -> Iterator[str]:
         ...
 
 

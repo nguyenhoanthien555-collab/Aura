@@ -10,6 +10,10 @@ place that decides what those facts mean for the face on screen.
     SpeakingEvent(active=True)    ->  SPEAKING
     ResponseEvent / ErrorEvent    ->  IDLE
 
+Mood is tracked alongside state but never derived from these events.
+Nothing infers it, here or anywhere else - the machine only follows
+MoodChangedEvent if something publishes one.
+
 The machine holds no window and draws nothing, so it is testable on its
 own with no display attached.
 """
@@ -21,6 +25,8 @@ from events.types import (
     ErrorEvent,
     Event,
     ListeningEvent,
+    Mood,
+    MoodChangedEvent,
     ResponseEvent,
     SpeakingEvent,
     StateChangedEvent,
@@ -29,6 +35,7 @@ from events.types import (
 
 
 Listener = Callable[[AuraState], None]
+MoodListener = Callable[[Mood], None]
 
 
 class AvatarStateMachine:
@@ -45,7 +52,13 @@ class AvatarStateMachine:
 
         self.state = AuraState.IDLE
 
+        # Mood is tracked, never derived. Nothing publishes
+        # MoodChangedEvent yet; when something does, this already
+        # follows it. See brain/mood.py.
+        self.mood = Mood.NEUTRAL
+
         self._listeners: list[Listener] = []
+        self._mood_listeners: list[MoodListener] = []
 
     # ------------------------------------------------------------------
     # Wiring
@@ -80,6 +93,23 @@ class AvatarStateMachine:
 
         return remove
 
+    def on_mood_change(self, listener: MoodListener) -> Callable[[], None]:
+        """
+        Call `listener` whenever the mood changes.
+
+        Separate from `on_change` because the two are independent: mood
+        does not move when state does, and a renderer that only animates
+        states can ignore this entirely.
+        """
+
+        self._mood_listeners.append(listener)
+
+        def remove() -> None:
+            if listener in self._mood_listeners:
+                self._mood_listeners.remove(listener)
+
+        return remove
+
     # ------------------------------------------------------------------
     # Transition
     # ------------------------------------------------------------------
@@ -87,12 +117,36 @@ class AvatarStateMachine:
     def handle(self, event: Event) -> AuraState:
         """Apply one event and return the resulting state."""
 
+        if isinstance(event, MoodChangedEvent):
+            self.set_mood(event.mood)
+            return self.state
+
         next_state = self._derive(event)
 
         if next_state is not None:
             self.set_state(next_state)
 
         return self.state
+
+    def set_mood(self, mood: Mood) -> None:
+        """
+        Record a mood, ignoring no-op changes.
+
+        Publishes nothing. MoodChangedEvent is already on the bus - the
+        machine is a subscriber here, not the owner, which is the one
+        difference from how it treats state.
+        """
+
+        if not isinstance(mood, Mood) or mood == self.mood:
+            return
+
+        self.mood = mood
+
+        for listener in list(self._mood_listeners):
+            try:
+                listener(mood)
+            except Exception:
+                pass
 
     def set_state(self, state: AuraState) -> None:
         """
@@ -144,4 +198,6 @@ class AvatarStateMachine:
         if isinstance(event, (ResponseEvent, ErrorEvent)):
             return AuraState.IDLE
 
+        # Everything else - transcripts, vision updates, mood - leaves
+        # the state where it is. Mood is handled in `handle`, above.
         return None

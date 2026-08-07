@@ -16,6 +16,12 @@ Gate 4 defaults to refusal. With no confirmation callback wired up, a
 SENSITIVE or DANGEROUS tool cannot run - not because it fails, but
 because nothing exists that could say yes. A model that asks Aura to
 delete a directory gets a denial, not a directory.
+
+Past the gates there is one more bound, and it is not a permission
+question: a tool that runs forever stops the conversation rather than
+failing it, so every call is given a deadline. What that can and cannot
+do is documented in tools/timeout.py, and the short version is that the
+wait is bounded, not the tool.
 """
 
 from dataclasses import dataclass, field
@@ -23,8 +29,14 @@ from typing import Callable
 
 from core.logger import logger
 from events.types import ToolCompletedEvent, ToolInvokedEvent
-from tools.base import Tool, ToolResult, ToolRisk, fail, ok
+from tools.base import ToolProtocol, ToolResult, ToolRisk, fail, ok
 from tools.registry import ToolRegistry
+from tools.timeout import (
+    DEFAULT_TOOL_TIMEOUT,
+    ToolTimeout,
+    call_with_timeout,
+    seconds_or,
+)
 
 
 # Values a tool argument is allowed to be. Anything else - a callable, an
@@ -35,7 +47,7 @@ MAX_ARGUMENT_DEPTH = 3
 MAX_OUTPUT = 4000
 
 
-Confirm = Callable[[Tool, dict], bool]
+Confirm = Callable[[ToolProtocol, dict], bool]
 
 
 @dataclass
@@ -53,6 +65,7 @@ class ToolPolicy:
     auto_approve: frozenset[ToolRisk] = field(
         default_factory=lambda: frozenset({ToolRisk.SAFE})
     )
+    timeout: float = DEFAULT_TOOL_TIMEOUT
 
     @classmethod
     def from_config(cls, config: dict | None) -> "ToolPolicy":
@@ -75,6 +88,7 @@ class ToolPolicy:
                 if str(name).strip()
             ),
             auto_approve=frozenset(risks),
+            timeout=seconds_or(config.get("timeout"), DEFAULT_TOOL_TIMEOUT),
         )
 
 
@@ -132,7 +146,7 @@ class ToolExecutor:
 
         return ""
 
-    def _approved(self, tool: Tool, arguments: dict) -> bool:
+    def _approved(self, tool: ToolProtocol, arguments: dict) -> bool:
         """
         Whether this specific call may proceed.
 
@@ -198,19 +212,49 @@ class ToolExecutor:
 
         return self._finish(name, self._run(tool, arguments))
 
-    def _run(self, tool: Tool, arguments: dict) -> ToolResult:
+    def _run(self, tool: ToolProtocol, arguments: dict) -> ToolResult:
+
+        name = getattr(tool, "name", "tool")
 
         try:
-            result = tool.execute(**arguments)
+            result = call_with_timeout(
+                lambda: tool.execute(**arguments),
+                timeout=self._timeout_for(tool),
+                name=name,
+            )
+
+        except ToolTimeout as error:
+            # Not "the tool failed" but "we stopped waiting". Said
+            # differently on purpose: the call may still be running, and
+            # a user who sees "timed out" knows to raise the limit rather
+            # than to go looking for a bug in the tool.
+            return fail(str(error), tool=name)
 
         except Exception as error:
-            logger.warning("Tool %s failed: %s", tool.name, error)
-            return fail(f"{type(error).__name__}: {error}", tool=tool.name)
+            logger.warning("Tool %s failed: %s", name, error)
+            return fail(f"{type(error).__name__}: {error}", tool=name)
 
         return self._normalise(tool, result)
 
+    def _timeout_for(self, tool: ToolProtocol) -> float:
+        """
+        How long this particular tool may take.
+
+        The policy sets the limit; a tool may override it, because only
+        the tool knows that it shells out to something slow. Optional by
+        absence, like every other capability in this codebase - a tool
+        without a `timeout` is not a broken tool.
+        """
+
+        own = getattr(tool, "timeout", None)
+
+        if own is None:
+            return self.policy.timeout
+
+        return seconds_or(own, self.policy.timeout)
+
     @staticmethod
-    def _normalise(tool: Tool, result) -> ToolResult:
+    def _normalise(tool: ToolProtocol, result) -> ToolResult:
         """Accept a ToolResult or a plain string from `execute`."""
 
         if isinstance(result, ToolResult):
@@ -233,7 +277,7 @@ class ToolExecutor:
     # Argument validation
     # ------------------------------------------------------------------
 
-    def _validate(self, tool: Tool, arguments: dict) -> str:
+    def _validate(self, tool: ToolProtocol, arguments: dict) -> str:
 
         if not isinstance(arguments, dict):
             return "arguments must be a mapping"
@@ -248,7 +292,7 @@ class ToolExecutor:
 
         missing = [
             name
-            for name in tool.required_parameters()
+            for name in self._required(tool)
             if name not in arguments
         ]
 
@@ -256,6 +300,34 @@ class ToolExecutor:
             return f"missing arguments: {', '.join(missing)}"
 
         return ""
+
+    @staticmethod
+    def _required(tool: ToolProtocol) -> list[str]:
+        """
+        Which arguments this tool insists on.
+
+        `required_parameters` is not on the Protocol, so a tool written
+        against the interface alone may not have one. No declaration
+        means no requirement, which is the honest reading: a tool that
+        never said what it needs has not been checked, and it will raise
+        a TypeError of its own if something is genuinely missing. That
+        becomes a failed result like any other.
+        """
+
+        declared = getattr(tool, "required_parameters", None)
+
+        if not callable(declared):
+            return []
+
+        try:
+            return list(declared() or [])
+        except Exception as error:
+            logger.debug(
+                "Tool %s could not list its parameters: %s",
+                getattr(tool, "name", tool),
+                error,
+            )
+            return []
 
     @classmethod
     def _is_plain(cls, value, depth: int) -> bool:

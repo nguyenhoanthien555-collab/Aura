@@ -5,6 +5,8 @@ Memory.
     ProfileStore            durable facts about the user
     KeywordRetriever        finds older messages worth recalling
     MemoryKnowledgeProvider what the brain actually asks
+    CompanionMemory         companion context: facts, preferences, goals,
+                            projects, coding style, highlights
 
 The conversation store and the knowledge provider are separate objects
 on purpose. One is the transcript; the other is what was learned from
@@ -21,6 +23,21 @@ from memory.retrieval import (
     tokenize,
 )
 from memory.knowledge import MemoryKnowledgeProvider
+from memory.companion import (
+    CodingStyle,
+    CompanionMemory,
+    Fact,
+    Goal,
+    Highlight,
+    InMemoryCodingStyle,
+    InMemoryFacts,
+    InMemoryGoals,
+    InMemoryHighlights,
+    InMemoryPreferences,
+    InMemoryProjects,
+    Preference,
+    Project,
+)
 
 __all__ = [
     "MemoryManager",
@@ -33,4 +50,17 @@ __all__ = [
     "NullRetriever",
     "tokenize",
     "MemoryKnowledgeProvider",
+    "CompanionMemory",
+    "Fact",
+    "Goal",
+    "Preference",
+    "Project",
+    "CodingStyle",
+    "Highlight",
+    "InMemoryFacts",
+    "InMemoryGoals",
+    "InMemoryPreferences",
+    "InMemoryProjects",
+    "InMemoryCodingStyle",
+    "InMemoryHighlights",
 ]

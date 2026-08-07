@@ -12,6 +12,7 @@ pytest
 # Every one of these is imported lazily, inside the function that needs
 # it, and falls back to a mock when missing. Install only what you want.
 #
+#   edge-tts         Aura's intended voice    voice.tts.provider: edge
 #   sounddevice      microphone capture       voice.stt.enabled
 #   faster-whisper   local speech recognition voice.stt.provider: whisper
 #   pyttsx3          cross-platform speech    voice.tts.provider: pyttsx3
@@ -19,6 +20,11 @@ pytest
 #
 # Windows speech output needs nothing extra: voice.tts.provider "auto"
 # uses the SAPI voices already on the machine.
+#
+# edge-tts is the one worth installing on purpose - warm, expressive
+# neural voices, no API key. It does need a network round trip per reply,
+# which is why "auto" never picks it. Playback uses PowerShell on Windows
+# and ffplay/mpv/afplay elsewhere; `playsound` is used when installed.
 #
 # The avatar needs tkinter, which ships with the official Python
 # installer. Without a display it degrades to a null renderer.

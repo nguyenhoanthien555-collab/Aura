@@ -39,3 +39,29 @@ class GeminiProvider(BaseProvider):
         # Providers must honour the `-> str` contract, so normalise here
         # rather than letting None leak into the pipeline and the database.
         return response.text or ""
+
+    def stream(self, prompt: str):
+        """
+        The same reply, yielded as it is generated.
+
+        Optional capability, found by `brain.streaming.can_stream` rather
+        than declared on the LLM protocol - a provider that only has
+        `generate` must remain a valid LLM, and widening that protocol
+        would break every one that does.
+
+        Empty pieces are skipped. Gemini emits them around safety
+        annotations and at the end of a stream, and a consumer counting
+        chunks should not see them as fragments of a reply.
+        """
+
+        stream = self.client.models.generate_content_stream(
+            model=self.model,
+            contents=prompt,
+        )
+
+        for piece in stream:
+
+            text = getattr(piece, "text", None)
+
+            if text:
+                yield text

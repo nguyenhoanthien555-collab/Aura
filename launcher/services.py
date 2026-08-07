@@ -31,11 +31,13 @@ class Services:
     memory: Any                      # memory.manager.MemoryManager
     profile: Any = None              # memory.profile.ProfileStore
     knowledge: Any = None            # MemoryKnowledgeProvider
+    companion: Any = None            # memory.companion.CompanionMemory
     vision: Any = None               # vision.manager.VisionManager
     tts: Any = None                  # voice.tts.engine.TTSEngine
     stt: Any = None                  # voice.stt.engine.SpeechToTextEngine
     tools: Any = None                # tools.executor.ToolExecutor
     avatar: Any = None               # avatar.controller.AvatarController
+    plugins: Any = None              # plugins.manager.PluginManager
 
     def summary(self) -> str:
         """One line description of what actually came up."""
@@ -47,6 +49,9 @@ class Services:
             f"vision={'on' if self.vision and self.vision.enabled else 'off'}",
             f"tools={len(self.tools.available()) if self.tools else 0}",
             f"avatar={type(self.avatar.renderer).__name__ if self.avatar else 'none'}",
+            # `is not None`, not truthiness: PluginManager defines __len__,
+            # so a manager that discovered nothing is falsy.
+            f"plugins={len(self.plugins.enabled) if self.plugins is not None else 0}",
         ]
 
         return "  ".join(parts)
@@ -69,7 +74,7 @@ def build_services(
 
     memory = _build_memory()
 
-    profile, knowledge = _build_knowledge(config, memory)
+    profile, knowledge, companion = _build_knowledge(config, memory)
 
     vision = _build_vision(config, bus)
 
@@ -83,6 +88,10 @@ def build_services(
 
     avatar = _build_avatar(config, bus)
 
+    # Last, deliberately. A plugin may register tools and subscribe to
+    # events, so everything it might touch has to exist first.
+    plugins = _build_plugins(config, bus, tools)
+
     return Services(
         config=config,
         bus=bus,
@@ -90,11 +99,13 @@ def build_services(
         memory=memory,
         profile=profile,
         knowledge=knowledge,
+        companion=companion,
         vision=vision,
         tts=tts,
         stt=stt,
         tools=tools,
         avatar=avatar,
+        plugins=plugins,
     )
 
 
@@ -122,23 +133,33 @@ def _build_engine(bus, vision, knowledge):
 
 def _build_knowledge(config: dict, memory):
     """
-    Long term memory.
+    Long term memory, combining two sources:
 
-    Shares the conversation session so profile facts and the transcript
-    live in one database file and one transaction scope.
+    1. ProfileStore + KeywordRetriever (SQLite-backed facts + recall)
+    2. CompanionMemory (in-memory companion context)
+
+    Both implement KnowledgeProvider and are composed into one that merges
+    their lines. Shares the conversation session so profile facts and the
+    transcript live in one database file and one transaction scope.
+
+    Returns (profile, knowledge, companion). The companion store is handed
+    back separately so a caller can populate it - nothing else can reach
+    inside the composite to do so.
     """
 
     settings = config.get("memory") or {}
 
     use_profile = bool(settings.get("profile", True))
     use_recall = bool(settings.get("recall", False))
+    use_companion = bool(settings.get("companion", True))
 
-    if not use_profile and not use_recall:
-        return None, None
+    if not use_profile and not use_recall and not use_companion:
+        return None, None, None
 
     from memory.knowledge import MemoryKnowledgeProvider
     from memory.profile import ProfileStore
     from memory.retrieval import KeywordRetriever, NullRetriever
+    from memory.companion import CompanionMemory
 
     session = getattr(memory, "session", None)
 
@@ -152,14 +173,62 @@ def _build_knowledge(config: dict, memory):
     else:
         retriever = NullRetriever()
 
-    knowledge = MemoryKnowledgeProvider(
+    # Profile facts + recalled messages
+    durable = MemoryKnowledgeProvider(
         profile=profile,
         retriever=retriever,
         max_facts=settings.get("max_facts", 8),
         max_recalled=settings.get("max_recalled", 3),
     )
 
-    return profile, knowledge
+    # Companion context (facts, preferences, goals, projects, style, highlights)
+    companion = CompanionMemory(
+        max_lines=settings.get("max_companion", 10),
+        max_highlights=settings.get("max_highlights", 3),
+    ) if use_companion else None
+
+    # Compose both into one knowledge provider
+    if companion:
+        knowledge = _CompositeKnowledge(durable, companion)
+    else:
+        knowledge = durable
+
+    return profile, knowledge, companion
+
+
+class _CompositeKnowledge:
+    """
+    Merges two knowledge providers into one.
+
+    ProfileStore lives in SQLite and persists across sessions.
+    CompanionMemory is in-memory and session-only for now.
+
+    Both are queried, both contribute lines, and max_lines is applied
+    after merging so neither source can crowd out the other.
+    """
+
+    def __init__(self, durable, companion, max_total: int = 20):
+        self.durable = durable
+        self.companion = companion
+        self.max_total = max_total
+
+    def get_knowledge(self, query: str) -> list[str]:
+
+        lines: list[str] = []
+
+        # Durable first: who the user is outranks what the session contains
+        try:
+            lines.extend(self.durable.get_knowledge(query) or [])
+        except Exception:
+            pass
+
+        # Companion second: projects, goals, preferences, coding style
+        try:
+            lines.extend(self.companion.get_knowledge(query) or [])
+        except Exception:
+            pass
+
+        return lines[: self.max_total]
 
 
 # ----------------------------------------------------------------------
@@ -277,6 +346,32 @@ def _build_tools(config: dict, bus):
     # when it starts, so approval always belongs to something that can
     # actually reach a human.
     return build_tools(config.get("tools") or {}, events=bus)
+
+
+def _build_plugins(config: dict, bus, tools):
+    """
+    Load and initialize plugins.
+
+    A plugin receives the bus and the tool *registry*, never the executor.
+    The distinction is the whole point: a plugin may add a capability, and
+    it may not decide whether that capability is permitted. Registration
+    and permission stay where they were - a plugin's tool still has to be
+    named in `tools.allowed` before it can run.
+
+    Returns None when nothing was discovered or configured, which keeps
+    `Services.plugins` falsy on a stock install.
+    """
+
+    settings = config.get("plugins") or {}
+
+    if not settings.get("enabled"):
+        return None
+
+    from plugins.factory import build_plugins
+
+    registry = getattr(tools, "registry", None)
+
+    return build_plugins(config, bus=bus, tools=registry)
 
 
 def _build_avatar(config: dict, bus):

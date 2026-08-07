@@ -11,7 +11,7 @@ allowed this" and a confusing "unknown tool".
 """
 
 from core.logger import logger
-from tools.base import Tool
+from tools.base import ToolProtocol
 from tools.executor import ToolExecutor, ToolPolicy
 from tools.registry import ToolRegistry
 
@@ -32,9 +32,9 @@ def build_registry(config: dict | None = None) -> ToolRegistry:
     return registry
 
 
-def _builtin_tools(config: dict) -> list[Tool]:
+def _builtin_tools(config: dict) -> list[ToolProtocol]:
 
-    tools: list[Tool] = []
+    tools: list[ToolProtocol] = []
 
     from tools.builtins.clock import CurrentTimeTool
 

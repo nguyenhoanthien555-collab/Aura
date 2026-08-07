@@ -14,6 +14,7 @@ vision provider and a knowledge provider. All default to None, so
 launcher is what supplies them.
 """
 
+from brain.consistency import IdentityAnchor, build_anchor
 from brain.conversation import ConversationManager
 from brain.ports import (
     ConversationStore,
@@ -25,6 +26,7 @@ from brain.ports import (
 from brain.prompt_builder import PromptBuilder
 from brain.response import Response
 from brain.router import BrainRouter
+from brain.style import ResponseStyler, build_styler
 from core.config import load_config
 from memory.manager import MemoryManager
 
@@ -39,6 +41,8 @@ class ChatEngine:
         events: EventPublisher | None = None,
         vision: VisionProvider | None = None,
         knowledge: KnowledgeProvider | None = None,
+        style: ResponseStyler | None = None,
+        identity: IdentityAnchor | None = None,
     ):
         """
         Create the chat engine with dependency injection.
@@ -55,6 +59,12 @@ class ChatEngine:
         if llm is None:
             llm = BrainRouter()
 
+        if style is None:
+            style = build_styler(self._style_config())
+
+        if identity is None:
+            identity = build_anchor(self._consistency_config())
+
         self.conversation = ConversationManager(
             memory=memory,
             builder=builder,
@@ -63,6 +73,8 @@ class ChatEngine:
             events=events,
             vision=vision,
             knowledge=knowledge,
+            style=style,
+            identity=identity,
         )
 
     @staticmethod
@@ -77,6 +89,33 @@ class ChatEngine:
         memory_config = config.get("memory") or {}
 
         return memory_config.get("history_limit", 20)
+
+    @staticmethod
+    def _personality_section(name: str) -> dict:
+        """
+        One subsection of `personality:`, or an empty one.
+
+        Shared by the style and consistency lookups so a missing
+        `personality:` block is tolerated in exactly one place.
+        """
+
+        config = load_config() or {}
+
+        personality = config.get("personality") or {}
+
+        return personality.get(name) or {}
+
+    @classmethod
+    def _style_config(cls) -> dict:
+        """The `personality.style` section, or an empty one."""
+
+        return cls._personality_section("style")
+
+    @classmethod
+    def _consistency_config(cls) -> dict:
+        """The `personality.consistency` section, or an empty one."""
+
+        return cls._personality_section("consistency")
 
     def chat(
         self,

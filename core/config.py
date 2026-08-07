@@ -50,6 +50,67 @@ DEFAULT_CONFIG = {
         "recall": False,
         "max_facts": 8,
         "max_recalled": 3,
+
+        # Companion memory: session-only context about the user (facts,
+        # preferences, goals, projects, coding style, highlights). On by
+        # default, in-memory only, no database.
+        "companion": True,
+        "max_companion": 10,
+        "max_highlights": 3,
+    },
+
+    "personality": {
+        # Who Aura is lives in prompts/personality.md, not here. This
+        # section only controls the style layer that sits on top of it.
+        "style": {
+            "enabled": True,
+
+            # Delete assistant boilerplate the model emitted out of
+            # habit: "Certainly!", "I apologize for the inconvenience",
+            # "Is there anything else I can help you with?".
+            #
+            # Subtractive only. It never rewrites a sentence and never
+            # touches anything inside code, so it cannot change what a
+            # reply says - only how much throat clearing surrounds it.
+            "strip_filler": True,
+
+            # Override the instruction added near the end of the prompt.
+            # Empty uses brain.style.DEFAULT_HINT.
+            "hint": "",
+
+            # How many recent opening phrases to remember, so she is
+            # told not to reuse them. 0 disables the tracking.
+            "avoid_repeats": 3,
+        },
+
+        # Character consistency over a long conversation.
+        #
+        # A personality described once at the top of the prompt gets
+        # further away with every turn, and the model starts answering
+        # like the transcript it has been reading rather than like Aura.
+        # This restates who she is *after* the transcript, where recency
+        # makes it stick.
+        #
+        # Prompt construction only. Nothing inspects or rewrites a reply.
+        "consistency": {
+            "enabled": True,
+
+            # Messages - not turns - before the reminder appears at all.
+            # A three exchange conversation has not drifted, so it costs
+            # zero tokens until it might have.
+            "after_messages": 6,
+
+            # Messages before the "stay consistent with what you already
+            # said" clause is added. Held back until there is enough
+            # transcript to actually contradict.
+            "contradiction_after": 20,
+
+            # Override the identity line. Empty uses
+            # brain.consistency.IDENTITY. The drift and contradiction
+            # clauses are not configurable - they are the guard itself,
+            # not flavour.
+            "anchor": "",
+        },
     },
 
     "voice": {
@@ -59,10 +120,41 @@ DEFAULT_CONFIG = {
             # "auto" picks the best voice this machine already has:
             # SAPI on Windows, pyttsx3 if installed, otherwise a silent
             # mock. It never installs or downloads anything.
+            #
+            # "edge" is the one worth switching to on purpose. It is
+            # Aura's intended voice - warm, expressive, conversational -
+            # but it needs `pip install edge-tts` and a network round
+            # trip per reply, so it is opt in rather than automatic.
             "provider": "auto",
+
+            # Empty means "whatever the provider considers its own
+            # voice". For Edge that is en-US-AvaMultilingualNeural.
             "voice": "",
-            "rate": 0,
+
+            # One scale shared by every provider, written the way Edge
+            # wants it. SAPI and pyttsx3 read the number out of it, so
+            # switching providers never needs this rewritten.
+            #
+            # Slightly quicker and slightly brighter than neutral: it
+            # reads as someone talking rather than narrating.
+            "rate": "+5%",
+            "pitch": "+10Hz",
             "volume": 100,
+
+            # Seconds to wait for Edge to return audio. This is a network
+            # round trip, so past this something is wrong and waiting
+            # only delays the fallback to a silent reply.
+            "timeout": 60.0,
+
+            # Seconds before a playback process is assumed stuck. A guard
+            # against a hung player, not an expected speech length.
+            "playback_timeout": 300.0,
+
+            # Set false to synthesise without playing - useful when
+            # something downstream owns the audio, and the reason the
+            # player is injected rather than constructed inside the
+            # provider.
+            "playback": True,
         },
 
         "stt": {
@@ -123,12 +215,41 @@ DEFAULT_CONFIG = {
         # attached it simply cannot run.
         "auto_approve": ["safe"],
 
+        # Seconds a single tool call may take before Aura stops waiting.
+        # The wait is bounded, not the tool: a hung call is abandoned
+        # rather than killed, because killing a thread mid-write leaves
+        # locks held and files half written. 0 removes the bound.
+        "timeout": 30.0,
+
         # Directories read_file and list_directory may touch. Empty
         # means those tools are not even registered.
         "allowed_paths": [],
 
         # Nickname to executable. The only programs Aura can launch.
         "applications": {},
+    },
+
+    "plugins": {
+        # Two locks, the same shape tools use. A plugin has to be
+        # discovered, and its name has to appear here.
+        #
+        # A list enables exactly those names. `true` enables everything
+        # found, which is convenient while developing a plugin and a bad
+        # idea afterwards. An empty list is a deliberate "none", which is
+        # different from having never configured this at all.
+        "enabled": [],
+
+        # An extra directory to search, alongside plugins/builtins.
+        # Empty means only bundled plugins are considered.
+        "directory": "",
+
+        # Per plugin settings, keyed by plugin name. Each plugin receives
+        # only its own entry, never this whole map.
+        #
+        #   config:
+        #     session_stats:
+        #       format: "%d turns in %s"
+        "config": {},
     },
 
     "logging": {

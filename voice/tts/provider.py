@@ -26,10 +26,10 @@ def is_provider_available(provider) -> bool:
     Best effort availability check.
 
     `is_available` is optional in the protocol, so a provider that does
-    not define it is assumed to work. A provider that defines it and
-    raises is treated as unavailable rather than propagating the error -
-    availability checks run during startup, where a crash is costly and
-    a missing voice is not.
+    not define it is assumed to work.
+
+    A provider that defines it and raises is treated as unavailable rather
+    than propagating the error.
     """
 
     check = getattr(provider, "is_available", None)
@@ -39,5 +39,6 @@ def is_provider_available(provider) -> bool:
 
     try:
         return bool(check())
+
     except Exception:
         return False
