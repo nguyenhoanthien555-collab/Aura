@@ -6,6 +6,29 @@ import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 
+/**
+ * Sealed result type for gesture dispatch, distinguishing between
+ * rejection, completion, cancellation, timeout, and exceptions.
+ */
+sealed class GestureResult {
+    object Completed : GestureResult()
+    object Cancelled : GestureResult()
+    object DispatchRejected : GestureResult()
+    object Timeout : GestureResult()
+    class Error(val exception: Exception) : GestureResult()
+
+    val isSuccess: Boolean get() = this is Completed
+
+    override fun toString(): String = when (this) {
+        is Completed -> "COMPLETED"
+        is Cancelled -> "CANCELLED"
+        is DispatchRejected -> "DISPATCH_REJECTED"
+        is Timeout -> "TIMEOUT"
+        is Error -> "ERROR(${exception.message})"
+    }
+}
+
+
 class AuraActionExecutor(
     private val service: AccessibilityService
 ) {
@@ -113,6 +136,36 @@ class AuraActionExecutor(
         return if (totalWeight > 0.0) score / totalWeight else 0.0
     }
 
+    /**
+     * Logs detailed diagnostic information about a target node for debugging.
+     */
+    fun logNodeDiagnostics(tag: String, nodeId: String, node: AccessibilityNodeInfo?, meta: AccessibilityNode?) {
+        if (node == null && meta == null) {
+            Log.d(tag, "Target node=$nodeId  [UNRESOLVED - node not found in current tree]")
+            return
+        }
+
+        val bounds = android.graphics.Rect()
+        node?.getBoundsInScreen(bounds)
+
+        val displayMetrics = service.resources.displayMetrics
+
+        Log.d(tag, buildString {
+            appendLine("Target node=$nodeId")
+            appendLine("  class=${node?.className}")
+            appendLine("  text=${node?.text}")
+            appendLine("  contentDescription=${node?.contentDescription}")
+            appendLine("  clickable=${node?.isClickable}")
+            appendLine("  enabled=${node?.isEnabled}")
+            appendLine("  visibleToUser=${node?.isVisibleToUser}")
+            appendLine("  bounds=[$bounds]")
+            appendLine("  display=(${displayMetrics.widthPixels}x${displayMetrics.heightPixels})")
+            if (meta != null) {
+                append("  meta.bounds=${meta.bounds}")
+            }
+        })
+    }
+
     fun executeWithNode(
         action: AgentAction,
         resolvedNode: AccessibilityNodeInfo?,
@@ -133,7 +186,7 @@ class AuraActionExecutor(
             }
             "click" -> {
                 val node = resolvedNode ?: return false
-                clickWithRecovery(node, resolvedNodeMeta?.bounds)
+                clickWithRecovery(node, resolvedNodeMeta, action.nodeId ?: "unknown")
             }
             "long_click" -> {
                 val node = resolvedNode ?: return false
@@ -230,38 +283,54 @@ class AuraActionExecutor(
         }
     }
 
-    private fun clickWithRecovery(node: AccessibilityNodeInfo, bounds: List<Int>?): Boolean {
+    private fun clickWithRecovery(node: AccessibilityNodeInfo, meta: AccessibilityNode?, nodeId: String): Boolean {
         // 1. Try normal click on the node
-        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-            Log.d("AuraActionExecutor", "Click succeeded via standard performAction.")
+        val clickResult = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        Log.d("AuraActionExecutor", "CLICK node=$nodeId  ACTION_CLICK result=$clickResult")
+        if (clickResult) {
             return true
         }
 
         // 2. Try click on clickable parent
         val parent = getClickableParent(node)
+        val parentFound = parent != null
+        var parentResult = false
         if (parent != null) {
-            val parentSuccess = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            parentResult = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             parent.recycle()
-            if (parentSuccess) {
-                Log.d("AuraActionExecutor", "Click succeeded via clickable parent.")
-                return true
-            }
+        }
+        Log.d("AuraActionExecutor", "CLICK node=$nodeId  clickable-parent found=$parentFound  parent-click result=$parentResult")
+        if (parentResult) {
+            return true
         }
 
         // 3. Try coordinate-based gesture tap at the center of bounds
+        val bounds = meta?.bounds
         if (bounds != null && bounds.size >= 4) {
             val cx = (bounds[0] + bounds[2]) / 2
             val cy = (bounds[1] + bounds[3]) / 2
-            if (cx > 0 && cy > 0) {
-                Log.d("AuraActionExecutor", "Attempting gesture tap at coordinate: ($cx, $cy)")
-                if (performTapGesture(cx, cy)) {
-                    Log.d("AuraActionExecutor", "Click succeeded via gesture tap.")
+
+            val displayMetrics = service.resources.displayMetrics
+            val screenW = displayMetrics.widthPixels
+            val screenH = displayMetrics.heightPixels
+
+            Log.d("AuraActionExecutor", "CLICK node=$nodeId  gesture coordinates=($cx,$cy)  display=(${screenW}x${screenH})  bounds=$bounds")
+
+            // Validate coordinates are within screen bounds
+            if (cx in 1 until screenW && cy in 1 until screenH) {
+                val gestureResult = performTapGesture(cx, cy)
+                Log.d("AuraActionExecutor", "CLICK node=$nodeId  dispatchGesture result=$gestureResult")
+                if (gestureResult.isSuccess) {
                     return true
                 }
+            } else {
+                Log.w("AuraActionExecutor", "CLICK node=$nodeId  gesture coordinates ($cx,$cy) outside screen bounds (${screenW}x${screenH}). Skipping gesture.")
             }
+        } else {
+            Log.d("AuraActionExecutor", "CLICK node=$nodeId  no valid bounds for gesture fallback. bounds=$bounds")
         }
 
-        Log.e("AuraActionExecutor", "Click recovery failed completely.")
+        Log.e("AuraActionExecutor", "CLICK node=$nodeId  all recovery mechanisms exhausted: ACTION_CLICK=$clickResult, parent=$parentResult, gesture=failed/skipped")
         return false
     }
 
@@ -278,37 +347,66 @@ class AuraActionExecutor(
         return null
     }
 
-    private fun performTapGesture(x: Int, y: Int): Boolean {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            val path = android.graphics.Path().apply {
-                moveTo(x.toFloat(), y.toFloat())
-            }
-            val gestureDescription = android.accessibilityservice.GestureDescription.Builder()
-                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
-                .build()
+    /**
+     * Dispatches a tap gesture at the given screen coordinates.
+     *
+     * Returns a typed [GestureResult] distinguishing:
+     * - DispatchRejected: dispatchGesture() returned false
+     * - Completed: callback.onCompleted() fired
+     * - Cancelled: callback.onCancelled() fired
+     * - Timeout: latch timed out (neither callback fired)
+     * - Error: an exception occurred
+     */
+    fun performTapGesture(x: Int, y: Int): GestureResult {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N) {
+            Log.w("AuraActionExecutor", "Gesture API not available below API 24.")
+            return GestureResult.DispatchRejected
+        }
 
-            var success = false
-            val latch = java.util.concurrent.CountDownLatch(1)
+        val path = android.graphics.Path().apply {
+            moveTo(x.toFloat(), y.toFloat())
+        }
+        val gestureDescription = android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
+            .build()
 
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val resultRef = java.util.concurrent.atomic.AtomicReference<GestureResult>(GestureResult.Timeout)
+
+        val dispatched = try {
             service.dispatchGesture(gestureDescription, object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: android.accessibilityservice.GestureDescription?) {
-                    success = true
+                    resultRef.set(GestureResult.Completed)
                     latch.countDown()
                 }
                 override fun onCancelled(gestureDescription: android.accessibilityservice.GestureDescription?) {
-                    success = false
+                    resultRef.set(GestureResult.Cancelled)
                     latch.countDown()
                 }
             }, null)
-
-            try {
-                latch.await(2000, java.util.concurrent.TimeUnit.MILLISECONDS)
-            } catch (e: InterruptedException) {
-                Log.e("AuraActionExecutor", "Gesture dispatch interrupted: $e")
-            }
-            return success
+        } catch (e: Exception) {
+            Log.e("AuraActionExecutor", "dispatchGesture threw exception: $e")
+            return GestureResult.Error(e)
         }
-        return false
+
+        if (!dispatched) {
+            Log.w("AuraActionExecutor", "dispatchGesture returned false — gesture rejected by system at ($x,$y)")
+            return GestureResult.DispatchRejected
+        }
+
+        try {
+            val completed = latch.await(3000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            if (!completed) {
+                Log.w("AuraActionExecutor", "Gesture callback timed out after 3000ms at ($x,$y)")
+                return GestureResult.Timeout
+            }
+        } catch (e: InterruptedException) {
+            Log.e("AuraActionExecutor", "Gesture latch interrupted: $e")
+            return GestureResult.Error(e)
+        }
+
+        return resultRef.get()
+
     }
 
     private fun findScrollableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {

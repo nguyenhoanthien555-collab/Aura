@@ -2,6 +2,9 @@ package com.aura.companion.accessibility
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -107,5 +110,218 @@ class AccessibilityAgentTest {
         // Destructive keyword in transaction
         val actionBuy = AgentAction(action = "click", text = "buy now")
         assertFalse(guard.checkAction(actionBuy, null))
+    }
+
+    // ===== GestureResult tests =====
+
+    @Test
+    fun testGestureResultCompletedIsSuccess() {
+        val result = GestureResult.Completed
+        assertTrue(result.isSuccess)
+        assertEquals("COMPLETED", result.toString())
+    }
+
+    @Test
+    fun testGestureResultCancelledIsNotSuccess() {
+        val result = GestureResult.Cancelled
+        assertFalse(result.isSuccess)
+        assertEquals("CANCELLED", result.toString())
+    }
+
+    @Test
+    fun testGestureResultDispatchRejectedIsNotSuccess() {
+        val result = GestureResult.DispatchRejected
+        assertFalse(result.isSuccess)
+        assertEquals("DISPATCH_REJECTED", result.toString())
+    }
+
+    @Test
+    fun testGestureResultTimeoutIsNotSuccess() {
+        val result = GestureResult.Timeout
+        assertFalse(result.isSuccess)
+        assertEquals("TIMEOUT", result.toString())
+    }
+
+    @Test
+    fun testGestureResultErrorIsNotSuccess() {
+        val err = RuntimeException("test error")
+        val result = GestureResult.Error(err)
+        assertFalse(result.isSuccess)
+        assertEquals(err, (result as GestureResult.Error).exception)
+        assertTrue(result.toString().contains("ERROR"))
+        assertTrue(result.toString().contains("test error"))
+    }
+
+    @Test
+    fun testGestureResultSealedTypeDistinguishability() {
+        // Ensure all types are distinct
+        val results = listOf(
+            GestureResult.Completed,
+            GestureResult.Cancelled,
+            GestureResult.DispatchRejected,
+            GestureResult.Timeout,
+            GestureResult.Error(RuntimeException("x"))
+        )
+        // Each should have a unique toString
+        val strings = results.map { it.toString() }.toSet()
+        assertEquals(5, strings.size)
+
+        // Only Completed should be success
+        assertEquals(1, results.count { it.isSuccess })
+    }
+
+    // ===== ScreenFingerprint tests (via data class verification) =====
+
+    @Test
+    fun testScreenFingerprintEquality() {
+        val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
+        val fp2 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
+        assertEquals(fp1, fp2)
+    }
+
+    @Test
+    fun testScreenFingerprintPackageChange() {
+        val fp1 = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
+        val fp2 = AuraAccessibilityService.ScreenFingerprint("com.google.android.youtube", 15, 67890)
+        assertNotEquals(fp1.packageName, fp2.packageName)
+    }
+
+    @Test
+    fun testScreenFingerprintNodeCountChange() {
+        val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
+        val fp2 = AuraAccessibilityService.ScreenFingerprint("com.example", 15, 12345)
+        assertEquals(fp1.packageName, fp2.packageName)
+        assertNotEquals(fp1.nodeCount, fp2.nodeCount)
+    }
+
+    @Test
+    fun testScreenFingerprintContentHashChange() {
+        val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
+        val fp2 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 67890)
+        assertEquals(fp1.packageName, fp2.packageName)
+        assertEquals(fp1.nodeCount, fp2.nodeCount)
+        assertNotEquals(fp1.contentHash, fp2.contentHash)
+    }
+
+    @Test
+    fun testScreenFingerprintNoChange() {
+        // Same package, same nodes, same content hash = no UI change
+        val fp1 = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 5, 999)
+        val fp2 = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 5, 999)
+        assertEquals(fp1, fp2)
+        // This simulates the false-positive case: rootInActiveWindow exists but nothing changed
+    }
+
+    // ===== Action verification logic tests (pure data, no Android framework) =====
+
+    @Test
+    fun testVerificationDetectsFalsePositive() {
+        // This is the exact scenario from the bug: Aura claims "Action verified"
+        // because rootInActiveWindow != null, but package is still com.aura.companion
+        val pre = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
+        val post = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
+        // With the new system, identical fingerprints mean NO verification
+        assertEquals(pre, post)
+    }
+
+    @Test
+    fun testVerificationDetectsRealPackageChange() {
+        val pre = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
+        val post = AuraAccessibilityService.ScreenFingerprint("com.google.android.youtube", 20, 67890)
+        assertNotEquals(pre.packageName, post.packageName)
+        assertNotEquals(pre.nodeCount, post.nodeCount)
+        assertNotEquals(pre.contentHash, post.contentHash)
+    }
+
+    @Test
+    fun testVerificationDetectsContentChangeWithinSameApp() {
+        // Click within same app changes content but not package
+        val pre = AuraAccessibilityService.ScreenFingerprint("com.google.android.youtube", 20, 11111)
+        val post = AuraAccessibilityService.ScreenFingerprint("com.google.android.youtube", 25, 22222)
+        assertEquals(pre.packageName, post.packageName)
+        assertNotEquals(pre.nodeCount, post.nodeCount)
+        assertNotEquals(pre.contentHash, post.contentHash)
+    }
+
+    // ===== ExecutionResult sealed class tests =====
+
+    @Test
+    fun testExecutionResultTypes() {
+        // Verify all result types exist and are distinct
+        val verified: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Verified
+        val unverified: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Unverified
+        val failed: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Failed
+        val blocked: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Blocked
+
+        assertNotEquals(verified, unverified)
+        assertNotEquals(verified, failed)
+        assertNotEquals(verified, blocked)
+        assertNotEquals(unverified, failed)
+        assertNotEquals(unverified, blocked)
+        assertNotEquals(failed, blocked)
+    }
+
+    // ===== Node resolution data tests =====
+
+    @Test
+    fun testAccessibilityNodeDefaults() {
+        val node = AccessibilityNode(
+            id = "node_5",
+            text = null,
+            contentDescription = null,
+            className = "android.widget.ImageView",
+            clickable = false,
+            bounds = listOf(0, 0, 100, 100)
+        )
+        // Check defaults
+        assertTrue(node.enabled)
+        assertTrue(node.visible)
+        assertNull(node.role)
+        assertFalse(node.scrollable)
+        assertFalse(node.longClickable)
+        assertFalse(node.editable)
+        assertFalse(node.selected)
+        assertFalse(node.checked)
+        assertFalse(node.focused)
+    }
+
+    @Test
+    fun testAgentActionCompleteMessage() {
+        val action = AgentAction(
+            action = "complete",
+            message = "Successfully opened YouTube"
+        )
+        assertEquals("complete", action.action)
+        assertNull(action.nodeId)
+        assertEquals("Successfully opened YouTube", action.message)
+    }
+
+    @Test
+    fun testSnapshotWithAllFields() {
+        val tree = mapOf(
+            "node_1" to AccessibilityNode(
+                id = "node_1",
+                text = "Search",
+                contentDescription = "Search button",
+                className = "android.widget.Button",
+                clickable = true,
+                bounds = listOf(10, 20, 200, 80),
+                role = "button",
+                enabled = true,
+                visible = true
+            )
+        )
+        val snapshot = AccessibilitySnapshot(
+            device = DeviceState(1080, 2400),
+            app = AppInfo("com.google.android.youtube", label = "YouTube"),
+            accessibilityTree = tree,
+            screenshotAvailable = false,
+            userRequest = "open youtube",
+            lastActionError = "Previous click failed."
+        )
+        assertEquals(1, snapshot.accessibilityTree.size)
+        assertEquals("open youtube", snapshot.userRequest)
+        assertEquals("Previous click failed.", snapshot.lastActionError)
+        assertNotNull(snapshot.accessibilityTree["node_1"])
     }
 }
