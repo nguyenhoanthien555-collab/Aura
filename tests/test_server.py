@@ -87,12 +87,21 @@ def isolated_memory():
 def client(isolated_memory):
     """Test client over a runtime wired to the mock provider."""
 
+    # General route tests describe the unauthenticated development mode.
+    # Keep that contract independent of a developer's real `.env`; the
+    # `auth_enabled` fixture below covers the authenticated path explicitly.
+    previous_token = server_config.settings.auth_token
+    server_config.settings.auth_token = ""
+
     init_runtime(dict(TEST_CONFIG), memory=isolated_memory)
 
-    with TestClient(app) as test_client:
-        yield test_client
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        shutdown_runtime()
+        server_config.settings.auth_token = previous_token
 
-    shutdown_runtime()
 
 
 @pytest.fixture
@@ -105,6 +114,21 @@ def auth_enabled():
     yield server_config.settings.auth_token
 
     server_config.settings.auth_token = previous
+
+
+# ----------------------------------------------------------------------
+# Deployment configuration
+# ----------------------------------------------------------------------
+
+def test_render_port_takes_precedence_over_the_namespaced_local_port(monkeypatch):
+    """Render injects `PORT`; local Docker may still set the old name."""
+
+    monkeypatch.setenv("PORT", "14321")
+    monkeypatch.setenv("AURA_SERVER_PORT", "8000")
+
+    settings = server_config.ServerSettings(_env_file=None)
+
+    assert settings.port == 14321
 
 
 # ----------------------------------------------------------------------
@@ -124,6 +148,10 @@ def test_health_reports_a_running_runtime(client):
     assert data["uptime_seconds"] >= 0
     assert data["runtime"]["llm_provider"] == "mock"
     assert data["runtime"]["memory"] == "connected"
+
+
+def test_root_accepts_render_head_health_probes(client):
+    assert client.head("/").status_code == 200
 
 
 def test_health_does_not_start_a_second_runtime(client):

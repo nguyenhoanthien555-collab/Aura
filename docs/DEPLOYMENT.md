@@ -21,21 +21,21 @@ This document covers deploying Aura Cloud Core to a $0/month hosting platform. T
 - `.env` with `AURA_SERVER_AUTH_TOKEN` and provider keys
 - `AURA_SERVER_CORS_ORIGINS` set to your Android app's origin (or `*` for testing)
 
-## Option 1: Render (recommended for simplicity)
+## Option 1: Render Python Web Service (recommended for Gemini)
 
 ### 1. Create a Web Service
 
 1. Connect your GitHub repo to Render
 2. New → Web Service → select the repo
 3. Settings:
-   - **Runtime**: Docker
-   - **Build command**: (empty — uses `Dockerfile`)
-   - **Start command**: (empty — uses `CMD` in Dockerfile)
-   - **Port**: 8000
+   - **Runtime**: Python
+   - **Build command**: `pip install -r requirements-server.txt`
+   - **Start command**: `python -m server.main`
+   - Do not set a port manually. Render supplies `PORT`; Aura reads it and
+     binds `0.0.0.0:$PORT`.
 4. Environment variables (all from `.env`):
    - `AURA_SERVER_AUTH_TOKEN` — **required**, generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
    - `GEMINI_API_KEY` — if using Gemini
-   - `OLLAMA_HOST` — if using Ollama (must be reachable from Render; see below)
    - `AURA_SERVER_CORS_ORIGINS` — your Android app's origin, or `https://*.onrender.com`
    - `AURA_SERVER_LOG_LEVEL=INFO`
 
@@ -205,13 +205,15 @@ The Android app sends no `Origin` header, so it works regardless. This setting o
 
 ## Health check
 
-All platforms should probe `/health`:
+Render should probe the public root route, because `/api/health` is an
+authenticated diagnostic endpoint:
 
 ```bash
-curl https://your-service.onrender.com/health
+curl https://your-service.onrender.com/
 ```
 
-Expected: `{"status":"ok",...}`. The health endpoint is unauthenticated.
+Expected: `{"name":"Aura",...,"status":"running"}`. For authenticated
+runtime diagnostics, use `GET /api/health` with `Authorization: Bearer <token>`.
 
 ## Cold start behaviour
 

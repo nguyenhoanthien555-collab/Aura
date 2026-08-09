@@ -8,7 +8,7 @@ local `.env` file. Nothing is hardcoded and nothing is committed - see
 
 from typing import List
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,7 +24,13 @@ class ServerSettings(BaseSettings):
     )
 
     host: str = "0.0.0.0"
-    port: int = 8000
+    # Render supplies its listener port as `PORT`, while local Docker and
+    # existing installs use the namespaced setting. Prefer Render's value
+    # when both are present so `python -m server.main` is deployable as-is.
+    port: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("PORT", "AURA_SERVER_PORT"),
+    )
 
     # Empty means "dev mode, no auth". Anything reachable off localhost
     # must set this; see `is_auth_enabled`.

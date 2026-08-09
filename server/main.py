@@ -82,6 +82,12 @@ async def root():
     }
 
 
+@app.head("/", include_in_schema=False)
+async def root_head():
+    """Render probes the public readiness route with HEAD."""
+    return None
+
+
 if __name__ == "__main__":
     import uvicorn
 

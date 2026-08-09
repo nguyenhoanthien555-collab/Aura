@@ -54,11 +54,10 @@ USER aura
 # and from config.yaml (committed, no secrets).
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    AURA_SERVER_HOST=0.0.0.0 \
-    AURA_SERVER_PORT=8000
+    AURA_SERVER_HOST=0.0.0.0
 
 EXPOSE 8000
 
-# Uvicorn with one worker per container. The process manager
-# (systemd, Docker, Render, Fly, etc.) handles horizontal scale.
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# `ServerSettings` honours Render's `PORT` and falls back to 8000 locally.
+# The process manager (Docker, Render, Fly, etc.) handles scaling.
+CMD ["python", "-m", "server.main"]
