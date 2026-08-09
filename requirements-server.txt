@@ -21,6 +21,7 @@ pyyaml==6.0.1
 rich==13.9.4
 sqlalchemy==2.0.36
 google-genai==2.17.0
+pillow==11.1.0
 
 # Testing (not installed in the final image; kept here for CI)
 pytest==8.3.4

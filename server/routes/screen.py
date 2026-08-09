@@ -296,6 +296,16 @@ async def upload_screenshot(
             detail={"error": "screen_failed"},
         )
 
+    processor = getattr(runtime.vision, "processor", None)
+    if getattr(processor, "last_error", None) is not None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "vision_unavailable",
+                "message": "No configured cloud vision provider could process the screenshot.",
+            },
+        )
+
     decision = result.get("decision")
 
     return {

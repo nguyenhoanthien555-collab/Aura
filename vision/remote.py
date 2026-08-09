@@ -56,6 +56,7 @@ class ScreenObservation:
             or self.package.strip()
             or self.screen_text.strip()
             or self.accessibility_context.strip()
+            or (self.frame is not None and not self.frame.is_empty())
         )
 
     def fingerprint(self) -> str:
@@ -228,6 +229,7 @@ def build_remote_vision(
     min_interval: float = 8.0,
     enabled: bool = False,
     max_age: float = DEFAULT_MAX_AGE,
+    processor=None,
 ):
     """
     A VisionManager fed by a device, and the source to push into.
@@ -242,7 +244,7 @@ def build_remote_vision(
 
     manager = VisionManager(
         capture=source,
-        processor=RemoteScreenProcessor(source),
+        processor=processor or RemoteScreenProcessor(source),
         window_reader=source,
         events=events,
         enabled=enabled,

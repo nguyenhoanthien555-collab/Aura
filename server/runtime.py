@@ -94,18 +94,25 @@ class ServerRuntime:
         if not settings.get("enabled", False):
             return None
 
+        from vision.cloud_processor import build_cloud_vision_processor
         from vision.remote import build_remote_vision
+
+        processor = build_cloud_vision_processor(config)
+        if processor is None:
+            logger.error("Cloud vision is not configured; remote vision remains disabled")
+            return None
 
         manager, source = build_remote_vision(
             events=bus,
             min_interval=float(settings.get("min_interval", 8.0)),
             enabled=True,
+            processor=processor,
         )
 
         self.screen_source = source
 
         logger.info(
-            "Screen observation enabled (min_interval=%.1fs)",
+            "Cloud screen vision enabled (min_interval=%.1fs)",
             manager.min_interval,
         )
 

@@ -9,6 +9,8 @@ router (and therefore booting Aura) never requires network access or
 API keys.
 """
 
+import os
+
 from core.config import load_config
 
 from brain.ports import LLM
@@ -60,7 +62,23 @@ class BrainRouter:
 
         if name == "gemini":
             from brain.providers.gemini import GeminiProvider
-            return GeminiProvider()
+            primary = GeminiProvider()
+            config = load_config().get("llm") or {}
+            fallback_name = config.get("fallback_provider")
+            if not fallback_name:
+                return primary
+            if fallback_name != "openrouter":
+                raise ValueError(f"Unknown fallback provider: {fallback_name}")
+            if not os.getenv("OPENROUTER_API_KEY"):
+                return primary
+            from brain.providers.fallback import FallbackProvider
+            from brain.providers.openrouter import OpenRouterProvider
+            fallback = OpenRouterProvider(
+                model=config.get("fallback_model", "openrouter/free"),
+                timeout=float(config.get("timeout", 45.0)),
+                max_tokens=int(config.get("max_output_tokens", 768)),
+            )
+            return FallbackProvider([primary, fallback], "gemini->openrouter")
 
         if name == "ollama":
             from brain.providers.ollama import OllamaProvider

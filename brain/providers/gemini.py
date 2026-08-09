@@ -9,11 +9,13 @@ from google import genai
 
 from core.config import load_config
 from brain.providers.base import BaseProvider
+from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
 
 
 class GeminiProvider(BaseProvider):
+    provider_name = "gemini"
 
-    def __init__(self):
+    def __init__(self, model: str | None = None):
 
         load_dotenv()
 
@@ -26,19 +28,38 @@ class GeminiProvider(BaseProvider):
 
         self.client = genai.Client(api_key=api_key)
 
-        self.model = config["llm"]["model"]
+        self.model = model or config["llm"]["model"]
+        self.max_output_tokens = int(config["llm"].get("max_output_tokens", 768))
+        self.temperature = float(config["llm"].get("temperature", 0.7))
 
     def generate(self, prompt: str) -> str:
 
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config={
+                    "max_output_tokens": self.max_output_tokens,
+                    "temperature": self.temperature,
+                },
+            )
+        except Exception as error:
+            self._raise_cloud_error(error)
 
         # Gemini returns None when a response is blocked or empty.
         # Providers must honour the `-> str` contract, so normalise here
         # rather than letting None leak into the pipeline and the database.
         return response.text or ""
+
+    @staticmethod
+    def _raise_cloud_error(error):
+        status = getattr(error, "code", None) or getattr(error, "status_code", None)
+        text = str(error).lower()
+        if status == 429 or "resource_exhausted" in text or "quota" in text:
+            raise ProviderRateLimitError("Gemini quota/rate limit reached") from error
+        if (isinstance(status, int) and status >= 500) or any(word in text for word in ("unavailable", "timeout", "connection")):
+            raise ProviderUnavailableError("Gemini is unavailable") from error
+        raise error
 
     def stream(self, prompt: str):
         """

@@ -5,15 +5,18 @@ app:
 llm:
   provider: gemini
   model: gemini-3.6-flash
+  fallback_provider: openrouter
+  fallback_model: openrouter/free
   timeout: 120
+  max_output_tokens: 768
 
 memory:
-  history_limit: 20
+  history_limit: 10
 
   profile: true
   recall: false
-  max_facts: 8
-  max_recalled: 3
+  max_facts: 5
+  max_recalled: 2
 
 voice:
   tts:
@@ -23,8 +26,12 @@ voice:
     enabled: false
 
 vision:
-  enabled: false
+  enabled: true
   capture_screen: false
+  model: gemini-3.6-flash
+  fallback_model: openrouter/free
+  max_pixels: 1500000
+  jpeg_quality: 75
 
 avatar:
   enabled: false
@@ -38,6 +45,11 @@ tools:
 
   allowed_paths: []
   applications: []
+
+server:
+  screen:
+    enabled: true
+    min_interval: 8.0
 
 logging:
   level: INFO
