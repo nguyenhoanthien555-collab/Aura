@@ -232,6 +232,32 @@ class VisionUpdateEvent(Event):
 
 
 # ----------------------------------------------------------------------
+# Companion
+# ----------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CompanionNotificationEvent(Event):
+    """
+    Aura decided to say something the user did not ask for.
+
+    Published by companion/, consumed by whatever can reach the user - a
+    WebSocket, a push notification, a desktop toast. The engine knows
+    nothing about any of them, which is why this carries text and numbers
+    rather than a destination.
+
+    `reason` is why she spoke. It is written for a human reading a log or
+    asking "why did you say that", and is never parsed.
+    """
+
+    message: str
+    reason: str = ""
+    priority: str = "normal"          # "low" | "normal" | "high"
+    confidence: float = 0.0
+    source: str = ""                  # app or window that prompted it
+    device_id: str = ""
+
+
+# ----------------------------------------------------------------------
 # Avatar
 # ----------------------------------------------------------------------
 

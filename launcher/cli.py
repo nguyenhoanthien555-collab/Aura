@@ -15,6 +15,7 @@ import sys
 from rich.console import Console
 
 from core.logger import logger
+from events.types import ListeningEvent
 from tools.base import ToolRisk
 
 
@@ -24,7 +25,7 @@ console = Console()
 HELP = """
 [bold]Commands[/bold]
   /help                 this list
-  /voice                listen once through the microphone
+  /listen               listen once through the microphone (alias /voice)
   /say <text>           speak text out loud
   /look                 refresh and show what Aura can see
   /remember key value   store a fact about you
@@ -117,6 +118,7 @@ class AuraCLI:
             "help": lambda _: console.print(HELP),
             "quit": self._quit,
             "exit": self._quit,
+            "listen": self._voice,
             "voice": self._voice,
             "say": self._speak,
             "look": self._look,
@@ -138,22 +140,119 @@ class AuraCLI:
         self.running = False
 
     def _voice(self, _rest: str) -> None:
+        """
+        Push to talk: one utterance, one reply.
 
-        if self.runtime.services.stt is None:
-            console.print("[yellow]voice input is disabled[/yellow]")
+        Every part of this already exists. The engine records and
+        transcribes, `runtime.chat` answers, and the reply reaches the
+        speakers because the TTS engine is subscribed to ResponseEvent.
+        Nothing here touches audio.
+
+        A wake word is never required here. `/listen` is explicit by
+        definition, which is why KeywordWakeWord gates continuous
+        listening only - stated in the `voice.stt.wake_word` comment in
+        core/config.py, and left that way.
+        """
+
+        stt = self.runtime.services.stt
+
+        if stt is None:
+            console.print(
+                "[yellow]voice input is disabled[/yellow] "
+                "[dim](set voice.stt.enabled: true in config.yaml, "
+                "or start with --listen)[/dim]"
+            )
             return
 
-        console.print("[dim]listening...[/dim]")
+        if not self._voice_is_usable(stt):
+            return
 
-        heard = self.runtime.listen()
+        release = self._follow_listening()
+
+        try:
+            heard = self.runtime.listen()
+        finally:
+            release()
 
         if not heard:
-            console.print("[dim]nothing heard[/dim]")
+            console.print(
+                "[dim]nothing heard - try again, or raise "
+                "voice.stt.record_seconds[/dim]"
+            )
             return
 
-        console.print(f"[bold green]you (voice)[/bold green] > {heard}")
+        console.print(f"[bold green]you \\[voice][/bold green] > {heard}")
 
         self._say(heard, source="voice")
+
+    @staticmethod
+    def _voice_is_usable(stt) -> bool:
+        """
+        Whether the microphone and the recogniser can both actually run.
+
+        Without this check, a machine with no `sounddevice` gets a mock
+        microphone that returns silence, so every attempt reports "nothing
+        heard" - which reads as a broken microphone rather than a missing
+        package.
+        """
+
+        try:
+            available = stt.is_available()
+
+        except Exception as error:
+            logger.warning("Voice input check failed: %s", error)
+            available = False
+
+        if available:
+            return True
+
+        console.print(
+            "[yellow]voice input is unavailable[/yellow] "
+            "[dim](no working microphone or recogniser - "
+            "pip install sounddevice faster-whisper)[/dim]"
+        )
+
+        return False
+
+    def _follow_listening(self):
+        """
+        Show progress while the engine works, then stop showing it.
+
+        ListeningEvent is published around the recording, so it is the
+        only thing that knows when capture ended and transcription began.
+        Reading it here keeps the CLI out of the audio path instead of
+        timing the two halves itself.
+
+        Returns a callable that removes the subscription again.
+        """
+
+        bus = getattr(self.runtime, "bus", None)
+
+        if bus is None:
+            return lambda: None
+
+        def show(event) -> None:
+
+            if getattr(event, "active", False):
+                console.print("[dim]\\[Listening...][/dim]")
+            else:
+                console.print("[dim]\\[Transcribing...][/dim]")
+
+        try:
+            release = bus.subscribe(ListeningEvent, show)
+
+        except Exception as error:
+            logger.warning("Could not follow the microphone: %s", error)
+            return lambda: None
+
+        def stop() -> None:
+
+            try:
+                release()
+            except Exception:
+                pass
+
+        return stop
 
     def _speak(self, rest: str) -> None:
 

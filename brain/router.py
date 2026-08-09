@@ -62,6 +62,10 @@ class BrainRouter:
             from brain.providers.gemini import GeminiProvider
             return GeminiProvider()
 
+        if name == "ollama":
+            from brain.providers.ollama import OllamaProvider
+            return OllamaProvider()
+
         raise ValueError(
             f"Unknown provider: {name}"
         )

@@ -41,15 +41,16 @@ from voice.tts.values import (
 )
 
 
-# en-US-AvaMultilingualNeural: warm, expressive, conversational rather
-# than newsreader. Multilingual, so a Vietnamese sentence in the middle
-# of an English reply is pronounced rather than spelled out.
-DEFAULT_VOICE = "en-US-AvaMultilingualNeural"
+# zh-CN-XiaoxiaoNeural: female, warm, and the most expressive of the
+# stock Edge voices. Trained for news and novel narration, which is what
+# gives it the steady, unhurried delivery Aura is meant to have rather
+# than the clipped read of an assistant voice.
+DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 
 # Slightly quicker and slightly brighter than neutral. Enough to read as
 # a person talking to a friend, small enough not to sound sped up.
-DEFAULT_RATE = "+5%"
-DEFAULT_PITCH = "+10Hz"
+DEFAULT_RATE = "+0%"
+DEFAULT_PITCH = "+0Hz"
 DEFAULT_VOLUME = "+0%"
 
 # Synthesis is a network round trip. Past this something is wrong, and

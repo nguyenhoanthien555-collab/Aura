@@ -1,0 +1,28 @@
+# Server-mode dependencies, pinned for reproducible deploys.
+#
+# Generated from requirements.txt. Update by editing requirements.txt and
+# re-pinning here, or run `pip-compile requirements.txt -o requirements-server.txt`
+# if pip-tools is available.
+#
+# These versions are the minimum that satisfy the server code. They are
+# not the absolute latest — the goal is a stable, auditable deploy.
+# When a CVE appears, bump the affected package here.
+
+# Core server
+fastapi==0.115.4
+uvicorn[standard]==0.34.0
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-multipart==0.0.18
+httpx==0.28.1
+websockets==13.1
+python-dotenv==1.0.1
+pyyaml==6.0.1
+rich==13.9.4
+sqlalchemy==2.0.36
+google-genai==1.4.0
+
+# Testing (not installed in the final image; kept here for CI)
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0

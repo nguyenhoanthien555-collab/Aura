@@ -60,25 +60,37 @@ class Services:
 def build_services(
     config: dict | None = None,
     bus: EventBus | None = None,
+    memory: Any = None,
+    vision: Any = None,
 ) -> Services:
     """
     Build everything from config.
 
     Order matters only in one place: the bus exists before anything that
     publishes to it.
+
+    `memory` and `vision` may be supplied to point the system at a
+    different implementation of the same port:
+
+      * memory - an isolated in-memory database in tests, or a mounted
+        volume in a container. None opens the default `data/memory.db`.
+
+      * vision - the remote screen source in server mode, where the
+        observations come from a phone rather than from this machine's
+        display. None builds from the `vision:` config section.
     """
 
     config = config if config is not None else load_config()
 
     bus = bus or EventBus()
 
-    memory = _build_memory()
+    memory = memory if memory is not None else _build_memory()
 
     profile, knowledge, companion = _build_knowledge(config, memory)
 
-    vision = _build_vision(config, bus)
+    vision = vision if vision is not None else _build_vision(config, bus)
 
-    engine = _build_engine(bus, vision, knowledge)
+    engine = _build_engine(config, bus, vision, knowledge, memory)
 
     tts = _build_tts(config, bus)
 
@@ -120,11 +132,32 @@ def _build_memory():
     return MemoryManager()
 
 
-def _build_engine(bus, vision, knowledge):
+def _build_engine(config: dict, bus, vision, knowledge, memory):
+    """
+    The chat engine, wired to the objects this composition root already
+    built.
+
+    Two things are injected rather than left to ChatEngine's defaults:
+
+      * `memory` - so the runtime and the conversation share one
+        MemoryManager instead of opening two.
+      * `llm` - so the provider comes from *this* config dict. Left to
+        its default, BrainRouter re-reads config.yaml from disk, which
+        silently ignored `--provider` and any caller-supplied override.
+    """
 
     from brain.chat_engine import ChatEngine
+    from brain.router import BrainRouter
+
+    llm_config = config.get("llm") or {}
+
+    provider_name = llm_config.get("provider")
+
+    llm = BrainRouter(provider_name=provider_name) if provider_name else None
 
     return ChatEngine(
+        memory=memory,
+        llm=llm,
         events=bus,
         vision=vision,
         knowledge=knowledge,
@@ -236,7 +269,6 @@ class _CompositeKnowledge:
 # ----------------------------------------------------------------------
 
 def _build_vision(config: dict, bus):
-
     settings = config.get("vision") or {}
 
     if not settings.get("enabled", False):
@@ -250,18 +282,75 @@ def _build_vision(config: dict, bus):
 
         from vision.capture import ScreenshotCapture
 
-        candidate = ScreenshotCapture(monitor=settings.get("monitor", 1))
+        monitor = settings.get("monitor", 1)
+
+        candidate = ScreenshotCapture(monitor=monitor)
 
         if candidate.is_available():
             capture = candidate
+            logger.info("Screen capture: monitor %s via mss", monitor)
         else:
-            logger.info("Screen capture unavailable, using window titles")
+            logger.info(
+                "Screen capture unavailable (mss not installed), "
+                "using window titles"
+            )
+
+    processor = (
+        _build_vision_processor(settings, config) if capture else None
+    )
 
     return VisionManager(
         capture=capture,
+        processor=processor,
         events=bus,
         enabled=True,
-        min_interval=settings.get("min_interval", 2.0),
+        min_interval=settings.get(
+            "min_interval",
+            2.0
+        ),
+    )
+
+
+def _build_vision_processor(settings: dict, config: dict):
+    """
+    The pixel processor, or None to leave the manager on window titles.
+
+    Pixels are only worth a vision model if the encoder is installed.
+    Returning None here is what makes a missing Pillow degrade to the
+    window title description instead of an empty observation every turn.
+    """
+
+    try:
+        import PIL                      # noqa: F401, PLC0415
+    except ImportError:
+        logger.info(
+            "Vision: Pillow not installed, using window titles "
+            "(pip install pillow for screen understanding)"
+        )
+        return None
+
+    from vision.ollama_processor import (
+        DEFAULT_HOST,
+        DEFAULT_MODEL,
+        DEFAULT_TIMEOUT,
+        OllamaVisionProcessor,
+    )
+
+    llm = config.get("llm") or {}
+
+    model = settings.get("model") or DEFAULT_MODEL
+    host = settings.get("host") or llm.get("host") or DEFAULT_HOST
+    timeout = settings.get("timeout") or DEFAULT_TIMEOUT
+
+    debug_path = settings.get("debug_frame") or None
+
+    logger.info("Vision: %s at %s", model, host)
+
+    return OllamaVisionProcessor(
+        model=model,
+        host=host,
+        timeout=timeout,
+        debug_path=debug_path,
     )
 
 

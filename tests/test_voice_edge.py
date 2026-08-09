@@ -93,17 +93,18 @@ def provider_for(**kwargs) -> EdgeTTSProvider:
 # ----------------------------------------------------------------------
 
 def test_the_default_voice_is_auras():
-    assert EdgeTTSProvider().voice == "en-US-AvaMultilingualNeural"
-    assert DEFAULT_VOICE == "en-US-AvaMultilingualNeural"
+    assert EdgeTTSProvider().voice == "zh-CN-XiaoxiaoNeural"
+    assert DEFAULT_VOICE == "zh-CN-XiaoxiaoNeural"
 
 
-def test_she_speaks_slightly_faster_and_slightly_higher_by_default():
-    """Warm and conversational rather than a newsreader."""
+def test_xiaoxiao_uses_neutral_tts_defaults():
+    """Keep Xiaoxiao natural; personality should provide the character."""
 
     provider = EdgeTTSProvider()
 
-    assert provider.rate == DEFAULT_RATE == "+5%"
-    assert provider.pitch == DEFAULT_PITCH == "+10Hz"
+    assert provider.rate == DEFAULT_RATE == "+0%"
+    assert provider.pitch == DEFAULT_PITCH == "+0Hz"
+    
 
 
 def test_a_configured_voice_wins():
@@ -130,7 +131,7 @@ def test_it_satisfies_the_existing_provider_protocol():
 
 
 def test_repr_does_not_hide_what_it_will_sound_like():
-    assert "AvaMultilingual" in repr(provider_for())
+    assert "Xiaoxiao" in repr(provider_for())
 
 
 # ----------------------------------------------------------------------
@@ -452,9 +453,9 @@ def test_a_reply_on_the_bus_is_spoken_by_edge():
 
     TTSEngine(provider=provider, events=bus).attach(bus)
 
-    bus.publish(ResponseEvent(text="Bro that idea is actually pretty sick."))
+    bus.publish(ResponseEvent(text="Okay, that's actually a good idea."))
 
-    assert synth.last["text"] == "Bro that idea is actually pretty sick."
+    assert synth.last["text"] == "Okay, that's actually a good idea."
 
 
 def test_the_speaking_event_carries_the_voice():

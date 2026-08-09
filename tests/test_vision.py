@@ -140,6 +140,53 @@ def test_vision_is_off_by_default():
     assert manager.get_context() is None
 
 
+def test_the_default_processor_needs_no_optional_dependency():
+    """
+    Window titles are the default, so a bare install still has vision.
+
+    The pixel processor is a composition decision made by
+    launcher/services.py, not a default buried in the manager.
+    """
+
+    manager = VisionManager(window_reader=MockWindowReader(title="anything"))
+
+    assert isinstance(manager.processor, WindowTitleProcessor)
+
+
+def test_importing_vision_does_not_import_the_image_stack():
+    """
+    Regression: `from vision.capture import ScreenshotCapture` used to
+    fail with ModuleNotFoundError: No module named 'PIL', because the
+    package imported the manager, which imported the Ollama processor,
+    which imported Pillow at module level.
+
+    Capture must not depend on the encoder.
+    """
+
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import vision, sys;"
+            "from vision.capture import ScreenshotCapture;"
+            "assert 'vision.ollama_processor' not in sys.modules, "
+            "'manager imported the Ollama processor eagerly';"
+            "assert 'PIL' not in sys.modules, 'Pillow was imported eagerly'",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_enabled_manager_describes_the_active_window():
     manager = manager_for("main.py - AURA - Visual Studio Code")
 

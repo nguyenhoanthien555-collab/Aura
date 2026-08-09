@@ -1,0 +1,256 @@
+# Aura Cloud Core — Free-Tier Deployment Guide
+
+This document covers deploying Aura Cloud Core to a $0/month hosting platform. The laptop **must not be required** for normal remote operation: Android → Internet → Cloud backend → configured LLM provider.
+
+## Target platforms (verified free tiers, August 2026)
+
+| Platform | Free tier | Persistence | Cold start | Notes |
+|----------|-----------|-------------|------------|-------|
+| **Render** | Web Service, 750 hrs/mo | Disk (opt-in) | ~30s | Native Docker, GitHub deploy, custom domains |
+| **Fly.io** | 3 shared-cpu-1x VMs | Volume (1 GB free) | ~2s | `fly.toml` + `fly launch`; global anycast |
+| **Railway** | $5 credit/mo (≈500 hrs) | Volume | ~10s | Simple, but credit-based not time-based |
+| **Google Cloud Run** | 2M requests/mo | Cloud SQL / Filestore | <1s | Container-native, scales to zero |
+| **Koyeb** | 1 free service | Volume (1 GB) | ~5s | Simple Docker deploy |
+
+> **Verify current limits before committing.** Free tiers change. Check the provider's pricing page the day you deploy. Do not hardcode assumptions into the repo.
+
+## Prerequisites
+
+- A GitHub repository with this codebase
+- A Dockerfile (provided at repo root)
+- `.env` with `AURA_SERVER_AUTH_TOKEN` and provider keys
+- `AURA_SERVER_CORS_ORIGINS` set to your Android app's origin (or `*` for testing)
+
+## Option 1: Render (recommended for simplicity)
+
+### 1. Create a Web Service
+
+1. Connect your GitHub repo to Render
+2. New → Web Service → select the repo
+3. Settings:
+   - **Runtime**: Docker
+   - **Build command**: (empty — uses `Dockerfile`)
+   - **Start command**: (empty — uses `CMD` in Dockerfile)
+   - **Port**: 8000
+4. Environment variables (all from `.env`):
+   - `AURA_SERVER_AUTH_TOKEN` — **required**, generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+   - `GEMINI_API_KEY` — if using Gemini
+   - `OLLAMA_HOST` — if using Ollama (must be reachable from Render; see below)
+   - `AURA_SERVER_CORS_ORIGINS` — your Android app's origin, or `https://*.onrender.com`
+   - `AURA_SERVER_LOG_LEVEL=INFO`
+
+### 2. Persistent disk (for SQLite)
+
+1. In the service settings → **Disks** → **Add Disk**
+2. Name: `aura-data`, Mount path: `/app/data`, Size: 1 GB (free)
+3. This persists `data/memory.db` across deploys and restarts.
+
+### 3. Ollama on Render (if using local LLM)
+
+Render does not allow sidecar containers on the free tier. Options:
+
+- **Use a hosted Ollama** (e.g., `https://ollama.example.com`) and set `OLLAMA_HOST` to it
+- **Use Gemini/OpenAI** instead (API keys stay on the server)
+- **Run Ollama on a separate free service** (another Render Web Service with a GPU instance — not free) or a VPS
+
+> For a truly free deployment with local LLM, Fly.io allows a second container on the same network, or use Cloud Run with a separate Cloud Run service for Ollama.
+
+### 4. Deploy
+
+Push to `main` — Render builds and deploys automatically. First deploy takes ~2-3 minutes (Docker build). Subsequent deploys are faster with layer caching.
+
+### 5. Custom domain (optional)
+
+Render provides `https://<service>.onrender.com` free. Add a custom domain in Settings → Custom Domains.
+
+## Option 2: Fly.io (recommended for Ollama sidecar)
+
+### 1. Install `flyctl` and login
+
+```bash
+curl -L https://fly.io/install.sh | sh
+fly auth login
+```
+
+### 2. Launch the app
+
+```bash
+cd D:\AURA
+fly launch --name aura-cloud --region <closest> --no-deploy
+```
+
+This creates `fly.toml`. Edit it:
+
+```toml
+app = "aura-cloud"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  AURA_SERVER_HOST = "0.0.0.0"
+  AURA_SERVER_PORT = "8000"
+  AURA_SERVER_CORS_ORIGINS = "*"
+  AURA_SERVER_LOG_LEVEL = "INFO"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true   # scales to zero when idle
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+```
+
+### 3. Add a volume for SQLite
+
+```bash
+fly volumes create aura_data --region iad --size 1
+```
+
+Add to `fly.toml`:
+
+```toml
+[mounts]
+  source = "aura_data"
+  destination = "/app/data"
+```
+
+### 4. Secrets (never in `fly.toml`)
+
+```bash
+fly secrets set AURA_SERVER_AUTH_TOKEN="$(python -c "import secrets; print(secrets.token_urlsafe(32))")"
+fly secrets set GEMINI_API_KEY="your-key"
+# or
+fly secrets set OLLAMA_HOST="http://ollama.internal:11434"
+```
+
+### 5. Ollama sidecar (optional, same private network)
+
+Create a second app for Ollama:
+
+```bash
+fly launch --name aura-ollama --image ollama/ollama:latest --region iad --no-deploy
+```
+
+Edit its `fly.toml` to expose port 11434 internally, then reference it as `http://aura-ollama.internal:11434` from the main app's `OLLAMA_HOST`.
+
+### 6. Deploy
+
+```bash
+fly deploy
+```
+
+Fly builds remotely (no local Docker needed) and deploys. Cold start is ~2s with `auto_stop_machines = true`.
+
+## Option 3: Google Cloud Run
+
+### 1. Enable APIs
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+```
+
+### 2. Build and push
+
+```bash
+gcloud builds submit --tag gcr.io/<PROJECT_ID>/aura-cloud
+```
+
+### 3. Deploy
+
+```bash
+gcloud run deploy aura-cloud \
+  --image gcr.io/<PROJECT_ID>/aura-cloud \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars AURA_SERVER_AUTH_TOKEN="$(python -c "import secrets; print(secrets.token_urlsafe(32))"),GEMINI_API_KEY=xxx,AURA_SERVER_CORS_ORIGINS=* \
+  --memory 512Mi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 1
+```
+
+### 4. Persistence
+
+Cloud Run's filesystem is ephemeral. For SQLite you need:
+- **Cloud SQL (PostgreSQL)** — migrate `memory/sqlite.py` to use `postgresql://` URL. The server code uses SQLAlchemy so this is a config change.
+- **Filestore (NFS)** — mount at `/app/data`. More complex setup.
+
+> For a $0 deployment with SQLite, Render or Fly.io with a volume is simpler.
+
+## Provider keys (server-side only)
+
+| Provider | Env var | Notes |
+|----------|---------|-------|
+| Gemini | `GEMINI_API_KEY` | Google AI Studio key |
+| OpenAI | `OPENAI_API_KEY` | Not yet wired in `BrainRouter` — see Known Limitations |
+| Ollama | `OLLAMA_HOST` | Must be reachable from the cloud (see platform notes) |
+| Edge TTS | `EDGE_TTS_VOICE` | Desktop only; server does not synthesise |
+
+**Never put these in the Android app, the Docker image, or GitHub.**
+
+## CORS
+
+- Development (phone on LAN): `AURA_SERVER_CORS_ORIGINS=*`
+- Production: `AURA_SERVER_CORS_ORIGINS=https://your-frontend.example.com`
+
+The Android app sends no `Origin` header, so it works regardless. This setting only affects browser clients.
+
+## Health check
+
+All platforms should probe `/health`:
+
+```bash
+curl https://your-service.onrender.com/health
+```
+
+Expected: `{"status":"ok",...}`. The health endpoint is unauthenticated.
+
+## Cold start behaviour
+
+Free tiers scale to zero. The first request after idle:
+
+1. Platform starts the container (~2-30s)
+2. Aura runtime initializes (loads config, opens SQLite, connects to LLM provider)
+3. Request completes
+
+The Android app handles this: it shows "Aura server is waking up..." after 4s and retries. The user sees the reply when it arrives.
+
+## Monitoring
+
+- **Render**: Built-in metrics (CPU, RAM, request latency, deploy logs)
+- **Fly.io**: `fly logs`, `fly dashboard`, Grafana Cloud integration (free tier)
+- **Cloud Run**: Cloud Logging + Cloud Monitoring (free tier generous)
+
+No separate APM required for this scale.
+
+## Upgrading
+
+```bash
+# Render: push to main
+git push origin main
+
+# Fly.io:
+fly deploy
+
+# Cloud Run:
+gcloud builds submit --tag gcr.io/<PROJECT_ID>/aura-cloud
+gcloud run deploy aura-cloud --image gcr.io/<PROJECT_ID>/aura-cloud ...
+```
+
+Database migrations: none yet (SQLAlchemy `create_all` on startup). When schema changes, add a migration script and run it at startup or as a one-off job.
+
+## Known Limitations (current phase)
+
+1. **OpenAI not wired** — `brain/providers/openai.py` is empty and `BrainRouter._create_provider` has no `"openai"` branch. Only Gemini and Ollama work.
+2. **SQLite on ephemeral FS** — Render/Fly volumes solve this; Cloud Run needs Cloud SQL or Filestore.
+3. **Ollama sidecar** — Only Fly.io supports a free private-network sidecar natively. On Render you need a separate paid service or hosted Ollama.
+4. **No horizontal scale** — Single container. For HA, run 2+ replicas with a shared Postgres (not SQLite).
+5. **TLS termination** — Handled by platform (Render/Fly/Cloud Run all provide HTTPS). The container sees HTTP on port 8000.

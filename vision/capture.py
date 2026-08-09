@@ -81,17 +81,64 @@ class MockScreenCapture:
         return self._available
 
 
+# mss monitor indices. 0 is every display stitched into a single wide
+# image; 1 is the primary display; 2 and up are the other displays in the
+# order mss reports them.
+ALL_DISPLAYS = 0
+PRIMARY_DISPLAY = 1
+
+
+def _as_index(value) -> int | None:
+    """
+    `value` as an mss monitor index, or None when it is not one.
+
+    YAML hands back whatever was written, so `monitor: "2"` arrives as a
+    string. Reading it is friendlier than grabbing nothing over a pair of
+    quotes. `True` is rejected explicitly - bool is an int subclass, and
+    `monitor: yes` meaning "display 1" would be an accident, not a
+    choice.
+    """
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    try:
+        return int(str(value).strip())
+
+    except (TypeError, ValueError):
+        return None
+
+
 class ScreenshotCapture:
     """
     Real screen capture through `mss`.
 
     Optional dependency, imported lazily. A failed grab returns None
     rather than raising - a missed frame is not worth an exception.
+
+    `monitor` is an mss index, and picking the wrong one is the single
+    most common way Aura ends up describing a screen the user is not
+    looking at:
+
+        0   every display combined into one wide image
+        1   the primary display
+        2+  the other displays, in mss order
+
+    An index no display answers to is a configuration mistake rather
+    than a reason to guess quietly. See `_resolve`.
     """
 
-    def __init__(self, monitor: int = 1):
+    def __init__(self, monitor: int = PRIMARY_DISPLAY):
 
         self.monitor = monitor
+
+        # One warning per capture object, not one per frame. At the
+        # default two second throttle an unconditional warning would
+        # write thirty lines a minute for the whole session.
+        self._warned = False
 
     @staticmethod
     def _mss():
@@ -107,6 +154,45 @@ class ScreenshotCapture:
         except Exception:
             return False
 
+    def _resolve(self, monitors) -> int:
+        """
+        The index to grab, given what mss actually reports.
+
+        Out of range and negative both mean the configured display does
+        not exist. The old behaviour silently fell back to index 0, the
+        union of every display - which on a multi monitor machine hands
+        the vision model a stitched image of every screen at once and
+        looks, from the outside, exactly like a hallucinating model.
+
+        The primary display is used instead, and it is logged, because a
+        wrong screen described confidently is worse than a right screen
+        described plainly.
+        """
+
+        index = _as_index(self.monitor)
+
+        if index is not None and 0 <= index < len(monitors):
+            return index
+
+        fallback = (
+            PRIMARY_DISPLAY
+            if len(monitors) > PRIMARY_DISPLAY
+            else ALL_DISPLAYS
+        )
+
+        if not self._warned:
+            self._warned = True
+
+            logger.warning(
+                "Vision: monitor %r does not exist (%d reported by mss), "
+                "capturing monitor %d instead",
+                self.monitor,
+                len(monitors),
+                fallback,
+            )
+
+        return fallback
+
     def capture(self) -> Frame | None:
 
         try:
@@ -116,12 +202,23 @@ class ScreenshotCapture:
 
                 monitors = screen.monitors
 
-                index = self.monitor
+                index = self._resolve(monitors)
 
-                if index >= len(monitors):
-                    index = 0
+                region = monitors[index]
 
-                shot = screen.grab(monitors[index])
+                shot = screen.grab(region)
+
+                # Which display this frame is actually of. The cheapest
+                # way to tell a wrong-monitor bug from a wrong-model one,
+                # and it logs geometry only - never image data.
+                logger.debug(
+                    "Vision: captured monitor %d, %dx%d at (%s, %s)",
+                    index,
+                    shot.width,
+                    shot.height,
+                    region.get("left", "?"),
+                    region.get("top", "?"),
+                )
 
                 return Frame(
                     width=shot.width,

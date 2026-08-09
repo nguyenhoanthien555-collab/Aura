@@ -232,10 +232,137 @@ def test_what_she_is_into(personality_text, interest):
 
 
 def test_the_brief_s_own_examples_are_in_there(personality_text):
-    """Verbatim, because they define the target voice better than a rule."""
+    """
+    Verbatim, because they define the target voice better than a rule.
 
-    assert "Bro that idea is actually pretty sick. Let's cook." in personality_text
-    assert "Oops, my bad bro, something went sideways." in personality_text
+    These replaced a louder set ("Bro that idea is actually pretty sick.
+    Let's cook.") when the brief moved the target from hyped to composed.
+    They are the calibration sample: warm and casual, but at a pace a
+    person could actually speak.
+    """
+
+    assert "Okay, that's actually a good idea. Let's build it." in personality_text
+    assert "Yeah, that one's on me. Let me fix it." in personality_text
+
+
+def test_the_overcooked_register_is_named_as_the_thing_to_avoid(personality_text):
+    """
+    The failure mode has to be shown, not just prohibited. "Do not be
+    hyperactive" leaves a model guessing; a rejected sample and its
+    replacement side by side does not.
+    """
+
+    assert "OH MY GOD BRO YOU'RE COOKING" in personality_text
+    assert "630 passed" in personality_text
+
+
+@pytest.mark.parametrize(
+    "trait",
+    ["Warm", "Mature", "Confident", "Patient", "Emotionally attentive"],
+)
+def test_the_composed_traits_are_present(personality_text, trait):
+    """
+    The half of the character that separates calm-and-warm from
+    casual-and-loud. Without these the older traits alone read as a
+    hype account.
+    """
+
+    assert trait in personality_text
+
+
+def test_the_pace_is_an_instruction_not_a_vibe(personality_text):
+    """
+    Pacing is the whole difference between the old voice and this one, so
+    it is stated as a constraint on sentence construction.
+    """
+
+    lowered = personality_text.lower()
+
+    assert "moderately short sentences" in lowered
+    assert "unhurried" in lowered
+    assert "pause" in lowered
+
+
+def test_slang_is_capped_rather_than_merely_permitted(personality_text):
+    """
+    A list of available slang with no ceiling on it is how every reply
+    ends up with "bro" in it.
+    """
+
+    assert "seasoning, not punctuation" in personality_text
+
+
+def test_teasing_has_a_shape_and_a_limit(personality_text):
+    """
+    Teasing is a colour, not the personality. The brief's own pattern -
+    notice, tease, help anyway - is what keeps it from becoming the whole
+    interaction.
+    """
+
+    lowered = personality_text.lower()
+
+    assert "never cruel" in lowered
+    assert "never humiliating" in lowered
+    assert "help him anyway" in lowered
+
+
+def test_she_does_not_invent_a_shared_past(personality_text):
+    """
+    The failure mode a companion with memory has and a chatbot does not:
+    warmth filling in history that was never there.
+    """
+
+    lowered = personality_text.lower()
+
+    assert "do not pretend to remember" in lowered
+    assert "do not invent a shared past" in lowered
+
+
+def test_attachment_is_not_manufactured(personality_text):
+    """
+    A companion is allowed to be good company. It is not allowed to imply
+    the user owes it time, or that it substitutes for people.
+    """
+
+    lowered = personality_text.lower()
+
+    assert "do not manufacture attachment" in lowered
+    assert "substitute for people" in lowered
+
+
+def test_personality_loses_to_accuracy_when_they_conflict(personality_text):
+    """
+    The priority hierarchy, and the reason it exists: style is the last
+    thing that gets to win.
+    """
+
+    lowered = personality_text.lower()
+
+    assert "safety and system instructions" in lowered
+    assert "accuracy and honesty" in lowered
+
+    # Style ranks below what he asked for, which ranks below accuracy.
+    assert lowered.index("accuracy and honesty") < lowered.index(
+        "slang and stylistic flavour"
+    )
+
+
+def test_mood_colours_her_without_replacing_her(personality_text):
+    """
+    Consistency rule from the brief: the same character across moods.
+
+    Matched against whitespace-collapsed text, because these phrases span
+    a line wrap in the source and a reflow should not fail the test.
+    """
+
+    import re
+
+    flat = re.sub(r"\s+", " ", personality_text.lower())
+
+    assert "it does not replace you" in flat
+    assert "still composed" in flat
+    assert "still kind" in flat
+    assert "still warm" in flat
 
 
 @pytest.mark.parametrize(
@@ -460,6 +587,12 @@ def test_the_prompt_hint_is_what_actually_rewrites_the_tone(styler):
     assert hint == DEFAULT_HINT
     assert "Aura" in hint
     assert "never the facts" in hint
+
+    # The pacing half of the brief has to survive into the per-reply
+    # instruction, not just the personality file - this is the line that
+    # sits next to the user's message.
+    assert "unhurried" in hint
+    assert "seasoning, not punctuation" in hint
 
 
 def test_a_custom_hint_replaces_the_default():

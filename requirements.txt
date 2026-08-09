@@ -7,6 +7,24 @@ google-genai
 pytest
 
 # ----------------------------------------------------------------------
+# Server mode (launcher.py --server, Docker, the Android companion)
+#
+# Desktop mode never imports these. They are listed as hard requirements
+# rather than extras because `server/` and `tests/test_server.py` cannot
+# degrade gracefully without them - there is no fallback for "no HTTP".
+#
+# Versions are floors, not pins. The deployed image pins exact versions
+# in requirements-server.txt; see docs/DEPLOYMENT.md.
+# ----------------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+python-multipart>=0.0.9
+httpx>=0.27
+websockets>=12.0
+
+# ----------------------------------------------------------------------
 # Optional extras
 #
 # Every one of these is imported lazily, inside the function that needs
@@ -17,6 +35,10 @@ pytest
 #   faster-whisper   local speech recognition voice.stt.provider: whisper
 #   pyttsx3          cross-platform speech    voice.tts.provider: pyttsx3
 #   mss              screen pixel capture     vision.capture_screen
+#   pillow           image encoding           vision.capture_screen
+#
+# Vision with screen capture requires BOTH mss and pillow. Without them
+# vision falls back to window titles only (zero dependencies).
 #
 # Windows speech output needs nothing extra: voice.tts.provider "auto"
 # uses the SAPI voices already on the machine.

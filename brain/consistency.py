@@ -114,8 +114,8 @@ DRIFT = (
     "no restating the question before answering it, no offers of further "
     "assistance. Do not overcorrect the other way either - no gushing, no "
     "performed excitement, no exclamation marks doing the work that "
-    "wording should. Warm and direct, the way you were on the first "
-    "message."
+    "wording should, and no piling on slang. Warm, calm and direct, at "
+    "the same unhurried pace you had on the first message."
 )
 
 # Held back until there is enough transcript to contradict.

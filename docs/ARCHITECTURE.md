@@ -32,7 +32,128 @@ Anything that looks like it needs a horizontal dependency goes through the
 event bus instead. TTS speaks replies because it subscribes to
 `ResponseEvent`, not because the brain calls it.
 
-## One turn, end to end
+---
+
+## Server mode — same composition root, different wiring
+
+`server/runtime.py` calls `build_services` from `launcher/services.py` with
+two differences:
+
+1. **No avatar** — `avatar.enabled = False` so nothing imports tkinter.
+2. **Remote vision** — screen observations arrive from an Android device
+   via `/api/screen`. `vision.remote.build_remote_vision` creates a
+   `RemoteVisionManager` that implements the same port as the local
+   `VisionManager`. The rest of the system (Brain, Companion) cannot tell
+   the difference.
+
+The `ServerRuntime` owns:
+- `services` — the full `Services` bundle from `build_services`
+- `screen_source` — the remote vision source (or `None` if disabled)
+- `companion_engine` — unprompted notifications (or `None` if disabled)
+- `notifications` — device-targeted outbox
+
+Routes in `server/routes/` only:
+- Validate / authenticate / deserialize
+- Call the corresponding `ServerRuntime` method
+- Serialize the result
+
+No route constructs a provider, builds a prompt, queries memory, or decides
+what a screen means. All of that lives in the shared core.
+
+### Server endpoints
+
+| Method | Path | Runtime method |
+|--------|------|----------------|
+| `GET` | `/health` | `health_status()` |
+| `POST` | `/api/chat` | `chat(message, session_id)` |
+| `WS` | `/api/chat/stream` | `chat_stream(message, session_id)` |
+| `POST` | `/api/screen` | `observe_screen(observation)` |
+| `POST` | `/api/screen/upload` | (multipart, same runtime) |
+| `GET` | `/api/notifications` | `notifications.collect(device_id)` |
+
+Authentication: `Authorization: Bearer <token>` (env `AURA_SERVER_AUTH_TOKEN`).
+WebSocket carries token in query string (`?token=`) because the handshake has
+no header slot.
+
+---
+
+## Android Companion — the remote client
+
+The Android app (`android/`) is a Kotlin/Jetpack Compose client that speaks
+the same protocol the desktop CLI uses, over HTTPS/WSS.
+
+### Android architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MainActivity (Compose Navigation)                          │
+├─────────────────────────────────────────────────────────────┤
+│  ChatViewModel ──► AuraRepository ──► AuraApi (REST)        │
+│       │                │                  AuraStreamClient (WS)│
+│       │                ▼                                     │
+│       │           SettingsProvider (interface)               │
+│       │                │                                     │
+│       ▼                ▼                                     │
+│  ChatUiState    SettingsStore (EncryptedSharedPreferences)   │
+├─────────────────────────────────────────────────────────────┤
+│  ScreenObservationService (AccessibilityService)            │
+│       │                                                     │
+│       ▼                                                     │
+│  ObservationThrottle (client-side filter)                   │
+├─────────────────────────────────────────────────────────────┤
+│  NotificationWorker (WorkManager, 15-min poll)              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key seams
+
+**`SettingsProvider` (interface)** — read-only access to server URL, token,
+device ID, feature flags. `SettingsStore` implements it (needs `Context` +
+Keystore). `FakeSettings` implements it for JVM tests. The network layer
+(`ApiFactory`, `AuraStreamClient`, `AuraRepository`) and `ChatViewModel`
+depend on the interface, so they are testable without Android.
+
+**`AuraRepository`** — the single door to the server. Owns the session ID
+(continuity). Methods: `send()`, `stream()`, `health()`, `sendScreen()`,
+`uploadScreenshot()`, `collectNotifications()`. Returns `AuraResult.Ok/Fail`.
+
+**`AuraStreamClient`** — WebSocket streaming. One socket per message.
+Protocol: connect → send one frame → read `started` → `chunk*` → `complete`.
+Auth via `?token=` + `?session_id=`. Falls back to REST on refused handshake
+or empty stream — `ChatViewModel` handles this transparently.
+
+**`ObservationThrottle`** — client-side gate mirroring the server's
+`companion/detector.py`. Rate limit (min interval), Jaccard similarity on
+token sets, volatile token collapsing (counters, percentages). Empty screens
+never sent. First screen always passes.
+
+**`ScreenObservationService`** — AccessibilityService. Walks the view tree
+(max depth 12, max parts 300, max text 8000). Skips password fields.
+Checks `settings.current.screenObservationEnabled` on every event.
+Only runs when the user explicitly enables it.
+
+**`NotificationWorker`** — WorkManager periodic (15 min). Re-checks
+`notificationsEnabled` and `companion_enabled` from `/health` before each
+poll. Tap-to-open via `MainActivity` intent extra.
+
+### Session continuity
+
+Server generates `session_id` on first reply. Android echoes it on every
+subsequent request (REST body `session_id`, WS query `session_id`). This is
+the whole of conversational continuity — no client-side session logic beyond
+storing that string.
+
+### Security
+
+- No LLM provider keys in APK (server owns them)
+- Token stored in `EncryptedSharedPreferences` (Keystore-backed)
+- Cleartext permitted only in `debug` build (`network_security_config.xml`)
+- Release requires HTTPS (platform-enforced)
+- No logging of Authorization header (no logging interceptor)
+
+---
+
+## One turn, end to end (desktop)
 
 ```
 "hey, what broke"

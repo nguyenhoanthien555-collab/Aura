@@ -6,7 +6,7 @@ it deals in (role, content) pairs and ORM rows. Converting rows into
 pipeline messages is done by brain/adapters.py.
 """
 
-from memory.sqlite import SessionLocal, init_database
+from memory.sqlite import SessionLocal, db_lock, init_database
 from memory.models import Message
 
 
@@ -28,20 +28,25 @@ class MemoryManager:
             content=content,
         )
 
-        self.session.add(message)
-        self.session.commit()
+        # Held across add+commit, not around each one: a half-applied
+        # write is exactly what another thread must never observe.
+        with db_lock:
+            self.session.add(message)
+            self.session.commit()
 
     def get_recent(self, limit: int = 10) -> list[Message]:
         """
         Most recent messages, NEWEST FIRST.
         """
-        return (
-            self.session.query(Message)
-            .order_by(Message.id.desc())
-            .limit(limit)
-            .all()
-        )
+        with db_lock:
+            return (
+                self.session.query(Message)
+                .order_by(Message.id.desc())
+                .limit(limit)
+                .all()
+            )
 
     def clear(self) -> None:
-        self.session.query(Message).delete()
-        self.session.commit()
+        with db_lock:
+            self.session.query(Message).delete()
+            self.session.commit()

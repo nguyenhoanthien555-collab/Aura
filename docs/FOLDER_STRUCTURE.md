@@ -145,7 +145,7 @@ providers/
 Predates `voice/tts/`, which is the live implementation. Flagged for the
 cleanup pass; removal should follow a check for importers.
 
-## vision/ — 5 files
+## vision/ — 7 files
 
 ```
 __init__.py
@@ -153,9 +153,17 @@ manager.py            VisionManager: rate-limited observation
 capture.py            ScreenshotCapture (needs mss)
 context.py            VisionContext: source and description
 processor.py          turns a capture into a description
+ollama_processor.py   local vision model (needs pillow)
+debug.py              python -m vision.debug: verify what the model sees
 ```
 
 Off by default. Reading someone's screen is opt in, always.
+
+`processor.py` reads window titles and needs nothing installed;
+`ollama_processor.py` reads pixels with a local vision model. The manager
+defaults to the former, and `launcher/services.py` injects the latter when
+`vision.capture_screen` is on, so importing `vision.capture` never pulls in
+the image stack.
 
 ## avatar/ — 8 files
 

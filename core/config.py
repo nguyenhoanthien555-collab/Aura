@@ -128,7 +128,7 @@ DEFAULT_CONFIG = {
             "provider": "auto",
 
             # Empty means "whatever the provider considers its own
-            # voice". For Edge that is en-US-AvaMultilingualNeural.
+            # voice". For Edge that is zh-CN-XiaoxiaoNeural.
             "voice": "",
 
             # One scale shared by every provider, written the way Edge
@@ -185,9 +185,25 @@ DEFAULT_CONFIG = {
         "min_interval": 2.0,
 
         # Window titles only. Turn this on to also grab pixels, which
-        # needs the optional `mss` package.
+        # needs the optional `mss` and `pillow` packages.
+        #
+        # `monitor` is an mss index: 1 is the primary display, 2 the
+        # second, and 0 the union of all of them. Getting this wrong is
+        # the difference between describing the screen the user is
+        # looking at and describing a different one.
         "capture_screen": False,
         "monitor": 1,
+
+        # The local vision model that reads captured frames. Only used
+        # when capture_screen is on. Empty host falls back to llm.host.
+        "model": "qwen2.5vl:7b",
+        "host": "",
+        "timeout": 120.0,
+
+        # Write the exact frame handed to the model here, as PNG, for
+        # verifying what it actually saw. Empty writes nothing. This is a
+        # screenshot on disk, so it stays off unless asked for.
+        "debug_frame": "",
     },
 
     "avatar": {
@@ -254,6 +270,57 @@ DEFAULT_CONFIG = {
 
     "logging": {
         "level": "INFO",
+    },
+
+    "server": {
+        # Read only by server mode (`launcher.py --server`). Desktop mode
+        # never looks at this section.
+        #
+        # No secret belongs here. config.yaml is committed; the bearer
+        # token, CORS origins, host and port come from the environment
+        # (`AURA_SERVER_*`). See .env.example and docs/SECURITY.md.
+
+        # Seconds an idle chat session is kept before it is swept.
+        "session_ttl_seconds": 3600,
+
+        # Screen observation reported by a mobile client. Off until the
+        # user turns it on - here *and* on the device. Two switches, the
+        # same shape tools and plugins use.
+        "screen": {
+            "enabled": False,
+
+            # Seconds between accepted observations. Below this an
+            # arriving frame is dropped, not queued.
+            "min_interval": 8.0,
+
+            # How different a screen has to be from the last one before
+            # it counts as a change worth thinking about, 0.0 to 1.0.
+            "min_change_ratio": 0.25,
+        },
+
+        # Unprompted messages back to the device.
+        #
+        # Every default here exists to keep Aura quiet. She notifies when
+        # she has something worth saying, not when something happened.
+        "companion": {
+            "enabled": False,
+
+            # Confidence a thought must reach before it is allowed out.
+            "relevance_threshold": 0.7,
+
+            # Seconds after any notification before the next one may fire.
+            "cooldown_seconds": 300,
+
+            # A hard ceiling that survives a bad relevance score.
+            "max_per_hour": 6,
+
+            # Local hour ranges to stay silent through, e.g. [[23, 7]].
+            "quiet_hours": [],
+
+            # Seconds after the user's last message during which nothing
+            # unprompted is sent - she is already in the conversation.
+            "suppress_after_chat_seconds": 120,
+        },
     },
 }
 

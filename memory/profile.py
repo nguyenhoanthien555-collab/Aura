@@ -14,7 +14,7 @@ instruction.
 import re
 
 from memory.models import UserFact, timestamp_now
-from memory.sqlite import SessionLocal, init_database
+from memory.sqlite import SessionLocal, db_lock, init_database
 
 
 MAX_KEY = 64
@@ -71,30 +71,34 @@ class ProfileStore:
         if not text:
             return None
 
-        fact = (
-            self.session.query(UserFact)
-            .filter(UserFact.key == slug)
-            .one_or_none()
-        )
+        # Read-then-write. Held across both, so two threads cannot each
+        # find no fact and each insert one against a unique key.
+        with db_lock:
 
-        if fact is None:
-
-            fact = UserFact(
-                key=slug,
-                value=text,
-                category=category,
-                source=source,
+            fact = (
+                self.session.query(UserFact)
+                .filter(UserFact.key == slug)
+                .one_or_none()
             )
 
-            self.session.add(fact)
+            if fact is None:
 
-        else:
-            fact.value = text
-            fact.category = category
-            fact.source = source
-            fact.updated_at = timestamp_now()
+                fact = UserFact(
+                    key=slug,
+                    value=text,
+                    category=category,
+                    source=source,
+                )
 
-        self.session.commit()
+                self.session.add(fact)
+
+            else:
+                fact.value = text
+                fact.category = category
+                fact.source = source
+                fact.updated_at = timestamp_now()
+
+            self.session.commit()
 
         return fact
 
@@ -102,24 +106,27 @@ class ProfileStore:
 
         slug = normalise_key(key)
 
-        fact = (
-            self.session.query(UserFact)
-            .filter(UserFact.key == slug)
-            .one_or_none()
-        )
+        with db_lock:
 
-        if fact is None:
-            return False
+            fact = (
+                self.session.query(UserFact)
+                .filter(UserFact.key == slug)
+                .one_or_none()
+            )
 
-        self.session.delete(fact)
-        self.session.commit()
+            if fact is None:
+                return False
+
+            self.session.delete(fact)
+            self.session.commit()
 
         return True
 
     def clear(self) -> None:
 
-        self.session.query(UserFact).delete()
-        self.session.commit()
+        with db_lock:
+            self.session.query(UserFact).delete()
+            self.session.commit()
 
     # ------------------------------------------------------------------
     # Reading
@@ -130,11 +137,12 @@ class ProfileStore:
 
         slug = normalise_key(key)
 
-        fact = (
-            self.session.query(UserFact)
-            .filter(UserFact.key == slug)
-            .one_or_none()
-        )
+        with db_lock:
+            fact = (
+                self.session.query(UserFact)
+                .filter(UserFact.key == slug)
+                .one_or_none()
+            )
 
         return fact.value if fact is not None else ""
 
@@ -147,24 +155,27 @@ class ProfileStore:
         Aura ever heard.
         """
 
-        query = (
-            self.session.query(UserFact)
-            .order_by(UserFact.updated_at.desc(), UserFact.id.desc())
-        )
+        with db_lock:
 
-        if limit is not None:
-            query = query.limit(limit)
+            query = (
+                self.session.query(UserFact)
+                .order_by(UserFact.updated_at.desc(), UserFact.id.desc())
+            )
 
-        return query.all()
+            if limit is not None:
+                query = query.limit(limit)
+
+            return query.all()
 
     def by_category(self, category: str) -> list[UserFact]:
 
-        return (
-            self.session.query(UserFact)
-            .filter(UserFact.category == category)
-            .order_by(UserFact.key.asc())
-            .all()
-        )
+        with db_lock:
+            return (
+                self.session.query(UserFact)
+                .filter(UserFact.category == category)
+                .order_by(UserFact.key.asc())
+                .all()
+            )
 
     def render(self, limit: int | None = None) -> list[str]:
         """Prompt ready lines."""
@@ -172,4 +183,5 @@ class ProfileStore:
         return [fact.render() for fact in self.all(limit)]
 
     def __len__(self) -> int:
-        return self.session.query(UserFact).count()
+        with db_lock:
+            return self.session.query(UserFact).count()

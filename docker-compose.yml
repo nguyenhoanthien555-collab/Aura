@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  aura:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aura
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # These can be overridden at `docker compose up` time
+      - AURA_SERVER_HOST=0.0.0.0
+      - AURA_SERVER_PORT=8000
+      # CORS: restrict in production. * is only for local dev.
+      - AURA_SERVER_CORS_ORIGINS=${AURA_SERVER_CORS_ORIGINS:-*}
+      # Log level
+      - AURA_SERVER_LOG_LEVEL=${AURA_SERVER_LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent SQLite database (memory.db)
+      - aura-data:/app/data
+      # Optional: keep logs across restarts
+      - aura-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  aura-data:
+  aura-logs:

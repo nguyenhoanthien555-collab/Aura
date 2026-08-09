@@ -19,7 +19,7 @@ import re
 from typing import Protocol, runtime_checkable
 
 from memory.models import Message
-from memory.sqlite import SessionLocal, init_database
+from memory.sqlite import SessionLocal, db_lock, init_database
 
 
 # Words too common to carry meaning. Small on purpose: an aggressive
@@ -130,13 +130,14 @@ class KeywordRetriever:
         what the prompt already contains.
         """
 
-        return (
-            self.session.query(Message)
-            .order_by(Message.id.desc())
-            .offset(self.skip_recent)
-            .limit(self.scope)
-            .all()
-        )
+        with db_lock:
+            return (
+                self.session.query(Message)
+                .order_by(Message.id.desc())
+                .offset(self.skip_recent)
+                .limit(self.scope)
+                .all()
+            )
 
     @staticmethod
     def _render(message: Message) -> str:

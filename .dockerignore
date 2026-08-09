@@ -1,0 +1,79 @@
+# .dockerignore — everything that must not reach the image
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Local databases and logs
+data/
+logs/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed at runtime)
+docs/
+*.md
+!prompts/*.md
+!docker/README.md
+
+# Android project (not part of the server image)
+android/
+
+# Tests (not needed at runtime)
+tests/
+*.test.py
+test_*.py
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Debug / temporary files
+debug_screen.png
+test*.png
+test*.py
+*.mp3
+
+# Companion / server directories not needed in container
+companion/
+server/__pycache__/
+
+# Config that is environment-specific
+config.local.yaml
+*.local.yaml

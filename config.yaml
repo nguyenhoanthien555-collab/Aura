@@ -3,15 +3,15 @@ app:
   version: 0.2.0
 
 llm:
-  provider: gemini
-  model: gemini-3.5-flash
-  temperature: 0.7
-  max_output_tokens: 4096
+  provider: ollama
+  model: qwen2.5vl:7b
+  host: http://127.0.0.1:11434
+  timeout: 120
 
 memory:
   history_limit: 20
-  # Long term memory. Profile facts are always worth their tokens;
-  # keyword recall is worth enabling once the transcript is long.
+
+  # Long-term memory
   profile: true
   recall: false
   max_facts: 8
@@ -20,20 +20,37 @@ memory:
 voice:
   tts:
     enabled: true
-    # auto = SAPI on Windows, pyttsx3 if installed, otherwise silent.
-    # Nothing is downloaded or installed.
-    provider: auto
-    voice: ""
-    rate: 0
-    volume: 100
+
+    # Edge TTS gives Aura her actual neural voice.
+    provider: edge
+
+    # Female, warm, expressive.
+    voice: zh-CN-XiaoxiaoNeural
+
+    # Slightly quicker than neutral.
+    rate: "-5%"
+
+    # Slightly brighter while remaining natural.
+    pitch: "-20Hz"
+
+    # Normal volume.
+    volume: "+20%"
+
+    # Network synthesis timeout.
+    timeout: 60.0
+
+    # Maximum playback duration.
+    playback_timeout: 120.0
+
+    playback: true
 
   stt:
-    enabled: false
-    provider: mock          # mock | whisper
+    enabled: true
+    provider: whisper
     model: base
     language: ""
     record_seconds: 5.0
-    wake_word: ""           # e.g. "aura" for hands free listening
+    wake_word: ""
 
   microphone:
     sample_rate: 16000
@@ -41,28 +58,46 @@ voice:
     device: null
 
 vision:
-  # Off by default. Aura does not look at your screen unless told to.
   enabled: true
-  min_interval: 2.0
-  capture_screen: false     # window titles only; true needs `mss`
+  capture_screen: true
+
+  # mss monitor index: 1 = primary display, 2 = second, 0 = all combined.
   monitor: 1
+
+  min_interval: 2.0
+
+  # Local vision model that reads captured frames.
+  model: qwen2.5vl:7b
+  host: http://127.0.0.1:11434
+  timeout: 120.0
+
+  # Set to a path (e.g. debug_screen.png) to save the exact frame sent to
+  # the model. Off by default: it writes a screenshot to disk.
+  debug_frame: ""
 
 avatar:
   enabled: true
   size: 160
   scale: 1.0
   opacity: 0.95
-  position: null            # null = bottom right
-  sprites_dir: ""           # idle.png / listening.png / thinking.png / speaking.png
+  position: null
+  sprites_dir: ""
 
 tools:
-  # Two locks, both must be opened: enable the system, then name each
-  # tool you permit. An empty allow list grants nothing.
+  # Two locks must be opened:
+  # 1. Enable the tool system
+  # 2. Explicitly allow individual tools
   enabled: false
-  allowed: []               # e.g. [current_time, read_file]
-  auto_approve: [safe]      # anything else asks first
-  allowed_paths: []         # directories read_file may touch
-  applications: {}          # nickname: executable
+
+  allowed: []
+
+  # Safe tools can run automatically.
+  # Everything else requires approval.
+  auto_approve:
+    - safe
+
+  allowed_paths: []
+  applications: {}
 
 logging:
   level: INFO
