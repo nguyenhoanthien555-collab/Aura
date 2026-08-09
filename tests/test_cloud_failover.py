@@ -375,3 +375,331 @@ def test_openrouter_error_parsing_detects_account_limit(monkeypatch):
 
     err4 = _failure(429, '{"error": {"message": "Provider rate limit hit on nvidia/nemotron-nano-12b-v2-vl:free"}}')
     assert err4.is_account_limit is False
+
+    # Test free-models-per-day message
+    err5 = _failure(429, '{"error": {"message": "Rate limit exceeded: free-models-per-day"}}')
+    assert err5.is_account_limit is True
+
+    # Test headers limit: 50, remaining: 0
+    headers = {"X-RateLimit-Limit": "50", "X-RateLimit-Remaining": "0"}
+    err6 = _failure(429, '{"error": {"message": "Generic limit exceeded"}}', headers=headers)
+    assert err6.is_account_limit is True
+
+
+def test_openrouter_vision_provider_account_level_429_stops_immediately(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    called_models = []
+
+    def mock_request(self, messages):
+        called_models.append(self.model)
+        # Raise account-level 429
+        raise ProviderRateLimitError("Rate limit exceeded: free-models-per-day", is_account_limit=True)
+
+    from vision.cloud_processor import OpenRouterVisionProvider
+    monkeypatch.setattr(OpenRouterVisionProvider, "_request", mock_request)
+    provider = OpenRouterVisionProvider(model="openrouter/free")
+    with pytest.raises(ProviderRateLimitError) as exc_info:
+        provider.describe_image("describe this", b"dummy-data", "image/png")
+
+    assert exc_info.value.is_account_limit is True
+    # Should stop on the first model (google/gemma-4-31b-it:free) immediately
+    assert called_models == ["google/gemma-4-31b-it:free"]
+
+
+def test_gemini_success_scenario(monkeypatch):
+    from brain.providers.gemini import GeminiProvider
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: "Gemini reply")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "Gemini reply"
+
+
+def test_gemini_429_to_groq_success_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+
+    def fail_gemini(*args, **kwargs):
+        raise ProviderRateLimitError("Gemini 429")
+
+    monkeypatch.setattr(GeminiProvider, "generate", fail_gemini)
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "Groq reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "Groq reply"
+
+
+def test_gemini_unavailable_to_groq_success_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+
+    def fail_gemini(*args, **kwargs):
+        raise ProviderUnavailableError("Gemini down")
+
+    monkeypatch.setattr(GeminiProvider, "generate", fail_gemini)
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "Groq reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "Groq reply"
+
+
+def test_groq_failure_to_mistral_success_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Gemini down")))
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderRateLimitError("Groq 429")))
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: "Mistral reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "Mistral reply"
+
+
+def test_mistral_failure_to_openrouter_success_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+    from brain.providers.openrouter import OpenRouterProvider
+
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Gemini down")))
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Groq down")))
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderRateLimitError("Mistral 429")))
+    monkeypatch.setattr(OpenRouterProvider, "generate", lambda self, prompt: "OpenRouter reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "OpenRouter reply"
+
+
+def test_vision_never_uses_text_only_provider_scenario(monkeypatch):
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+    from brain.providers.openrouter import OpenRouterProvider
+
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
+
+    groq = GroqProvider(model="llama-3.3-70b-versatile")
+    mistral = MistralProvider(model="mistral-small-latest")
+    openrouter = OpenRouterProvider(model="openrouter/free")
+
+    assert not groq.supports_vision
+    assert not mistral.supports_vision
+    assert not openrouter.supports_vision
+
+
+def test_gemini_vision_failure_to_openrouter_vision_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
+
+    from vision.cloud_processor import GeminiVisionProvider, OpenRouterVisionProvider
+
+    monkeypatch.setattr(GeminiVisionProvider, "describe_image", lambda self, prompt, image, mime: (_ for _ in ()).throw(ProviderRateLimitError("Gemini 429")))
+    monkeypatch.setattr(OpenRouterVisionProvider, "describe_image", lambda self, prompt, image, mime: "OpenRouter vision reply")
+
+    from vision.cloud_processor import build_cloud_vision_processor
+    config = {
+        "vision": {"enabled": True},
+        "llm": {"fallback_providers": ["openrouter"]}
+    }
+    processor = build_cloud_vision_processor(config)
+    assert processor is not None
+    assert processor.describe(Frame(data=_png(), image_format="png")) == "OpenRouter vision reply"
+
+
+def test_optional_provider_keys_do_not_prevent_server_startup_scenario(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.provider is not None
+
+
+def test_no_infinite_retry_loops_scenario():
+    from brain.providers.fallback import FallbackProvider
+
+    class FailingProvider:
+        provider_name = "failing"
+        supports_text = True
+        supports_vision = False
+        def generate(self, prompt):
+            raise ProviderUnavailableError("Error")
+
+    provider = FallbackProvider([FailingProvider(), FailingProvider()], "failing->failing")
+    with pytest.raises(ProviderUnavailableError):
+        provider.generate("hello")
+
+
+def test_api_keys_never_appear_in_logs_scenario(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key-12345")
+
+    logged_messages = []
+    def mock_warning(msg, *args):
+        formatted = msg % args if args else msg
+        logged_messages.append(formatted)
+
+    from core.logger import logger
+    monkeypatch.setattr(logger, "warning", mock_warning)
+    monkeypatch.setattr(logger, "info", lambda *args: None)
+
+    from brain.providers.openrouter import _failure
+    headers = {"Authorization": "Bearer secret-key-12345", "X-RateLimit-Limit": "50"}
+    _failure(429, '{"error": {"message": "Rate limit exceeded"}}', headers=headers, model="google/gemma-4-31b-it:free")
+
+    for msg in logged_messages:
+        assert "secret-key-12345" not in msg
+        assert "Bearer" not in msg
+
+
+def test_mistral_success(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-key")
+    from brain.providers.mistral import MistralProvider
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: "Mistral success reply")
+
+    provider = MistralProvider()
+    assert provider.generate("hello") == "Mistral success reply"
+
+
+def test_mistral_authentication_failure(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "invalid-key")
+
+    from urllib.error import HTTPError
+    import io
+    def mock_urlopen(*args, **kwargs):
+        raise HTTPError("https://api.mistral.ai/v1/chat/completions", 401, "Unauthorized", {}, io.BytesIO(b""))
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    from brain.providers.mistral import MistralProvider
+    provider = MistralProvider()
+    with pytest.raises(ValueError) as exc_info:
+        provider.generate("hello")
+    assert "authentication failed" in str(exc_info.value)
+
+
+def test_mistral_429_to_openrouter_fallback(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+    from brain.providers.openrouter import OpenRouterProvider
+
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Gemini down")))
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Groq down")))
+
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderRateLimitError("Mistral 429", is_account_limit=False)))
+    monkeypatch.setattr(OpenRouterProvider, "generate", lambda self, prompt: "OpenRouter reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "OpenRouter reply"
+
+
+def test_gemini_groq_mistral_success(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Gemini down")))
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Groq down")))
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: "Mistral reply")
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    assert router.generate("hello") == "Mistral reply"
+
+
+def test_gemini_groq_mistral_openrouter_failure(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+    from brain.providers.openrouter import OpenRouterProvider
+
+    monkeypatch.setattr(GeminiProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Gemini down")))
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Groq down")))
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("Mistral down")))
+    monkeypatch.setattr(OpenRouterProvider, "generate", lambda self, prompt: (_ for _ in ()).throw(ProviderUnavailableError("OpenRouter down")))
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    with pytest.raises(ProviderUnavailableError):
+        router.generate("hello")
+
+
+def test_text_request_does_not_send_image_to_mistral(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-key")
+    from brain.providers.mistral import MistralProvider
+    provider = MistralProvider()
+    assert not provider.supports_vision
+    assert provider.supports_text
+
+
+def test_mistral_api_key_missing():
+    import os
+    orig_key = os.environ.get("MISTRAL_API_KEY")
+    try:
+        if "MISTRAL_API_KEY" in os.environ:
+            del os.environ["MISTRAL_API_KEY"]
+        from brain.providers.mistral import MistralProvider
+        with pytest.raises(ValueError) as exc_info:
+            MistralProvider()
+        assert "MISTRAL_API_KEY is not configured" in str(exc_info.value)
+    finally:
+        if orig_key is not None:
+            os.environ["MISTRAL_API_KEY"] = orig_key
+
+
+def test_mistral_streaming(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-key")
+
+    from brain.providers.mistral import MistralProvider
+    def mock_stream(self, prompt):
+        yield "Chunk 1 "
+        yield "Chunk 2"
+
+    monkeypatch.setattr(MistralProvider, "stream", mock_stream)
+
+    provider = MistralProvider()
+    chunks = list(provider.stream("hello"))
+    assert chunks == ["Chunk 1 ", "Chunk 2"]

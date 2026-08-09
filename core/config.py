@@ -36,8 +36,13 @@ DEFAULT_CONFIG = {
     "llm": {
         "provider": "mock",
         "model": "gemini-2.5-flash",
+        "fallback_provider": "",
+        "fallback_model": "",
+        "fallback_providers": [],
+        "groq_model": "llama-3.3-70b-versatile",
+        "mistral_model": "mistral-small-latest",
         "temperature": 0.7,
-        "max_output_tokens": 4096,
+        "max_output_tokens": 768,
     },
 
     "memory": {

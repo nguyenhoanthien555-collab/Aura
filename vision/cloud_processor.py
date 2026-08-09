@@ -62,6 +62,8 @@ class CloudVisionProcessor:
 
 class GeminiVisionProvider:
     provider_name = "gemini-vision"
+    supports_text = False
+    supports_vision = True
 
     def __init__(self, model: str):
         from google import genai
@@ -88,6 +90,7 @@ class GeminiVisionProvider:
 
 class OpenRouterVisionProvider(OpenRouterProvider):
     provider_name = "openrouter-vision"
+    supports_vision = True
 
     def describe_image(self, prompt: str, image: bytes, mime: str) -> str:
         encoded = base64.b64encode(image).decode("ascii")
@@ -151,13 +154,17 @@ def build_cloud_vision_processor(config: dict) -> CloudVisionProcessor | None:
     llm = config.get("llm") or {}
     providers = []
     if os.getenv("GEMINI_API_KEY"):
-        providers.append(GeminiVisionProvider(vision.get("model") or llm.get("model")))
+        prov = GeminiVisionProvider(vision.get("model") or llm.get("model"))
+        if getattr(prov, "supports_vision", False):
+            providers.append(prov)
     if os.getenv("OPENROUTER_API_KEY"):
-        providers.append(OpenRouterVisionProvider(
+        prov = OpenRouterVisionProvider(
             model=vision.get("fallback_model") or llm.get("fallback_model") or "openrouter/free",
             timeout=float(vision.get("timeout") or llm.get("timeout") or 45.0),
             max_tokens=220,
-        ))
+        )
+        if getattr(prov, "supports_vision", False):
+            providers.append(prov)
     return CloudVisionProcessor(
         providers,
         max_pixels=int(vision.get("max_pixels", 1_500_000)),

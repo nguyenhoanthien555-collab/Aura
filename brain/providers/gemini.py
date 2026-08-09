@@ -14,6 +14,8 @@ from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableEr
 
 class GeminiProvider(BaseProvider):
     provider_name = "gemini"
+    supports_text = True
+    supports_vision = True
 
     def __init__(self, model: str | None = None):
 

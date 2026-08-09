@@ -36,7 +36,9 @@ def _failure(status: int, body: str, retry_after: str | None = None, model: str 
         providers = ["google/", "nvidia/", "cohere/", "meta-llama/", "openai/", "anthropic/", "mistral/", "microsoft/"]
         has_provider = any(p in err_msg for p in providers)
 
-        if "slow down" in err_msg or "daily limit" in err_msg or "key limit" in err_msg or "account limit" in err_msg or "quota" in err_msg:
+        if "free-models-per-day" in err_msg:
+            is_account_limit = True
+        elif "slow down" in err_msg or "daily limit" in err_msg or "key limit" in err_msg or "account limit" in err_msg or "quota" in err_msg:
             if not has_provider:
                 is_account_limit = True
         elif "limit_rpd" in err_msg or "limit_rpm" in err_msg:
@@ -45,6 +47,15 @@ def _failure(status: int, body: str, retry_after: str | None = None, model: str 
 
         if not err_msg or (not has_provider and "limit_" in err_msg):
             is_account_limit = True
+
+        if headers:
+            limit_val = headers.get("X-RateLimit-Limit") or headers.get("x-ratelimit-limit")
+            rem_val = headers.get("X-RateLimit-Remaining") or headers.get("x-ratelimit-remaining")
+            try:
+                if limit_val and rem_val and int(limit_val) == 50 and int(rem_val) == 0:
+                    is_account_limit = True
+            except (ValueError, TypeError):
+                pass
 
         classification = "account-level" if is_account_limit else "model/provider-level"
 
@@ -74,6 +85,8 @@ def _failure(status: int, body: str, retry_after: str | None = None, model: str 
 
 class OpenRouterProvider(BaseProvider):
     provider_name = "openrouter"
+    supports_text = True
+    supports_vision = False
 
     def __init__(self, model: str, timeout: float = 45.0, max_tokens: int = 768):
         load_dotenv()

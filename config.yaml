@@ -7,6 +7,10 @@ llm:
   model: gemini-3.6-flash
   fallback_provider: openrouter
   fallback_model: openrouter/free
+  fallback_providers:
+    - groq
+    - mistral
+    - openrouter
   timeout: 120
   max_output_tokens: 768
 
