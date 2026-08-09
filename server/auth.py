@@ -11,10 +11,22 @@ Two rules this module exists to enforce:
     about how much of it was right.
 """
 import secrets
+from typing import Annotated
 
-from fastapi import Header, HTTPException, status
+from fastapi import HTTPException, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from server.config import settings
+
+
+# Declares the standard OpenAPI HTTP bearer scheme. `auto_error=False`
+# deliberately leaves the response vocabulary to `check_bearer`, so the
+# HTTP and WebSocket paths keep their existing authentication semantics.
+bearer_scheme = HTTPBearer(
+    scheme_name="AuraBearer",
+    description="Aura server bearer token",
+    auto_error=False,
+)
 
 
 def _unauthorized(detail: str) -> HTTPException:
@@ -58,8 +70,19 @@ def check_bearer(authorization: str | None) -> str:
     return token
 
 
-async def verify_token(authorization: str = Header(None)) -> str:
+async def verify_token(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Security(bearer_scheme),
+    ],
+) -> str:
     """
     FastAPI dependency: verify the bearer token on an HTTP request.
+
+    `credentials` exists to declare HTTP bearer authentication in OpenAPI,
+    which makes Swagger's Authorize action attach the Authorization header.
+    The raw header remains the validation input so `check_bearer` retains
+    its precise handling of malformed and non-Bearer schemes.
     """
-    return check_bearer(authorization)
+    return check_bearer(request.headers.get("Authorization"))

@@ -358,6 +358,17 @@ def test_chat_requires_a_token_when_one_is_configured(client, auth_enabled):
     assert response.status_code == 401
 
 
+def test_chat_accepts_the_correct_bearer_header(client, auth_enabled):
+
+    response = client.post(
+        "/api/chat",
+        headers={"Authorization": f"Bearer {auth_enabled}"},
+        json={"session_id": "swagger-auth", "message": "Hello"},
+    )
+
+    assert response.status_code == 200
+
+
 def test_a_wrong_token_is_rejected(client, auth_enabled):
 
     response = client.get(
@@ -402,6 +413,21 @@ def test_a_rejection_never_echoes_the_expected_token(client, auth_enabled):
 
     assert auth_enabled not in response.text
     assert auth_enabled not in str(response.headers)
+
+
+def test_openapi_declares_bearer_security_for_authenticated_chat(client):
+
+    schema = client.get("/openapi.json").json()
+    operation = schema["paths"]["/api/chat"]["post"]
+    scheme = schema["components"]["securitySchemes"]["AuraBearer"]
+
+    assert scheme["type"] == "http"
+    assert scheme["scheme"] == "bearer"
+    assert {"AuraBearer": []} in operation["security"]
+    assert not any(
+        parameter["name"] == "authorization"
+        for parameter in operation.get("parameters", [])
+    )
 
 
 # ----------------------------------------------------------------------
