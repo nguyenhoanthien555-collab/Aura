@@ -23,7 +23,7 @@
 <tr>
 <td>
 <div class="infoBox" id="tests">
-<div class="counter">4</div>
+<div class="counter">6</div>
 <p>tests</p>
 </div>
 </td>
@@ -41,7 +41,7 @@
 </td>
 <td>
 <div class="infoBox" id="duration">
-<div class="counter">0.007s</div>
+<div class="counter">0.030s</div>
 <p>duration</p>
 </div>
 </td>
@@ -63,9 +63,6 @@
 <li>
 <a href="#tab0">Tests</a>
 </li>
-<li>
-<a href="#tab1">Standard error</a>
-</li>
 </ul>
 <div id="tab0" class="tab">
 <h2>Tests</h2>
@@ -79,63 +76,35 @@
 </thead>
 <tr>
 <td class="success">testAccessibilityNodeModel</td>
-<td class="success">0.003s</td>
+<td class="success">0.004s</td>
 <td class="success">passed</td>
 </tr>
 <tr>
 <td class="success">testActionExecutorValidation</td>
-<td class="success">0.001s</td>
+<td class="success">0s</td>
 <td class="success">passed</td>
 </tr>
 <tr>
 <td class="success">testSafetyGuardKeywords</td>
-<td class="success">0.003s</td>
+<td class="success">0s</td>
 <td class="success">passed</td>
 </tr>
 <tr>
 <td class="success">testSafetyGuardOpenApp</td>
-<td class="success">0s</td>
+<td class="success">0.001s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">testSafetyGuardStillBlocksDangerousActions</td>
+<td class="success">0.018s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">testVietnameseUtf8Tasks</td>
+<td class="success">0.007s</td>
 <td class="success">passed</td>
 </tr>
 </table>
-</div>
-<div id="tab1" class="tab">
-<h2>Standard error</h2>
-<span class="code">
-<pre>Exception in thread &quot;DefaultDispatcher-worker-2&quot; kotlinx.coroutines.CoroutinesInternalError: Fatal exception in coroutines machinery for CancellableContinuation(DispatchedContinuation[Dispatchers.IO, Continuation at com.aura.companion.data.AuraRepository$health$2.invokeSuspend(AuraRepository.kt:84)@497f03c2]){Completed}@60699a9b. Please read KDoc to 'handleFatalException' method and report this incident to maintainers
-	at kotlinx.coroutines.DispatchedTask.handleFatalException$kotlinx_coroutines_core(DispatchedTask.kt:132)
-	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:109)
-	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:113)
-	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:589)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:823)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:720)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:707)
-	Suppressed: kotlinx.coroutines.internal.DiagnosticCoroutineContextException: [CoroutineId(83), &quot;coroutine#83&quot;:DispatchedCoroutine{Completed}@608c49de, Dispatchers.IO]
-Caused by: java.lang.IllegalStateException: Module with the Main dispatcher had failed to initialize. For tests Dispatchers.setMain from kotlinx-coroutines-test module can be used
-	at kotlinx.coroutines.internal.MissingMainCoroutineDispatcher.missing(MainDispatchers.kt:111)
-	at kotlinx.coroutines.internal.MissingMainCoroutineDispatcher.isDispatchNeeded(MainDispatchers.kt:92)
-	at kotlinx.coroutines.test.internal.TestMainDispatcher.isDispatchNeeded(TestMainDispatcher.kt:27)
-	at kotlinx.coroutines.internal.DispatchedContinuationKt.resumeCancellableWith(DispatchedContinuation.kt:299)
-	at kotlinx.coroutines.DispatchedCoroutine.afterResume(Builders.common.kt:255)
-	at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:100)
-	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)
-	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:99)
-	... 6 more
-Caused by: java.lang.IllegalStateException: The main looper is not available
-	at kotlinx.coroutines.android.AndroidDispatcherFactory.createDispatcher(HandlerDispatcher.kt:51)
-	at kotlinx.coroutines.internal.MainDispatchersKt.tryCreateDispatcher(MainDispatchers.kt:53)
-	at kotlinx.coroutines.test.internal.TestMainDispatcherFactory.createDispatcher(TestMainDispatcherJvm.kt:11)
-	at kotlinx.coroutines.internal.MainDispatchersKt.tryCreateDispatcher(MainDispatchers.kt:53)
-	at kotlinx.coroutines.internal.MainDispatcherLoader.loadMainDispatcher(MainDispatchers.kt:34)
-	at kotlinx.coroutines.internal.MainDispatcherLoader.&lt;clinit&gt;(MainDispatchers.kt:18)
-	at kotlinx.coroutines.Dispatchers.getMain(Dispatchers.kt:20)
-	at kotlinx.coroutines.test.internal.TestMainDispatcherJvmKt.getTestMainDispatcher(TestMainDispatcherJvm.kt:24)
-	at kotlinx.coroutines.test.TestDispatchers.setMain(TestDispatchers.kt:21)
-	at com.aura.companion.ui.chat.ChatViewModelTest.setUp(ChatViewModelTest.kt:67)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-</pre>
-</span>
 </div>
 </div>
 <div id="footer">
@@ -145,7 +114,7 @@ Caused by: java.lang.IllegalStateException: The main looper is not available
 <input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
 </label>
 </div>Generated by 
-<a href="http://www.gradle.org">Gradle 8.9</a> at Aug 9, 2026, 8:06:11 PM</p>
+<a href="http://www.gradle.org">Gradle 8.9</a> at Aug 9, 2026, 8:23:02 PM</p>
 </div>
 </div>
 </body>

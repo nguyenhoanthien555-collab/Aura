@@ -300,6 +300,13 @@ class PromptBuilder:
                 json.dumps(tree, indent=2)
             ])
 
+            # 2.5 Last Action Error
+            if context.get("last_action_error"):
+                prompt.extend([
+                    "===== LAST ACTION ERROR =====",
+                    context["last_action_error"]
+                ])
+
             # 3. Agent Rules
             prompt.extend([
                 "===== AGENT RULES =====",

@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.aura.companion.data.settings.UrlNormalisationTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:06:11" hostname="MSI" time="0.006">
+<testsuite name="com.aura.companion.data.settings.UrlNormalisationTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:23:02" hostname="MSI" time="0.007">
   <properties/>
   <testcase name="trailing slash is added exactly once" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.001"/>
   <testcase name="isConfigured is false until a URL exists" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <testcase name="explicit scheme is never overridden" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
-  <testcase name="mdns names are local" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.001"/>
+  <testcase name="mdns names are local" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <testcase name="surrounding whitespace is stripped" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <testcase name="isSecure reports the scheme actually stored" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <testcase name="localhost and the emulator loopback are treated as local" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <testcase name="public host assumed https" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
-  <testcase name="bare host and port assumed local and given http" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
+  <testcase name="bare host and port assumed local and given http" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.001"/>
   <testcase name="toString never reveals the token" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.004"/>
-  <testcase name="blank stays blank rather than becoming a scheme" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
+  <testcase name="blank stays blank rather than becoming a scheme" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.001"/>
   <testcase name="a path in the base URL survives normalisation" classname="com.aura.companion.data.settings.UrlNormalisationTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

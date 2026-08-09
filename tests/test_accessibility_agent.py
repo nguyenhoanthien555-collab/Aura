@@ -92,3 +92,41 @@ def test_runtime_chat_forwards_context(monkeypatch):
     assert response.text == '{"action": "click", "node_id": "node_1"}'
     assert len(captured_prompts) == 1
     assert "===== AGENT RULES =====" in captured_prompts[0]
+
+
+def test_vietnamese_utf8_task_formatting():
+    builder = PromptBuilder()
+    
+    # Check that Vietnamese characters in user_request are preserved correctly in the build prompt
+    for vi_request in ["mở youtube", "tìm video minecraft", "mở cài đặt"]:
+        context = {
+            "device": {"width": 1080, "height": 2400},
+            "app": {"package": "com.example.app", "activity": "ExampleActivity"},
+            "accessibility_tree": {"package": "com.example.app", "nodes": []},
+            "user_request": vi_request
+        }
+        prompt = builder.build(
+            history=[],
+            user_message=Message(role="user", content="tick"),
+            context=context
+        )
+        assert f'The user has requested: "{vi_request}"' in prompt
+
+
+def test_last_action_error_formatting():
+    builder = PromptBuilder()
+    context = {
+        "device": {"width": 1080, "height": 2400},
+        "app": {"package": "com.example.app", "activity": "ExampleActivity"},
+        "accessibility_tree": {"package": "com.example.app", "nodes": []},
+        "user_request": "click button",
+        "last_action_error": "Action click on node_12 failed. Target not clickable."
+    }
+    prompt = builder.build(
+        history=[],
+        user_message=Message(role="user", content="tick"),
+        context=context
+    )
+    assert "===== LAST ACTION ERROR =====" in prompt
+    assert "Action click on node_12 failed. Target not clickable." in prompt
+

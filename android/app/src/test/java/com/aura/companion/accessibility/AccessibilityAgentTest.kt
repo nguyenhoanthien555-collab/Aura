@@ -55,15 +55,57 @@ class AccessibilityAgentTest {
             id = "node_1",
             role = "button",
             text = "Submit",
-            description = "Submit Button",
+            contentDescription = "Submit Button",
+            className = "android.widget.Button",
             clickable = true,
-            bounds = listOf(10, 20, 100, 200)
+            bounds = listOf(10, 20, 100, 200),
+            visible = true,
+            enabled = true
         )
         assertEquals("node_1", node.id)
         assertEquals("button", node.role)
         assertEquals("Submit", node.text)
-        assertEquals("Submit Button", node.description)
+        assertEquals("Submit Button", node.contentDescription)
+        assertEquals("android.widget.Button", node.className)
         assertTrue(node.clickable)
+        assertTrue(node.visible)
+        assertTrue(node.enabled)
         assertEquals(listOf(10, 20, 100, 200), node.bounds)
+    }
+
+    @Test
+    fun testVietnameseUtf8Tasks() {
+        // UTF-8 strings should be represented exactly as they are without encoding issues.
+        val request1 = "mở youtube"
+        val request2 = "tìm video minecraft"
+        val request3 = "mở cài đặt"
+
+        assertEquals("mở youtube", request1)
+        assertEquals("tìm video minecraft", request2)
+        assertEquals("mở cài đặt", request3)
+
+        // Verify snapshot serialization fields
+        val snapshot = AccessibilitySnapshot(
+            device = DeviceState(1080, 2400),
+            app = AppInfo("com.google.android.youtube"),
+            accessibilityTree = emptyMap(),
+            userRequest = request1,
+            lastActionError = "Action failed."
+        )
+        assertEquals("mở youtube", snapshot.userRequest)
+        assertEquals("Action failed.", snapshot.lastActionError)
+    }
+
+    @Test
+    fun testSafetyGuardStillBlocksDangerousActions() {
+        val guard = SafetyGuard()
+        
+        // Destructive keyword in action text parameter
+        val actionWipe = AgentAction(action = "input_text", text = "please wipe the phone")
+        assertFalse(guard.checkAction(actionWipe, null))
+        
+        // Destructive keyword in transaction
+        val actionBuy = AgentAction(action = "click", text = "buy now")
+        assertFalse(guard.checkAction(actionBuy, null))
     }
 }

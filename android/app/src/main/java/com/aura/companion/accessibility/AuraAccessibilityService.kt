@@ -56,6 +56,12 @@ class AuraAccessibilityService : AccessibilityService() {
         scope.cancel()
     }
 
+    private sealed interface ExecutionResult {
+        object Success : ExecutionResult
+        object Failed : ExecutionResult
+        object Blocked : ExecutionResult
+    }
+
     fun startAgentLoop(request: String, onComplete: (String) -> Unit) {
         agentJob?.cancel()
         agentJob = scope.launch {
@@ -63,6 +69,8 @@ class AuraAccessibilityService : AccessibilityService() {
             val maxSteps = 10
             var currentRequest = request
             var finalMessage = "Task failed to complete."
+            var lastActionError: String? = null
+            val failedActionsCount = mutableMapOf<String, Int>()
 
             while (stepCount < maxSteps) {
                 stepCount++
@@ -75,8 +83,10 @@ class AuraAccessibilityService : AccessibilityService() {
                     continue
                 }
 
+                val activePackage = root.packageName?.toString().orEmpty()
                 val nodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
                 val tree = AccessibilityNodeSerializer.serialize(root, nodeMap)
+                root.recycle()
 
                 val displayMetrics = resources.displayMetrics
                 val deviceState = DeviceState(
@@ -84,7 +94,6 @@ class AuraAccessibilityService : AccessibilityService() {
                     height = displayMetrics.heightPixels
                 )
 
-                val activePackage = root.packageName?.toString().orEmpty()
                 val appInfo = AppInfo(
                     packageName = activePackage,
                     label = runCatching {
@@ -99,15 +108,21 @@ class AuraAccessibilityService : AccessibilityService() {
                     app = appInfo,
                     accessibilityTree = tree,
                     screenshotAvailable = false,
-                    userRequest = currentRequest
+                    userRequest = currentRequest,
+                    lastActionError = lastActionError
                 )
+
+                // Clear error so we only send it once
+                lastActionError = null
 
                 val jsonContext = Json.encodeToJsonElement(snapshot).jsonObject
 
                 Log.d("AuraAgent", "Sending screen snapshot to backend...")
                 val result = repository.send("agent_tick", jsonContext)
 
-                var actionExecuted = false
+                // Recycle tree node references immediately after sending request to prevent leaks
+                nodeMap.values.forEach { it.recycle() }
+
                 when (result) {
                     is AuraResult.Ok -> {
                         val reply = result.value.reply.trim()
@@ -121,46 +136,39 @@ class AuraAccessibilityService : AccessibilityService() {
                             if (action.action == "complete") {
                                 finalMessage = action.message ?: "Task completed successfully!"
                                 Log.d("AuraAgent", "Task complete: $finalMessage")
-                                nodeMap.values.forEach { it.recycle() }
                                 break
                             }
 
-                            val targetNode = nodeMap[action.nodeId]
-                            if (safetyGuard.checkAction(action, targetNode)) {
-                                Log.d("AuraAgent", "Executing action: ${action.action}")
-                                val success = executor.execute(action, nodeMap)
-                                Log.d("AuraAgent", "Action success: $success")
-                                actionExecuted = success
-                            } else {
+                            // Check consecutive failures for this node/action
+                            val actionKey = "${action.action}:${action.nodeId}"
+                            if ((failedActionsCount[actionKey] ?: 0) >= 2) {
+                                lastActionError = "Action ${action.action} on ${action.nodeId} failed repeatedly. Target is not actionable."
+                                Log.w("AuraAgent", lastActionError!!)
+                                continue
+                            }
+
+                            val execResult = executeActionWithRecovery(action, tree)
+                            if (execResult is ExecutionResult.Success) {
+                                failedActionsCount.remove(actionKey)
+                                delay(1500) // Wait for screen state to settle after success
+                            } else if (execResult is ExecutionResult.Blocked) {
                                 finalMessage = "Action blocked for safety: attempted ${action.action} containing sensitive targets."
-                                Log.w("AuraAgent", finalMessage)
-                                nodeMap.values.forEach { it.recycle() }
                                 break
+                            } else {
+                                failedActionsCount[actionKey] = (failedActionsCount[actionKey] ?: 0) + 1
+                                lastActionError = "Action ${action.action} on ${action.nodeId} failed. Target not clickable or not found."
                             }
                         } else {
                             finalMessage = "Failed to parse action from server: $reply"
                             Log.e("AuraAgent", finalMessage)
-                            nodeMap.values.forEach { it.recycle() }
                             break
                         }
                     }
                     is AuraResult.Failed -> {
                         finalMessage = "Aura server request failed: ${result.error.userMessage}"
                         Log.e("AuraAgent", finalMessage)
-                        nodeMap.values.forEach { it.recycle() }
                         break
                     }
-                }
-
-                // Recycle nodes
-                nodeMap.values.forEach { it.recycle() }
-
-                if (actionExecuted) {
-                    // Wait for screen state to settle
-                    delay(1500)
-                } else {
-                    finalMessage = "Action failed to execute or UI did not respond."
-                    break
                 }
             }
 
@@ -170,6 +178,67 @@ class AuraAccessibilityService : AccessibilityService() {
 
             onComplete(finalMessage)
         }
+    }
+
+    private suspend fun executeActionWithRecovery(
+        action: AgentAction,
+        oldTree: Map<String, AccessibilityNode>
+    ): ExecutionResult {
+        var attempt = 0
+        val maxAttempts = 2
+
+        while (attempt < maxAttempts) {
+            attempt++
+            Log.d("AuraAgent", "Attempt $attempt to execute ${action.action} for ${action.nodeId}")
+
+            val root = rootInActiveWindow
+            if (root == null) {
+                Log.d("AuraAgent", "No active window root found during execution. Retrying in 1s...")
+                delay(1000)
+                continue
+            }
+
+            val freshNodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
+
+            // Resolve target node using AuraActionExecutor
+            val (resolvedNode, resolvedNodeMeta) = if (action.nodeId != null) {
+                executor.resolveNode(action.nodeId, oldTree, root, freshNodeMap)
+            } else {
+                Pair(null, null)
+            }
+
+            // Run SafetyGuard check on the resolved node
+            if (!safetyGuard.checkAction(action, resolvedNode)) {
+                freshNodeMap.values.forEach { it.recycle() }
+                root.recycle()
+                Log.w("AuraAgent", "Action blocked for safety: attempted ${action.action} containing sensitive targets.")
+                return ExecutionResult.Blocked
+            }
+
+            // Execute the action with the resolved node
+            val success = executor.executeWithNode(action, resolvedNode, resolvedNodeMeta, freshNodeMap)
+
+            // Recycle all fresh node references to prevent leaks
+            freshNodeMap.values.forEach { it.recycle() }
+            root.recycle()
+
+            if (success) {
+                // Verify action
+                delay(1000)
+                val newRoot = rootInActiveWindow
+                if (newRoot != null) {
+                    Log.d("AuraAgent", "Action verified. Fresh screen package: ${newRoot.packageName}")
+                    newRoot.recycle()
+                }
+                return ExecutionResult.Success
+            } else {
+                Log.w("AuraAgent", "Attempt $attempt failed for action ${action.action}")
+                if (attempt < maxAttempts) {
+                    delay(1000)
+                }
+            }
+        }
+        return ExecutionResult.Failed
     }
 
     fun stopAgentLoop() {

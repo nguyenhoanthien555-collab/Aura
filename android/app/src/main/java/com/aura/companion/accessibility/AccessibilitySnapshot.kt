@@ -20,13 +20,15 @@ data class AppInfo(
 @Serializable
 data class AccessibilityNode(
     val id: String,
-    val role: String,
     val text: String?,
-    val description: String?,
+    @SerialName("content_description") val contentDescription: String?,
+    @SerialName("class_name") val className: String?,
     val clickable: Boolean,
-    val bounds: List<Int>, // [left, top, right, bottom]
-    val scrollable: Boolean = false,
     val enabled: Boolean = true,
+    val visible: Boolean = true,
+    val bounds: List<Int>, // [left, top, right, bottom]
+    val role: String? = null,
+    val scrollable: Boolean = false,
     @SerialName("long_clickable") val longClickable: Boolean = false,
     val editable: Boolean = false,
     val selected: Boolean = false,
@@ -40,7 +42,8 @@ data class AccessibilitySnapshot(
     val app: AppInfo,
     @SerialName("accessibility_tree") val accessibilityTree: Map<String, AccessibilityNode>,
     @SerialName("screenshot_available") val screenshotAvailable: Boolean = false,
-    @SerialName("user_request") val userRequest: String? = null
+    @SerialName("user_request") val userRequest: String? = null,
+    @SerialName("last_action_error") val lastActionError: String? = null
 )
 
 @Serializable
