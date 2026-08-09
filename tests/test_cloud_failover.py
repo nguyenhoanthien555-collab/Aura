@@ -270,3 +270,108 @@ def test_upload_screenshot_vision_unavailable(monkeypatch):
     assert response.json()["detail"]["error"] == "vision_unavailable"
 
     app.dependency_overrides.clear()
+
+
+def test_gemini_429_to_openrouter_success(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    from brain.providers.gemini import GeminiProvider
+    def mock_gemini_generate(self, prompt):
+        raise ProviderRateLimitError("Gemini 429")
+    monkeypatch.setattr(GeminiProvider, "generate", mock_gemini_generate)
+
+    from brain.providers.openrouter import OpenRouterProvider
+    def mock_openrouter_request(self, messages):
+        return {
+            "choices": [{
+                "message": {
+                    "content": "OpenRouter reply"
+                }
+            }]
+        }
+    monkeypatch.setattr(OpenRouterProvider, "_request", mock_openrouter_request)
+
+    from brain.providers.fallback import FallbackProvider
+    primary = GeminiProvider()
+    fallback = OpenRouterProvider(model="openrouter/free")
+    provider = FallbackProvider([primary, fallback], "gemini->openrouter")
+
+    assert provider.generate("hello") == "OpenRouter reply"
+    assert provider.active_provider_name == "openrouter"
+
+
+def test_openrouter_model_specific_429_tries_next_model(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    called_models = []
+
+    from brain.providers.openrouter import OpenRouterProvider
+    def mock_openrouter_request(self, messages):
+        called_models.append(self.model)
+        if self.model == "google/gemma-4-31b-it:free":
+            raise ProviderRateLimitError("Rate limit exceeded: limit_rpm/google/gemma-4-31b-it:free exceeded", is_account_limit=False)
+        elif self.model == "nvidia/nemotron-nano-12b-v2-vl:free":
+            return {
+                "choices": [{
+                    "message": {
+                        "content": "Model fallback success"
+                    }
+                }]
+            }
+        return {"choices": []}
+
+    monkeypatch.setattr(OpenRouterProvider, "_request", mock_openrouter_request)
+
+    provider = OpenRouterProvider(model="openrouter/free")
+    assert provider.generate("hello") == "Model fallback success"
+    assert called_models == ["google/gemma-4-31b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free"]
+
+
+def test_openrouter_account_level_429_stops_immediately(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    called_models = []
+
+    from brain.providers.openrouter import OpenRouterProvider
+    def mock_openrouter_request(self, messages):
+        called_models.append(self.model)
+        raise ProviderRateLimitError("Rate limit exceeded: limit_rpd exceeded for your account", is_account_limit=True)
+
+    monkeypatch.setattr(OpenRouterProvider, "_request", mock_openrouter_request)
+
+    provider = OpenRouterProvider(model="openrouter/free")
+    with pytest.raises(ProviderRateLimitError) as exc_info:
+        provider.generate("hello")
+
+    assert exc_info.value.is_account_limit is True
+    assert called_models == ["google/gemma-4-31b-it:free"]
+
+
+def test_openrouter_all_models_unavailable_raises_clean_error(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
+
+    from brain.providers.openrouter import OpenRouterProvider
+    def mock_openrouter_request(self, messages):
+        raise ProviderRateLimitError(f"Rate limit exceeded: limit_rpm/{self.model}", is_account_limit=False)
+
+    monkeypatch.setattr(OpenRouterProvider, "_request", mock_openrouter_request)
+
+    provider = OpenRouterProvider(model="openrouter/free")
+    with pytest.raises(ProviderRateLimitError):
+        provider.generate("hello")
+
+
+def test_openrouter_error_parsing_detects_account_limit(monkeypatch):
+    from brain.providers.openrouter import _failure
+
+    err1 = _failure(429, '{"error": {"message": "Rate limit exceeded: limit_rpd exceeded for key"}}')
+    assert err1.is_account_limit is True
+
+    err2 = _failure(429, '{"error": {"message": "Rate limit exceeded. Please slow down."}}')
+    assert err2.is_account_limit is True
+
+    err3 = _failure(429, '{"error": {"message": "Rate limit exceeded: limit_rpm/google/gemma-4-31b-it:free exceeded"}}')
+    assert err3.is_account_limit is False
+
+    err4 = _failure(429, '{"error": {"message": "Provider rate limit hit on nvidia/nemotron-nano-12b-v2-vl:free"}}')
+    assert err4.is_account_limit is False

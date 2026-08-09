@@ -14,14 +14,59 @@ from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableEr
 DEFAULT_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
-def _failure(status: int, body: str, retry_after: str | None = None):
+def _failure(status: int, body: str, retry_after: str | None = None, model: str = "unknown", headers: dict = None):
     message = f"OpenRouter HTTP {status}"
     if status == 429:
         try:
             wait = float(retry_after) if retry_after else None
         except ValueError:
             wait = None
-        return ProviderRateLimitError(message, retry_after=wait)
+
+        is_account_limit = False
+        err_code = 429
+        try:
+            err_data = json.loads(body)
+            err_code = err_data.get("error", {}).get("code", 429)
+            err_msg = err_data.get("error", {}).get("message", "").lower()
+            err_msg_orig = err_data.get("error", {}).get("message", body)
+        except Exception:
+            err_msg = body.lower()
+            err_msg_orig = body
+
+        providers = ["google/", "nvidia/", "cohere/", "meta-llama/", "openai/", "anthropic/", "mistral/", "microsoft/"]
+        has_provider = any(p in err_msg for p in providers)
+
+        if "slow down" in err_msg or "daily limit" in err_msg or "key limit" in err_msg or "account limit" in err_msg or "quota" in err_msg:
+            if not has_provider:
+                is_account_limit = True
+        elif "limit_rpd" in err_msg or "limit_rpm" in err_msg:
+            if not has_provider:
+                is_account_limit = True
+
+        if not err_msg or (not has_provider and "limit_" in err_msg):
+            is_account_limit = True
+
+        classification = "account-level" if is_account_limit else "model/provider-level"
+
+        safe_headers_dict = {}
+        if headers:
+            for k in ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"]:
+                val = headers.get(k) or headers.get(k.lower())
+                if val:
+                    safe_headers_dict[k] = val
+
+        from core.logger import logger
+        logger.warning(
+            "OpenRouter 429 Rate Limited - Model: %s, Status: %d, Code: %s, Message: %s, Headers: %s, Classification: %s",
+            model,
+            status,
+            err_code,
+            err_msg_orig,
+            json.dumps(safe_headers_dict),
+            classification
+        )
+
+        return ProviderRateLimitError(message, retry_after=wait, is_account_limit=is_account_limit)
     if status >= 500 or status in (408, 409):
         return ProviderUnavailableError(message)
     return RuntimeError(message)
@@ -41,11 +86,45 @@ class OpenRouterProvider(BaseProvider):
         self.url = os.getenv("OPENROUTER_BASE_URL", DEFAULT_URL)
 
     def generate(self, prompt: str) -> str:
-        data = self._request([{"role": "user", "content": prompt}])
-        try:
-            return data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError) as error:
-            raise ProviderUnavailableError("OpenRouter returned an invalid response") from error
+        models_to_try = [self.model]
+        if self.model == "openrouter/free":
+            models_to_try = [
+                "google/gemma-4-31b-it:free",
+                "nvidia/nemotron-nano-12b-v2-vl:free",
+                "google/gemma-4-26b-a4b-it:free",
+                "openrouter/free",
+            ]
+        elif self.model in ("google/gemma-4-31b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free", "google/gemma-4-26b-a4b-it:free"):
+            models_to_try = [self.model] + [m for m in [
+                "google/gemma-4-31b-it:free",
+                "nvidia/nemotron-nano-12b-v2-vl:free",
+                "google/gemma-4-26b-a4b-it:free",
+            ] if m != self.model]
+
+        last_error = None
+        for model in models_to_try:
+            try:
+                original_model = self.model
+                self.model = model
+                data = self._request([{"role": "user", "content": prompt}])
+                self.model = original_model
+
+                try:
+                    return data["choices"][0]["message"]["content"] or ""
+                except (KeyError, IndexError, TypeError) as error:
+                    raise ProviderUnavailableError("OpenRouter returned an invalid response") from error
+            except ProviderRateLimitError as error:
+                if getattr(error, "is_account_limit", False):
+                    raise
+                last_error = error
+                continue
+            except ProviderUnavailableError as error:
+                last_error = error
+                continue
+
+        if last_error:
+            raise last_error
+        raise ProviderUnavailableError("All eligible free models failed")
 
     def _request(self, messages: list) -> dict:
         payload = json.dumps({
@@ -63,6 +142,12 @@ class OpenRouterProvider(BaseProvider):
             with urlopen(request, timeout=self.timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            raise _failure(error.code, error.read().decode("utf-8", "replace"), error.headers.get("Retry-After")) from error
+            raise _failure(
+                error.code,
+                error.read().decode("utf-8", "replace"),
+                error.headers.get("Retry-After"),
+                model=self.model,
+                headers=error.headers
+            ) from error
         except (URLError, TimeoutError) as error:
             raise ProviderUnavailableError("OpenRouter is unreachable") from error

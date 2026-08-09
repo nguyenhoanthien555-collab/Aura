@@ -108,6 +108,12 @@ class OpenRouterVisionProvider(OpenRouterProvider):
                 "google/gemma-4-26b-a4b-it:free",
                 "openrouter/free",  # last resort fallback
             ]
+        elif self.model in ("google/gemma-4-31b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free", "google/gemma-4-26b-a4b-it:free"):
+            models_to_try = [self.model] + [m for m in [
+                "google/gemma-4-31b-it:free",
+                "nvidia/nemotron-nano-12b-v2-vl:free",
+                "google/gemma-4-26b-a4b-it:free",
+            ] if m != self.model]
 
         last_error = None
         for model in models_to_try:
@@ -125,6 +131,12 @@ class OpenRouterVisionProvider(OpenRouterProvider):
                         if content:
                             return content.strip()
                 raise ProviderUnavailableError(f"Model {model} returned an empty or invalid response")
+            except ProviderRateLimitError as error:
+                if getattr(error, "is_account_limit", False):
+                    raise
+                last_error = error
+                logger.warning("OpenRouter vision try with model %s failed (rate limit): %s", model, error)
+                continue
             except Exception as error:
                 last_error = error
                 logger.warning("OpenRouter vision try with model %s failed: %s", model, error)
