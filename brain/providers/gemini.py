@@ -35,14 +35,17 @@ class GeminiProvider(BaseProvider):
         self.temperature = float(config["llm"].get("temperature", 0.7))
 
     def generate(self, prompt: str) -> str:
+        from brain.providers.base import split_prompt
+        system_instruction, user_content = split_prompt(prompt)
 
         try:
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=prompt,
+                contents=user_content,
                 config={
                     "max_output_tokens": self.max_output_tokens,
                     "temperature": self.temperature,
+                    "system_instruction": system_instruction or None,
                 },
             )
         except Exception as error:
@@ -77,9 +80,15 @@ class GeminiProvider(BaseProvider):
         chunks should not see them as fragments of a reply.
         """
 
+        from brain.providers.base import split_prompt
+        system_instruction, user_content = split_prompt(prompt)
+
         stream = self.client.models.generate_content_stream(
             model=self.model,
-            contents=prompt,
+            contents=user_content,
+            config={
+                "system_instruction": system_instruction or None,
+            }
         )
 
         for piece in stream:

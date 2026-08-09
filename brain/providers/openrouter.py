@@ -117,9 +117,16 @@ class OpenRouterProvider(BaseProvider):
         last_error = None
         for model in models_to_try:
             try:
+                from brain.providers.base import split_prompt
+                system_instruction, user_content = split_prompt(prompt)
+                messages = []
+                if system_instruction:
+                    messages.append({"role": "system", "content": system_instruction})
+                messages.append({"role": "user", "content": user_content})
+
                 original_model = self.model
                 self.model = model
-                data = self._request([{"role": "user", "content": prompt}])
+                data = self._request(messages)
                 self.model = original_model
 
                 try:

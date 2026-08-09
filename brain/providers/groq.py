@@ -49,7 +49,14 @@ class GroqProvider(BaseProvider):
         self.url = os.getenv("GROQ_BASE_URL", DEFAULT_URL)
 
     def generate(self, prompt: str) -> str:
-        data = self._request([{"role": "user", "content": prompt}])
+        from brain.providers.base import split_prompt
+        system_instruction, user_content = split_prompt(prompt)
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": user_content})
+
+        data = self._request(messages)
         try:
             return data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as error:

@@ -703,3 +703,103 @@ def test_mistral_streaming(monkeypatch):
     provider = MistralProvider()
     chunks = list(provider.stream("hello"))
     assert chunks == ["Chunk 1 ", "Chunk 2"]
+
+
+def test_personality_consistency_across_providers(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "dummy")
+
+    from brain.providers.base import split_prompt
+    from brain.prompt_builder import PromptBuilder
+    from brain.message import Message
+
+    prompt = PromptBuilder().build(
+        history=[Message(role="user", content="old")],
+        user_message=Message(role="user", content="new"),
+        style="Playful Gen Z"
+    )
+
+    system_inst, user_cont = split_prompt(prompt)
+
+    assert "===== SYSTEM =====" in system_inst
+    assert "===== PERSONALITY =====" in system_inst
+    assert "===== RESPONSE STYLE =====" in system_inst
+
+    assert "===== SYSTEM =====" not in user_cont
+    assert "===== PERSONALITY =====" not in user_cont
+    assert "===== RECENT CONVERSATION =====" in user_cont
+    assert "===== CURRENT USER MESSAGE =====" in user_cont
+
+
+def test_provider_switching_does_not_change_identity(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")
+
+    from brain.providers.gemini import GeminiProvider
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+
+    captured_sys_instructions = {}
+
+    def mock_gemini_generate(self, prompt):
+        from brain.providers.base import split_prompt
+        sys, _ = split_prompt(prompt)
+        captured_sys_instructions["gemini"] = sys
+        raise ProviderUnavailableError("Gemini down")
+
+    def mock_groq_request(self, messages):
+        for msg in messages:
+            if msg["role"] == "system":
+                captured_sys_instructions["groq"] = msg["content"]
+        raise ProviderRateLimitError("Groq 429")
+
+    def mock_mistral_request(self, messages):
+        for msg in messages:
+            if msg["role"] == "system":
+                captured_sys_instructions["mistral"] = msg["content"]
+        return {"choices": [{"message": {"content": "Mistral reply"}}]}
+
+    monkeypatch.setattr(GeminiProvider, "generate", mock_gemini_generate)
+    monkeypatch.setattr(GroqProvider, "_request", mock_groq_request)
+    monkeypatch.setattr(MistralProvider, "_request", mock_mistral_request)
+
+    from brain.router import BrainRouter
+    router = BrainRouter(provider_name="gemini")
+    from brain.prompt_builder import PromptBuilder
+    from brain.message import Message
+    prompt = PromptBuilder().build(
+        history=[],
+        user_message=Message(role="user", content="hello"),
+    )
+    reply = router.generate(prompt)
+    assert reply == "Mistral reply"
+
+    assert "gemini" in captured_sys_instructions
+    assert "groq" in captured_sys_instructions
+    assert "mistral" in captured_sys_instructions
+    assert captured_sys_instructions["gemini"] == captured_sys_instructions["groq"]
+    assert captured_sys_instructions["groq"] == captured_sys_instructions["mistral"]
+
+
+def test_streaming_fallback_keeps_personality_scenario(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy-key")
+
+    captured_sys = []
+
+    from brain.providers.mistral import MistralProvider
+    def mock_stream(self, prompt):
+        from brain.providers.base import split_prompt
+        sys, _ = split_prompt(prompt)
+        captured_sys.append(sys)
+        yield "Chunk"
+
+    monkeypatch.setattr(MistralProvider, "stream", mock_stream)
+
+    provider = MistralProvider()
+    chunks = list(provider.stream("===== SYSTEM =====\ninstruction\n\n===== CURRENT USER MESSAGE =====\nhello"))
+    assert chunks == ["Chunk"]
+    assert len(captured_sys) == 1
+    assert "instruction" in captured_sys[0]
