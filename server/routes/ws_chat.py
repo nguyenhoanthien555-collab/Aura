@@ -141,6 +141,7 @@ async def chat_stream(
                 message,
                 session_id=session_id,
                 source="text",
+                context=request.get("context"),
             )
 
             async for fragment in iterate_in_threadpool(fragments):

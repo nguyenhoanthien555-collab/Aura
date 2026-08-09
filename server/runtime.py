@@ -214,7 +214,7 @@ class ServerRuntime:
     # Work
     # ------------------------------------------------------------------
 
-    def chat(self, message: str, session_id: str = "default", source: str = "text"):
+    def chat(self, message: str, session_id: str = "default", source: str = "text", context: dict | None = None):
         """
         Process a chat message.
 
@@ -222,7 +222,8 @@ class ServerRuntime:
             message: User message
             session_id: Session identifier (for future per-session memory)
             source: Message source ("text" or "voice")
-
+            context: Optional context dictionary
+        
         Returns:
             Response object with .text
         """
@@ -234,9 +235,9 @@ class ServerRuntime:
 
         # For now, all sessions share the same memory
         # Future: implement per-session memory isolation
-        return self.services.engine.chat(message, source=source)
+        return self.services.engine.chat(message, source=source, context=context)
 
-    def chat_stream(self, message: str, session_id: str = "default", source: str = "text"):
+    def chat_stream(self, message: str, session_id: str = "default", source: str = "text", context: dict | None = None):
         """
         Process a chat message with streaming.
 
@@ -249,7 +250,8 @@ class ServerRuntime:
         return self.services.engine.conversation.chat_stream(
             message,
             contexts=None,
-            source=source
+            source=source,
+            context=context
         )
 
     def observe_screen(self, observation) -> dict:

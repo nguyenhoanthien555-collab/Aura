@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        The Compose theme in ui/theme/Theme.kt does the real work. This
+        exists so the manifest has something to name, and so the window
+        background matches before the first frame is composed - without it
+        a launch flashes white on a dark device.
+    -->
+    <style name="Theme.Aura" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>

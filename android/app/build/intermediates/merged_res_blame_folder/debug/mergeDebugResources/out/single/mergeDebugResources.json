@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    },
+    {
+        "merged": "com.aura.companion.app-debug-65:/xml_aura_accessibility_service.xml.flat",
+        "source": "com.aura.companion.app-main-67:/xml/aura_accessibility_service.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\xml_network_security_config.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-66:\\xml\\network_security_config.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\xml_accessibility_service_config.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\xml\\accessibility_service_config.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\xml\\data_extraction_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-debug-65:\\drawable_ic_notification.xml.flat",
+        "source": "C:\\Users\\Hoan Thien\\.gradle\\daemon\\8.9\\com.aura.companion.app-main-67:\\drawable\\ic_notification.xml"
+    }
+]

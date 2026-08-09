@@ -35,7 +35,8 @@ def split_prompt(prompt: str) -> tuple[str, str]:
         "===== SYSTEM =====",
         "===== PERSONALITY =====",
         "===== WHO YOU ARE =====",
-        "===== RESPONSE STYLE ====="
+        "===== RESPONSE STYLE =====",
+        "===== AGENT RULES ====="
     }
 
     if parts[0].strip():

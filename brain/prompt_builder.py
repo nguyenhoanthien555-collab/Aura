@@ -208,6 +208,7 @@ class PromptBuilder:
         knowledge: list[str] | None = None,
         identity: str | None = None,
         style: str | None = None,
+        context: dict | None = None,
     ):
         """
         Render the full prompt.
@@ -270,6 +271,56 @@ class PromptBuilder:
             self._build_style(style)
         )
 
+
+        if context and ("accessibility_tree" in context or "device" in context):
+            device = context.get("device") or {}
+            app = context.get("app") or {}
+            tree = context.get("accessibility_tree") or {}
+            user_req = context.get("user_request") or user_message.content
+
+            # 1. Device State
+            device_state_lines = []
+            if app.get("package"):
+                device_state_lines.append(f"Package: {app['package']}")
+            if app.get("activity"):
+                device_state_lines.append(f"Activity: {app['activity']}")
+            if device.get("width") and device.get("height"):
+                device_state_lines.append(f"Dimensions: {device['width']}x{device['height']}")
+
+            if device_state_lines:
+                prompt.extend([
+                    "===== DEVICE STATE =====",
+                    "\n".join(device_state_lines)
+                ])
+
+            # 2. Accessibility Tree
+            import json
+            prompt.extend([
+                "===== ACCESSIBILITY TREE =====",
+                json.dumps(tree, indent=2)
+            ])
+
+            # 3. Agent Rules
+            prompt.extend([
+                "===== AGENT RULES =====",
+                f'You are operating in Android Agentic Jarvis mode.\n'
+                f'The user has requested: "{user_req}".\n'
+                f'Based on the current device state and accessibility tree, decide the next action.\n'
+                f'If the task is complete, or you cannot proceed further, output a "complete" action:\n'
+                f'{{\n'
+                f'  "action": "complete",\n'
+                f'  "message": "<friendly response in Gen-Z style completing the request>"\n'
+                f'}}\n'
+                f'Otherwise, output exactly one action from the supported set in JSON format:\n'
+                f'{{\n'
+                f'  "action": "click" | "long_click" | "input_text" | "clear_text" | "scroll" | "scroll_screen" | "back" | "home" | "open_notifications" | "open_quick_settings" | "open_app" | "focus",\n'
+                f'  "node_id": "<node_id>",\n'
+                f'  "text": "<text to input>",\n'
+                f'  "direction": "up" | "down" | "left" | "right",\n'
+                f'  "package": "<app package to open>"\n'
+                f'}}\n'
+                f'Only output the raw JSON block without any conversational text.'
+            ])
 
         prompt.extend(
             self._build_user(user_message)

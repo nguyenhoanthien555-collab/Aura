@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG network policy: cleartext allowed.
+
+    This file replaces the release policy in debug builds only, and exists
+    for one scenario: pointing the app at `http://<laptop-ip>:8000` on a
+    home network, where no certificate a phone trusts can be presented.
+
+    It ships in the debug APK and nowhere else. The release build uses
+    `app/src/main/res/xml/network_security_config.xml`, which refuses
+    cleartext to anything routable.
+
+    If you are reading this because a release build cannot reach your
+    server: that is the file doing its job. Put a TLS terminator in front
+    of Aura, or use the debug build on your own network.
+-->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+</network-security-config>

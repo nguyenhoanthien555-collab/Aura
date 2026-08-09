@@ -1,0 +1,289 @@
+package com.aura.companion.data
+
+import com.aura.companion.data.remote.ApiFactory
+import com.aura.companion.data.remote.AuraApi
+import com.aura.companion.data.remote.ChatRequestDto
+import com.aura.companion.data.remote.DecisionDto
+import com.aura.companion.data.remote.HealthDto
+import com.aura.companion.data.remote.NotificationDto
+import com.aura.companion.data.remote.AuraStreamClient
+import com.aura.companion.data.remote.ScreenRequestDto
+import com.aura.companion.data.remote.StreamEvent
+import com.aura.companion.data.settings.SettingsProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.Response
+import java.io.File
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import java.util.concurrent.atomic.AtomicReference
+
+/**
+ * The app's single door to the Aura server.
+ *
+ * Everything above this line - ViewModels, Composables, the accessibility
+ * service, the notification worker - talks to this. Nothing above this
+ * line touches Retrofit, OkHttp, an HTTP status code or a `Response`.
+ *
+ * The repository also owns the session id, which is what makes a
+ * conversation continuous: the server generates one on the first reply
+ * and every later message carries it back.
+ */
+class AuraRepository(
+    private val settings: SettingsProvider,
+) {
+
+    private val cached = AtomicReference<Pair<String, AuraApi>?>(null)
+
+    private val streamClient = AuraStreamClient(settings)
+
+    private val _sessionId = AtomicReference<String?>(null)
+
+    val sessionId: String? get() = _sessionId.get()
+
+    fun resetSession() {
+        _sessionId.set(null)
+    }
+
+    /**
+     * The API for the currently configured URL.
+     *
+     * Rebuilt only when the URL changes. Retrofit fixes its base URL at
+     * construction, and rebuilding per request would discard the
+     * connection pool - which on a mobile link costs a full TLS handshake
+     * every message.
+     */
+    private fun api(): AuraApi? {
+
+        val url = settings.current.serverUrl
+
+        if (url.isBlank()) return null
+
+        cached.get()?.let { (cachedUrl, api) ->
+            if (cachedUrl == url) return api
+        }
+
+        return runCatching { ApiFactory.create(settings, url) }
+            .onSuccess { cached.set(url to it) }
+            .getOrNull()
+    }
+
+    // ------------------------------------------------------------------
+    // Health
+    // ------------------------------------------------------------------
+
+    suspend fun health(): AuraResult<HealthDto> = call { it.health() }
+
+    // ------------------------------------------------------------------
+    // Chat
+    // ------------------------------------------------------------------
+
+    suspend fun send(message: String, context: JsonObject = JsonObject(emptyMap())): AuraResult<ChatReply> {
+
+        val result = call {
+            it.chat(
+                ChatRequestDto(
+                    sessionId = _sessionId.get(),
+                    message = message,
+                    context = context,
+                    metadata = JsonObject(mapOf("client" to JsonPrimitive("android"))),
+                )
+            )
+        }
+
+        return result.map { dto ->
+            // Adopt whatever session the server used, so a server that
+            // generated one becomes the conversation this app continues.
+            _sessionId.set(dto.sessionId)
+
+            ChatReply(
+                sessionId = dto.sessionId,
+                reply = dto.reply,
+                messageId = dto.messageId,
+            )
+        }
+    }
+
+    /**
+     * The same turn as [send], delivered as it is generated.
+     *
+     * Session continuity works exactly as it does for [send]: whatever
+     * session the server names is adopted, so a reply that arrives over the
+     * socket and one that arrives over REST continue the same
+     * conversation. That is what lets a caller fall back from one to the
+     * other without the user losing their thread.
+     */
+    fun stream(message: String): Flow<StreamEvent> =
+        streamClient.stream(message, _sessionId.get())
+            .onEach { event ->
+                when (event) {
+                    is StreamEvent.Started -> adopt(event.sessionId)
+                    is StreamEvent.Complete -> adopt(event.sessionId)
+                    else -> Unit
+                }
+            }
+
+    private fun adopt(sessionId: String) {
+        if (sessionId.isNotBlank()) _sessionId.set(sessionId)
+    }
+
+    // ------------------------------------------------------------------
+    // Screen
+    // ------------------------------------------------------------------
+
+    suspend fun sendScreen(
+        application: String,
+        packageName: String,
+        screenText: String,
+        accessibility: Map<String, String> = emptyMap(),
+    ): AuraResult<DecisionDto?> {
+
+        val request = ScreenRequestDto(
+            sessionId = _sessionId.get() ?: "",
+            deviceId = settings.current.deviceId,
+            application = application,
+            packageName = packageName,
+            screenText = screenText,
+            accessibilityContext = accessibility
+                .takeIf { it.isNotEmpty() }
+                ?.let { context ->
+                    JsonObject(context.mapValues { JsonPrimitive(it.value) })
+                },
+            timestamp = System.currentTimeMillis() / 1000.0,
+        )
+
+        return call { it.screen(request) }.map { it.decision }
+    }
+
+    suspend fun uploadScreenshot(
+        file: File,
+        application: String,
+        packageName: String,
+    ): AuraResult<Unit> {
+
+        val mediaType = "image/jpeg".toMediaTypeOrNull()
+
+        val part = MultipartBody.Part.createFormData(
+            "screenshot",
+            file.name,
+            file.asRequestBody(mediaType),
+        )
+
+        fun field(value: String) = value.toRequestBody("text/plain".toMediaTypeOrNull())
+
+        return call {
+            it.uploadScreenshot(
+                sessionId = field(_sessionId.get() ?: ""),
+                deviceId = field(settings.current.deviceId),
+                application = field(application),
+                packageName = field(packageName),
+                timestamp = field((System.currentTimeMillis() / 1000.0).toString()),
+                screenshot = part,
+            )
+        }.map { }
+    }
+
+    // ------------------------------------------------------------------
+    // Notifications
+    // ------------------------------------------------------------------
+
+    suspend fun collectNotifications(): AuraResult<List<NotificationDto>> =
+        call { it.notifications(settings.current.deviceId) }
+            .map { it.notifications }
+
+    // ------------------------------------------------------------------
+    // The one place an HTTP failure becomes an AuraError
+    // ------------------------------------------------------------------
+
+    private suspend fun <T> call(
+        block: suspend (AuraApi) -> Response<T>,
+    ): AuraResult<T> = withContext(Dispatchers.IO) {
+
+        val api = api()
+            ?: return@withContext AuraResult.Failed(AuraError.NotConfigured)
+
+        try {
+            val response = block(api)
+
+            val body = response.body()
+
+            if (response.isSuccessful && body != null) {
+                return@withContext AuraResult.Ok(body)
+            }
+
+            AuraResult.Failed(
+                when (response.code()) {
+                    401, 403 -> AuraError.Unauthorized
+                    503 -> unavailableReason(response)
+                    // A gateway that has no Aura behind it yet. On the
+                    // free tiers this project targets, that is a container
+                    // still starting rather than anything broken.
+                    502, 504 -> AuraError.Waking
+                    else -> AuraError.ServerFailure(response.code())
+                }
+            )
+
+        } catch (e: SocketTimeoutException) {
+            AuraResult.Failed(AuraError.Timeout)
+
+        } catch (e: UnknownHostException) {
+            AuraResult.Failed(AuraError.Offline)
+
+        } catch (e: IOException) {
+            // Covers a dropped socket mid-handover. Deliberately not
+            // logged with its message: an IOException can name the host
+            // and port it failed to reach.
+            AuraResult.Failed(AuraError.Offline)
+
+        } catch (e: Exception) {
+            AuraResult.Failed(AuraError.Unknown())
+        }
+    }
+
+    /**
+     * Tell "Aura says no" apart from "Aura is not up yet".
+     *
+     * Both arrive as 503. Aura itself only ever sends one - the screen
+     * endpoints, when observation is switched off server-side - and it
+     * names itself in the body. A free-tier platform sends the other from
+     * its own edge while the container starts, with no such marker.
+     *
+     * The distinction is worth a body read because the two lead the user
+     * opposite ways: one means "turn it on in the server config", the
+     * other means "wait ten seconds". The body is matched against and then
+     * dropped; it is never shown, so nothing it contains reaches the UI.
+     */
+    private fun unavailableReason(response: Response<*>): AuraError {
+
+        val body = runCatching { response.errorBody()?.string() }
+            .getOrNull()
+            .orEmpty()
+
+        return if (SCREEN_DISABLED in body) {
+            AuraError.Unavailable(
+                "Screen observation is switched off on the Aura server."
+            )
+        } else {
+            AuraError.Waking
+        }
+    }
+
+    private companion object {
+        const val SCREEN_DISABLED = "screen_disabled"
+    }
+}
+
+data class ChatReply(
+    val sessionId: String,
+    val reply: String,
+    val messageId: String,
+)

@@ -39,7 +39,8 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
         response = runtime.chat(
             request.message,
             session_id=session.session_id,
-            source="text"
+            source="text",
+            context=request.context,
         )
 
         elapsed = time.time() - start_time

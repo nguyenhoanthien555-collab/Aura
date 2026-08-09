@@ -85,12 +85,13 @@ class ConversationManager:
         user_message: str,
         contexts: list[str] | None = None,
         source: str = "text",
+        context: dict | None = None,
     ) -> Response:
         """
         Process a user message and return the assistant's reply.
         """
 
-        user_msg, prompt = self._prepare(user_message, contexts, source)
+        user_msg, prompt = self._prepare(user_message, contexts, source, context)
 
         self._emit(ThinkingEvent())
 
@@ -120,6 +121,7 @@ class ConversationManager:
         user_message: str,
         contexts: list[str] | None = None,
         source: str = "text",
+        context: dict | None = None,
     ):
         """
         The same turn, delivered as it is written.
@@ -153,7 +155,7 @@ class ConversationManager:
         would be indistinguishable from a real one on the next prompt.
         """
 
-        user_msg, prompt = self._prepare(user_message, contexts, source)
+        user_msg, prompt = self._prepare(user_message, contexts, source, context)
 
         self._emit(ThinkingEvent())
         self._emit(StreamStartedEvent())
@@ -223,6 +225,7 @@ class ConversationManager:
         user_message: str,
         contexts: list[str] | None,
         source: str,
+        context: dict | None = None,
     ) -> tuple[Message, str]:
         """
         Everything both paths do before the provider is called.
@@ -245,6 +248,7 @@ class ConversationManager:
             knowledge=self._knowledge_for(user_msg.content),
             identity=anchor_of(self.identity, len(history)),
             style=hint_of(self.style),
+            context=context,
         )
 
         return user_msg, prompt

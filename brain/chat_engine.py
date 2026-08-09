@@ -122,6 +122,7 @@ class ChatEngine:
         message: str,
         contexts: list[str] | None = None,
         source: str = "text",
+        context: dict | None = None,
     ) -> Response:
         """
         Process a user message and return the assistant's reply.
@@ -129,4 +130,4 @@ class ChatEngine:
         `source` records how the message arrived ("text" or "voice") and
         is carried on the published UserInputEvent.
         """
-        return self.conversation.chat(message, contexts, source=source)
+        return self.conversation.chat(message, contexts, source=source, context=context)

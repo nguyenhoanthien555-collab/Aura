@@ -1,0 +1,28 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.aura.companion.app-mergeReleaseResources-59:/values-night-v8/values-night-v8.xml",
+            "map": [
+                {
+                    "source": "D:\\AURA\\android\\app\\src\\main\\res\\values-night\\themes.xml",
+                    "from": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "56",
+                        "endLines": "6",
+                        "endColumns": "12",
+                        "endOffsets": "298"
+                    },
+                    "to": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "297"
+                    }
+                }
+            ]
+        }
+    ]
+}
