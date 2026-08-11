@@ -23,6 +23,7 @@ import com.aura.companion.ui.chat.ChatViewModel
 import com.aura.companion.ui.hub.AuraSection
 import com.aura.companion.ui.hub.AwarenessSection
 import com.aura.companion.ui.hub.ConnectionSection
+import com.aura.companion.ui.hub.DiagnosticsSection
 import com.aura.companion.ui.hub.GeneralSection
 import com.aura.companion.ui.hub.HubRoutes
 import com.aura.companion.ui.hub.HubScreen
@@ -30,7 +31,9 @@ import com.aura.companion.ui.hub.HubViewModel
 import com.aura.companion.ui.hub.MemorySection
 import com.aura.companion.ui.hub.ModelsSection
 import com.aura.companion.ui.hub.NotificationsSection
+import com.aura.companion.ui.hub.PrivacySection
 import com.aura.companion.ui.hub.ProactiveSection
+import com.aura.companion.ui.hub.ToolsSection
 import com.aura.companion.ui.hub.VisionSection
 import com.aura.companion.ui.hub.VoiceSection
 import com.aura.companion.ui.settings.SettingsViewModel
@@ -187,6 +190,28 @@ class MainActivity : ComponentActivity() {
                             onOpenSystemSettings = ::openNotificationSettings,
                             onBack = back,
                         )
+                    }
+
+                    composable(HubRoutes.TOOLS) {
+                        ToolsSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.PRIVACY) {
+                        PrivacySection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            // Privacy links to the screens that own each
+                            // action rather than duplicating their buttons,
+                            // so it needs to navigate sideways. `navigate`
+                            // rather than `popBackStack`: back from AI &
+                            // Models should return here.
+                            onOpenSection = { route -> navController.navigate(route) },
+                            onBack = back,
+                        )
+                    }
+
+                    composable(HubRoutes.DIAGNOSTICS) {
+                        DiagnosticsSection(hubState, hubViewModel, back)
                     }
 
                     composable(HubRoutes.GENERAL) {

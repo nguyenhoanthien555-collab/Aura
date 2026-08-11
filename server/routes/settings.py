@@ -153,6 +153,12 @@ async def reset_settings(
 
     removed = runtime.settings_store.reset(paths)
 
+    if removed:
+        # The overlay shrank, so the values underneath it are the effective
+        # ones again. Without this the next GET would still report what was
+        # just reverted.
+        runtime.settings_service.refresh_config()
+
     if removed and any(path.startswith("llm.") for path in removed):
         # The overlay's provider choice is gone, so the live chain must go
         # back to what config.yaml says rather than staying on the model
@@ -307,7 +313,92 @@ async def provider_health(token: str = Depends(verify_token)):
         "in_fallback": bool(active and members and active != members[0]),
         "problems": problems,
         "ready": not problems,
+        "providers": _per_provider_health(members, active),
     }
+
+
+def _per_provider_health(members: list[str], active: str) -> dict[str, dict]:
+    """
+    Per-provider `configured` / `healthy`, without calling anything.
+
+    WHY THIS DOES NOT PROBE
+    -----------------------
+    `healthy` here means "this provider was built into the chain that is
+    currently serving", not "it answered a request a moment ago". Probing
+    six providers on a route a settings screen opens would bill the
+    deployment for being looked at, which is the same reason
+    `/api/ready` refuses to call the provider. The button that really
+    asks is `POST /api/providers/test`, and it is a button precisely
+    because it costs a token.
+
+    FAILURE ISOLATION
+    -----------------
+    One unreadable provider must not blank the whole map, so each entry
+    is computed in its own `try`. A provider that raises is reported as
+    `configured: false, healthy: false` with a category, never an
+    exception message - this response is rendered on a phone.
+    """
+
+    from core.credentials import get_credential_store
+
+    store = get_credential_store()
+    out: dict[str, dict] = {}
+
+    # Where the serving provider sits in the chain. Everything before it
+    # was tried and did not answer; everything after it was never asked.
+    try:
+        active_index = members.index(active) if active in members else -1
+    except ValueError:                                   # pragma: no cover
+        active_index = -1
+
+    for name, caps in PROVIDER_CAPABILITIES.items():
+        try:
+            keyless = bool(caps.get("keyless"))
+            configured = keyless or store.has(name)
+
+            position = members.index(name) if name in members else -1
+
+            if position < 0:
+                # Not in the chain at all: it is not being used, which is
+                # not the same as broken.
+                state = "idle" if configured else "unconfigured"
+                healthy = False
+
+            elif name == active:
+                state = "active"
+                healthy = True
+
+            elif 0 <= active_index and position < active_index:
+                # The chain moved past it. That is the one case where we
+                # can honestly say a provider failed.
+                state = "failed"
+                healthy = False
+
+            else:
+                # In the chain, behind the active one. Never asked, so
+                # nothing is known beyond whether it has a key.
+                state = "standby"
+                healthy = False
+
+            out[name] = {
+                "configured": configured,
+                "healthy": healthy,
+                "state": state,
+                "in_chain": position >= 0,
+            }
+
+        except Exception as error:
+            # One unreadable provider must not blank the map. A category,
+            # never a message - this is rendered on a phone.
+            out[name] = {
+                "configured": False,
+                "healthy": False,
+                "state": "error",
+                "in_chain": False,
+                "problem": type(error).__name__,
+            }
+
+    return out
 
 
 @router.post("/providers/test")

@@ -82,11 +82,23 @@ fun ConnectionSection(
                 value = when {
                     hub.connected -> "Connected"
                     state.serverUrl.isBlank() -> "Not set up"
+                    // The host answered but did not accept this token, or
+                    // is not Aura. Either way, not "unreachable".
+                    hub.server.reach == ServerReach.Connected -> "Not authenticated"
                     else -> "Unreachable"
                 },
-                subtitle = state.serverUrl.ifBlank { "No server address yet" },
+                subtitle = when {
+                    // The server is up and this token works; only the hub
+                    // API is missing. Say so here rather than letting the
+                    // sections look broken for no stated reason.
+                    hub.connected && hub.server.settingsProblem != null ->
+                        "Chat works. This server has no settings API."
+                    else -> state.serverUrl.ifBlank { "No server address yet" }
+                },
                 icon = Icons.Filled.Dns,
                 tone = when {
+                    hub.connected && hub.server.settingsProblem != null ->
+                        StatusTone.Warning
                     hub.connected -> StatusTone.Good
                     state.serverUrl.isBlank() -> StatusTone.Neutral
                     else -> StatusTone.Bad

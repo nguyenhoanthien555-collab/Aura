@@ -146,7 +146,7 @@ fun NotificationsSection(
                     appEnabled = state.device.notificationsEnabled,
                     permitted = permissions.notificationsPermitted,
                     configured = state.device.isConfigured,
-                    serverEnabled = !state.connected || companion.enabled,
+                    serverEnabled = !state.settingsAvailable || companion.enabled,
                 ),
                 subtitle = "Checked every 15 minutes while the app is closed",
                 icon = Icons.Filled.Schedule,
@@ -154,7 +154,7 @@ fun NotificationsSection(
                     state.device.notificationsEnabled &&
                     permissions.notificationsPermitted &&
                     state.device.isConfigured &&
-                    (!state.connected || companion.enabled)
+                    (!state.settingsAvailable || companion.enabled)
                 ) {
                     StatusTone.Good
                 } else {

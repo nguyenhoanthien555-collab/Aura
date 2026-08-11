@@ -499,6 +499,44 @@ class ServerRuntime:
             "problems": problems,
         }
 
+    def _provider_chain_label(self) -> str:
+        """
+        What the provider chain actually is, or why it cannot be named.
+
+        `active_chain()` reports what was *built* ("gemini->groq") where
+        `provider_name` would only report what was configured, so it is
+        worth the call. But it builds the lazy provider, and construction
+        raises when the key is missing or invalid - which is precisely the
+        state a user opens Settings to repair.
+
+        A bare call here made `/api/health` return 500 in that state, and
+        `/api/health` is the one request the Android app treats as proof
+        the server is reachable and the token was accepted. So a dead
+        provider presented as an unreachable server: the phone sent the
+        user to the connection screen to retype a working token, while the
+        screen that could actually fix it - AI & Models - was locked
+        behind the same false verdict.
+
+        The provider is one subsystem among eight in this report, and the
+        others are already reported as strings rather than as exceptions.
+        `readiness_status` above catches the same call for the same
+        reason; this is that guard, applied to the endpoint that needed it
+        more. `/api/providers/health` remains the place that explains
+        *which* provider is unhappy.
+        """
+
+        try:
+            llm = self.engine.conversation.llm
+        except Exception:
+            return "unavailable"
+
+        try:
+            return getattr(llm, "active_chain", lambda: "unknown")()
+        except Exception as error:
+            # The type name only - a provider's exception message can
+            # carry the key it was rejected for.
+            return f"unavailable ({type(error).__name__})"
+
     def health_status(self) -> dict:
         """Get health status for /api/health."""
         return {
@@ -506,11 +544,7 @@ class ServerRuntime:
             "version": self.config.get("app", {}).get("version", "0.2.0"),
             "uptime_seconds": self.uptime,
             "runtime": {
-                # active_chain() is what was actually built (e.g.
-                # "gemini->groq"); the plain provider_name would only say
-                # what was configured. It builds the lazy provider, so it
-                # must not be called on a hot path - health is not one.
-                "llm_provider": getattr(self.engine.conversation.llm, "active_chain", lambda: "unknown")(),
+                "llm_provider": self._provider_chain_label(),
                 "memory": "connected" if self.memory else "unavailable",
                 "vision": "enabled" if self.vision and self.vision.enabled else "disabled",
                 "voice_output": "enabled" if self.services.tts else "disabled",

@@ -16,12 +16,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RemoveRedEye
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -175,6 +178,27 @@ fun HubScreen(
                 )
 
                 NavigationRow(
+                    title = "Agent & Tools",
+                    subtitle = "What Aura may do, and what needs approval",
+                    icon = Icons.Filled.Build,
+                    onClick = { onOpenSection(HubRoutes.TOOLS) },
+                )
+
+                NavigationRow(
+                    title = "Privacy",
+                    subtitle = "What leaves this phone, and API keys",
+                    icon = Icons.Filled.Shield,
+                    onClick = { onOpenSection(HubRoutes.PRIVACY) },
+                )
+
+                NavigationRow(
+                    title = "Diagnostics",
+                    subtitle = "What is reachable, and why not",
+                    icon = Icons.Filled.MonitorHeart,
+                    onClick = { onOpenSection(HubRoutes.DIAGNOSTICS) },
+                )
+
+                NavigationRow(
                     title = "General",
                     subtitle = "Appearance, advanced",
                     icon = Icons.Filled.Tune,
@@ -208,18 +232,31 @@ fun HubScreen(
  * The three values that answer that in one glance: connection state,
  * provider state, and - the one the whole fallback feature exists for -
  * whether the active provider is a substitute.
+ *
+ * WHY THIS READS `reach` AND NOT `loaded`
+ * ---------------------------------------
+ * It used to say "Disconnected" whenever `GET /api/settings` failed, which
+ * on a deployment predating the Control Hub API meant the headline
+ * contradicted the chat tab working in the background. Reachability comes
+ * from `/api/health` now; a missing settings API is a second line, not a
+ * different verdict.
  */
 @Composable
 private fun StatusCard(state: HubUiState) {
 
     val server = state.server
 
-    val connected = server.loaded && state.error == null
+    val connected = state.connected
 
     val provider = server.providers.firstOrNull { it.name == server.health.active }
         ?: server.providers.firstOrNull { it.name == server.health.requested }
 
     val label = provider?.label ?: server.health.active.ifBlank { "—" }
+
+    // What the server told us about itself, whichever route answered.
+    // `/api/health` reports a version even when `/api/settings` is absent,
+    // which is exactly the case this card has to render honestly.
+    val version = server.config.app.version.ifBlank { server.version }
 
     Column(
         modifier = Modifier
@@ -236,13 +273,16 @@ private fun StatusCard(state: HubUiState) {
                     Column(modifier = Modifier.weight(1f)) {
 
                         Text(
-                            text = if (connected) {
-                                if (server.health.inFallback) "Running on a fallback"
-                                else "Connected"
-                            } else if (state.loading) {
-                                "Connecting…"
-                            } else {
-                                "Disconnected"
+                            text = when {
+                                connected && server.health.inFallback ->
+                                    "Running on a fallback"
+                                connected -> "Connected"
+                                state.loading -> "Connecting…"
+                                // Something answered on that address, but
+                                // not as Aura with this token.
+                                server.reach == ServerReach.Connected ->
+                                    "Server reachable"
+                                else -> "Disconnected"
                             },
                             style = MaterialTheme.typography.titleLarge,
                         )
@@ -250,10 +290,15 @@ private fun StatusCard(state: HubUiState) {
                         Spacer(Modifier.height(4.dp))
 
                         Text(
-                            text = if (connected) {
-                                "$label is answering"
-                            } else {
-                                state.error ?: "Enter your server address to connect"
+                            text = when {
+                                // Reachable, authenticated, but this build
+                                // of the app knows endpoints that server
+                                // does not. Say which half works.
+                                connected && server.settingsProblem != null ->
+                                    "Chat works. Settings unavailable."
+                                connected -> "$label is answering"
+                                state.error != null -> state.error
+                                else -> "Enter your server address to connect"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -262,7 +307,9 @@ private fun StatusCard(state: HubUiState) {
 
                     StatusDot(
                         tone = when {
-                            connected && !server.health.inFallback -> StatusTone.Good
+                            connected &&
+                                !server.health.inFallback &&
+                                server.settingsProblem == null -> StatusTone.Good
                             connected -> StatusTone.Warning
                             state.loading -> StatusTone.Neutral
                             else -> StatusTone.Bad
@@ -271,10 +318,10 @@ private fun StatusCard(state: HubUiState) {
                     )
                 }
 
-                if (server.loaded && server.config.app.version.isNotBlank()) {
+                if (version.isNotBlank()) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "Aura ${server.config.app.version}",
+                        text = "Aura $version",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -289,11 +336,22 @@ private fun StatusCard(state: HubUiState) {
                     "in Connection first.",
                 tone = StatusTone.Warning,
             )
+        } else if (connected && server.settingsProblem != null) {
+            // Not an error card: nothing is broken from the user's side and
+            // there is nothing for them to fix on the phone. It explains
+            // why the sections below are read-only.
+            Spacer(Modifier.height(10.dp))
+            NoticeCard(
+                text = server.settingsProblem +
+                    " The sections below are read-only until the server is " +
+                    "updated. Chat is unaffected.",
+                tone = StatusTone.Warning,
+            )
         } else if (!connected && !state.loading) {
             Spacer(Modifier.height(10.dp))
             NoticeCard(
-                text = "Could not reach Aura. Check the server address, or try " +
-                    "again.",
+                text = state.error
+                    ?: "Could not reach Aura. Check the server address, or try again.",
                 tone = StatusTone.Bad,
             )
         }
@@ -394,6 +452,9 @@ object HubRoutes {
     const val VISION = "hub/vision"
     const val VOICE = "hub/voice"
     const val NOTIFICATIONS = "hub/notifications"
+    const val TOOLS = "hub/tools"
+    const val PRIVACY = "hub/privacy"
+    const val DIAGNOSTICS = "hub/diagnostics"
     const val GENERAL = "hub/general"
     const val CONNECTION = "hub/connection"
 }

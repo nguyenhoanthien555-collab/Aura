@@ -57,6 +57,23 @@ sealed interface AuraError {
     }
 
     /**
+     * The route is not on this server.
+     *
+     * A 404 from an endpoint this app knows by name means the server is
+     * *older* than the app, not that it is down. The Control Hub API
+     * arrived after chat did, so a deployment from before it answers
+     * `/api/chat` and `/api/health` perfectly while 404-ing
+     * `/api/settings`. Reporting that as a dead server is how a working
+     * configuration gets torn up for no reason, so it is its own case -
+     * the hub branches on it to say "connected, settings unavailable"
+     * rather than "disconnected".
+     */
+    data object NotSupported : AuraError {
+        override val userMessage =
+            "This Aura server does not have this feature yet. It may need updating."
+    }
+
+    /**
      * The server validated the request and refused it.
      *
      * Distinct from [ServerFailure] because the server knows *why* and has
@@ -78,8 +95,11 @@ sealed interface AuraError {
     data class ServerFailure(val code: Int) : AuraError {
         override val userMessage = when (code) {
             in 500..599 -> "Aura hit an error. Try again in a moment."
+            400 -> "Aura could not read that request."
+            409 -> "Another change is already in progress. Try again."
             413 -> "That was too large to send."
             422 -> "Aura could not read that message."
+            429 -> "Too many requests. Give Aura a moment."
             else -> "Aura returned an unexpected response ($code)."
         }
     }

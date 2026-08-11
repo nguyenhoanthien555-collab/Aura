@@ -219,7 +219,7 @@ fun GeneralSection(
                 "model, memory, proactive, vision, voice and awareness - goes " +
                 "back to the deployment's own configuration. Some changes need " +
                 "an Aura restart to take effect.",
-            enabled = state.connected,
+            enabled = state.settingsAvailable,
             busy = state.loading,
             onConfirm = { viewModel.resetSettings() },
         )

@@ -301,6 +301,9 @@ class AuraRepository(
                     // The server validated the request and said no, in
                     // words written for this screen. See AuraError.Rejected.
                     422 -> rejection(response)
+                    // The route is absent, not the server. A deployment
+                    // older than this app answers chat and 404s the hub.
+                    404, 405 -> AuraError.NotSupported
                     503 -> unavailableReason(response)
                     // A gateway that has no Aura behind it yet. On the
                     // free tiers this project targets, that is a container

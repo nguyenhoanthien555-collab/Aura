@@ -129,6 +129,17 @@ every other settings route, and these are its rules:
   token). With neither configured the key is applied to this process and
   the response says `persistent: false` and why — it is never written to
   disk in plaintext as a fallback.
+- **A stored key beats the environment.** At startup, and after every
+  write, `CredentialStore.apply()` pushes each stored key into the
+  process environment, overwriting whatever `.env` or the hosting
+  dashboard set. That direction is the whole feature: if a stale
+  dashboard value won, a phone could never repair a dead provider. The
+  consequence is worth knowing — while a key is stored, editing the
+  deployment's environment changes nothing, and `key_source` says
+  `"store"` so the phone can tell the user which one is in force.
+  `DELETE /api/providers/{provider}/key` forgets the stored key *and*
+  unsets the variable, so the running process has no key for that
+  provider at all until a restart re-reads `.env`.
 - **A key is only ever read back masked**, as `••••••••ABCD`. Nothing
   returns the value: not `GET /api/settings`, not `GET /api/providers`,
   not `/api/providers/health`, not the probe endpoint that actually uses

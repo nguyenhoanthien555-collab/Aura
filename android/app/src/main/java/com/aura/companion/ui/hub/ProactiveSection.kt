@@ -261,7 +261,7 @@ fun ProactiveSection(
             actionLabel = "Revert",
             confirmBody = "Frequency, quiet hours and repetition settings will " +
                 "go back to the server's own configuration.",
-            enabled = state.connected,
+            enabled = state.settingsAvailable,
             busy = state.loading,
             onConfirm = { viewModel.resetSettings(PROACTIVE_PATHS) },
         )

@@ -73,7 +73,24 @@ Render does not allow sidecar containers on the free tier. Options:
 
 ### 4. Deploy
 
-Push to `main` — Render builds and deploys automatically. First deploy takes ~2-3 minutes (Docker build). Subsequent deploys are faster with layer caching.
+Push the branch Render is configured to track — it builds and deploys
+automatically. First deploy takes ~2-3 minutes (Docker build). Subsequent
+deploys are faster with layer caching.
+
+> **Check which branch that is before trusting this step.** The server
+> lives on `feature/aura-identity`; `main` has no `server/` directory at
+> all, so a service tracking `main` cannot serve `/api/*`. Set the branch
+> in Render → Settings → Build & Deploy → Branch.
+
+**A stale deployment fails in a way that looks like a connection
+problem.** The Control Hub routes (`/api/settings`, `/api/providers`,
+`/api/providers/health`) arrived after the chat and health routes, so a
+service built from an older commit answers `/api/health` with 200,
+answers chat normally, and returns 404 for all three settings routes. The
+phone reports that honestly — *Connected / Settings unavailable*, with the
+reason on Settings → Diagnostics — rather than calling the server dead.
+If the Diagnostics screen shows "Token accepted: Yes" and "Settings API:
+Unavailable", the fix is a redeploy, not a new token.
 
 ### 5. Custom domain (optional)
 
@@ -277,8 +294,9 @@ No separate APM required for this scale.
 ## Upgrading
 
 ```bash
-# Render: push to main
-git push origin main
+# Render: push the branch the service tracks (see "Deploy" above -
+# the server code is on feature/aura-identity, not on main)
+git push origin feature/aura-identity
 
 # Fly.io:
 fly deploy

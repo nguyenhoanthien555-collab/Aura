@@ -125,16 +125,46 @@ data class VoiceConfigDto(
     val stt: VoiceChannelDto = VoiceChannelDto(),
 )
 
+/**
+ * One voice channel.
+ *
+ * `voice` and `volume` are TTS-only in the server's config, but the two
+ * channels share this class because `stt` simply never sends them and the
+ * defaults render as "not set". Two near-identical classes to express that
+ * would be worse. `rate` and `pitch` are absent on purpose: the mood pacing
+ * system owns them at runtime, so they are not settable and showing them
+ * would invite an edit that reverts itself.
+ */
 @Serializable
 data class VoiceChannelDto(
     val enabled: Boolean = false,
     val provider: String = "",
+    val voice: String = "",
+    /** 0-100. The server converts it to the `"+80%"` form edge-tts wants. */
+    val volume: Int = 100,
+    /** False synthesises without playing. Decided when the engine is built. */
+    val playback: Boolean = true,
 )
 
+/**
+ * The tool policy, as the server is running it.
+ *
+ * [allowed], [allowedPaths] and [applications] are reported but are *not*
+ * in the server's allow-list, so the hub renders them read-only. They decide
+ * which tools exist and which filesystem roots and executables they may
+ * touch - granting a capability rather than configuring one - and a bearer
+ * token is deliberately not enough for that.
+ */
 @Serializable
 data class ToolsConfigDto(
     val enabled: Boolean = false,
     val allowed: List<String> = emptyList(),
+    /** Risk levels that skip the confirmation prompt: safe/sensitive/dangerous. */
+    @SerialName("auto_approve") val autoApprove: List<String> = emptyList(),
+    val timeout: Double = 30.0,
+    @SerialName("allowed_paths") val allowedPaths: List<String> = emptyList(),
+    /** Name → executable. Values are paths on the host, never secrets. */
+    val applications: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -253,6 +283,40 @@ data class ProviderHealthDto(
     @SerialName("in_fallback") val inFallback: Boolean = false,
     val problems: List<String> = emptyList(),
     val ready: Boolean = false,
+    /**
+     * Per-provider state, keyed by provider name.
+     *
+     * Defaulted to empty rather than required, because a server older than
+     * this field still answers this route usefully - the chain-level fields
+     * above are what the recovery UI needs, and an empty map renders as
+     * "not reported" instead of failing the whole parse.
+     */
+    val providers: Map<String, ProviderStateDto> = emptyMap(),
+)
+
+/**
+ * One provider's state, as reported without calling it.
+ *
+ * `healthy` means "this is the provider currently serving", not "it
+ * answered a probe a moment ago" - see `_per_provider_health` in
+ * `server/routes/settings.py` for why this route deliberately does not
+ * spend a token per provider. [state] carries the distinction the UI
+ * actually renders:
+ *
+ *   active        serving right now
+ *   standby       in the chain behind the active one, never asked
+ *   failed        the chain moved past it, so it was asked and did not answer
+ *   idle          configured but not in the chain
+ *   unconfigured  no key
+ *   error         its state could not be read; [problem] is a category
+ */
+@Serializable
+data class ProviderStateDto(
+    val configured: Boolean = false,
+    val healthy: Boolean = false,
+    val state: String = "",
+    @SerialName("in_chain") val inChain: Boolean = false,
+    val problem: String = "",
 )
 
 @Serializable

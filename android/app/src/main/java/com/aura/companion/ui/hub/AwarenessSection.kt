@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.runtime.Composable
@@ -18,7 +17,7 @@ import com.aura.companion.ui.components.NoticeCard
 import com.aura.companion.ui.components.RowDivider
 import com.aura.companion.ui.components.SelectRow
 import com.aura.companion.ui.components.SettingsSection
-import com.aura.companion.ui.components.StatusRow
+import com.aura.companion.ui.components.SliderRow
 import com.aura.companion.ui.components.StatusTone
 import com.aura.companion.ui.components.ToggleRow
 import kotlin.math.roundToInt
@@ -177,15 +176,28 @@ fun AwarenessSection(
 
             RowDivider()
 
-            // Read-only on purpose. `server.screen.min_interval` is not in
-            // the server's allow-list, so a slider here would be a control
-            // that 422s - or worse, one that moves and changes nothing. The
-            // number is still worth showing: it explains why updates arrive
-            // at the rate they do.
-            StatusRow(
+            // Live on the running vision manager: `VisionManager._is_fresh`
+            // reads `self.min_interval` on every observation, so this moves
+            // the next one without a restart. On a deployment with screen
+            // observation off there is no manager to move it on, and the
+            // server reports that honestly as needing a restart - which is
+            // why this is a real slider and not a fake one.
+            SliderRow(
                 title = "Minimum interval",
-                value = "${serverScreen.minInterval.roundToInt()}s",
-                icon = Icons.Filled.Timer,
+                subtitle = "How long Aura waits before accepting another screen update",
+                value = serverScreen.minInterval.toFloat(),
+                range = 1f..60f,
+                steps = 58,
+                enabled = serverScreen.enabled,
+                lockedReason = state.lockedReason("server.screen.min_interval")
+                    ?: if (serverScreen.enabled) null else "Accept screen context first",
+                format = { "${it.roundToInt()}s" },
+                onCommit = {
+                    viewModel.setNumber(
+                        "server.screen.min_interval",
+                        it.roundToInt(),
+                    )
+                },
             )
         }
 

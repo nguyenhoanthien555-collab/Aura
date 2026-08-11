@@ -51,13 +51,16 @@ fun AuraSection(
             StatusRow(
                 title = "Connection",
                 value = when {
-                    server.loaded -> "Connected"
+                    state.connected -> "Connected"
                     state.loading -> "Connecting"
+                    // The address answered, but not as Aura accepting this
+                    // token. A different verdict from nothing answering.
+                    server.reach == ServerReach.Connected -> "Not authenticated"
                     state.device.isConfigured -> "Unreachable"
                     else -> "Not configured"
                 },
                 tone = when {
-                    server.loaded -> StatusTone.Good
+                    state.connected -> StatusTone.Good
                     state.loading -> StatusTone.Neutral
                     else -> StatusTone.Bad
                 },
@@ -65,6 +68,22 @@ fun AuraSection(
             )
 
             RowDivider()
+
+            // Present only when it is the answer to a question the user
+            // would otherwise ask: the server is up, so why is everything
+            // below read-only?
+            if (state.connected && server.settingsProblem != null) {
+
+                StatusRow(
+                    title = "Settings API",
+                    value = "Unavailable",
+                    subtitle = server.settingsProblem,
+                    tone = StatusTone.Warning,
+                    icon = Icons.Filled.Info,
+                )
+
+                RowDivider()
+            }
 
             StatusRow(
                 title = "Transport",
@@ -77,7 +96,11 @@ fun AuraSection(
 
             StatusRow(
                 title = "Version",
-                value = server.config.app.version.ifBlank { "—" },
+                // `/api/health` carries a version even where `/api/settings`
+                // does not, so the row is filled on an older server too.
+                value = server.config.app.version
+                    .ifBlank { server.version }
+                    .ifBlank { "—" },
                 icon = Icons.Filled.Info,
             )
         }
@@ -100,7 +123,10 @@ fun AuraSection(
                 title = "Answering",
                 value = server.health.active.ifBlank { "—" },
                 tone = when {
-                    !server.loaded -> StatusTone.Neutral
+                    // Keyed on the health document, not on the settings
+                    // one: `/api/providers/health` is a separate request
+                    // and can answer when settings does not.
+                    server.health.active.isBlank() -> StatusTone.Neutral
                     server.health.inFallback -> StatusTone.Warning
                     server.health.ready -> StatusTone.Good
                     else -> StatusTone.Bad

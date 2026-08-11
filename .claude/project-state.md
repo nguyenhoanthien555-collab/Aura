@@ -8,13 +8,56 @@ Build and stabilize Aura as a local/cloud-capable AI assistant.
 
 ## Status
 Phases 0-7 of the repair mandate are complete, PHASE 8 (Memory 2.0 +
-Temporal Context + User Model + Proactive System) is complete, and
-PHASE 9 (Android Control Hub, modern UI, provider/API-key management,
-feature controls) is complete: **1550 passed, 1 deselected** on the
-backend, **132 Android unit tests** passing, `lintDebug` 0 errors /
-44 warnings. The "local Windows device agent" that earlier notes
-deferred is still deferred - it was not part of the Phase 8 or Phase 9
+Temporal Context + User Model + Proactive System) is complete, PHASE 9
+(Android Control Hub, modern UI, provider/API-key management, feature
+controls) is complete, and PHASE 10 (Android <-> server settings
+contract) is complete: **1628 passed, 1 deselected** on the backend,
+**175 Android unit tests** passing across 11 classes, and a verified
+19.6 MB debug APK. The "local Windows device agent" that earlier notes
+deferred is still deferred - it was not part of the Phase 8, 9 or 10
 spec.
+
+**Nothing from Phase 9 or Phase 10 is committed.** HEAD is `35589a0` on
+`feature/aura-identity`; both phases forbade committing. The deployed
+Render revision predates `35589a0`, which is why its `/api/settings`,
+`/api/providers` and `/api/providers/health` return 404 - a redeploy of
+that branch is the user's outstanding action.
+
+## Phase 10 architecture (standing)
+- **Connectivity is a ladder, not a boolean.** `ServerReach`
+  (`ui/hub/HubViewModel.kt`): `Unknown < Unreachable < Connected <
+  Authenticated < SettingsAvailable < ProviderHealthy`, compared by
+  ordinal through `atLeast`. Each rung is one observed request.
+  `connected` is anchored to `Authenticated` = a 200 from `/api/health`,
+  which is itself behind `verify_token`, so one request proves
+  reachability and the token together. An optional route returning 404
+  must never make a working server read as dead.
+- **A report is not a snapshot.** `ServerRuntime.config` is still built
+  once - `build_services` hands that dict to every subsystem - but
+  `SettingsService.refresh_config()` re-merges it after every overlay
+  write, because the same dict is what `GET /api/settings`,
+  `GET /api/providers` and `/api/health` report. Live application is
+  unaffected: every `_reapply_*` handler reads `load_config()` fresh.
+- **`/api/health` must not build anything.** `_provider_chain_label()`
+  guards the lazy provider construction that `active_chain()` triggers,
+  and reports the exception *type* only. The route that means "Aura is
+  alive" cannot be allowed to fail because one subsystem is unwell -
+  least of all the provider, whose repair is what the user came for.
+- **Subsystem-conditional settings demote themselves.** Three handlers
+  (`_reapply_screen`, `_reapply_tools`, `_reapply_voice`) return whether
+  the change reached a live object; a `False` moves the path from
+  `applied` to `restart_required`. Derived from the assignment, never
+  from a table.
+- **Precedence, in two directions.** Settings:
+  `DEFAULT_CONFIG < config.yaml < runtime overlay`, and `load_config()`
+  reads no environment variable. Secrets: `.env < credential store`,
+  since `CredentialStore.apply()` overwrites the environment at startup
+  and after each write. Documented in `docs/API.md` (Precedence) and
+  `docs/SECURITY.md`.
+- **A settable path is not a new capability.** `tools.allowed`,
+  `tools.allowed_paths` and `tools.applications` stay off the allow-list
+  on purpose: a bearer token may change a setting, not grant a remote
+  client a new verb on the host.
 
 ## Phase 9 architecture (standing)
 - **Android is a control surface, not a source of truth.** Server state

@@ -156,7 +156,7 @@ fun MemorySection(
             confirmBody = "Recall, remembering, profile, history and search " +
                 "depth will go back to the server's own configuration. Some of " +
                 "them need an Aura restart to take effect.",
-            enabled = state.connected,
+            enabled = state.settingsAvailable,
             busy = state.loading,
             onConfirm = { viewModel.resetSettings(MEMORY_PATHS) },
         )

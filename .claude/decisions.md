@@ -173,3 +173,71 @@ Affected files: `vision/settings.py`, `vision/cloud_processor.py`,
 
 Do not change unless: the legacy key is confirmed absent from every
 deployment, which would allow dropping that fallback step.
+
+## 2026-08-11 — Connectivity is a ladder, not a boolean
+
+Decision: `ServerReach` in `ui/hub/HubViewModel.kt` -
+`Unknown < Unreachable < Connected < Authenticated < SettingsAvailable <
+ProviderHealthy`, compared by ordinal through `atLeast`. Each rung is one
+observed request, and `HubUiState.connected` is anchored to
+`Authenticated`.
+
+Reason: one boolean was carrying two unrelated facts. A 404 from the
+optional `/api/settings` demoted the same flag that `/api/health` had
+just proved, so a server that was answering chat read as "Disconnected"
+and the app sent the user to retype a token that already worked - while
+the screen that could fix the real problem sat behind the same false
+verdict. `Authenticated` is the right anchor because `/api/health` is
+itself behind `verify_token`: one 200 proves reachability and the token
+together. An optional route's absence can now only lower the top rungs.
+
+Affected files: `ui/hub/HubViewModel.kt`, `ui/hub/HubScreen.kt`,
+`ui/hub/ConnectionSection.kt`, `ui/hub/DiagnosticsSection.kt`,
+`android/app/src/test/java/com/aura/companion/ui/hub/ServerReachTest.kt`.
+
+Do not change unless: `/api/health` stops being authenticated, in which
+case `Connected` and `Authenticated` need separate evidence again.
+
+## 2026-08-11 — A report is not a snapshot
+
+Decision: `SettingsService.refresh_config()` re-materializes
+`ServerRuntime.config` after every overlay write (in `apply()`, and in
+the reset route when something was actually removed). `build_services`
+still receives a single dict; nothing already constructed is rebuilt.
+
+Reason: `runtime.config` was a constructor snapshot, and it is also what
+`GET /api/settings`, `PATCH /api/settings` and `GET /api/providers`
+report. So a write persisted correctly, applied to the live subsystem
+correctly, and then answered the next GET with the old value - the phone
+renders its controls from `effective`, so the switch sprang back while
+the server used the new setting. Two answers for one change. Live
+application never depended on this dict (every `_reapply_*` handler
+calls `load_config()` fresh), which is why the fix is confined to
+reporting and `restart_required` stays exactly as honest as it was.
+
+Affected files: `server/settings_service.py`, `server/routes/settings.py`,
+`tests/test_settings_contract.py`.
+
+Do not change unless: subsystems start reading `runtime.config` live, at
+which point a refresh becomes a reconfiguration and needs to say so.
+
+## 2026-08-11 — `/api/health` may not construct a provider
+
+Decision: `ServerRuntime._provider_chain_label()` wraps the
+`active_chain()` call that `health_status()` makes, and reports the
+exception *type* only - `"unavailable (ValueError)"`.
+
+Reason: `BrainRouter.provider` builds lazily and raises when the key is
+missing, so a missing API key made `/api/health` return 500. That is the
+one request the Android app treats as proof the server is reachable, so a
+dead provider presented as a dead server - and the repair screen was
+unreachable for the same reason. `readiness_status()` ten lines above
+already guarded exactly this; health had simply been written without it.
+The type name only, because a provider's rejection message can quote the
+key it was rejected for.
+
+Affected files: `server/runtime.py`, `ui/hub/DiagnosticsSection.kt`
+(tone matching became prefix-based), `tests/test_settings_contract.py`.
+
+Do not change unless: provider construction becomes eager and total, so
+that a failure is impossible rather than merely caught.

@@ -29,10 +29,32 @@ Persisted-and-live:
         next `tick`.
     memory.recall
         `MemoryPipeline.recall_enabled` is read per turn.
+    server.screen.min_interval
+        `VisionManager._is_fresh` reads `self.min_interval` on every
+        observation, so setting the attribute moves the next one.
+    tools.enabled, tools.auto_approve, tools.timeout
+        All three are `ToolPolicy` fields and the executor reads them per
+        call (`tools/executor.py`: `policy.enabled` at 119 and 157,
+        `policy.auto_approve` at 179, `policy.timeout` at 273). Replacing
+        `executor.policy` with one rebuilt from the effective config
+        therefore applies them immediately. The tool *registry* is not
+        rebuilt, which is why `tools.allowed_paths` and `tools.applications`
+        are not settable at all.
+    voice.tts.voice, voice.tts.volume
+        Passed through at each synthesis from `self.voice`/`self.volume` on
+        the provider, so they can be moved on a live one.
+
+Applied live when the subsystem is running, restart_required when it is
+not:
+    The three above that need a live object - the vision manager, the tool
+    executor, the TTS provider - are reported as `restart_required` when
+    that object does not exist in this process, which on a headless server
+    is the normal case for vision and voice. The report is derived from
+    whether the assignment actually happened, not from a table.
 
 Persisted, needs restart:
     memory.profile/pipeline/history_limit/retrieval_scope, vision.enabled,
-    vision models, voice.tts/stt.enabled, tools.enabled,
+    vision models, voice.tts.enabled/provider/playback, voice.stt.enabled,
     server.screen.enabled, server.companion.enabled
         These gate construction in `build_services` / `_build_remote_vision`
         / `_build_companion`. The pipeline is built once per process on
@@ -47,6 +69,10 @@ Persisted, needs restart:
         (`launcher/services.py`), and that copy would keep the old value.
         A setting that applies to half its subsystems is worse than one
         that honestly says "restart", so it is not in LIVE_PATHS.
+
+        `voice.tts.playback` is `create_audio_player(enabled=...)`
+        (`voice/factory.py:203`) and `voice.tts.provider` selects the
+        class, so neither can move on a built engine.
 """
 
 from __future__ import annotations
@@ -69,6 +95,9 @@ LIVE_PATHS = {
     "proactive.max_per_day", "proactive.quiet_hours",
     "proactive.duplicate_window_seconds", "proactive.similarity_threshold",
     "memory.recall",
+    "server.screen.min_interval",
+    "tools.enabled", "tools.auto_approve", "tools.timeout",
+    "voice.tts.voice", "voice.tts.volume",
 }
 
 
@@ -144,6 +173,12 @@ class SettingsService:
         # `CredentialStore.persistent` - are reported the same shape.
         persisted = True
 
+        # The overlay changed, so the runtime's config snapshot - what
+        # every report reads - is now out of date. Refreshed before the
+        # subsystem handlers run so that a failure in one of them cannot
+        # leave the reports describing the previous state.
+        self.refresh_config()
+
         applied: list[str] = []
         restart: list[str] = []
 
@@ -173,12 +208,75 @@ class SettingsService:
         self._reapply_proactive(accepted)
         self._reapply_memory(accepted)
 
+        # Subsystem-conditional paths. Each handler is called once, for the
+        # whole group it owns, and answers whether the change reached a live
+        # object. A no means the setting is on disk but not in effect, and
+        # the report has to move it - `applied` is a promise.
+        for paths, handler in (
+            (("server.screen.min_interval",), self._reapply_screen),
+            (("tools.enabled", "tools.auto_approve", "tools.timeout"),
+             self._reapply_tools),
+            (("voice.tts.voice", "voice.tts.volume"), self._reapply_voice),
+        ):
+            touched = [path for path in paths if path in accepted]
+
+            if not touched:
+                continue
+
+            if handler():
+                continue
+
+            for path in touched:
+                if path in applied:
+                    applied.remove(path)
+                    restart.append(path)
+
         return {
             "applied": applied,
             "restart_required": restart,
             "persistent": persisted,
             "needs_restart": bool(restart),
         }
+
+    def refresh_config(self) -> dict:
+        """
+        Re-merge the overlay into the runtime's config snapshot.
+
+        `ServerRuntime.config` is built once in the constructor, because
+        `build_services` hands the same dict to every subsystem and a
+        config that changed under a running pipeline would be worse than
+        one that needs a restart. But it is also what every *report* reads
+        - `GET /api/settings`'s `effective`, `GET /api/providers`'s
+        primary and fallback list, the version in `/api/health` - and a
+        report must not be a snapshot from process start.
+
+        Without this, a successful PATCH persisted the value, applied it
+        to the live subsystem, and then answered the next GET with the old
+        one. The phone renders its controls from `effective`, so the
+        switch the user had just moved would spring back while the server
+        quietly used the new value: the same change reported two ways.
+
+        Called after every write to the overlay. Cheap enough for that -
+        it is one YAML read and a dict merge, on a path a person triggers
+        by tapping a control, not on a chat turn.
+
+        Note what this does *not* do: it does not reconfigure anything
+        already built. A path that needs a restart still needs one; the
+        `restart_required` report stays exactly as honest as it was.
+        """
+
+        from server.runtime import _materialize_config
+
+        config = _materialize_config()
+
+        # The constructor guarantees this key exists and code downstream
+        # indexes it without checking. A refresh has to keep that true.
+        if "server" not in config:
+            config["server"] = {}
+
+        self.runtime.config = config
+
+        return config
 
     # ------------------------------------------------------------------
     # Live application
@@ -284,6 +382,124 @@ class SettingsService:
 
         if pipeline is not None:
             pipeline.recall_enabled = recall
+
+    def _reapply_screen(self) -> bool:
+        """
+        Move the observation throttle on the live vision manager.
+
+        Returns False when there is nothing to move it on - screen
+        observation off in this process means `services.vision` is either
+        absent or a manager without the attribute. The caller demotes the
+        path to `restart_required` in that case rather than reporting a
+        change to an object that does not exist.
+
+        `VisionManager._is_fresh` compares against `self.min_interval` on
+        every observation, so the assignment takes effect on the next one.
+        """
+
+        manager = getattr(
+            getattr(self.runtime, "services", None), "vision", None
+        )
+
+        if manager is None or not hasattr(manager, "min_interval"):
+            return False
+
+        settings = ((load_config().get("server") or {}).get("screen")) or {}
+
+        try:
+            manager.min_interval = float(settings.get("min_interval", 8.0))
+        except (TypeError, ValueError):            # pragma: no cover
+            # The validator already bounded this; a failure here would mean
+            # the manager rejects assignment, which is still not applied.
+            return False
+
+        return True
+
+    def _reapply_tools(self) -> bool:
+        """
+        Replace the executor's policy with one built from the new config.
+
+        The whole policy, not one field: `ToolPolicy.from_config` is the
+        single place that turns the `tools:` section into a policy, and
+        duplicating its coercions here would be a second reading of the
+        same config that could disagree with the first.
+
+        The tool *registry* is untouched, which is correct - the settable
+        paths are all policy fields, and the two that decide which tools
+        exist (`allowed_paths`, `applications`) are deliberately not
+        settable at all.
+        """
+
+        executor = getattr(
+            getattr(self.runtime, "services", None), "tools", None
+        )
+
+        if executor is None or not hasattr(executor, "policy"):
+            return False
+
+        from tools.executor import ToolPolicy
+
+        try:
+            executor.policy = ToolPolicy.from_config(
+                load_config().get("tools") or {}
+            )
+        except Exception as error:                 # pragma: no cover
+            logger.warning(
+                "Tool policy could not be rebuilt (%s); the running policy "
+                "is unchanged", type(error).__name__,
+            )
+            return False
+
+        return True
+
+    def _reapply_voice(self) -> bool:
+        """
+        Move voice and volume on the live TTS provider.
+
+        Only those two: they are passed through at each synthesis, so the
+        next utterance uses them. `provider` and `playback` were decided
+        when the engine was built and are reported as needing a restart.
+
+        `volume` goes through `normalise_percent`, the same coercion
+        `EdgeTTSProvider.__init__` uses. The setting is validated as 0-100
+        but the provider hands its value to edge-tts, which wants "+80%" -
+        assigning the bare integer would produce speech at the wrong volume
+        or none at all, from a setting the UI had just called applied.
+
+        On a headless deployment `voice.tts.enabled` is false, there is no
+        engine, and this returns False - which is the honest answer, not a
+        failure.
+        """
+
+        provider = getattr(
+            getattr(getattr(self.runtime, "services", None), "tts", None),
+            "provider",
+            None,
+        )
+
+        if provider is None:
+            return False
+
+        from voice.tts.values import normalise_percent
+
+        settings = ((load_config().get("voice") or {}).get("tts")) or {}
+
+        moved = False
+
+        # Set only what the provider already has. A provider without these
+        # attributes is not one this can configure, and creating them would
+        # be a setting that writes a field nothing reads.
+        if "voice" in settings and hasattr(provider, "voice"):
+            provider.voice = str(settings["voice"]).strip()
+            moved = True
+
+        if "volume" in settings and hasattr(provider, "volume"):
+            provider.volume = normalise_percent(
+                settings["volume"], provider.volume
+            )
+            moved = True
+
+        return moved
 
 
 # ----------------------------------------------------------------------

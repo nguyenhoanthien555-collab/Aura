@@ -729,10 +729,11 @@ rather than per screen.
 
 **Toggles are real, or they are read-only and say why.** The
 notifications switch re-syncs WorkManager rather than only writing a
-flag; `server.screen.min_interval` is displayed but not settable because
-it is not in the validator's allow-list; voice is two toggles because
-`voice.tts.enabled`/`voice.stt.enabled` are the only settable voice
-paths; dynamic colour locks below Android 12 with the reason shown.
+flag; dynamic colour locks below Android 12 with the reason shown.
+(*Superseded by Phase 10:* this phase also recorded
+`server.screen.min_interval` as not settable and voice as two toggles,
+because neither was in the allow-list then. Phase 10 added eight paths
+and both statements are now false.)
 
 **Four defects found and fixed during the build**, three of them mine:
 `StatusRow` had no `subtitle` parameter (widened after checking every
@@ -771,14 +772,112 @@ config, 1 ConstantLocale).
    commits 4ba906e/1fe3368 - `.gitignore` does not apply to paths already
    in the index. Needs `git rm -r --cached` in a commit of its own; left
    for Phase 10 rather than mixed into this one.
+   *Resolved in `35589a0` itself* (2183 files, 61256 deletions), which is
+   the commit this section describes - so the "left for Phase 10" note
+   was already stale when written. Phase 10 verified `git ls-files` returns
+   zero paths under those directories and removed three generated files
+   the sweep missed.
 
 **Not verified:** no live provider, no real device, no deploy. Every
 claim is proven against `TestClient`, JVM unit tests and lint.
 
+## Phase 10 - COMPLETE - Android <-> server settings contract
+
+**The reported symptom** was Settings showing "Disconnected / unexpected
+response (404)" while chat, `/api/health` and `/api/screen` all returned
+200, and Render logged 404 for `/api/settings`, `/api/providers` and
+`/api/providers/health`.
+
+**Two causes, one of them ours.**
+
+1. *Deployment skew.* Those three routes first exist in `35589a0`
+   (Phase 9, current HEAD of `feature/aura-identity`). The deployed
+   revision predates it. `main` has no `server/` directory at all, and
+   `docs/DEPLOYMENT.md` told the operator to push there - corrected.
+2. *One boolean carrying two facts.* `server.loaded` meant both "Aura
+   answered" and "Aura gave me its settings", so a 404 from an optional
+   route was rendered as a dead server. Replaced with `ServerReach`, a
+   six-rung ladder (`Unknown < Unreachable < Connected < Authenticated <
+   SettingsAvailable < ProviderHealthy`) where each rung is one observed
+   request. `connected` is anchored to `Authenticated`, which is
+   `/api/health` - itself behind `verify_token`, so one 200 proves
+   reachability *and* the token. A missing settings API now reads
+   "Connected / Settings unavailable".
+
+**Eight settings promoted from read-only to settable**, each classified
+from its read site rather than guessed: `server.screen.min_interval`,
+`tools.enabled/auto_approve/timeout`, `voice.tts.provider/voice/volume/`
+`playback`. Three are subsystem-conditional - the vision manager, the
+tool executor, the TTS provider - so `SettingsService.apply` calls one
+handler per group and a `False` demotes the path from `applied` to
+`restart_required`. `applied` stays a promise.
+
+**Deliberately still not settable:** `tools.allowed`,
+`tools.allowed_paths`, `tools.applications`. A bearer token is enough to
+change a setting; it is not enough to hand a remote client a new verb on
+the host.
+
+**Three real bugs found, two of them by doing the live check.**
+
+1. `ToolPolicy.from_config` reads `config.get("auto_approve") or
+   ["safe"]`, so an empty list collapses to auto-approving safe tools -
+   a UI that let the user clear the list would have silently *widened*
+   permission. `_risk_levels` now rejects `[]`, and `ToolsSection` locks
+   the last enabled switch.
+2. `/api/health` returned **500** with no provider key. `health_status()`
+   called `active_chain()` bare, and that property builds the provider on
+   first access, which raises when the key is missing. So the one route
+   the phone treats as proof of life failed for the exact user the
+   Control Hub exists for - and the phone sent them to the connection
+   screen to retype a working token. Now guarded by
+   `_provider_chain_label()`, mirroring what `readiness_status()` already
+   did, reporting `"unavailable (ValueError)"` - the type name only,
+   because a provider's exception can quote the key it was rejected for.
+3. `ServerRuntime.config` is materialised once in the constructor, but is
+   also what every *report* reads. A successful PATCH persisted the
+   value and applied it live (every `_reapply_*` handler reads
+   `load_config()` fresh) and then answered the next GET with the old
+   one - so the switch the user just moved sprang back while the server
+   used the new value. `SettingsService.refresh_config()` re-merges the
+   snapshot after every overlay write; the reset route calls it too.
+   Nothing in the old suite caught this, because those tests assert on
+   `overrides` and on the PATCH report, both of which were right.
+
+**Precedence, now documented** (`docs/API.md`, `docs/SECURITY.md`) - two
+chains that resolve in opposite directions. Settings:
+`DEFAULT_CONFIG < config.yaml < runtime overlay`, and `load_config()`
+reads no environment variable at all. Secrets: `.env < credential store`,
+because `CredentialStore.apply()` pushes stored keys into the environment
+at startup and after each write - a phone must be able to replace a key
+the dashboard got wrong.
+
+**Tests:** `tests/test_settings_contract.py` (78) plus
+`SettingsContractTest.kt` (29) and `ServerReachTest.kt` (14) - 121 new.
+The 4 read-after-write tests were confirmed to fail with the fix
+disabled, so they test the defect rather than the code.
+
+**Verified:** backend `1628 passed, 1 deselected`; Android
+`175 tests, 0 failures` across 11 classes; `:app:assembleDebug BUILD
+SUCCESSFUL` with a 19.6 MB APK; and a real uvicorn on `127.0.0.1:8123`
+answering all four routes 200 authenticated / 401 unauthenticated, with
+a full PATCH -> GET -> reset round-trip and 422s for an out-of-range
+value and an off-allow-list path.
+
+**Git hygiene:** the ~2139 build artifacts were already untracked in
+`35589a0`; three generated files that predate the rule were still tracked
+and are now removed from the index (kept on disk) - `android/`
+`local.properties`, which carries the machine username in `sdk.dir`,
+plus `source.properties` and `NOTICE.txt`.
+
 ## Current
 
-Phase 9 complete, backend and Android. Next: Phase 10 - final
-integration, regression and release-readiness audit.
+Phase 10 complete. Nothing committed - the phase forbade it.
+
+**The user's next action is a redeploy.** The client fix stops the app
+lying about the connection, but the deployed server still has to contain
+the three routes: Render must track `feature/aura-identity` at `35589a0`
+or later. Until then Aura reads "Connected / Settings unavailable", which
+is now the truth.
 
 ## Blockers
 

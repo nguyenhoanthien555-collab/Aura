@@ -11,7 +11,7 @@ Hermetic suite: `.venv/Scripts/python.exe -m pytest -q`
 Baseline: 885 passed, 1 deselected. After Phase 2: 958. After Phase 3: 1053.
 After Phase 4: 1067. After Phase 5: 1101. After Phase 6: 1146.
 After Phase 7: 1160. After Phase 8: 1441 (stale - the tree measured 1480
-when Phase 9 began). Phase 9 backend: 1535.
+when Phase 9 began). Phase 9 backend: 1535. Phase 10 backend: 1628.
 
 ## Phase status
 
@@ -62,7 +62,20 @@ when Phase 9 began). Phase 9 backend: 1535.
 - [x] Phase 9 - Android Control Hub, provider/key management (COMPLETE:
       backend 1550 passed / 1 deselected, Android 132 unit tests passed,
       lint 0 errors / 44 warnings)
-- [ ] Phase 10 - Final integration, regression, release-readiness audit
+- [x] Phase 10 - Android <-> server settings contract (COMPLETE: backend
+      1628 passed / 1 deselected, Android 175 unit tests passed, debug
+      APK built and verified, four routes checked against a real uvicorn).
+      The reported 404s had two causes: a deployment older than the
+      commit that added the routes, and one boolean carrying two facts on
+      the client. Three real bugs fixed - the empty `auto_approve`
+      permission widening, `/api/health` 500ing when the provider key is
+      missing, and reports served from a config snapshot taken at process
+      start. Details in `progress.md`; the standing architecture is in
+      `project-state.md`.
+- [ ] Next: nothing assigned. The outstanding *user* action is a Render
+      redeploy of `feature/aura-identity` at `35589a0` or later - the
+      client fix stops the app misreporting the connection, but only the
+      server can start answering `/api/settings`.
 
 ## Standing constraints
 
@@ -303,12 +316,15 @@ Modified: `MainActivity.kt`, `AuraRepository.kt`, `AuraResult.kt`,
 
 **Every toggle is wired to something real.** The notifications switch
 calls `NotificationScheduler.sync` as well as writing the flag, so "off"
-means off now rather than at the next launch. `server.screen.min_interval`
-stayed read-only because it is not in the allow-list. Voice is two
-toggles plus an explanation, because `voice.tts.enabled` and
-`voice.stt.enabled` are the only two settable voice paths. Dynamic
-colour locks below Android 12 with a stated reason instead of failing
-silently.
+means off now rather than at the next launch. Dynamic colour locks below
+Android 12 with a stated reason instead of failing silently.
+
+*Superseded by Phase 10:* this phase left `server.screen.min_interval`
+read-only and voice at two toggles, because neither was in the
+validator's allow-list. Phase 10 added eight paths to that allow-list -
+`server.screen.min_interval`, `tools.enabled/auto_approve/timeout`,
+`voice.tts.provider/voice/volume/playback` - so both statements are now
+false. See the Phase 10 section of `progress.md`.
 
 **`ui/settings/SettingsScreen.kt` is now unreachable** - the chat gear
 opens the hub, and `ConnectionSection` reuses the same

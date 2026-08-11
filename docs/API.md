@@ -437,11 +437,30 @@ cannot change instead of discovering it through a rejection. Nothing in
 it is credential material — keys have their own route.
 
 **`restart_required` is the honest signal.** A path listed there was
-persisted but is *not* live, because it is built once during startup
-(`vision.enabled` when vision was never constructed, `tools.enabled`,
-`voice.tts/stt.enabled`, `server.screen.enabled`). Keys, `llm.provider`,
-the fallback chain, the model and every `proactive.*` value apply
-immediately.
+persisted but is *not* live. There are three tiers, and only the middle
+one is interesting:
+
+- **Always live.** `llm.provider`, the fallback chain and every model,
+  `llm.temperature/max_output_tokens/timeout`, all of `proactive.*`,
+  `memory.recall`, and stored keys.
+- **Live if the subsystem is running.** `server.screen.min_interval`
+  needs the vision manager, `tools.enabled/auto_approve/timeout` need
+  the tool executor, `voice.tts.voice/volume` need a built TTS provider.
+  On a headless deployment vision and voice usually do not exist, so
+  those paths persist and report `restart_required` instead. The report
+  comes from whether the assignment actually happened, not from a table
+  — so `applied` is a claim about this process, not about the file.
+- **Always a restart.** `vision.enabled`, `voice.tts.enabled/provider/`
+  `playback`, `voice.stt.enabled`, `server.screen.enabled`,
+  `server.companion.enabled`, and `memory.profile/pipeline/`
+  `history_limit/retrieval_scope`. Each gates construction in
+  `build_services`, and the pipeline is built once per process on
+  purpose.
+
+A path outside the allow-list is not in any tier: it is refused, not
+deferred. `tools.allowed`, `tools.allowed_paths` and `tools.applications`
+are deliberately among them — a bearer token is enough to change a
+setting, not enough to hand a remote client a new verb on the host.
 
 **A mask is not a key.** `key_masked` is `••••••••ABCD`, or `""` when
 nothing is stored; posting that value back returns 422 rather than
@@ -490,3 +509,46 @@ to `true`, so a deployment using the shipped file accepts observations —
 the code default and the shipped default are not the same thing, and the
 snippet above shows the code default. The device-side gate is unaffected:
 Android sends nothing until the user grants the accessibility permission.
+
+### Precedence
+
+Two independent chains. Conflating them is the mistake to avoid, because
+they resolve in opposite directions.
+
+**Settings** — `load_config()` in `core/config.py` merges three layers,
+lowest first, and reads no environment variable at all:
+
+```
+DEFAULT_CONFIG  <  config.yaml  <  runtime overlay
+(core/config.py)   (committed)     (data/settings.json, set by PATCH)
+```
+
+The overlay wins, and it is merged inside `load_config()` rather than at
+the call sites, so a subsystem that calls that function directly still
+sees a change made from the phone. Nothing is cached: the next read picks
+the new value up. `POST /api/settings/reset` drops overlay entries and
+the layer below re-emerges — so reset means "back to this deployment's
+`config.yaml`", not "back to the code defaults".
+
+**Secrets** — never in that chain, and the store wins instead:
+
+```
+.env / hosting dashboard  <  data/credentials.enc  (set by PUT .../key)
+```
+
+`CredentialStore.apply()` pushes stored keys into the process environment
+at startup and after each write, so while a key is stored, editing the
+deployment's environment changes nothing — see
+[SECURITY.md](SECURITY.md#provider-api-keys-set-from-the-control-hub).
+`GET /api/providers` reports `key_source` as `"store"` or
+`"environment"` so a client can say which one is in force. A settings
+reset does not touch this chain: keys are not settings, and a reset that
+silently deleted every key would be a destructive surprise.
+
+The server's own transport, limits and auth — `AURA_SERVER_HOST`,
+`_PORT`, `_AUTH_TOKEN`, `_CORS_ORIGINS`, `_LOG_LEVEL`,
+`_MAX_MESSAGE_LENGTH`, `_MAX_SCREEN_TEXT_LENGTH`, `_MAX_UPLOAD_BYTES`,
+and `AURA_SECRET_KEY` — are environment only. They are read once at
+startup, are not in `config.yaml`, and are not settable over the API: a
+client that could rewrite the token it authenticates with is a client
+that can lock the owner out.

@@ -177,6 +177,55 @@ def _provider_list(value, path: str) -> list[str]:
     return chain
 
 
+def _risk_levels(value, path: str) -> list[str]:
+    """
+    Which tool risk levels skip the confirmation prompt.
+
+    The vocabulary is `ToolRisk` in `tools/base.py`, not a list invented
+    here - a level this codebase does not define would be dropped
+    silently by `ToolPolicy.from_config`, leaving a setting that appears
+    to have been accepted and does nothing.
+
+    An empty list is refused for the same reason, and it is the subtle
+    one: `from_config` reads `config.get("auto_approve") or ["safe"]`, so
+    `[]` does not mean "confirm everything" - it collapses back to
+    auto-approving safe tools. Accepting it would store a value the
+    running policy contradicts. "Confirm everything" is not expressible
+    through this key, so it is refused rather than mistranslated.
+    """
+
+    if not isinstance(value, list):
+        raise SettingsError(
+            f"{path} must be a list of risk levels (safe, sensitive, dangerous)"
+        )
+
+    from tools.base import ToolRisk
+
+    known = {level.value for level in ToolRisk}
+
+    out: list[str] = []
+
+    for entry in value:
+        name = str(entry or "").strip().lower()
+
+        if name not in known:
+            raise SettingsError(
+                f"{path}: {name or 'empty'} is not a risk level "
+                f"({', '.join(sorted(known))})"
+            )
+
+        if name not in out:
+            out.append(name)
+
+    if not out:
+        raise SettingsError(
+            f"{path} needs at least one risk level "
+            f"({', '.join(sorted(known))})"
+        )
+
+    return out
+
+
 def _quiet_hours(value, path: str) -> list[list[int]]:
     """
     A list of [start_hour, end_hour] windows, hours in 0..23.
@@ -279,15 +328,49 @@ ALLOWED: dict[str, object] = {
 
     # Voice. Server-side only - there is no phone TTS/STT in this app, and
     # the UI says so rather than offering a control that does nothing.
+    #
+    # `voice`/`volume` are read at each synthesis (`EdgeTTSProvider.speak`
+    # passes `self.voice`/`self.volume` through), so they can be moved on a
+    # running provider. `provider` and `playback` cannot: one selects the
+    # class, the other is `create_audio_player(enabled=...)` at build time.
+    #
+    # `rate` and `pitch` are deliberately absent. The mood pacing system
+    # owns them at runtime and restores from `_base_rate`, so a value set
+    # here would be silently reverted by the next mood change - a setting
+    # that un-sets itself is worse than one that says "restart".
     "voice.tts.enabled": _boolean,
+    "voice.tts.provider": _non_empty_text(40),
+    "voice.tts.voice": _non_empty_text(80),
+    "voice.tts.volume": _bounded_integer(0, 100),
+    "voice.tts.playback": _boolean,
     "voice.stt.enabled": _boolean,
 
-    # Tools and agent actions.
+    # Tools and agent actions. All three are `ToolPolicy` fields, and the
+    # executor reads every one of them per call (`tools/executor.py` lines
+    # 119-275), so replacing the policy applies them without a restart.
+    #
+    # `auto_approve` is the confirmation gate: a level *not* listed makes
+    # every tool of that risk wait for a human. It cannot be emptied - see
+    # `_risk_levels` for why an empty list would not mean what it looks
+    # like.
+    #
+    # Deliberately NOT here: `tools.allowed`, `tools.allowed_paths` and
+    # `tools.applications`. Those three decide which tools exist and which
+    # filesystem roots and executables they may touch - granting a new
+    # capability, not configuring an existing one. A bearer token is enough
+    # to change a setting; it is not enough to hand a remote client a new
+    # verb on the host.
     "tools.enabled": _boolean,
+    "tools.auto_approve": _risk_levels,
+    "tools.timeout": _bounded_number(1.0, 300.0),
 
     # Screen observation, the server half of the Awareness section. The
     # device half is an Android permission and is not a config key.
+    #
+    # `min_interval` is live: `VisionManager._is_fresh` reads the
+    # attribute on every observation, so setting it moves the next one.
     "server.screen.enabled": _boolean,
+    "server.screen.min_interval": _bounded_number(1.0, 300.0),
     "server.companion.enabled": _boolean,
 }
 

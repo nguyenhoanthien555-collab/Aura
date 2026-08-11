@@ -3,6 +3,7 @@ package com.aura.companion.ui.hub
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
 import com.aura.companion.data.remote.EffectiveConfigDto
@@ -49,6 +50,46 @@ import kotlinx.serialization.json.JsonPrimitive
  * enough to poll but polling it would keep the radio awake for a screen
  * nobody is looking at, so it refreshes with everything else.
  */
+/**
+ * How far the app got with the server, as a ladder.
+ *
+ * WHY A LADDER AND NOT A BOOLEAN
+ * ------------------------------
+ * The hub used to derive "connected" from whether `GET /api/settings`
+ * returned a document, which conflated two unrelated facts. A server
+ * running a build from before the Control Hub existed answers
+ * `/api/health` and `/api/chat` normally and 404s `/api/settings` - and
+ * the app called that "Disconnected / unexpected response (404)" while
+ * chat was working in the next tab. That reading sends the user to
+ * re-enter a token that was never wrong.
+ *
+ * Each rung is a separate, independently observable fact:
+ *
+ *   Unreachable        nothing answered - no route, timeout, refused
+ *   Connected          something answered, but not as Aura-with-our-token
+ *   Authenticated      `GET /api/health` returned 200, so the server is
+ *                      Aura *and* the bearer token is accepted. Chat
+ *                      works from here up.
+ *   SettingsAvailable  `GET /api/settings` returned 200: the hub can
+ *                      render and PATCH
+ *   ProviderHealthy    the provider chain reports ready and is serving
+ *                      from the requested provider
+ *
+ * `/api/health` is itself behind `verify_token` (`server/routes/health.py`),
+ * which is why a 200 there proves both reachability and authentication and
+ * why a 401 there is the only thing that stops at [Connected].
+ */
+enum class ServerReach {
+    Unknown,
+    Unreachable,
+    Connected,
+    Authenticated,
+    SettingsAvailable,
+    ProviderHealthy;
+
+    fun atLeast(other: ServerReach): Boolean = ordinal >= other.ordinal
+}
+
 data class HubUiState(
     val device: AuraSettings = AuraSettings(),
     val server: ServerState = ServerState(),
@@ -60,7 +101,18 @@ data class HubUiState(
     val notice: Notice? = null,
     val providerAction: ProviderAction = ProviderAction(),
 ) {
-    val connected: Boolean get() = server.loaded
+    /**
+     * Whether Aura answered this app.
+     *
+     * Deliberately the health rung, not the settings rung: the question
+     * the status line answers is "is my Aura up", and it is, even when
+     * this build of the app knows about endpoints that deployment does
+     * not. [ServerState.settingsProblem] carries the narrower failure.
+     */
+    val connected: Boolean get() = server.reach.atLeast(ServerReach.Authenticated)
+
+    /** True when the hub has a settings document to render and PATCH. */
+    val settingsAvailable: Boolean get() = server.loaded
 
     /**
      * Whether the server accepts this setting.
@@ -75,6 +127,12 @@ data class HubUiState(
         server.configurable.isEmpty() || path in server.configurable
 
     fun lockedReason(path: String): String? = when {
+        // Ordered so the *closest* reason wins. A reachable server with no
+        // settings API is a different instruction from an unreachable one,
+        // and "check your connection" would be actively misleading. Why the
+        // token was refused, when it was, is already in `error`.
+        !server.loaded && connected ->
+            "This Aura server does not expose settings"
         !server.loaded -> "Connect to Aura to change this"
         !supports(path) -> "This Aura server does not support this setting"
         else -> null
@@ -83,6 +141,14 @@ data class HubUiState(
 
 data class ServerState(
     val loaded: Boolean = false,
+    val reach: ServerReach = ServerReach.Unknown,
+    /**
+     * Why the settings document is missing, when the server is otherwise
+     * up. Null when it loaded, or when the server itself is unreachable -
+     * in that case the top-level error already says so and repeating it
+     * next to every row is noise.
+     */
+    val settingsProblem: String? = null,
     val config: EffectiveConfigDto = EffectiveConfigDto(),
     val configurable: Set<String> = emptySet(),
     val providers: List<ProviderDto> = emptyList(),
@@ -92,6 +158,17 @@ data class ServerState(
     val keyStorageNote: String = "",
     /** Set after a PATCH the server said needs a restart. */
     val restartRequired: Boolean = false,
+    /** From `GET /api/health`, for the diagnostics section. */
+    val version: String = "",
+    /** How long the server process has been up, per `/api/health`. */
+    val uptimeSeconds: Double = 0.0,
+    /**
+     * The server's own subsystem report from `/api/health` - which parts of
+     * Aura this deployment actually built. Rendered verbatim rather than
+     * interpreted: the keys are the server's, and a build with a subsystem
+     * this app has never heard of should still show it.
+     */
+    val runtime: Map<String, String> = emptyMap(),
 )
 
 /** Transient per-provider UI state: which one is being tested or saved. */
@@ -132,10 +209,18 @@ class HubViewModel(
     /**
      * Pull the server's configuration and provider state.
      *
-     * Settings first: without them the hub has nothing to render, so a
-     * failure there is the one worth reporting. Providers and health are
-     * additive - a hub that shows the settings but not the chain is still
-     * useful, so their failures do not blank the screen.
+     * THREE INDEPENDENT QUESTIONS, IN ORDER
+     * -------------------------------------
+     * 1. Is Aura there and does it accept my token? (`GET /api/health`)
+     * 2. Can it tell me its settings? (`GET /api/settings`)
+     * 3. Is its provider chain serving what I asked for?
+     *
+     * Each answer only ever moves its own rung of [ServerReach]. Step 1 is
+     * what the status line reports, so a server that fails step 2 - an
+     * older deployment without the hub API - shows as connected with the
+     * settings section explaining itself, instead of the whole app
+     * claiming to be offline. Step 1 is also the cheapest, so an
+     * unreachable server costs one request rather than three.
      */
     fun refresh() {
 
@@ -150,6 +235,55 @@ class HubViewModel(
 
         viewModelScope.launch {
 
+            // 1. Reachability and authentication, from the one route that
+            //    every Aura build has ever had.
+            val reachable = when (val health = repository.health()) {
+
+                is AuraResult.Ok -> {
+                    _state.update {
+                        it.copy(
+                            error = null,
+                            server = it.server.copy(
+                                reach = ServerReach.Authenticated,
+                                version = health.value.version,
+                                uptimeSeconds = health.value.uptimeSeconds,
+                                runtime = health.value.runtime,
+                            ),
+                        )
+                    }
+                    true
+                }
+
+                is AuraResult.Failed -> {
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            error = health.error.userMessage,
+                            server = it.server.copy(
+                                loaded = false,
+                                // A refused token or a 404 from /api/health
+                                // means something answered; a timeout or a
+                                // dead host means nothing did.
+                                reach = when (health.error) {
+                                    is AuraError.Offline,
+                                    is AuraError.Timeout,
+                                    is AuraError.NotConfigured,
+                                    -> ServerReach.Unreachable
+
+                                    else -> ServerReach.Connected
+                                },
+                                settingsProblem = null,
+                            ),
+                        )
+                    }
+                    false
+                }
+            }
+
+            if (!reachable) return@launch
+
+            // 2. The settings document. Its absence is a missing feature,
+            //    not a missing server.
             when (val result = repository.loadSettings()) {
 
                 is AuraResult.Ok -> _state.update {
@@ -158,6 +292,8 @@ class HubViewModel(
                         error = null,
                         server = it.server.copy(
                             loaded = true,
+                            reach = ServerReach.SettingsAvailable,
+                            settingsProblem = null,
                             config = result.value.effective,
                             configurable = result.value.configurable.toSet(),
                             keysPersistent = result.value.providers.persistent,
@@ -169,8 +305,14 @@ class HubViewModel(
                 is AuraResult.Failed -> _state.update {
                     it.copy(
                         loading = false,
-                        error = result.error.userMessage,
-                        server = it.server.copy(loaded = false),
+                        // Not `error`: the server is up, and a banner
+                        // saying otherwise contradicts the status line
+                        // two lines above it.
+                        error = null,
+                        server = it.server.copy(
+                            loaded = false,
+                            settingsProblem = result.error.userMessage,
+                        ),
                     )
                 }
             }
@@ -179,7 +321,15 @@ class HubViewModel(
         }
     }
 
-    /** Providers and chain health. Silent on failure; the hub still renders. */
+    /**
+     * Providers and chain health.
+     *
+     * Additive: a hub showing settings but not the chain is still useful,
+     * so a failure here neither blanks the screen nor lowers [ServerReach]
+     * below what the earlier steps established. It only ever raises the
+     * top rung, and only when the chain is genuinely serving the requested
+     * provider.
+     */
     fun refreshProviders() {
         viewModelScope.launch {
 
@@ -199,8 +349,20 @@ class HubViewModel(
 
             repository.providerHealth().let { result ->
                 if (result is AuraResult.Ok) {
+
+                    val health = result.value
+
                     _state.update {
-                        it.copy(server = it.server.copy(health = result.value))
+                        it.copy(
+                            server = it.server.copy(
+                                health = health,
+                                reach = if (health.ready && !health.inFallback) {
+                                    ServerReach.ProviderHealthy
+                                } else {
+                                    it.server.reach
+                                },
+                            )
+                        )
                     }
                 }
             }
