@@ -447,6 +447,14 @@ def load_config() -> dict:
     A missing file is created from the defaults. A malformed one is
     reported and the defaults are used, because refusing to start over a
     stray tab in YAML helps nobody.
+
+    Three layers, lowest first: DEFAULT_CONFIG, config.yaml, and the
+    runtime overlay set from the Control Hub (`core/settings_store.py`).
+    The overlay is applied *here* rather than at the call sites because
+    several subsystems - `GeminiProvider.__init__`, `OllamaProvider`,
+    `vision/settings.py` - call this function directly and would
+    otherwise never see a setting the user had changed. One merge point
+    means no dead settings.
     """
 
     if not CONFIG_PATH.exists():
@@ -467,7 +475,47 @@ def load_config() -> dict:
     if not isinstance(config, dict):
         config = {}
 
-    return deep_merge(DEFAULT_CONFIG, config)
+    merged = deep_merge(DEFAULT_CONFIG, config)
+
+    return apply_overlay(merged)
+
+
+def apply_overlay(config: dict) -> dict:
+    """
+    Merge the runtime overlay over `config`, if one is loaded.
+
+    Imported lazily and guarded: `core.settings_store` imports this
+    module for `deep_merge`, and its validators import `brain.router`,
+    which imports this module again. A module-level import would be a
+    cycle; a failure here must not break configuration loading, which is
+    on the boot path for everything.
+
+    Deliberately reads the overlay only when one has already been
+    constructed - `load_config` runs during import of several modules and
+    must not itself build a store, touch the disk, or decide that an
+    absent overlay file should be created.
+    """
+
+    try:
+        from core.settings_store import peek_runtime_settings
+    except Exception:
+        return config
+
+    overlay = peek_runtime_settings()
+
+    if overlay is None:
+        return config
+
+    try:
+        return overlay.effective(config)
+    except Exception as error:
+        from core.logger import logger
+
+        logger.warning(
+            "Runtime settings overlay could not be applied (%s)",
+            type(error).__name__,
+        )
+        return config
 
 
 def save_default_config():

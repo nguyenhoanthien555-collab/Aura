@@ -22,6 +22,46 @@ from launcher.services import build_services
 from server.notifications import NotificationOutbox
 
 
+def _materialize_config() -> dict:
+    """
+    The effective config, with the Control Hub overlay applied.
+
+    Built in the runtime constructor and handed to `build_services` so
+    that everything assembled once - vision processors, tool registry,
+    voice engines - sees the user's settings from the start. Provider
+    construction reads `load_config()` again on first use, which is fine:
+    `load_config` applies the same overlay, and keys were applied to the
+    environment by `_bootstrap_stores`.
+    """
+
+    from core.settings_store import get_runtime_settings
+
+    return get_runtime_settings().effective(load_config())
+
+
+def _bootstrap_stores() -> None:
+    """
+    Load the credential store and overlay before anything is built.
+
+    `CredentialStore.__init__` reads the encrypted key file and
+    `apply()` pushes stored keys into the environment - both must happen
+    before the first provider is constructed. The settings overlay file
+    is read the same way (its load is what makes a stored `llm.provider`
+    take effect from boot). Both keep their default on-disk paths; a
+    deployment that mounts `data/` persists them across restarts.
+    """
+
+    from core.credentials import get_credential_store
+    from core.settings_store import get_runtime_settings
+
+    applied = get_credential_store().apply()
+    if applied:
+        logger.info("Provider keys applied from credential store: %s", ", ".join(applied))
+
+    get_runtime_settings()
+
+
+
 class ServerRuntime:
     """
     Server-mode Aura runtime.
@@ -35,11 +75,23 @@ class ServerRuntime:
         Initialize the server runtime.
 
         Args:
-            config: Optional config dict. If None, loads from config.yaml.
+            config: Optional config dict. If None, loads from config.yaml
+                and applies the Control Hub overlay. A caller-supplied
+                config is used exactly as given - tests build one on
+                purpose, and a settings file on the developer's disk must
+                not leak into it.
             memory: Optional MemoryManager. If None, the default
                 `data/memory.db` store is opened.
         """
-        self.config = config or load_config()
+
+        if config is None:
+            # The real server path. Keys reach the environment before the
+            # first provider is built, and the overlay is merged before
+            # anything reads a setting.
+            _bootstrap_stores()
+            self.config = _materialize_config()
+        else:
+            self.config = config
 
         # Ensure server config section exists
         if "server" not in self.config:
@@ -75,6 +127,33 @@ class ServerRuntime:
 
         self.started = False
         self.start_time: Optional[float] = None
+        self._settings_service = None
+
+    @property
+    def settings_store(self):
+        """
+        The runtime settings overlay this process writes through.
+
+        A property rather than a constructor field: the overlay is a
+        process-wide singleton (like the credential store), and a runtime
+        built by a test with an explicit config still needs to reach
+        whichever overlay that test installed.
+        """
+
+        from core.settings_store import get_runtime_settings
+
+        return get_runtime_settings()
+
+    @property
+    def settings_service(self):
+        """The settings applier, built on demand."""
+
+        from server.settings_service import SettingsService
+
+        if self._settings_service is None:
+            self._settings_service = SettingsService(self)
+
+        return self._settings_service
 
     # ------------------------------------------------------------------
     # Server-only wiring

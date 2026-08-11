@@ -10,7 +10,8 @@ each phase. Do not commit unless asked.
 Hermetic suite: `.venv/Scripts/python.exe -m pytest -q`
 Baseline: 885 passed, 1 deselected. After Phase 2: 958. After Phase 3: 1053.
 After Phase 4: 1067. After Phase 5: 1101. After Phase 6: 1146.
-After Phase 7: 1160. After Phase 8: 1441.
+After Phase 7: 1160. After Phase 8: 1441 (stale - the tree measured 1480
+when Phase 9 began). Phase 9 backend: 1535.
 
 ## Phase status
 
@@ -58,7 +59,9 @@ After Phase 7: 1160. After Phase 8: 1441.
       and 5 new test files (281 new tests). Wired through
       `launcher/services.py`, `brain/conversation.py` and
       `server/runtime.py`.
-- [ ] Phase 9 - Local Windows device agent (Option B) - NOT STARTED
+- [x] Phase 9 - Android Control Hub, provider/key management (COMPLETE:
+      backend 1550 passed / 1 deselected, Android 132 unit tests passed,
+      lint 0 errors / 44 warnings)
 - [ ] Phase 10 - Final integration, regression, release-readiness audit
 
 ## Standing constraints
@@ -183,13 +186,147 @@ fact - only an explicit user statement does that.
 something reads it. Bounded (the store caps its own size) but not
 tidy; a periodic sweep needs the same missing scheduler as above.
 
-## Next: Phase 9 - local Windows device agent (Option B)
+## Phase 9 (COMPLETE) - Android Control Hub, provider/key management
 
-Not started. Phases 6, 7 and 8 each took a slot this plan had once
-labelled "device agent"; it has never been built and was never asked
-for.
+The user's Phase 9 spec is NOT the device agent. It is: modernize the
+Android UI, add a Settings/Control Hub, add API-key + provider/model
+management callable from the phone, and add real feature toggles. The
+device agent moves to Phase 10+ and its notes below stand unchanged.
 
-## When Phase 9 starts (Option B - local Windows agent)
+Verified baseline before any change: **1480 passed, 1 deselected** in
+7.71s. (The 1441 recorded for Phase 8 was stale.)
+
+### Phase A audit - COMPLETE, findings that constrain the build
+
+- **One Android preference store exists**: `SettingsStore` over
+  EncryptedSharedPreferences (`aura_secure_settings`), exposed read-only
+  as `SettingsProvider`. Extend `AuraSettings`; do NOT add a second store.
+- **One config system exists**: `DEFAULT_CONFIG` + `deep_merge` +
+  `load_config()`. A runtime override layer must merge INTO it, not
+  replace it.
+- **Provider keys are read via `os.getenv` inside each provider's
+  `__init__`** (gemini, groq, mistral, openrouter, cerebras), and each
+  raises `ValueError` when the key is absent. `BrainRouter._skip_reason`
+  also probes `os.getenv`. So the smallest correct way to make an
+  Android-set key effective is a credential store that applies keys to
+  `os.environ` - zero provider edits, and `_skip_reason` stays honest.
+- **`conversation.llm` IS a `BrainRouter`** (`launcher/services.py:200`,
+  `brain/chat_engine.py:79`). It caches `_provider` lazily, so a live
+  provider switch = clear `_provider` + set `provider_name`.
+- **groq/mistral/openrouter/cerebras are four near-identical
+  OpenAI-compatible urllib clients.** Only mistral has `stream()`. This
+  is the reusable compatibility layer STEP 4 asks for.
+- **`cryptography` 50.0.0 is already importable** in `.venv` (transitive
+  via google-genai). Fernet is available; it must be declared explicitly
+  if depended on.
+- **`data/*.db` is gitignored but arbitrary `data/` files are not.** A
+  credential file needs its own ignore rule.
+- **STEP 22 "Failed to parse action from server" is NOT an open defect.**
+  Verified against code, not just the docstring: `AgentActionParser`
+  brace-matches, strips fences, tolerates unknown keys/lenient JSON, and
+  returns a model-readable `Failure` otherwise; `tests/test_agent_protocol.py`
+  (588 lines) pins the transport byte-for-byte on `response.content`.
+  Root cause was an installed APK older than the server.
+- **No Android voice code exists at all** - zero hits for
+  `TextToSpeech|SpeechRecognizer`. Backend `voice/` runs on the SERVER
+  and ships disabled. Voice settings must say so rather than offer
+  phone-side controls that do nothing.
+- **Proactive delivery is pull-driven** (`GET /api/notifications` is the
+  only trigger). No background scheduler, no FCM.
+
+### Phase B/C/D backend - COMPLETE (1535 passed, 1 deselected)
+
+Delivered, all authenticated with the existing `verify_token` bearer
+dependency - no new auth mechanism and no public write route:
+
+| Route | Purpose |
+|---|---|
+| `GET /api/settings` | effective config + overrides + `configurable` allow-list + provider persistence note |
+| `PATCH /api/settings` | validate + apply; 422 verbatim message on bad input; reports `applied` / `restart_required` |
+| `POST /api/settings/reset` | drop all overrides or named `paths`; never touches keys |
+| `GET /api/providers` | per-provider `configured` / `key_masked` / `source` / capabilities |
+| `GET /api/providers/health` | active chain, `in_fallback`; calls no provider |
+| `POST /api/providers/test` | real single probe; returns latency + error *category* only |
+| `PUT /api/providers/{p}/key` | store a key; returns masked only |
+| `DELETE /api/providers/{p}/key` | forget a key, and unset it for this process |
+
+New files: `core/credentials.py`, `core/settings_store.py`,
+`server/settings_service.py`, `server/routes/settings.py`,
+`tests/test_settings_api.py`.
+Modified: `core/config.py` (`apply_overlay` at the single merge point),
+`server/runtime.py` (bootstrap stores, `settings_store` /
+`settings_service` properties), `server/main.py` (router),
+`.gitignore` (credential + overlay files), `tests/conftest.py`
+(per-test settings/credential isolation + PROVIDER_KEYS env restore).
+
+**Contract notes the Android client must respect:**
+
+- A masked value (`••••••••ABCD`) is never accepted as a key - posting
+  back what was displayed returns 422. Leave the field untouched to keep
+  the current key.
+- `key_masked` is `""` when nothing is stored. `source` is `"store"`,
+  `"environment"` or `""`; a key from the deployment's environment cannot
+  be deleted from the phone, and the UI must say so rather than offering
+  a delete that appears to do nothing.
+- `PATCH` is all-or-nothing. On 422 nothing changed.
+- `needs_restart` in the response is the honest signal; a path listed in
+  `restart_required` was persisted but is NOT live yet.
+- `PROVIDER_CAPABILITIES` is per-implementation, not per-vendor: Groq is
+  `streaming: false` here because `GroqProvider` has no `stream()`. The
+  UI must render this rather than assume vendor docs.
+
+### Live-vs-restart, decided from the code
+
+Applies live: API keys + `llm.provider` + fallback chain + model (router
+reset), all `proactive.*` (read from `policy.settings` at decision time),
+`memory.recall` (`pipeline.recall_enabled`).
+Needs restart: anything built once in `build_services` - `vision.enabled`
+when vision was never built, `tools.enabled`, `voice.tts/stt.enabled`,
+`server.screen.enabled`. The API reports `restart_required` for these
+instead of pretending.
+
+### Phase E-L Android - COMPLETE (132 Android tests, lint 0 errors)
+
+Eleven hub files under `ui/hub/` and three component files under
+`ui/components/` (4772 lines total). `MainActivity` navigates
+chat -> hub -> ten sections; one Activity-scoped `HubViewModel` is shared
+by every destination, so the server's config is fetched once on entry
+rather than per screen.
+
+New: `ControlDto.kt`, `SettingsComponents.kt`, `ProviderComponents.kt`,
+`InputComponents.kt`, and `ui/hub/{AuraSection, ModelsSection,
+AwarenessSection, MemorySection, ProactiveSection, VisionSection,
+VoiceSection, NotificationsSection, GeneralSection, ConnectionSection,
+HubScreen, HubViewModel, DevicePermissions}.kt`.
+Modified: `MainActivity.kt`, `AuraRepository.kt`, `AuraResult.kt`,
+`AuraApi.kt`, `SettingsStore.kt`, `Theme.kt`, `NotificationWorker.kt`.
+
+**Every toggle is wired to something real.** The notifications switch
+calls `NotificationScheduler.sync` as well as writing the flag, so "off"
+means off now rather than at the next launch. `server.screen.min_interval`
+stayed read-only because it is not in the allow-list. Voice is two
+toggles plus an explanation, because `voice.tts.enabled` and
+`voice.stt.enabled` are the only two settable voice paths. Dynamic
+colour locks below Android 12 with a stated reason instead of failing
+silently.
+
+**`ui/settings/SettingsScreen.kt` is now unreachable** - the chat gear
+opens the hub, and `ConnectionSection` reuses the same
+`SettingsViewModel` rather than becoming a second connection store. The
+file was left on disk (rule 16: do not delete working functionality to
+simplify), and this is the record of that decision, not an oversight.
+
+**Phase J/K additions to `tests/test_settings_api.py` (70 tests total):**
+every `/api/settings*` and `/api/providers*` route enumerated from the
+ASGI app and asserted to refuse an unauthenticated call (so a route added
+without `Depends(verify_token)` fails on the day it is written); no
+allow-list path is credential material, matched on the last dotted
+segment rather than as a substring - `llm.max_output_tokens` is not a
+token; `PATCH` with an `llm.api_key` is refused 422 and changes nothing;
+and no route logs the key, covering the rejection paths where a
+`logger.warning("bad key: %s", ...)` would sit.
+
+## When the device agent starts (Option B - local Windows agent)
 
 Phase 4 did not build any of this, deliberately. Still to settle:
 transport (long-poll `/api/device/commands` recommended - mirrors the

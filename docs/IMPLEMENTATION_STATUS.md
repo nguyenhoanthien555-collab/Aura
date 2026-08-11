@@ -102,13 +102,48 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 - ✅ Avatar controller subscribes to conversation events
 - ✅ Expression changes flow through the bus as `ExpressionChangedEvent`
 
+### Phases 6-9: Server mode, Memory 2.0, Control Hub
+
+The ten sections above are the desktop foundation. Four later phases run
+on top of it, none of which replaced any of it:
+
+- ✅ **Server mode** (`server/`) - authenticated FastAPI HTTP + WebSocket
+  over the same `build_services` composition root the desktop uses.
+  Startup refuses a missing `AURA_SERVER_AUTH_TOKEN`. See `docs/API.md`.
+- ✅ **Memory 2.0** (`memory/pipeline.py`, `memory/user_model.py`) -
+  episodic memories, temporary context and a confirmed/inferred user
+  model over the same SQLite session as the transcript. Recall is ranked
+  and bounded; still lexical, still no vector store.
+- ✅ **Temporal context** (`core/temporal.py`) - one injected clock, so
+  no subsystem reads the wall clock on its own.
+- ✅ **Proactive system** (`proactive/`) - decision engine plus anti-spam
+  gates, all off by default. Pull-driven: it gets its turn when something
+  polls `/api/notifications`. There is no background scheduler, which is
+  a limitation and not a detail — see Known Limitations.
+- ✅ **Control Hub** (`server/routes/settings.py`, `core/settings_store.py`,
+  `core/credentials.py`, `android/.../ui/hub/`) - eight bearer-authenticated
+  routes let the Android app read effective config, change allow-listed
+  settings, inspect providers and store a provider API key encrypted. A
+  key is only ever read back masked. See `docs/SECURITY.md`.
+- ✅ **Android companion** (`android/`) - Compose chat with WebSocket
+  streaming and REST fallback, accessibility screen observation, a
+  10-section settings hub. 132 JVM unit tests. See `docs/ANDROID.md`.
+
 ## Test Status
 
 The suite runs. Measured with `.venv/Scripts/python.exe -m pytest -q`
-during the Phase 7 sweep:
+during the Phase 9 sweep:
 
 ```
-1160 passed, 1 deselected
+1550 passed, 1 deselected
+```
+
+The Android app has its own suite, run separately because it needs a JDK
+and the Android SDK rather than the Python environment:
+
+```
+cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug
+132 tests, 0 failures — lint: 0 errors, 44 warnings
 ```
 
 The deselected test is `tests/test_gemini_integration.py`, gated by
@@ -117,7 +152,7 @@ The deselected test is `tests/test_gemini_integration.py`, gated by
 so the hermetic suite passes with no API keys at all — which is what CI
 runs.
 
-1160 collected comes from 1003 `def test_` functions across 32 files; the
+1550 collected comes from 1297 `def test_` functions across 39 files; the
 difference is parametrization. Per-file counts are not reproduced here
 because they go stale on every commit — get them from pytest, not from
 this file.
@@ -196,11 +231,13 @@ From the original roadmap, still pending:
 
 ### Section 11: Testing
 - **Status:** Executed. `.venv/Scripts/python.exe -m pytest -q` reports
-  **1160 passed, 1 deselected** (the deselected one is the opt-in
+  **1550 passed, 1 deselected** (the deselected one is the opt-in
   integration test, gated by `-m "not integration"` in `pytest.ini`).
 - **CI:** `.github/workflows/tests.yml` runs the same hermetic suite on
   every push and pull request. No secrets: the suite must pass with no
-  API keys at all.
+  API keys at all. It does **not** run the Android suite — that needs an
+  SDK the workflow does not install, so `./gradlew :app:testDebugUnitTest`
+  is a local step.
 
 ### Section 12: Documentation
 - **Status:** README.md, ARCHITECTURE.md, DEVELOPER_GUIDE.md and this
@@ -238,22 +275,23 @@ Python files by subsystem (counted from the working tree, excluding
 
 | Package | Files |
 |---|---|
+| `tests/` | 40 (39 `test_*` plus `conftest.py`) |
 | `brain/` | 32 (including `providers/`) |
-| `tests/` | 32 (all `test_*`) |
 | `voice/` | 21 (including `stt/`, `tts/`, their providers) |
-| `server/` | 14 (HTTP + WebSocket API) |
+| `server/` | 16 (HTTP + WebSocket API, including `routes/`) |
+| `memory/` | 14 (transcript, pipeline, user model, retrieval) |
 | `tools/` | 10 (including `builtins/`) |
-| `vision/` | 9 |
-| `memory/` | 8 |
+| `vision/` | 10 |
 | `avatar/` | 8 |
+| `core/` | 8 (config, settings store, credentials, temporal) |
 | `plugins/` | 7 (including `builtins/`) |
+| `proactive/` | 7 (scheduler tick, decision engine, gates) |
 | `scripts/` | 6 (side-effecting `manual_*`, run by hand) |
 | `companion/` | 6 (unprompted-notification pipeline) |
-| `core/` | 5 |
 | `launcher/` | 4 (plus `launcher.py` at root) |
 | `events/` | 3 |
 
-Total: 168 Python files, including `main.py`, `launcher.py`, and
+Total: 195 Python files, including `main.py`, `launcher.py`, and
 `conftest.py` at the root. Counted from the working tree, excluding
 `.venv/`, `.venv-py314-backup/`, `awesome-claude-skills/` and `android/`
 — the first three are gitignored and none are Aura source.
@@ -296,6 +334,20 @@ one was empty. `voice/tts/` is the live implementation.
 7. **No desktop execution from the server** - Render cannot touch a
    physical PC, and says so rather than describing the action. See
    `tests/test_device_boundary.py`.
+8. **No push, and no proactive scheduler** - the two are one limitation.
+   Nothing on the server wakes the proactive engine; it gets its turn
+   when `GET /api/notifications` is polled, and the only thing polling is
+   the Android app's WorkManager job, whose platform floor is 15 minutes.
+   So an "unprompted" message is delivered up to 15 minutes late, and
+   turning phone notifications off mostly stops the engine being asked at
+   all. There is no FCM and no server-initiated delivery.
+9. **Build artifacts are tracked again** - `android/app/build/` and
+   `android/.gradle/` are in `.gitignore`, but ~2100 files under them are
+   still in the index from commits `4ba906e`/`1fe3368`, because
+   `.gitignore` does not apply to already-tracked files. Every Android
+   build therefore dirties hundreds of files and buries source changes in
+   a diff. Fix with `git rm -r --cached android/app/build android/.gradle`
+   in a commit of its own.
 
 Two entries in the previous revision of this list - "local only, no
 remote access" and "no authentication, designed for single user on local
@@ -306,8 +358,19 @@ Test Status section above.
 
 ## Next Steps
 
-The local Windows device agent, which is the only substantial feature
-work still outstanding. `.claude/task-queue.md` carries the four items;
-`docs/DEPLOYMENT.md` and `.claude/decisions.md` carry the transport
-decision (outbound long-poll, because a container cannot reach a home
-machine unsolicited).
+Three things, in the order they are worth doing:
+
+1. **A delivery path for unprompted messages.** The proactive and
+   companion engines both work and neither can reach a phone on its own.
+   Today's delivery is the Android app's 15-minute WorkManager poll,
+   whose floor is imposed by the platform. Either a server-side scheduler
+   or FCM would fix it; both are real work and neither is started.
+2. **The local Windows device agent** — the substantial feature work
+   still outstanding. `.claude/task-queue.md` carries the four items;
+   `docs/DEPLOYMENT.md` and `.claude/decisions.md` carry the transport
+   decision (outbound long-poll, because a container cannot reach a home
+   machine unsolicited).
+3. **Android instrumentation tests.** `SettingsStore` (Keystore),
+   `ScreenObservationService` (accessibility) and `NotificationWorker`
+   (WorkManager) have no tests, because all three need a device or
+   Robolectric. The 132 JVM tests cover the layers below them.

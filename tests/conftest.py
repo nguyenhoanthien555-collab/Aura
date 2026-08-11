@@ -31,6 +31,8 @@ database. `configure()` mutates the object they are holding.
 they follow the new value.
 """
 
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -73,3 +75,68 @@ def never_the_real_database():
     sqlite.SessionLocal.configure(bind=original)
     sqlite.engine = original
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def never_the_real_settings(tmp_path, monkeypatch):
+    """
+    Neither the credential store nor the settings overlay is the user's.
+
+    Phase 9 added two more files under `data/`: `credentials.enc` (the
+    provider API keys) and `settings.json` (the Control Hub overlay).
+    Both are process-wide singletons reached through a module global, and
+    both are read on construction - so a test that builds a runtime would
+    otherwise load the developer's real keys and, worse, a test that
+    writes a setting would persist it into their live configuration.
+
+    Per-test rather than per-session, and this is the important part:
+    `core.config.load_config` consults the overlay, so a leftover
+    override from one test would silently change what every later test
+    sees as its configuration. A fresh empty pair per test keeps
+    `load_config()` meaning `config.yaml` unless a test says otherwise.
+
+    The singletons are reset both before and after. Before, because an
+    earlier test may have built one against a path that no longer exists;
+    after, so nothing outlives the temporary directory it points into.
+    """
+
+    from core import credentials, settings_store
+
+    # Applying a credential sets the provider's environment variable, on
+    # purpose - that is how a key reaches a provider that reads
+    # `os.getenv` in its constructor. It also means a key set by one test
+    # is visible to every later one, and `monkeypatch.delenv` cannot undo
+    # a write it did not make. Snapshot and restore the whole set.
+    saved_env = {
+        var: os.environ.get(var)
+        for var in credentials.PROVIDER_KEYS.values()
+    }
+
+    monkeypatch.setattr(
+        credentials, "CREDENTIAL_PATH", tmp_path / "credentials.enc"
+    )
+    monkeypatch.setattr(
+        settings_store, "SETTINGS_PATH", tmp_path / "settings.json"
+    )
+
+    # No inherited secret: a real AURA_SECRET_KEY in the developer's
+    # environment would make the test store durable, and its ciphertext
+    # would then be readable by the next run.
+    monkeypatch.delenv(credentials.SECRET_ENV_VAR, raising=False)
+
+    credentials._store = None
+    settings_store._settings = None
+
+    yield
+
+    credentials._store = None
+    settings_store._settings = None
+
+    # Restore the provider environment variables a test may have set via
+    # CredentialStore.set/delete, so the next test sees the environment
+    # the same way the previous one did.
+    for var, value in saved_env.items():
+        if value is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = value

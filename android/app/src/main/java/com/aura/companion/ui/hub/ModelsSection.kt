@@ -1,0 +1,437 @@
+package com.aura.companion.ui.hub
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.aura.companion.data.remote.ProviderDto
+import com.aura.companion.ui.components.AnimatedNotice
+import com.aura.companion.ui.components.ApiKeyField
+import com.aura.companion.ui.components.ChoiceDialog
+import com.aura.companion.ui.components.NoticeCard
+import com.aura.companion.ui.components.ProviderCard
+import com.aura.companion.ui.components.RowDivider
+import com.aura.companion.ui.components.SectionHeader
+import com.aura.companion.ui.components.SelectRow
+import com.aura.companion.ui.components.SettingsCard
+import com.aura.companion.ui.components.SettingsSection
+import com.aura.companion.ui.components.SliderRow
+import com.aura.companion.ui.components.StatusTone
+import com.aura.companion.ui.components.TextEntryDialog
+import com.aura.companion.ui.components.ToggleRow
+import kotlin.math.roundToInt
+
+/**
+ * Settings → AI & Models.
+ *
+ * The screen a dead provider is fixed from. Everything a Render deployment
+ * would otherwise need a file edit and a redeploy for - a new key, a
+ * different primary, a reordered fallback chain - happens here, over the
+ * authenticated API.
+ *
+ * MODELS ARE NOT INVENTED
+ * -----------------------
+ * The model list per provider comes from `PROVIDER_CAPABILITIES` on the
+ * server, which lists what that provider class is known to work with. For
+ * anything else there is a free-text entry that the server validates -
+ * rather than a list of model names this app guessed at, which would go
+ * stale the week after it shipped.
+ */
+@Composable
+fun ModelsSection(
+    state: HubUiState,
+    viewModel: HubViewModel,
+    onBack: () -> Unit,
+) {
+    var picking by remember { mutableStateOf<Picker?>(null) }
+
+    var keyFor by remember { mutableStateOf<String?>(null) }
+
+    val server = state.server
+
+    val llm = server.config.llm
+
+    val primary = server.providers.firstOrNull { it.name == llm.provider }
+
+    HubSection(
+        title = "AI & Models",
+        subtitle = "Provider, model and API keys",
+        onBack = onBack,
+        onRefresh = viewModel::refresh,
+    ) {
+
+        AnimatedNotice(text = state.notice?.text, tone = state.notice.tone())
+
+        if (!server.keysPersistent) {
+            NoticeCard(
+                text = server.keyStorageNote.ifBlank {
+                    "This server has no encryption secret, so API keys saved " +
+                        "here will work now but will be lost when it restarts."
+                },
+                tone = StatusTone.Warning,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        // ------------------------------------------------------------------
+        // Active configuration
+        // ------------------------------------------------------------------
+
+        SettingsSection(title = "Active") {
+
+            SelectRow(
+                title = "Provider",
+                value = primary?.label ?: llm.provider.ifBlank { "—" },
+                icon = Icons.Filled.Bolt,
+                lockedReason = state.lockedReason("llm.provider"),
+                onClick = { picking = Picker.Provider },
+            )
+
+            RowDivider()
+
+            SelectRow(
+                title = "Model",
+                value = llm.model.ifBlank { "Provider default" },
+                subtitle = primary?.let { "for ${it.label}" },
+                icon = Icons.Filled.Cloud,
+                lockedReason = state.lockedReason("llm.model"),
+                onClick = { picking = Picker.Model },
+            )
+
+            RowDivider()
+
+            SelectRow(
+                title = "Fallback chain",
+                value = llm.fallbackProviders
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(" → ")
+                    ?: "None",
+                subtitle = "Tried in order when the primary fails",
+                icon = Icons.Filled.Tune,
+                lockedReason = state.lockedReason("llm.fallback_providers"),
+                onClick = { picking = Picker.Fallback },
+            )
+        }
+
+        // ------------------------------------------------------------------
+        // Generation
+        // ------------------------------------------------------------------
+
+        SettingsSection(
+            title = "Generation",
+            subtitle = "How Aura writes its replies",
+        ) {
+
+            SliderRow(
+                title = "Temperature",
+                value = llm.temperature.toFloat(),
+                range = 0f..2f,
+                steps = 19,
+                subtitle = "Lower is more predictable",
+                lockedReason = state.lockedReason("llm.temperature"),
+                onCommit = { viewModel.setNumber("llm.temperature", round2(it)) },
+                format = { "%.1f".format(it) },
+            )
+
+            RowDivider()
+
+            SliderRow(
+                title = "Reply length",
+                value = llm.maxOutputTokens.toFloat(),
+                range = 64f..4096f,
+                subtitle = "Maximum tokens in one reply",
+                lockedReason = state.lockedReason("llm.max_output_tokens"),
+                onCommit = {
+                    viewModel.setNumber("llm.max_output_tokens", it.roundToInt())
+                },
+                format = { "${it.roundToInt()} tokens" },
+            )
+
+            RowDivider()
+
+            SliderRow(
+                title = "Timeout",
+                value = llm.timeout.toFloat(),
+                range = 5f..300f,
+                subtitle = "How long to wait for a provider",
+                lockedReason = state.lockedReason("llm.timeout"),
+                onCommit = { viewModel.setNumber("llm.timeout", it.roundToInt()) },
+                format = { "${it.roundToInt()}s" },
+            )
+        }
+
+        // ------------------------------------------------------------------
+        // Providers
+        // ------------------------------------------------------------------
+
+        SectionHeader(
+            title = "Providers",
+            subtitle = "What each one supports in this build of Aura",
+        )
+
+        if (server.providers.isEmpty()) {
+            SettingsCard {
+                Text(
+                    text = if (server.loaded) {
+                        "No providers reported."
+                    } else {
+                        "Connect to Aura to manage providers."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(20.dp),
+                )
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            server.providers.forEach { provider ->
+
+                val outcome = state.providerAction.results[provider.name]
+
+                ProviderCard(
+                    label = provider.label.ifBlank { provider.name },
+                    capabilities = provider.capabilityLabels(),
+                    configured = provider.configured,
+                    keyless = provider.keyless,
+                    keyMasked = provider.keyMasked,
+                    keySource = provider.keySource,
+                    isPrimary = provider.name == llm.provider,
+                    isFallback = provider.name in llm.fallbackProviders,
+                    testing = state.providerAction.testing == provider.name,
+                    testResult = outcome?.message,
+                    testOk = outcome?.ok == true,
+                    onTest = { viewModel.testProvider(provider.name) },
+                    onSetPrimary = { viewModel.setPrimaryProvider(provider.name) },
+                    onToggleFallback = { viewModel.toggleFallback(provider.name) },
+                    onManageKey = { keyFor = provider.name },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+    }
+
+    // ------------------------------------------------------------------
+    // Dialogs
+    // ------------------------------------------------------------------
+
+    when (picking) {
+
+        Picker.Provider -> ChoiceDialog(
+            title = "Primary provider",
+            options = server.providers.filter { it.chat }.map { it.name },
+            selected = llm.provider,
+            labels = { name -> server.providers.labelFor(name) },
+            onPick = viewModel::setPrimaryProvider,
+            onDismiss = { picking = null },
+            emptyMessage = "Connect to Aura to see its providers.",
+        )
+
+        Picker.Model -> {
+
+            val known = primary?.models.orEmpty()
+
+            if (known.isEmpty()) {
+                TextEntryDialog(
+                    title = "Model",
+                    initial = llm.model,
+                    label = "Model name",
+                    help = "Aura does not carry a model list for " +
+                        "${primary?.label ?: "this provider"}. Enter the model " +
+                        "name exactly as the provider spells it.",
+                    onCommit = viewModel::setModel,
+                    onDismiss = { picking = null },
+                )
+            } else {
+                ChoiceDialog(
+                    title = "Model",
+                    options = known,
+                    selected = llm.model,
+                    onPick = viewModel::setModel,
+                    onDismiss = { picking = null },
+                )
+            }
+        }
+
+        Picker.Fallback -> FallbackDialog(
+            providers = server.providers.filter {
+                it.chat && it.name != llm.provider
+            },
+            selected = llm.fallbackProviders,
+            onToggle = viewModel::toggleFallback,
+            onDismiss = { picking = null },
+        )
+
+        null -> Unit
+    }
+
+    keyFor?.let { name ->
+
+        val provider = server.providers.firstOrNull { it.name == name }
+
+        ApiKeyDialog(
+            provider = provider,
+            saving = state.providerAction.savingKey == name,
+            error = state.providerAction.keyError,
+            onSave = { key -> viewModel.saveProviderKey(name, key) },
+            onDelete = { viewModel.deleteProviderKey(name) },
+            onDismiss = { keyFor = null },
+        )
+    }
+}
+
+private enum class Picker { Provider, Model, Fallback }
+
+/**
+ * The fallback chain, as a set of toggles.
+ *
+ * Not a [ChoiceDialog] because this is a multi-select and the order is
+ * meaningful; each tap sends one PATCH, so the chain the server holds and
+ * the chain shown here cannot drift apart.
+ */
+@Composable
+private fun FallbackDialog(
+    providers: List<ProviderDto>,
+    selected: List<String>,
+    onToggle: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Fallback providers") },
+        text = {
+            Column {
+
+                Text(
+                    text = "Tried in order when the primary provider fails. " +
+                        "A provider with no key cannot answer, so it is worth " +
+                        "testing one before relying on it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                providers.forEach { provider ->
+                ToggleRow(
+                        title = provider.label.ifBlank { provider.name },
+                        subtitle = if (provider.configured) {
+                            null
+                        } else {
+                            "No API key set"
+                        },
+                        checked = provider.name in selected,
+                        enabled = provider.configured,
+                        onCheckedChange = { onToggle(provider.name) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                if (providers.isEmpty()) {
+                    Text(
+                        text = "No other providers available.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        },
+    )
+}
+
+/** The API key sheet for one provider. */
+@Composable
+private fun ApiKeyDialog(
+    provider: ProviderDto?,
+    saving: Boolean,
+    error: String?,
+    onSave: (String) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Filled.Key,
+                contentDescription = null,
+            )
+        },
+        title = { Text("API key") },
+        text = {
+            Column {
+
+                Text(
+                    text = "Sent once, over the same encrypted connection as " +
+                        "everything else, and stored encrypted on the Aura " +
+                        "server. It is never sent back to this app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                ApiKeyField(
+                    providerLabel = provider?.label ?: provider?.name.orEmpty(),
+                    keyMasked = provider?.keyMasked.orEmpty(),
+                    keySource = provider?.keySource.orEmpty(),
+                    saving = saving,
+                    error = error,
+                    onSave = onSave,
+                    onDelete = onDelete,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+    )
+}
+
+/**
+ * Capability chips, from what the server said its implementation does.
+ *
+ * A provider with no streaming gets no streaming chip, even where the
+ * vendor's API supports it - the badge describes Aura, not the vendor.
+ */
+private fun ProviderDto.capabilityLabels(): List<String> = buildList {
+    if (chat) add("Chat")
+    if (streaming) add("Streaming")
+    if (tools) add("Tools")
+    if (vision) add("Vision")
+    if (keyless) add("No key needed")
+}
+
+private fun List<ProviderDto>.labelFor(name: String): String =
+    firstOrNull { it.name == name }?.label?.takeIf { it.isNotBlank() } ?: name
+
+/** Two decimals, so a slider does not PATCH 0.7000000000000001. */
+private fun round2(value: Float): Double =
+    (value * 100).roundToInt() / 100.0

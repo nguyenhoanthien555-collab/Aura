@@ -13,13 +13,26 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aura.companion.ui.chat.ChatScreen
 import com.aura.companion.ui.chat.ChatViewModel
-import com.aura.companion.ui.settings.SettingsScreen
+import com.aura.companion.ui.hub.AuraSection
+import com.aura.companion.ui.hub.AwarenessSection
+import com.aura.companion.ui.hub.ConnectionSection
+import com.aura.companion.ui.hub.GeneralSection
+import com.aura.companion.ui.hub.HubRoutes
+import com.aura.companion.ui.hub.HubScreen
+import com.aura.companion.ui.hub.HubViewModel
+import com.aura.companion.ui.hub.MemorySection
+import com.aura.companion.ui.hub.ModelsSection
+import com.aura.companion.ui.hub.NotificationsSection
+import com.aura.companion.ui.hub.ProactiveSection
+import com.aura.companion.ui.hub.VisionSection
+import com.aura.companion.ui.hub.VoiceSection
 import com.aura.companion.ui.settings.SettingsViewModel
 import com.aura.companion.ui.theme.AuraTheme
 import com.aura.companion.work.NotificationScheduler
@@ -55,7 +68,15 @@ class MainActivity : ComponentActivity() {
         takeNotificationMessage(intent)
 
         setContent {
-            AuraTheme {
+
+            // Appearance is device-local, so it comes from the store rather
+            // than the server and applies before anything is drawn.
+            val device by container.settings.settings.collectAsStateWithLifecycle()
+
+            AuraTheme(
+                themeMode = device.themeMode,
+                dynamicColour = device.dynamicColour,
+            ) {
 
                 val navController = rememberNavController()
 
@@ -66,6 +87,19 @@ class MainActivity : ComponentActivity() {
                     )
                 )
 
+                // Scoped to the Activity rather than to a back stack entry,
+                // so all eleven hub destinations share one instance - and
+                // therefore one copy of the server's config, fetched once
+                // on entry instead of per screen.
+                val hubViewModel: HubViewModel = viewModel(
+                    factory = HubViewModel.factory(
+                        container.settings,
+                        container.repository,
+                    )
+                )
+
+                val hubState by hubViewModel.state.collectAsStateWithLifecycle()
+
                 // A notification that led here carries its text, so tapping
                 // it lands on the remark rather than on an empty screen.
                 LaunchedEffect(pendingMessage) {
@@ -75,16 +109,91 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val back: () -> Unit = { navController.popBackStack() }
+
                 NavHost(navController = navController, startDestination = ROUTE_CHAT) {
 
                     composable(ROUTE_CHAT) {
                         ChatScreen(
                             viewModel = chatViewModel,
-                            onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
+                            onOpenSettings = { navController.navigate(HubRoutes.HUB) },
                         )
                     }
 
-                    composable(ROUTE_SETTINGS) {
+                    composable(HubRoutes.HUB) {
+                        HubScreen(
+                            viewModel = hubViewModel,
+                            onOpenSection = { route -> navController.navigate(route) },
+                            onOpenChat = {
+                                navController.popBackStack(ROUTE_CHAT, false)
+                            },
+                            onBack = {
+                                // Re-probe on the way out: the user may have
+                                // just fixed the thing the chat banner was
+                                // complaining about, and the notification
+                                // poller may need starting or stopping.
+                                chatViewModel.checkConnection()
+                                NotificationScheduler.sync(
+                                    this@MainActivity,
+                                    container.settings.current.notificationsEnabled,
+                                )
+                                navController.popBackStack()
+                            },
+                        )
+                    }
+
+                    composable(HubRoutes.AURA) {
+                        AuraSection(
+                            state = hubState,
+                            onRefresh = hubViewModel::refresh,
+                            onBack = back,
+                        )
+                    }
+
+                    composable(HubRoutes.MODELS) {
+                        ModelsSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.AWARENESS) {
+                        AwarenessSection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            onOpenAccessibilitySettings = ::openAccessibilitySettings,
+                            onBack = back,
+                        )
+                    }
+
+                    composable(HubRoutes.MEMORY) {
+                        MemorySection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.PROACTIVE) {
+                        ProactiveSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.VISION) {
+                        VisionSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.VOICE) {
+                        VoiceSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.NOTIFICATIONS) {
+                        NotificationsSection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            onRequestPermission = ::askForNotifications,
+                            onOpenSystemSettings = ::openNotificationSettings,
+                            onBack = back,
+                        )
+                    }
+
+                    composable(HubRoutes.GENERAL) {
+                        GeneralSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.CONNECTION) {
 
                         val settingsViewModel: SettingsViewModel = viewModel(
                             factory = SettingsViewModel.factory(
@@ -93,21 +202,16 @@ class MainActivity : ComponentActivity() {
                             )
                         )
 
-                        SettingsScreen(
+                        ConnectionSection(
+                            hub = hubState,
                             viewModel = settingsViewModel,
                             onBack = {
-                                // Re-probe on the way back: the user may
-                                // have just fixed the thing the banner was
-                                // complaining about.
+                                // The URL or token may have changed, which
+                                // makes every cached server document stale.
+                                hubViewModel.refresh()
                                 chatViewModel.checkConnection()
-                                NotificationScheduler.sync(
-                                    this@MainActivity,
-                                    container.settings.current.notificationsEnabled,
-                                )
                                 navController.popBackStack()
                             },
-                            onRequestScreenObservation = ::openAccessibilitySettings,
-                            onRequestNotificationPermission = ::askForNotifications,
                         )
                     }
                 }
@@ -155,9 +259,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Aura's own page in the system notification settings.
+     *
+     * The runtime prompt above is a one-shot: after two refusals Android
+     * stops showing it and `launch` silently does nothing. Without this
+     * there would be no way back from a denied permission, which is how a
+     * "tap to allow" row becomes a dead end.
+     */
+    private fun openNotificationSettings() {
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            )
+        }
+    }
+
     companion object {
         const val ROUTE_CHAT = "chat"
-        const val ROUTE_SETTINGS = "settings"
         const val EXTRA_MESSAGE = "aura_message"
     }
 }

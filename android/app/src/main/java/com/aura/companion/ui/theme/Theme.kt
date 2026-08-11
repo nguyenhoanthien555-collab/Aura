@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.aura.companion.data.settings.ThemeMode
 
 /**
  * Aura's colours.
@@ -64,6 +65,34 @@ private val AuraTypography = Typography(
     titleMedium = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
     labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp),
 )
+
+/**
+ * Wraps the app, honouring the user's appearance settings.
+ *
+ * [ThemeMode.System] resolves to the platform's own answer, which is what
+ * keeps "Follow system" honest when the phone switches at sunset.
+ *
+ * `dynamicColour` is a user setting rather than a hard-coded `true` because
+ * on Android 12+ wallpaper colour *wins* over the palette below - so
+ * without a way to turn it off there is no way to actually see Aura's own
+ * violet.
+ */
+@Composable
+fun AuraTheme(
+    themeMode: ThemeMode,
+    dynamicColour: Boolean,
+    content: @Composable () -> Unit,
+) {
+    AuraTheme(
+        dark = when (themeMode) {
+            ThemeMode.System -> isSystemInDarkTheme()
+            ThemeMode.Light -> false
+            ThemeMode.Dark -> true
+        },
+        dynamic = dynamicColour,
+        content = content,
+    )
+}
 
 /**
  * Wraps the app.

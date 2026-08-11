@@ -603,11 +603,182 @@ reach the user's data even by accident.
 `ollama_model` (Ollama tag, desktop) separately, both falling back to
 the legacy `vision.model` so an existing config behaves identically.
 
+## Phase 9 (IN PROGRESS) - Android Control Hub, provider/API-key management
+
+Backend half complete. `.venv/Scripts/python.exe -m pytest -q` ->
+**1535 passed, 1 deselected** (from a verified 1480 baseline; the state
+file's previous 1441 figure was stale). +55 in
+`tests/test_settings_api.py`. Android work not started.
+
+**Audit first (Phase A), and it changed the plan twice.**
+
+- *The "Failed to parse action from server" regression in STEP 22 is not
+  an open defect.* `AgentActionParser.kt` is brace-matched, strips fences,
+  and sets `ignoreUnknownKeys`/`isLenient`/`coerceInputValues`;
+  `tests/test_agent_protocol.py` (588 lines) pins the server->Android
+  transport byte-for-byte on `response.content`. The symptom was an APK
+  older than the server. Nothing was "fixed" that was not broken.
+- *There is no Android TTS/STT at all.* Voice is server-side and ships
+  disabled, so the Voice section must say so rather than offer phone-side
+  controls that do nothing. This is a spec item that cannot be
+  implemented as written, and the UI will state the constraint.
+
+**API keys: `core/credentials.py`.** Fernet (AES-128-CBC + HMAC) under a
+scrypt-derived key (n=2^14), salt stored beside the ciphertext, written
+via `os.open(..., 0o600)` + `os.replace` so the file is never briefly
+world-readable and a crash cannot leave a half-written blob.
+
+The design decision worth recording: every provider already reads its own
+key with `os.getenv` in `__init__`, and `BrainRouter._skip_reason` probes
+the same variables to explain a provider it could not build. So a stored
+key is applied to `os.environ` and **nothing downstream changes** - no
+provider edits, no second resolution path, and `_skip_reason` stays
+truthful. Threading a key parameter through five providers would have
+been the larger change and would have left that diagnostic lying.
+
+There is deliberately no plaintext fallback. With no secret configured
+`persistent` is False, writes are refused, and the API returns the reason
+verbatim - a store that silently degrades to plaintext is worse than one
+that says it cannot help. `mask()` is the only way a value leaves the
+module (`••••••••ABCD`, and a key of 8 characters or fewer loses
+everything, since masking a 4-character key to its last 4 is the key).
+
+**Settings: `core/settings_store.py` + one merge point.** An additive
+overlay in `data/settings.json`, deep-merged over `config.yaml` rather
+than rewriting it - rewriting would destroy operator comments, could not
+distinguish "the deployment set this" from "the user set this", and a bad
+write would corrupt the file the server needs to boot. Delete the overlay
+and the deployment is exactly as it was.
+
+`ALLOWED` is a closed allow-list of dotted paths, each with a validator;
+the config tree carries things a remote client has no business setting
+(`server.host`, logging, plugin paths) and an allow-list fails safe as
+the tree grows. `update()` is all-or-nothing: a PATCH naming one bad
+setting changes nothing, because a partially applied settings write is
+state nobody can reason about afterwards.
+
+The merge happens in `core/config.py:load_config` and nowhere else,
+because `GeminiProvider`, `OllamaProvider` and `vision/settings.py` all
+call `load_config()` directly - so a single choke point makes every
+allow-listed setting real with no call-site changes.
+
+**Live vs restart, reported honestly.** `ProactivePolicy.allows()` reads
+`self.settings` at decision time and `MemoryPipeline.recall_enabled` is
+read per turn, so both are genuinely live-mutable; `BrainRouter` caches
+`_provider` lazily, so clearing it rebuilds the chain. Everything gated
+in `build_services` needs a restart and is returned as `restart_required`
+rather than claimed applied. When the chain cannot be rebuilt (a provider
+whose key is still missing) the llm.* paths are *moved* from `applied` to
+`restart_required` - claiming a live switch that did not happen is the
+"fake toggle" the spec forbids.
+
+**Two real bugs, both found by tests rather than review.**
+
+- `set_provider_key` inferred "could not be made durable" from
+  `not store.persistent`, but `CredentialError` was also raised for an
+  *invalid* key - so on a server with no secret, posting a masked value
+  back returned 200 "saved" instead of 422. Fixed at the source with a
+  `CredentialNotPersisted` subclass, so the route distinguishes "valid
+  but in-memory only" from "rejected" by type instead of by guessing.
+  `TestNonPersistentKeys` is what caught it and now pins it.
+- `SettingsService.apply` read `store.persistent` off the *settings*
+  overlay, which has no such property - a `CredentialStore` concept
+  borrowed onto the wrong object, returning 500 on every successful
+  PATCH. `RuntimeSettings.update` raises rather than returning when it
+  cannot write, so reaching that line already means it persisted.
+
+**Test isolation caught a third.** The API fixture set
+`AURA_SERVER_AUTH_TOKEN` with monkeypatch, but `server/config.py:114`
+builds `settings = ServerSettings()` once at *import* time - so the
+variable changed nothing and every request 401'd. It only appeared to
+work when the file ran alone and happened to import the module first.
+Now set on the singleton, which is what `tests/test_server.py` already
+did. `tests/conftest.py` also snapshots and restores every
+`PROVIDER_KEYS` environment variable per test, because `CredentialStore`
+writes them by design and monkeypatch cannot undo a write it did not
+make.
+
+**A pre-existing flake fixed, unrelated to Phase 9.**
+`test_expiry_drops_no_conversation_history` swept with
+`max_age_seconds=0`, but `_expire` drops what is idle *longer than* the
+age and `time.time()` on Windows advances in ~15.6ms steps - so a session
+created and swept inside one tick had an age of exactly 0.0. It failed
+about one run in four, and only when other sessions existed to satisfy
+the `>= 1` on their own. The test now passes -1; production's strict `>`
+is correct and unchanged. Six consecutive full-suite runs green
+afterwards, from intermittent before.
+
+**Added:** `tests/test_settings_api.py` (55 tests) - masking, encryption
+at rest, reload, wrong-secret, corrupt-blob, environment precedence,
+all-or-nothing validation, the merge, auth on every route, no key in any
+response, no key in any log (including the failure paths, where a
+careless `logger.warning("... %s", value)` usually hides), no key in
+error text, and the non-persistent path end to end.
+
+**Not verified:** no live provider was called; `POST /api/providers/test`
+is proven against the real route, not against Gemini or Groq. No Android
+code has been written or built this phase.
+
+## Phase 9 Android - COMPLETE
+
+**Added:** eleven files under `ui/hub/` and three under `ui/components/`
+(4772 lines), plus `data/remote/ControlDto.kt`. `MainActivity` now
+navigates chat -> hub -> ten sections against `HubRoutes`, sharing one
+Activity-scoped `HubViewModel` so the server config is fetched once
+rather than per screen.
+
+**Toggles are real, or they are read-only and say why.** The
+notifications switch re-syncs WorkManager rather than only writing a
+flag; `server.screen.min_interval` is displayed but not settable because
+it is not in the validator's allow-list; voice is two toggles because
+`voice.tts.enabled`/`voice.stt.enabled` are the only settable voice
+paths; dynamic colour locks below Android 12 with the reason shown.
+
+**Four defects found and fixed during the build**, three of them mine:
+`StatusRow` had no `subtitle` parameter (widened after checking every
+call site uses named arguments); the two-stage quiet-hours dialog closed
+itself after the first pick because `ChoiceDialog` calls `onDismiss()`
+right after `onPick`; `@Suppress` sat on a `when` branch in
+`AuraRepository.buildTree` and would not compile; and lint's
+`MissingPermission` on `NotificationWorker.present` is a pre-existing
+false positive - the guard is behind a helper and the post is inside
+`runCatching`, neither of which lint's dataflow reads - now suppressed
+with that reasoning recorded at the call site.
+
+**Phase J/K:** `tests/test_settings_api.py` is now 70 tests. The new
+ones enumerate every settings/provider route from the ASGI app and
+assert each refuses an unauthenticated call, assert no allow-list path is
+credential material (matched on the last dotted segment - a substring
+test would call `llm.max_output_tokens` a token, and a check that cries
+wolf gets deleted), assert `PATCH` with an `llm.api_key` is refused 422
+and changes nothing, and assert no route logs the key including on the
+rejection paths.
+
+**Verified:** backend `1550 passed, 1 deselected`; Android
+`132 tests, 0 failures`; `lintDebug` 0 errors, 44 warnings (39 are
+"newer dependency available" noise, the rest pre-existing: 3
+ObsoleteSdkInt, 1 InsecureBaseConfiguration in the debug-only network
+config, 1 ConstantLocale).
+
+**Found during the Phase L doc sweep, not fixed** (both recorded in
+`docs/IMPLEMENTATION_STATUS.md` Known Limitations and
+`.claude/project-state.md`):
+1. `docs/SECURITY.md` and `docs/API.md` claimed `server.screen.enabled`
+   defaults to false. The *code* default is false; the committed
+   `config.yaml` sets it to true. Docs corrected to say both.
+2. The Phase 7 build-artifact cleanup regressed. ~2100 files under
+   `android/app/build/` and `android/.gradle/` are tracked again from
+   commits 4ba906e/1fe3368 - `.gitignore` does not apply to paths already
+   in the index. Needs `git rm -r --cached` in a commit of its own; left
+   for Phase 10 rather than mixed into this one.
+
+**Not verified:** no live provider, no real device, no deploy. Every
+claim is proven against `TestClient`, JVM unit tests and lint.
+
 ## Current
 
-Phase 8 complete; state files updated. Next: the local Windows device
-agent, now Phase 9 - not started, not asked for. The plan's phase
-numbering has slipped three times; `current-task.md` records each.
+Phase 9 complete, backend and Android. Next: Phase 10 - final
+integration, regression and release-readiness audit.
 
 ## Blockers
 

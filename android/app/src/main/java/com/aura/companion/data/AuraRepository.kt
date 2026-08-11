@@ -1,21 +1,36 @@
 package com.aura.companion.data
 
 import com.aura.companion.data.remote.ApiFactory
+import com.aura.companion.data.remote.ApiKeyRequestDto
+import com.aura.companion.data.remote.ApiKeyResponseDto
 import com.aura.companion.data.remote.AuraApi
 import com.aura.companion.data.remote.ChatRequestDto
 import com.aura.companion.data.remote.DecisionDto
 import com.aura.companion.data.remote.HealthDto
 import com.aura.companion.data.remote.NotificationDto
 import com.aura.companion.data.remote.AuraStreamClient
+import com.aura.companion.data.remote.ProviderHealthDto
+import com.aura.companion.data.remote.ProviderTestRequestDto
+import com.aura.companion.data.remote.ProviderTestResponseDto
+import com.aura.companion.data.remote.ProvidersResponseDto
 import com.aura.companion.data.remote.ScreenRequestDto
+import com.aura.companion.data.remote.SettingsPatchDto
+import com.aura.companion.data.remote.SettingsPatchResponseDto
+import com.aura.companion.data.remote.SettingsResetRequestDto
+import com.aura.companion.data.remote.SettingsResetResponseDto
+import com.aura.companion.data.remote.SettingsResponseDto
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.settings.SettingsProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -201,6 +216,66 @@ class AuraRepository(
             .map { it.notifications }
 
     // ------------------------------------------------------------------
+    // Control Hub
+    //
+    // Every method here is a thin, typed wrapper. No caller above this
+    // line builds a JSON body, and the one place that does - `patch` -
+    // takes an already-validated map of dotted paths.
+    // ------------------------------------------------------------------
+
+    suspend fun loadSettings(): AuraResult<SettingsResponseDto> =
+        call { it.settings() }
+
+    /**
+     * Change settings on the server.
+     *
+     * `changes` is keyed by the server's dotted paths ("proactive.enabled")
+     * and nested here, because the server's allow-list is written in dotted
+     * form and matching it exactly is what makes a rejection legible.
+     *
+     * All-or-nothing: a 422 means the server changed nothing, and the
+     * message names which setting was wrong.
+     */
+    suspend fun patchSettings(
+        changes: Map<String, JsonElement>,
+    ): AuraResult<SettingsPatchResponseDto> {
+
+        if (changes.isEmpty()) {
+            return AuraResult.Failed(AuraError.Rejected("Nothing to change."))
+        }
+
+        return call { it.patchSettings(SettingsPatchDto(nest(changes))) }
+    }
+
+    suspend fun resetSettings(paths: List<String>? = null): AuraResult<SettingsResetResponseDto> =
+        call { it.resetSettings(SettingsResetRequestDto(paths)) }
+
+    suspend fun loadProviders(): AuraResult<ProvidersResponseDto> =
+        call { it.providers() }
+
+    suspend fun providerHealth(): AuraResult<ProviderHealthDto> =
+        call { it.providerHealth() }
+
+    suspend fun testProvider(
+        provider: String,
+        model: String? = null,
+    ): AuraResult<ProviderTestResponseDto> =
+        call { it.testProvider(ProviderTestRequestDto(provider, model)) }
+
+    /**
+     * Send an API key to the server.
+     *
+     * The key is a parameter and nothing else: it is not stored on the
+     * device, not held in a field, and not logged. The server returns only
+     * its mask.
+     */
+    suspend fun setProviderKey(provider: String, key: String): AuraResult<ApiKeyResponseDto> =
+        call { it.setProviderKey(provider, ApiKeyRequestDto(key)) }
+
+    suspend fun deleteProviderKey(provider: String): AuraResult<ApiKeyResponseDto> =
+        call { it.deleteProviderKey(provider) }
+
+    // ------------------------------------------------------------------
     // The one place an HTTP failure becomes an AuraError
     // ------------------------------------------------------------------
 
@@ -223,6 +298,9 @@ class AuraRepository(
             AuraResult.Failed(
                 when (response.code()) {
                     401, 403 -> AuraError.Unauthorized
+                    // The server validated the request and said no, in
+                    // words written for this screen. See AuraError.Rejected.
+                    422 -> rejection(response)
                     503 -> unavailableReason(response)
                     // A gateway that has no Aura behind it yet. On the
                     // free tiers this project targets, that is a container
@@ -276,6 +354,88 @@ class AuraRepository(
             AuraError.Waking
         }
     }
+
+    /**
+     * Pull the server's own explanation out of a 422.
+     *
+     * Two different shapes arrive with that code and only one of them is
+     * worth showing. Aura's settings routes raise
+     * `HTTPException(422, detail={"error": ..., "message": ...})`, and that
+     * message is written for a person holding a phone. FastAPI's *own*
+     * request validation also returns 422, but as a list of pydantic error
+     * objects full of `loc`/`type`/`ctx` internals - useless on a phone and
+     * the kind of thing that leaks implementation detail into the UI.
+     *
+     * So: an object with a `message` string is shown verbatim; anything
+     * else becomes a generic refusal. Parsing is wrapped because an error
+     * body is not guaranteed to be JSON at all.
+     */
+    private fun rejection(response: Response<*>): AuraError {
+
+        val message = runCatching {
+
+            val body = response.errorBody()?.string().orEmpty()
+
+            val detail = ApiFactory.json
+                .parseToJsonElement(body)
+                .jsonObject["detail"]
+
+            (detail as? JsonObject)
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                .orEmpty()
+
+        }.getOrNull().orEmpty()
+
+        return AuraError.Rejected(message)
+    }
+
+    /**
+     * Turn dotted paths into the nested object the server merges.
+     *
+     * `{"llm.provider": "groq"}` becomes `{"llm": {"provider": "groq"}}`.
+     * The server's `flatten()` would accept the dotted form directly, but
+     * sending the nested shape keeps the request identical to what
+     * `tests/test_settings_api.py` pins, so the contract the tests prove is
+     * the contract the phone uses.
+     */
+    private fun nest(changes: Map<String, JsonElement>): JsonObject {
+
+        val tree = mutableMapOf<String, Any>()
+
+        for ((path, value) in changes) {
+
+            val parts = path.split(".")
+
+            var level = tree
+
+            for (part in parts.dropLast(1)) {
+                @Suppress("UNCHECKED_CAST")
+                level = level.getOrPut(part) { mutableMapOf<String, Any>() }
+                    as? MutableMap<String, Any>
+                    // A caller asked for both "a.b" and "a.b.c". One has to
+                    // lose; dropping the deeper write silently would be
+                    // worse than the shallower one winning visibly.
+                    ?: return JsonObject(emptyMap())
+            }
+
+            level[parts.last()] = value
+        }
+
+        return buildTree(tree)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun buildTree(level: Map<String, Any>): JsonObject =
+        JsonObject(
+            level.mapValues { (_, value) ->
+                when (value) {
+                    is JsonElement -> value
+                    else -> buildTree(value as Map<String, Any>)
+                }
+            }
+        )
 
     private companion object {
         const val SCREEN_DISABLED = "screen_disabled"

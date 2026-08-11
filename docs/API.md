@@ -391,6 +391,71 @@ a client can poll unconditionally without branching on server config.
 
 ---
 
+## Control Hub routes
+
+Eight routes let a trusted client — in practice the Android app's
+Settings hub — read and change Aura's configuration without editing
+files on the deployment. **Every one requires the bearer token**; there
+is no public write path, and none of them ever returns a key.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/settings` | effective config, active overrides, the `configurable` allow-list |
+| `PATCH /api/settings` | validate and apply; reports `applied` and `restart_required` |
+| `POST /api/settings/reset` | drop all overrides, or only the named `paths` |
+| `GET /api/providers` | per provider: capabilities, `configured`, `key_masked`, `key_source` |
+| `GET /api/providers/health` | the active chain and whether it is in fallback; calls no provider |
+| `POST /api/providers/test` | one real probe; returns latency and an error *category* |
+| `PUT /api/providers/{provider}/key` | store a key; returns the mask only |
+| `DELETE /api/providers/{provider}/key` | forget a stored key, and unset it for this process |
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"settings": {"proactive": {"max_per_day": 6}}}' \
+  http://localhost:8000/api/settings
+```
+
+```json
+{
+  "applied": {"proactive.max_per_day": 6},
+  "restart_required": [],
+  "needs_restart": false
+}
+```
+
+Four properties worth knowing before writing a client:
+
+**`PATCH` is all-or-nothing.** Every path is validated before anything is
+written, so a request naming one bad setting changes nothing and returns
+422 with a message written for a person. A partially applied settings
+change is a state nobody can reason about afterwards.
+
+**Only the allow-list is settable.** It lives in `core/settings_store.py`
+and is returned as `configurable`, so a client can grey out what it
+cannot change instead of discovering it through a rejection. Nothing in
+it is credential material — keys have their own route.
+
+**`restart_required` is the honest signal.** A path listed there was
+persisted but is *not* live, because it is built once during startup
+(`vision.enabled` when vision was never constructed, `tools.enabled`,
+`voice.tts/stt.enabled`, `server.screen.enabled`). Keys, `llm.provider`,
+the fallback chain, the model and every `proactive.*` value apply
+immediately.
+
+**A mask is not a key.** `key_masked` is `••••••••ABCD`, or `""` when
+nothing is stored; posting that value back returns 422 rather than
+storing it. `key_source` is `"store"`, `"environment"` or `""` — a key
+that came from the deployment's environment cannot be deleted from a
+phone, and a client should say so rather than offering a delete that
+appears to do nothing.
+
+Capabilities are per-implementation facts, not vendor claims: Groq
+reports `streaming: false` because `GroqProvider` has no `stream()`
+method, whatever Groq's own documentation says.
+
+---
+
 ## Configuration
 
 The `server:` section of `config.yaml` (committed — **no secrets**):
@@ -416,7 +481,12 @@ server:
 Host, port, token and CORS come from the environment (`AURA_SERVER_*`),
 never from this file. See [.env.example](../.env.example).
 
-Both `screen` and `companion` default to **false**. Watching someone's
-screen and speaking without being spoken to are both things a companion
-should start doing because a human asked, not because a config key was
-missing.
+Both default to **false** in `core/config.py`. Watching someone's screen
+and speaking without being spoken to are both things a companion should
+start doing because a human asked, not because a config key was missing.
+
+Note that the committed `config.yaml` overrides `server.screen.enabled`
+to `true`, so a deployment using the shipped file accepts observations —
+the code default and the shipped default are not the same thing, and the
+snippet above shows the code default. The device-side gate is unaffected:
+Android sends nothing until the user grants the accessibility permission.

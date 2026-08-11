@@ -55,10 +55,24 @@ gradle wrapper --gradle-version 8.9
 | `POST` | `/api/screen` | Screen observation (text + accessibility) |
 | `POST` | `/api/screen/upload` | Screenshot multipart upload |
 | `GET` | `/api/notifications?device_id=` | Poll for companion notifications |
+| `GET` | `/api/settings` | Effective config + the settable allow-list |
+| `PATCH` | `/api/settings` | Change a setting (all-or-nothing) |
+| `POST` | `/api/settings/reset` | Revert all overrides, or named paths |
+| `GET` | `/api/providers` | Capabilities, key state, primary/fallback |
+| `GET` | `/api/providers/health` | Active chain, whether it is in fallback |
+| `POST` | `/api/providers/test` | Probe one provider |
+| `PUT` | `/api/providers/{p}/key` | Store an API key (mask returned) |
+| `DELETE` | `/api/providers/{p}/key` | Forget a stored API key |
+
+The last eight are the Control Hub's. See `docs/API.md` for their
+contracts — particularly that a mask is never accepted as a key, and that
+`restart_required` names settings which were saved but are not yet live.
 
 ### Authentication
 
-All endpoints, including `/api/health`, require `Authorization: Bearer <token>` when `AURA_SERVER_AUTH_TOKEN` is configured. The token is entered once in the Android Settings screen and travels in the WebSocket query string (`?token=`), because a WebSocket handshake has no Authorization header.
+All endpoints, including `/api/health`, require `Authorization: Bearer <token>` when `AURA_SERVER_AUTH_TOKEN` is configured. The token is entered once under Settings → Connection and travels in the WebSocket query string (`?token=`), because a WebSocket handshake has no Authorization header.
+
+The token is a bearer credential for every one of the routes above, including the ones that store API keys, so the app masks it by default, reveals it only on an explicit tap, and prints it nowhere else — not in the hub, not in Advanced, not in diagnostics.
 
 ### Session continuity
 
@@ -130,6 +144,7 @@ android/
 │       │   │   │   │   ├── AuraApi.kt         # REST interface
 │       │   │   │   │   ├── AuraStreamClient.kt # WebSocket streaming
 │       │   │   │   │   └── Dto.kt             # Serialization models
+│   │   │   │   │   └── ControlDto.kt     # Settings + provider payloads
 │       │   │   │   └── settings/
 │       │   │   │       ├── SettingsProvider.kt # Read-only interface (testable)
 │       │   │   │       ├── SettingsStore.kt   # EncryptedSharedPreferences
@@ -145,9 +160,27 @@ android/
 │       │   │   │   │   ├── ChatComponents.kt
 │       │   │   │   │   ├── ChatViewModel.kt
 │       │   │   │   │   └── ChatUiState.kt
+│       │   │   │   ├── components/
+│       │   │   │   │   ├── SettingsComponents.kt   # Rows, cards, sections
+│       │   │   │   │   ├── ProviderComponents.kt   # Provider/model/key cards
+│       │   │   │   │   └── InputComponents.kt      # Dialogs, sliders, steppers
+│       │   │   │   ├── hub/                        # Control Hub, 10 sections
+│       │   │   │   │   ├── HubScreen.kt            # Grid, HubRoutes, HubSection
+│       │   │   │   │   ├── HubViewModel.kt         # One Activity-scoped instance
+│       │   │   │   │   ├── DevicePermissions.kt    # Android grant probes
+│       │   │   │   │   ├── AuraSection.kt          # Status, version, chain
+│       │   │   │   │   ├── ModelsSection.kt        # Providers, models, API keys
+│       │   │   │   │   ├── AwarenessSection.kt     # Screen observation
+│       │   │   │   │   ├── MemorySection.kt
+│       │   │   │   │   ├── ProactiveSection.kt
+│       │   │   │   │   ├── VisionSection.kt
+│       │   │   │   │   ├── VoiceSection.kt
+│       │   │   │   │   ├── NotificationsSection.kt
+│       │   │   │   │   ├── GeneralSection.kt       # Appearance + Advanced
+│       │   │   │   │   └── ConnectionSection.kt    # Server URL + token
 │       │   │   │   └── settings/
-│       │   │   │       ├── SettingsScreen.kt
-│       │   │   │       └── SettingsViewModel.kt
+│       │   │   │       ├── SettingsScreen.kt   # Superseded by the hub
+│       │   │   │       └── SettingsViewModel.kt # Used by ConnectionSection
 │       │   │   └── companion/ (future)
 │       │   │
 │       │   ├── res/
@@ -231,7 +264,10 @@ Until signing is configured, only the debug APK is available. **Do not claim rel
 | `502 Bad Gateway` / `504 Gateway Timeout` | Free-tier container still starting (cold start). Wait ~30s and retry. |
 | Send button spins forever | Fixed in `ChatViewModel.streamReply` — settles after collection even without a terminal frame. |
 | Accessibility service not receiving events | Permission not granted, or service disabled in Settings → Accessibility → Aura Companion |
-| Notifications never arrive | WorkManager needs ~15 min for first poll; check `server.companion.enabled=true` in config.yaml |
+| Notifications never arrive | WorkManager needs ~15 min for first poll; check `server.companion.enabled=true` in config.yaml. Settings → Notifications shows which of the three gates is shut. |
+| `422` when saving an API key | The field still holds the mask (`••••••••ABCD`). Type the real key, or leave it untouched to keep the current one. |
+| A setting saves but nothing changes | It is restart-gated. The hub shows "Needs a restart of Aura" on those rows; the response's `restart_required` is the same fact. |
+| A toggle is greyed out with a reason | Either the path is not in the server's allow-list, or the phone cannot do it (dynamic colour below Android 12). The reason is the tooltip. |
 
 ## Protocol compatibility
 
@@ -242,7 +278,26 @@ If you change the server contract, update the Android DTOs and run the Android u
 ## Known limitations (current phase)
 
 - No inline reply on notifications (tap-to-open only)
-- No voice input/output on Android (reuses desktop STT/TTS on server if needed later)
+- **No push.** There is no FCM and no server-initiated delivery. The app
+  polls `/api/notifications` on a WorkManager `PeriodicWorkRequest`, whose
+  floor is 15 minutes, and only while notifications are enabled and a
+  server is configured.
+- **The proactive engine has no scheduler of its own.** It gets the
+  chance to speak when something polls `/api/notifications` — in practice
+  that poll. So turning phone notifications off does not merely mute
+  proactive messages, it mostly stops the engine being asked. Settings →
+  Proactive states this rather than showing one switch.
+- **No voice on Android.** There is no `TextToSpeech` or
+  `SpeechRecognizer` anywhere in the app. `voice.tts.enabled` and
+  `voice.stt.enabled` run where Aura is deployed, and Settings → Voice
+  says so instead of offering phone-side controls that would do nothing.
+- **The hub is a control surface, not a mirror.** A change is sent to the
+  server and the hub re-reads the result; it does not assume the write
+  landed. A device-local toggle (theme, notifications) changes nothing on
+  the server, and a server toggle changes nothing on the device.
+- `ui/settings/SettingsScreen.kt` is superseded by the hub and no longer
+  routed. It was kept rather than deleted; `SettingsViewModel` is still
+  live and backs Settings → Connection.
 - Screenshot upload uses JPEG; server validates MIME and size (8 MB default)
 - Companion notifications require `server.companion.enabled=true` and the relevance threshold/cooldown are server-side
 - SQLite persistence on ephemeral filesystems (Render free tier, Cloud Run) needs a mounted volume or external DB — see `docs/DEPLOYMENT.md`

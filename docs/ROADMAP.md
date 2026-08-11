@@ -118,9 +118,9 @@ removed — its accurate content is folded into ARCHITECTURE.md, and its
 
 ### Section 11 — Testing
 
-Done. `.venv/Scripts/python.exe -m pytest -q` reports **1160 passed, 1
-deselected** as of the Phase 7 sweep — 1000 `def test_` functions across
-32 files, the difference being parametrization. The one deselected test
+Done. `.venv/Scripts/python.exe -m pytest -q` reports **1550 passed, 1
+deselected** as of the Phase 9 sweep — 1297 `def test_` functions across
+39 files, the difference being parametrization. The one deselected test
 is the opt-in Gemini integration test; `pytest.ini` excludes it with
 `-m "not integration"` so the suite needs no API keys.
 

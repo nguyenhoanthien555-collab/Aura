@@ -4,10 +4,14 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
+import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -55,4 +59,58 @@ interface AuraApi {
     suspend fun notifications(
         @Query("device_id") deviceId: String,
     ): Response<NotificationsResponseDto>
+
+    // ------------------------------------------------------------------
+    // Control Hub
+    //
+    // Every route below is authenticated server-side by the same bearer
+    // token as chat (`server/routes/settings.py`, `Depends(verify_token)`).
+    // There is no unauthenticated path to changing a provider or a key,
+    // and the interceptor in ApiFactory attaches the token to these
+    // exactly as it does to everything else.
+    // ------------------------------------------------------------------
+
+    @GET("api/settings")
+    suspend fun settings(): Response<SettingsResponseDto>
+
+    @PATCH("api/settings")
+    suspend fun patchSettings(
+        @Body request: SettingsPatchDto,
+    ): Response<SettingsPatchResponseDto>
+
+    @POST("api/settings/reset")
+    suspend fun resetSettings(
+        @Body request: SettingsResetRequestDto,
+    ): Response<SettingsResetResponseDto>
+
+    @GET("api/providers")
+    suspend fun providers(): Response<ProvidersResponseDto>
+
+    /** Reads cached router state; calls no provider, so it is safe to poll. */
+    @GET("api/providers/health")
+    suspend fun providerHealth(): Response<ProviderHealthDto>
+
+    /** Sends one real prompt and bills for it. A button, never a poll. */
+    @POST("api/providers/test")
+    suspend fun testProvider(
+        @Body request: ProviderTestRequestDto,
+    ): Response<ProviderTestResponseDto>
+
+    /**
+     * Store an API key.
+     *
+     * The key travels once, in this request body, over the same TLS
+     * connection as everything else, and is never returned. The response
+     * carries only the mask.
+     */
+    @PUT("api/providers/{provider}/key")
+    suspend fun setProviderKey(
+        @Path("provider") provider: String,
+        @Body request: ApiKeyRequestDto,
+    ): Response<ApiKeyResponseDto>
+
+    @DELETE("api/providers/{provider}/key")
+    suspend fun deleteProviderKey(
+        @Path("provider") provider: String,
+    ): Response<ApiKeyResponseDto>
 }

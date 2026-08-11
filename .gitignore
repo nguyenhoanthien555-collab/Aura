@@ -17,6 +17,15 @@ venv/
 # Aura runtime data
 data/*.db
 data/*.db-journal
+# Provider API keys, encrypted at rest (core/credentials.py), and the
+# Control Hub's settings overlay (core/settings_store.py). Neither is
+# source: both are written by the running server from the phone. The
+# credential file is Fernet ciphertext, but a secret that is committed is
+# a secret that is leaked whatever its encoding.
+data/credentials.enc
+data/credentials.enc.tmp
+data/settings.json
+data/settings.json.tmp
 logs/
 .aider*
 

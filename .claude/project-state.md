@@ -7,12 +7,36 @@ Aura AI assistant.
 Build and stabilize Aura as a local/cloud-capable AI assistant.
 
 ## Status
-Phases 0-7 of the repair mandate are complete (1160 passed, 1 deselected),
-and PHASE 8 (Memory 2.0 + Temporal Context + User Model + Proactive
-System) is complete: 1441 passed, 1 deselected (0 failed, 0 errors).
-Phase 8 was an explicit spec task (the "local Windows device agent"
-that earlier notes deferred is still deferred - it was not part of the
-Phase 8 spec).
+Phases 0-7 of the repair mandate are complete, PHASE 8 (Memory 2.0 +
+Temporal Context + User Model + Proactive System) is complete, and
+PHASE 9 (Android Control Hub, modern UI, provider/API-key management,
+feature controls) is complete: **1550 passed, 1 deselected** on the
+backend, **132 Android unit tests** passing, `lintDebug` 0 errors /
+44 warnings. The "local Windows device agent" that earlier notes
+deferred is still deferred - it was not part of the Phase 8 or Phase 9
+spec.
+
+## Phase 9 architecture (standing)
+- **Android is a control surface, not a source of truth.** Server state
+  lives on the server and is read through `GET /api/settings`; the phone
+  stores only device-local values (server URL, token, theme, dynamic
+  colour, notifications, device id) in the one existing
+  EncryptedSharedPreferences store.
+- **One settable surface**: the dotted-path allow-list in
+  `core/settings_store.py`. Anything absent from it 422s, and the Android
+  UI renders such values read-only with the reason rather than offering a
+  control that cannot work.
+- **API keys enter through exactly one route** -
+  `PUT /api/providers/{provider}/key`, bearer-authenticated - are stored
+  Fernet-encrypted, applied to `os.environ` so no provider needed
+  editing, and are only ever read back masked. No allow-list path is
+  credential material, and a test enumerates the routes to keep it that
+  way.
+- **`PROVIDER_CAPABILITIES` is per-implementation, not per-vendor.** Groq
+  is `streaming: false` because `GroqProvider` has no `stream()`. The UI
+  renders these flags rather than vendor documentation.
+- **Restart honesty**: `restart_required` names paths that were persisted
+  but are not live, because they are built once in `build_services`.
 
 ## Phase 8 architecture (standing)
 - **Temporal context** (`core/temporal.py`, `brain/prompt_builder.py`
@@ -66,10 +90,15 @@ Pinned by `tests/test_device_boundary.py` and re-pinned by
 `tests/test_security_hardening.py`.
 
 ## Repository invariants (Phase 7)
-- Build artifacts are not tracked. ~2400 Gradle/dex/class files were
-  untracked with `git rm -r --cached` and ignored; tracked files went
-  from ~2400 to ~250. `android/gradle/wrapper/` STAYS tracked - the
-  wrapper jar is source and a checkout cannot build without it.
+- Build artifacts were untracked in Phase 7 (~2400 Gradle/dex/class files
+  via `git rm -r --cached`) and are ignored. **This has since regressed**:
+  commits 4ba906e and 1fe3368 re-added ~2100 files under
+  `android/app/build/` and `android/.gradle/`, because `.gitignore` does
+  not apply to already-tracked paths. Every Android build now dirties
+  hundreds of files. Fix with `git rm -r --cached android/app/build
+  android/.gradle` in a commit of its own - NOT mixed into feature work.
+  `android/gradle/wrapper/` STAYS tracked - the wrapper jar is source and
+  a checkout cannot build without it.
 - CI is `.github/workflows/tests.yml`: `pytest -q` on Python 3.11. It
   restates nothing from `pytest.ini` so it cannot drift, and references
   no secrets - the hermetic suite must pass with no API keys at all.

@@ -1,6 +1,7 @@
 package com.aura.companion.work
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -70,7 +71,15 @@ class NotificationWorker(
      * than quote the screen - so a password manager on screen produces
      * nothing at all (the server vetoes it), and an ordinary screen
      * produces a remark, not a transcript.
+     *
+     * The permission is checked at the top and the post itself is wrapped,
+     * which covers both halves of what `MissingPermission` asks for. Lint
+     * reads neither: the guard is behind a helper, and `runCatching` is an
+     * inline function rather than a literal `try`. The suppression is for
+     * lint's dataflow, not for the requirement - remove either the guard
+     * or the wrapper and this genuinely does throw.
      */
+    @SuppressLint("MissingPermission")
     private fun present(notification: NotificationDto) {
 
         val context = applicationContext

@@ -936,7 +936,14 @@ def test_expiry_drops_no_conversation_history(client):
 
     client.post("/api/chat", json={"session_id": "keeps-history", "message": "one"})
 
-    assert session_manager.cleanup_old(max_age_seconds=0) >= 1
+    # A negative age, not zero. `_expire` sweeps what is idle *longer than*
+    # `max_age_seconds`, and `time.time()` on Windows advances in ~15.6ms
+    # steps - so a session created and swept inside one tick has an age of
+    # exactly 0.0, which `> 0` does not match. This test then failed about
+    # one run in four, and only when other sessions were present to satisfy
+    # the `>= 1` on their own. Anything negative is unambiguously "all of
+    # them" without depending on the clock.
+    assert session_manager.cleanup_old(max_age_seconds=-1) >= 1
     assert session_manager.get_session("keeps-history") is None
 
     again = client.post(

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.config import cors_policy, enforce_auth_policy, settings
 from server.runtime import init_runtime, is_initialized, shutdown_runtime
-from server.routes import health, chat, ws_chat, screen, notifications
+from server.routes import health, chat, ws_chat, screen, notifications, settings as settings_routes
 from core.logger import logger
 
 
@@ -68,6 +68,7 @@ app.include_router(chat.router)
 app.include_router(ws_chat.router)
 app.include_router(screen.router)
 app.include_router(notifications.router)
+app.include_router(settings_routes.router)
 
 
 @app.get("/")

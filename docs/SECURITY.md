@@ -113,7 +113,46 @@ disable query-string logging for that path (see
 |---|---|---|
 | `AURA_SERVER_AUTH_TOKEN` | `.env` on the server | The server, and the phone that holds it |
 | `GEMINI_API_KEY` | `.env` on the server | The server only |
+| Keys set from the phone | `data/credentials.enc`, Fernet-encrypted | The server only |
+| `AURA_SECRET_KEY` | `.env` on the server | The server only |
 | Conversation memory | `data/memory.db` | The server only |
+
+### Provider API keys set from the Control Hub
+
+`PUT /api/providers/{provider}/key` exists so a deployment whose provider
+has died can be repaired from a phone instead of by editing files on the
+host. It is the only way a key enters, it requires the bearer token like
+every other settings route, and these are its rules:
+
+- **A key is written encrypted or not at all.** The store derives a Fernet
+  key with scrypt from `AURA_SECRET_KEY` (or, failing that, the auth
+  token). With neither configured the key is applied to this process and
+  the response says `persistent: false` and why — it is never written to
+  disk in plaintext as a fallback.
+- **A key is only ever read back masked**, as `••••••••ABCD`. Nothing
+  returns the value: not `GET /api/settings`, not `GET /api/providers`,
+  not `/api/providers/health`, not the probe endpoint that actually uses
+  it. Four characters is what the mask keeps, and tests assert that no
+  longer fragment appears in any response, log line or error message.
+- **A mask is not a key.** Posting back the displayed value returns 422
+  and leaves the stored key untouched — otherwise a UI that submitted
+  what it rendered would replace a working key with bullet characters.
+- **No settable path is credential material.** Keys are not settings, so
+  `PATCH /api/settings` cannot carry one; the allow-list in
+  `core/settings_store.py` contains no key, token, secret or password
+  path, and a test enumerates it to keep that true.
+- **Nothing about these routes is public.** A test enumerates every
+  `/api/settings*` and `/api/providers*` route from the ASGI app and
+  asserts each refuses an unauthenticated call — so a route added without
+  `Depends(verify_token)` fails on the day it is written rather than on
+  the day it is exploited. The refusals are checked by *effect* too: an
+  unauthenticated `PATCH` cannot change the provider, and an
+  unauthenticated `PUT` cannot install a key.
+- **The keys still never reach the phone.** The phone sends a key it was
+  given and is told the mask. It cannot read one back, and Aura remains
+  the only party that talks to a provider.
+
+`data/credentials.enc` is gitignored, and so is the settings overlay.
 
 ### Rules
 
@@ -289,9 +328,16 @@ The token does that.
 
 The most invasive thing Aura can do, and the most heavily defaulted-off.
 
-- **Off unless enabled.** `server.screen.enabled` defaults to `false`.
-  A disabled server answers `503` rather than quietly accepting screen
-  data.
+- **Off in code, on in the shipped config.** `core/config.py` defaults
+  `server.screen.enabled` to `false`, and the committed `config.yaml`
+  sets it to `true`. So a deployment that uses the shipped file **does**
+  accept screen observations — check that line before deploying if you
+  do not want it. A disabled server answers `503` rather than quietly
+  accepting screen data.
+- **Nothing reaches the server until the device sends it.** That is the
+  gate that actually holds: Android's screen observation is off by
+  default in the app, and turning it on requires the user to grant the
+  AccessibilityService in system settings.
 - **The user enables it on the device too.** Android's
   AccessibilityService cannot be enabled programmatically — the user
   grants it in system settings, and can revoke it there. MediaProjection

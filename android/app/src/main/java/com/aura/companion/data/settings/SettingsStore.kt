@@ -54,6 +54,8 @@ class SettingsStore(context: Context) : SettingsProvider {
         screenObservationEnabled = prefs.getBoolean(KEY_SCREEN, false),
         notificationsEnabled = prefs.getBoolean(KEY_NOTIFICATIONS, true),
         uploadScreenshots = prefs.getBoolean(KEY_UPLOAD, false),
+        themeMode = ThemeMode.from(prefs.getString(KEY_THEME, null)),
+        dynamicColour = prefs.getBoolean(KEY_DYNAMIC, true),
     )
 
     /**
@@ -98,6 +100,25 @@ class SettingsStore(context: Context) : SettingsProvider {
         _settings.value = read()
     }
 
+    /**
+     * Appearance. Device-local by design.
+     *
+     * These two never travel to the server. A theme is a property of the
+     * phone looking at Aura, not of Aura - and two devices pointed at the
+     * same deployment should be free to disagree about dark mode. That is
+     * also why they live here rather than in the server's settings overlay:
+     * there is nothing for `PATCH /api/settings` to do with them.
+     */
+    fun setThemeMode(mode: ThemeMode) {
+        prefs.edit().putString(KEY_THEME, mode.stored).apply()
+        _settings.value = read()
+    }
+
+    fun setDynamicColour(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC, enabled).apply()
+        _settings.value = read()
+    }
+
     fun clear() {
         prefs.edit()
             .remove(KEY_URL)
@@ -115,6 +136,8 @@ class SettingsStore(context: Context) : SettingsProvider {
         private const val KEY_SCREEN = "screen_observation"
         private const val KEY_NOTIFICATIONS = "notifications"
         private const val KEY_UPLOAD = "upload_screenshots"
+        private const val KEY_THEME = "theme_mode"
+        private const val KEY_DYNAMIC = "dynamic_colour"
 
         /**
          * Accept what a human would type.
@@ -153,6 +176,26 @@ class SettingsStore(context: Context) : SettingsProvider {
 }
 
 /**
+ * How the app picks light or dark.
+ *
+ * [System] is the default because an app that ignores the phone's own
+ * setting is the one people complain about at night.
+ *
+ * The stored value is the lowercase name rather than the ordinal:
+ * reordering this enum later must not silently repaint everyone's app.
+ */
+enum class ThemeMode(val stored: String, val label: String) {
+    System("system", "Follow system"),
+    Light("light", "Light"),
+    Dark("dark", "Dark");
+
+    companion object {
+        fun from(stored: String?): ThemeMode =
+            entries.firstOrNull { it.stored == stored } ?: System
+    }
+}
+
+/**
  * The user's configuration.
  *
  * `toString` is overridden so a token cannot reach a log through an
@@ -166,6 +209,8 @@ data class AuraSettings(
     val screenObservationEnabled: Boolean = false,
     val notificationsEnabled: Boolean = true,
     val uploadScreenshots: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.System,
+    val dynamicColour: Boolean = true,
 ) {
     val isConfigured: Boolean get() = serverUrl.isNotBlank()
 

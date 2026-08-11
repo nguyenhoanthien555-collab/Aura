@@ -56,6 +56,24 @@ sealed interface AuraError {
         override val userMessage = detail
     }
 
+    /**
+     * The server validated the request and refused it.
+     *
+     * Distinct from [ServerFailure] because the server knows *why* and has
+     * said so in words meant for this screen - "proactive.max_per_day must
+     * be between 1 and 20". Those messages come from
+     * `core/settings_store.py`, which is written to name the offending
+     * setting and to contain no exception text, so passing one through is
+     * both safe and far more useful than "unexpected response (422)".
+     *
+     * Carries the implication that nothing changed: settings PATCHes are
+     * all-or-nothing on the server.
+     */
+    data class Rejected(val detail: String) : AuraError {
+        override val userMessage =
+            detail.ifBlank { "Aura would not accept that setting." }
+    }
+
     /** The server failed. The detail is a code, never an exception. */
     data class ServerFailure(val code: Int) : AuraError {
         override val userMessage = when (code) {
