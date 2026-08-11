@@ -40,7 +40,7 @@ def _builtin_tools(config: dict) -> list[ToolProtocol]:
 
     tools.append(CurrentTimeTool())
 
-    roots = config.get("allowed_paths") or []
+    roots = _list_setting(config, "allowed_paths")
 
     if roots:
         from tools.builtins.filesystem import (
@@ -51,7 +51,7 @@ def _builtin_tools(config: dict) -> list[ToolProtocol]:
         tools.append(ReadFileTool(roots))
         tools.append(ListDirectoryTool(roots))
 
-    applications = config.get("applications") or {}
+    applications = _mapping_setting(config, "applications")
 
     if applications:
         from tools.builtins.apps import OpenApplicationTool
@@ -59,6 +59,91 @@ def _builtin_tools(config: dict) -> list[ToolProtocol]:
         tools.append(OpenApplicationTool(applications))
 
     return tools
+
+
+# ----------------------------------------------------------------------
+# Configuration, checked rather than assumed
+#
+# A tool that never registers because its config section is the wrong
+# shape is invisible: nothing fails, the tool simply is not there, and
+# `applications: []` sat in config.yaml doing exactly that (AURA-P0-004).
+# An empty list and an empty mapping are both falsy, so the bug survived
+# every `or {}` guard in the codebase.
+# ----------------------------------------------------------------------
+
+def _mapping_setting(config: dict, key: str) -> dict:
+    """A `key: {...}` section, or an empty one with a warning saying why."""
+
+    value = config.get(key)
+
+    if value is None or value == [] or value == {}:
+        return {}
+
+    if not isinstance(value, dict):
+        logger.warning(
+            "tools.%s must be a mapping of name to command, not %s - "
+            "write `%s: {}` for none. Ignoring it.",
+            key,
+            type(value).__name__,
+            key,
+        )
+        return {}
+
+    return value
+
+
+def _list_setting(config: dict, key: str) -> list:
+    """A `key: [...]` section, or an empty one with a warning saying why."""
+
+    value = config.get(key)
+
+    if value is None or value == [] or value == {}:
+        return []
+
+    if isinstance(value, (str, dict)):
+        logger.warning(
+            "tools.%s must be a list, not %s. Ignoring it.",
+            key,
+            type(value).__name__,
+        )
+        return []
+
+    return list(value)
+
+
+def _warn_about_policy(executor: ToolExecutor) -> None:
+    """
+    Say what the policy will and will not permit, before anything asks.
+
+    Both of these are silent failures otherwise: a user who switched
+    `enabled` on and stopped there gets a system that grants nothing, and
+    a misspelled name in `allowed` grants nothing *and* looks correct.
+    """
+
+    policy = executor.policy
+
+    if not policy.enabled:
+        return
+
+    if not policy.allowed:
+        logger.warning(
+            "tools.enabled is true but tools.allowed is empty, so no tool "
+            "can run. Name the tools you want in tools.allowed."
+        )
+        return
+
+    unknown = sorted(
+        name for name in policy.allowed if not executor.registry.has(name)
+    )
+
+    if unknown:
+        logger.warning(
+            "tools.allowed names %s, which %s not registered. Known tools: %s",
+            ", ".join(unknown),
+            "is" if len(unknown) == 1 else "are",
+            ", ".join(executor.registry.names()) or "none",
+        )
+
 
 
 def build_tools(
@@ -89,5 +174,7 @@ def build_tools(
         )
     else:
         logger.info("Tools disabled")
+
+    _warn_about_policy(executor)
 
     return executor

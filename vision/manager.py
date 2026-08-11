@@ -257,5 +257,12 @@ class VisionManager:
         try:
             self.events.publish(event)
 
-        except Exception:
-            pass
+        except Exception as error:
+            # Observation itself succeeded; only the announcement failed.
+            # Logged because a UI that stopped showing what Aura can see
+            # looks exactly like vision being switched off.
+            logger.debug(
+                "Vision event publish failed (%s): %s",
+                type(event).__name__,
+                error,
+            )

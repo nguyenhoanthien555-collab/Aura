@@ -7,10 +7,15 @@ Aura desktop runtime.
     python launcher.py --listen         enable the microphone
     python launcher.py --vision         let Aura see the active window
     python launcher.py --say "hello"    one turn, then exit
+    python launcher.py --server         serve the HTTP/WebSocket API
 
 Command line flags override config.yaml for this run only; nothing here
 writes to it. That makes `--vision` a thing you can try once without
 having granted it permanently.
+
+`--server` is the same Aura with a different front end: no avatar, no
+terminal, one HTTP process. Everything behind it - Brain, Memory,
+Personality, Providers - is the code the desktop uses.
 
 `main.py` is unchanged and remains the Sprint 4 text harness.
 
@@ -61,7 +66,7 @@ def parse_arguments(argv=None):
     parser.add_argument(
         "--provider",
         default=None,
-        help="override the LLM provider (mock, gemini)",
+        help="override the LLM provider (mock, gemini, ollama)",
     )
 
     parser.add_argument(
@@ -69,6 +74,25 @@ def parse_arguments(argv=None):
         default=None,
         metavar="TEXT",
         help="send one message, print the reply and exit",
+    )
+
+    parser.add_argument(
+        "--server",
+        action="store_true",
+        help="serve the HTTP/WebSocket API instead of the desktop UI",
+    )
+
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="server bind address (default from AURA_SERVER_HOST)",
+    )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="server port (default from AURA_SERVER_PORT)",
     )
 
     return parser.parse_args(argv)
@@ -100,11 +124,65 @@ def apply_overrides(config: dict, arguments) -> dict:
     return config
 
 
+def run_server(arguments) -> int:
+    """
+    Serve the API.
+
+    Imported here, not at module scope: FastAPI and uvicorn are only
+    needed in server mode, and a desktop user who never runs `--server`
+    should not need them installed to start Aura.
+    """
+
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "Server mode needs FastAPI and uvicorn:\n"
+            "    pip install -r requirements.txt",
+            file=sys.stderr,
+        )
+        return 1
+
+    from server.config import (
+        InsecureConfigurationError,
+        enforce_auth_policy,
+        settings,
+    )
+
+    host = arguments.host or settings.host
+    port = arguments.port or settings.port
+
+    # The same policy the ASGI lifespan enforces, applied here so that
+    # `launcher.py --server` reports it as a configuration error on stderr
+    # instead of as a startup traceback from inside uvicorn.
+    try:
+        insecure_warning = enforce_auth_policy()
+    except InsecureConfigurationError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    if insecure_warning:
+        print(f"WARNING: {insecure_warning}", file=sys.stderr)
+
+    uvicorn.run(
+        "server.main:app",
+        host=host,
+        port=port,
+        log_level=settings.log_level.lower(),
+        reload=False,
+    )
+
+    return 0
+
+
 def main(argv=None) -> int:
 
     load_dotenv()
 
     arguments = parse_arguments(argv)
+
+    if arguments.server:
+        return run_server(arguments)
 
     from core.config import load_config
     from launcher.cli import AuraCLI

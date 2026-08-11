@@ -29,7 +29,7 @@ from typing import Callable
 
 from core.logger import logger
 from events.types import ToolCompletedEvent, ToolInvokedEvent
-from tools.base import ToolProtocol, ToolResult, ToolRisk, fail, ok
+from tools.base import ToolProtocol, ToolResult, ToolRisk, describe_tool, fail, ok
 from tools.registry import ToolRegistry
 from tools.timeout import (
     DEFAULT_TOOL_TIMEOUT,
@@ -124,6 +124,27 @@ class ToolExecutor:
             for name in self.registry.names()
             if name in self.policy.allowed
         ]
+
+    def catalogue(self) -> str:
+        """
+        The available tools, described, for a prompt.
+
+        `available()` and not the whole registry: a model offered a tool
+        it is not permitted to run will request it, be denied, and have
+        spent a turn learning something the policy already knew.
+
+        The text comes from `describe_tool`, which is what the registry
+        and the CLI already use, so a tool is described in exactly one
+        place no matter who is asking.
+        """
+
+        described = [
+            describe_tool(tool)
+            for tool in (self.registry.get(name) for name in self.available())
+            if tool is not None
+        ]
+
+        return "\n".join(part for part in described if part)
 
     def check(self, name: str) -> str:
         """
@@ -396,5 +417,14 @@ class ToolExecutor:
 
         try:
             self.events.publish(event)
-        except Exception:
-            pass
+        except Exception as error:
+            # The tool still ran, and its result still returns to the
+            # caller - a broken bus must not turn a successful call into
+            # a failed one. But a subscriber that stopped seeing tool
+            # events is otherwise indistinguishable from no tools being
+            # run at all, so say so once per failure.
+            logger.debug(
+                "Tool event publish failed (%s): %s",
+                type(event).__name__,
+                error,
+            )

@@ -12,8 +12,26 @@ API keys.
 import os
 
 from core.config import load_config
+from core.logger import logger
 
 from brain.ports import LLM
+
+
+# The environment variable each cloud provider needs before it can be
+# built. Used only to explain a skipped provider by naming the variable -
+# never to read or report a value.
+PROVIDER_KEYS = {
+    "gemini": "GEMINI_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+# Ollama takes no key, only a reachable host. Listed separately so that
+# `provider: ollama` still resolves through the chain builder (and can
+# therefore carry cloud fallbacks) while _skip_reason knows it needs no
+# secret to explain.
+KEYLESS_PROVIDERS = ("ollama",)
 
 
 class BrainRouter:
@@ -60,34 +78,75 @@ class BrainRouter:
             from brain.providers.mock import MockProvider
             return MockProvider()
 
-        if name == "ollama":
-            from brain.providers.ollama import OllamaProvider
-            return OllamaProvider()
-
         config = load_config().get("llm") or {}
 
         primary = self._instantiate_provider(name, config)
         if primary is None:
             raise ValueError(f"Primary provider {name} could not be initialized (missing API key or config)")
 
-        fallback_names = config.get("fallback_providers")
-        if fallback_names is None:
-            old_fallback = config.get("fallback_provider")
-            if old_fallback:
-                fallback_names = [old_fallback]
-            else:
-                fallback_names = ["groq", "mistral", "openrouter"]
+        fallback_names = self._fallback_names(config)
 
         providers = [primary]
         provider_names = [name]
 
+        # Why a provider was left out, so a chain that silently collapsed
+        # to one provider can be diagnosed from the log rather than by
+        # reading this function.
+        skipped: list[str] = []
+
         for fb_name in fallback_names:
             if fb_name == name:
+                skipped.append(f"{fb_name} (already the primary)")
                 continue
-            fb_provider = self._instantiate_provider(fb_name, config)
+
+            try:
+                fb_provider = self._instantiate_provider(fb_name, config)
+            except Exception as error:
+                # A fallback is optional by definition. One that raises -
+                # a provider whose __init__ validates its key, a bad model
+                # string - must not take the process down with it, or an
+                # optional provider becomes a mandatory one and Aura will
+                # not boot at all. Reported as failed, not merely skipped:
+                # the two have different fixes.
+                skipped.append(
+                    f"{fb_name} (initialization raised {type(error).__name__})"
+                )
+                logger.debug(
+                    "Fallback %s raised during initialization", fb_name,
+                    exc_info=True,
+                )
+                continue
+
             if fb_provider is not None:
                 providers.append(fb_provider)
                 provider_names.append(fb_name)
+            else:
+                skipped.append(f"{fb_name} ({self._skip_reason(fb_name)})")
+
+        logger.info(
+            "Provider chain requested: %s | initialized: %s",
+            ", ".join([name, *fallback_names]) or "none",
+            ", ".join(provider_names),
+        )
+
+        if skipped:
+            # Warning, not debug: a configured fallback that never became
+            # a provider means the failover the operator asked for does
+            # not exist, and they will otherwise only find out during an
+            # outage.
+            logger.warning(
+                "Fallback providers not available: %s",
+                "; ".join(skipped),
+            )
+
+        if len(providers) == 1 and fallback_names:
+            # Every fallback was skipped. The chain the operator wrote
+            # exists only in config.yaml, and saying so once at boot is
+            # cheaper than discovering it mid-outage.
+            logger.warning(
+                "No fallback provider was initialized: %s runs with no failover",
+                name,
+            )
 
         if len(providers) > 1:
             from brain.providers.fallback import FallbackProvider
@@ -96,7 +155,96 @@ class BrainRouter:
 
         return primary
 
+    @staticmethod
+    def _fallback_names(config: dict) -> list[str]:
+        """
+        The fallback chain, from exactly one authoritative setting.
+
+        `fallback_providers` is that setting. `fallback_provider` is its
+        singular predecessor and is still read, because deleting it
+        outright would turn an old config.yaml into a silent loss of
+        failover - the worst of the three possible outcomes.
+
+        The subtlety this exists for: `fallback_providers` is in
+        DEFAULT_CONFIG, so after the deep merge the key is *always*
+        present, just empty. The old `is None` test therefore never fired
+        and an operator who wrote only `fallback_provider: openrouter`
+        got no fallback at all and no warning (AURA-P2-010). Emptiness,
+        not absence, is what has to be tested.
+
+        `fallback_model` is a different setting and is untouched here -
+        it names OpenRouter's model, not a provider.
+        """
+
+        names = config.get("fallback_providers") or []
+
+        if not isinstance(names, list):
+            logger.warning(
+                "llm.fallback_providers must be a list, got %s - ignoring it",
+                type(names).__name__,
+            )
+            names = []
+
+        names = [str(entry) for entry in names if entry]
+
+        legacy = config.get("fallback_provider")
+
+        if legacy and not names:
+            # Honoured, so an old config keeps working, and said out loud,
+            # so it stops being invisible.
+            logger.warning(
+                "llm.fallback_provider is the superseded singular form; "
+                "using it as the chain. Replace it with "
+                "llm.fallback_providers: [%s]",
+                legacy,
+            )
+            return [str(legacy)]
+
+        if legacy and names and str(legacy) not in names:
+            # Both set and disagreeing. The list wins - one of them has to,
+            # and it is the one the operator is being told to use - but a
+            # dropped provider is never dropped quietly.
+            logger.warning(
+                "llm.fallback_provider (%s) is ignored: llm.fallback_providers "
+                "is authoritative and does not list it",
+                legacy,
+            )
+
+        return names
+
+    @staticmethod
+    def _skip_reason(name: str) -> str:
+        """
+        Why `name` could not be built, without revealing any key.
+
+        Names the environment variable that is missing, never its value,
+        so this is safe to log and still actionable.
+        """
+
+        if name in KEYLESS_PROVIDERS:
+            # No key to be missing, so a failure here is the host being
+            # wrong or unreachable, not a secret being absent.
+            return "initialization failed (needs no API key - check the host)"
+
+        required = PROVIDER_KEYS.get(name)
+
+        if required is None:
+            return "unknown provider"
+
+        if not os.getenv(required):
+            return f"{required} is not set"
+
+        return "initialization failed"
+
     def _instantiate_provider(self, name: str, config: dict) -> LLM | None:
+        if name == "ollama":
+            # Needs no key, so there is nothing to check first: it is
+            # built, and a wrong host surfaces when a request is made.
+            # Reachability is deliberately not probed here - construction
+            # must not require network access (see the module docstring).
+            from brain.providers.ollama import OllamaProvider
+            return OllamaProvider()
+
         if name == "gemini":
             if not os.getenv("GEMINI_API_KEY"):
                 return None
@@ -134,6 +282,23 @@ class BrainRouter:
             )
 
         return None
+
+
+    def active_chain(self) -> str:
+        """
+        The chain that was actually built, e.g. "gemini->groq".
+
+        `provider_name` is what was *asked for* and stays that way - it is
+        read before the provider is lazily created, and changing it would
+        make the router's identity depend on whether anyone had used it
+        yet. This is what was *obtained*, which is the question a health
+        check is really asking. Building the provider is a side effect of
+        calling it, so this is not for a hot path.
+        """
+
+        return getattr(
+            self.provider, "provider_name", self.provider_name
+        )
 
 
     def generate(self, prompt: str) -> str:

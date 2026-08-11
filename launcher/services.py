@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.config import load_config
-from core.logger import logger
+from core.logger import apply_config_level, logger
 
 from events.bus import EventBus
 
@@ -32,6 +32,9 @@ class Services:
     profile: Any = None              # memory.profile.ProfileStore
     knowledge: Any = None            # MemoryKnowledgeProvider
     companion: Any = None            # memory.companion.CompanionMemory
+    clock: Any = None                # core.temporal.TemporalClock
+    pipeline: Any = None             # memory.pipeline.MemoryPipeline
+    proactive: Any = None            # proactive.engine.ProactiveEngine
     vision: Any = None               # vision.manager.VisionManager
     tts: Any = None                  # voice.tts.engine.TTSEngine
     stt: Any = None                  # voice.stt.engine.SpeechToTextEngine
@@ -82,21 +85,41 @@ def build_services(
 
     config = config if config is not None else load_config()
 
+    # Before anything else builds: `logging.level` in config.yaml has to
+    # be in force for the construction messages below to obey it.
+    apply_config_level(config)
+
     bus = bus or EventBus()
 
     memory = memory if memory is not None else _build_memory()
 
     profile, knowledge, companion = _build_knowledge(config, memory)
 
+    # The clock before anything that reads a time. One clock for the whole
+    # process, so the memory pipeline, the proactive engine and the prompt
+    # all agree on what "now" is - and so pinning it in a test pins all
+    # three at once.
+    clock = _build_clock(config)
+
+    pipeline = _build_pipeline(config, memory, clock)
+
     vision = vision if vision is not None else _build_vision(config, bus)
 
-    engine = _build_engine(config, bus, vision, knowledge, memory)
+    # Before the engine, and that ordering is load bearing: the engine is
+    # handed the runner so a conversation can ask for a tool, and a runner
+    # built afterwards would arrive too late to be injected.
+    tools = _build_tools(config, bus)
+
+    engine = _build_engine(
+        config, bus, vision, knowledge, memory, tools, clock, pipeline
+    )
+
+    # After the pipeline, which is where its pending work comes from.
+    proactive = _build_proactive(config, bus, pipeline, clock)
 
     tts = _build_tts(config, bus)
 
     stt = _build_stt(config, bus)
-
-    tools = _build_tools(config, bus)
 
     avatar = _build_avatar(config, bus)
 
@@ -112,6 +135,9 @@ def build_services(
         profile=profile,
         knowledge=knowledge,
         companion=companion,
+        clock=clock,
+        pipeline=pipeline,
+        proactive=proactive,
         vision=vision,
         tts=tts,
         stt=stt,
@@ -132,18 +158,36 @@ def _build_memory():
     return MemoryManager()
 
 
-def _build_engine(config: dict, bus, vision, knowledge, memory):
+def _build_engine(
+    config: dict,
+    bus,
+    vision,
+    knowledge,
+    memory,
+    tools=None,
+    clock=None,
+    pipeline=None,
+):
     """
     The chat engine, wired to the objects this composition root already
     built.
 
-    Two things are injected rather than left to ChatEngine's defaults:
+    Five things are injected rather than left to ChatEngine's defaults:
 
       * `memory` - so the runtime and the conversation share one
         MemoryManager instead of opening two.
       * `llm` - so the provider comes from *this* config dict. Left to
         its default, BrainRouter re-reads config.yaml from disk, which
         silently ignored `--provider` and any caller-supplied override.
+      * `tools` - the same executor `Services.tools` exposes, so a tool
+        run by the conversation and one run from the CLI pass the identical
+        policy, allow list and confirmation handler. Two executors would
+        mean two sets of permissions, one of which nobody configured.
+      * `clock` - the one clock the whole process shares, so the time in
+        the prompt and the time on a stored memory cannot disagree.
+      * `pipeline` - the same memory pipeline the proactive engine reads
+        its pending work from. Two pipelines would mean a reminder about
+        work recorded in a database nobody is reading.
     """
 
     from brain.chat_engine import ChatEngine
@@ -161,6 +205,102 @@ def _build_engine(config: dict, bus, vision, knowledge, memory):
         events=bus,
         vision=vision,
         knowledge=knowledge,
+        tools=tools,
+        clock=clock,
+        pipeline=pipeline,
+    )
+
+
+def _build_clock(config: dict):
+    """
+    The application clock.
+
+    Always built - there is no configuration under which Aura should not
+    know what time it is - but the timezone it reports comes from
+    `temporal.timezone`, defaulting to this machine's.
+    """
+
+    from core.temporal import TemporalClock
+
+    return TemporalClock.from_config(config)
+
+
+def _build_pipeline(config: dict, memory, clock):
+    """
+    Memory 2.0: episodic store, temporary context and user model.
+
+    Shares the conversation session, so the transcript, the profile, the
+    episodes and the user model are one database file and one transaction
+    scope. Off when `memory.pipeline` is false, in which case Aura keeps
+    the transcript and the older profile recall and nothing else.
+
+    The bundled profile is seeded here rather than on first use, because
+    seeding on first use makes the first turn after a fresh install
+    behave differently from every turn after it. Idempotent, so a restart
+    costs one indexed query per entry and changes nothing.
+    """
+
+    settings = config.get("memory") or {}
+
+    if not settings.get("pipeline", True):
+        return None
+
+    from memory.pipeline import build_memory_pipeline
+
+    session = getattr(memory, "session", None)
+
+    # The Phase 8 tables, created here rather than at database init, so a
+    # deployment that leaves the pipeline off never grows them. Additive
+    # and idempotent; see memory/sqlite.py.
+    if session is not None:
+        from memory.sqlite import init_pipeline_tables
+
+        try:
+            init_pipeline_tables(session.get_bind())
+        except Exception as error:
+            logger.warning("Could not create the memory pipeline tables: %s", error)
+            return None
+
+    pipeline = build_memory_pipeline(config, session=session, clock=clock)
+
+    if settings.get("seed_profile", True):
+        try:
+            pipeline.ensure_profile()
+        except Exception as error:
+            logger.warning("User model seeding failed: %s", error)
+
+    return pipeline
+
+
+def _build_proactive(config: dict, bus, pipeline, clock):
+    """
+    The proactive engine.
+
+    Always built, even when proactive messaging is switched off: a
+    disabled engine still ticks and still decides not to speak, which is
+    simpler than every caller checking for None. The `enabled` flag lives
+    in the policy with the other gates, and defaults to off.
+
+    Its pending work comes from the memory pipeline's episodic store and
+    nowhere else. With no pipeline there is no task source, and with no
+    task source there are no task reminders - which is the correct
+    behaviour rather than a gap, since the alternative is guessing at
+    what the user might have been doing.
+    """
+
+    from proactive import build_proactive_engine
+    from proactive.tasks import EpisodicTaskSource
+
+    tasks = None
+
+    if pipeline is not None:
+        tasks = EpisodicTaskSource(pipeline.episodic, clock=clock.now)
+
+    return build_proactive_engine(
+        config,
+        events=bus,
+        pending_tasks=tasks,
+        clock=clock,
     )
 
 
@@ -252,14 +392,14 @@ class _CompositeKnowledge:
         # Durable first: who the user is outranks what the session contains
         try:
             lines.extend(self.durable.get_knowledge(query) or [])
-        except Exception:
-            pass
+        except Exception as error:
+            logger.debug("Durable knowledge lookup failed: %s", error)
 
         # Companion second: projects, goals, preferences, coding style
         try:
             lines.extend(self.companion.get_knowledge(query) or [])
-        except Exception:
-            pass
+        except Exception as error:
+            logger.debug("Companion knowledge lookup failed: %s", error)
 
         return lines[: self.max_total]
 
@@ -318,6 +458,14 @@ def _build_vision_processor(settings: dict, config: dict):
     Pixels are only worth a vision model if the encoder is installed.
     Returning None here is what makes a missing Pillow degrade to the
     window title description instead of an empty observation every turn.
+
+    The model comes from `vision.settings.ollama_model`, which is also
+    what keeps this path from being handed the server's cloud model
+    name: the two processors have separate keys (`ollama_model` and
+    `cloud_model`) rather than one shared `vision.model`. The log line
+    below is deliberately the model and the host together, so a
+    mismatch is visible at startup rather than as an empty vision
+    section later.
     """
 
     try:
@@ -331,14 +479,14 @@ def _build_vision_processor(settings: dict, config: dict):
 
     from vision.ollama_processor import (
         DEFAULT_HOST,
-        DEFAULT_MODEL,
         DEFAULT_TIMEOUT,
         OllamaVisionProcessor,
     )
+    from vision.settings import ollama_model
 
     llm = config.get("llm") or {}
 
-    model = settings.get("model") or DEFAULT_MODEL
+    model = ollama_model(config)
     host = settings.get("host") or llm.get("host") or DEFAULT_HOST
     timeout = settings.get("timeout") or DEFAULT_TIMEOUT
 
@@ -428,12 +576,31 @@ def _build_stt(config: dict, bus):
 # ----------------------------------------------------------------------
 
 def _build_tools(config: dict, bus):
+    """
+    The one executor everything in this process runs tools through.
+
+    No confirmation handler is attached here, and which composition root
+    is running decides what that means:
+
+      * Desktop. `launcher/cli.py` calls `set_tool_confirmation` as it
+        starts, so a SENSITIVE or DANGEROUS call reaches a prompt at a
+        terminal and waits for an explicit yes.
+
+      * Server. Nothing installs one, and nothing should. There is no
+        human at the other end of an HTTP request to ask, and a handler
+        that answered on their behalf would be approval by default -
+        every gated tool granted to whoever holds the auth token. With
+        no handler, `ToolExecutor._approved` refuses anything outside
+        `auto_approve`, which is SAFE only unless config says otherwise.
+
+    So a server deployment can run safe tools and cannot run risky ones.
+    That is the intended behaviour, not an oversight; the way to grant
+    more is to widen `tools.auto_approve` in config on purpose, not to
+    make something up here (AURA-P1-002).
+    """
 
     from tools.factory import build_tools
 
-    # No confirmation handler is attached here. The CLI installs one
-    # when it starts, so approval always belongs to something that can
-    # actually reach a human.
     return build_tools(config.get("tools") or {}, events=bus)
 
 

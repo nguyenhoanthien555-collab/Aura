@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.config import settings
+from server.config import cors_policy, enforce_auth_policy, settings
 from server.runtime import init_runtime, is_initialized, shutdown_runtime
 from server.routes import health, chat, ws_chat, screen, notifications
 from core.logger import logger
@@ -26,18 +26,21 @@ async def lifespan(app: FastAPI):
     wired to a mock provider before the app starts, and startup must not
     overwrite it.
     """
+
+    # Before anything is served, and deliberately outside the
+    # `is_initialized` guard below: a pre-installed runtime says something
+    # about who built the engine, not about whether this process is safe to
+    # expose. Raising here aborts startup - uvicorn will not bind the port.
+    insecure_warning = enforce_auth_policy()
+    if insecure_warning:
+        logger.warning(insecure_warning)
+
     if not is_initialized():
         logger.info("Starting Aura API server...")
         init_runtime()
         logger.info(
             "Aura API server started on %s:%s", settings.host, settings.port
         )
-
-        if not settings.is_auth_enabled:
-            logger.warning(
-                "AURA_SERVER_AUTH_TOKEN is not set - the API is UNAUTHENTICATED. "
-                "Bind to localhost only, or set a token before exposing it."
-            )
 
     yield
 
@@ -54,14 +57,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS. The arguments come from `cors_policy` so that the one rule that
+# matters - never wildcard origins together with credentials - lives with
+# the settings it reads and can be tested without starting a server.
+app.add_middleware(CORSMiddleware, **cors_policy())
 
 # Routes
 app.include_router(health.router)

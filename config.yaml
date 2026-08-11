@@ -5,12 +5,26 @@ app:
 llm:
   provider: gemini
   model: gemini-3.6-flash
-  fallback_provider: openrouter
-  fallback_model: openrouter/free
+
+  # The fallback chain, in order. This key is authoritative. The singular
+  # `fallback_provider` is its superseded form and is read only when this
+  # list is empty; setting both is a warning at boot, not a silent
+  # surprise. Removed from this file so there is one answer to "which
+  # providers does Aura fall back to".
   fallback_providers:
     - groq
     - mistral
     - openrouter
+
+  # OpenRouter's model. Not a provider name - this is unrelated to the
+  # chain above and is still read by the router.
+  fallback_model: openrouter/free
+
+  # Ollama's model tag, used only when ollama is in the chain. Kept as
+  # the value the provider has always defaulted to; nothing here has been
+  # verified against what is actually pulled on this machine.
+  ollama_model: qwen3:8b
+
   timeout: 120
   max_output_tokens: 768
 
@@ -18,9 +32,81 @@ memory:
   history_limit: 10
 
   profile: true
+
+  # Keyword search over the older transcript. OFF ON PURPOSE, not
+  # unfinished: profile facts are cheap and always worth injecting, while
+  # searching the transcript only earns its prompt space once there is
+  # enough transcript to be worth searching. Set true to turn it on -
+  # `memory/retrieval.py` is implemented and tested. It is lexical
+  # (token overlap), not semantic; there is no embedding model here.
   recall: false
+
   max_facts: 5
   max_recalled: 2
+
+  # Memory 2.0. The episodic store, the temporary context and the
+  # structured user model, behind one pipeline. Unlike `recall` above
+  # this is ON: it does not search the raw transcript, it searches what
+  # was judged worth keeping, so it earns its prompt space from the
+  # first turn. See `memory/selection.py` for what gets kept.
+  pipeline: true
+
+  # Write the bundled profile into the user model at startup. Idempotent,
+  # never overwrites a confirmed entry, never undoes a correction.
+  seed_profile: true
+
+  # A ceiling on how much stored memory ranked recall may score. Not a
+  # target - what reaches the prompt is still `max_recalled`.
+  retrieval_scope: 500
+
+# What time Aura thinks it is.
+#
+# Empty means this machine's timezone. Set it explicitly for a server in
+# a different region than the person using it - a container in Frankfurt
+# should still say "good evening" in Vietnam's evening. Named zones need
+# the `tzdata` package installed on Windows; UTC does not.
+temporal:
+  timezone: ""
+
+# Speaking first.
+#
+# OFF ON PURPOSE, and not unfinished - `proactive/` is implemented and
+# tested. Something that can interrupt should be switched on deliberately
+# by the person it will interrupt, not acquired by upgrading.
+#
+# Every value here is a ceiling on how often Aura may speak unprompted,
+# and they compound: a message must pass the global cooldown AND its own
+# category cooldown AND quiet hours AND the daily cap AND the duplicate
+# and similarity checks. The decision engine deciding there is a good
+# reason does not override any of them.
+#
+# One deployment note, because it is easy to misread the behaviour as a
+# bug: delivery is pull-based. The engine gets its chance to speak when a
+# client polls /api/notifications, so while nothing is polling, nothing
+# is considered. A message that would have been sent to a sleeping phone
+# is not sent late - it is not sent. Closing that gap needs a background
+# worker or a push service, neither of which exists in this deployment.
+proactive:
+  enabled: false
+
+  # Nothing unprompted within two hours of anything else unprompted.
+  cooldown_seconds: 7200
+
+  # At most this many in one calendar day.
+  max_per_day: 4
+
+  category_cooldowns:
+    greeting: 21600        # 6h
+    appreciation: 86400    # 24h
+    wellbeing: 43200       # 12h
+    task: 14400            # 4h
+
+  # [start, end] pairs, may wrap midnight.
+  quiet_hours:
+    - [22, 8]
+
+  duplicate_window_seconds: 21600
+  similarity_threshold: 0.6
 
 voice:
   tts:
@@ -30,10 +116,36 @@ voice:
     enabled: false
 
 vision:
+  # Two switches, not one. `enabled` is whether Aura has any screen
+  # awareness at all; `capture_screen` is whether that awareness includes
+  # pixels. With enabled: true and capture_screen: false - the shipped
+  # combination - she reads window titles only, which needs no extra
+  # dependency and sends no image anywhere.
   enabled: true
+
+  # Pixels. Needs both `mss` and `pillow` installed; without them the
+  # manager logs why and stays on window titles.
   capture_screen: false
-  model: gemini-3.6-flash
+
+  # Two processors read this section, and they want two different kinds
+  # of model name. They get a key each:
+  #
+  #   cloud_model  -> vision/cloud_processor.py, a hosted model name,
+  #                   used in server mode
+  #   ollama_model -> the desktop processor, an OLLAMA TAG posted to a
+  #                   local daemon at 127.0.0.1:11434, built only when
+  #                   capture_screen is true
+  #
+  # Both can now be right at once. A legacy `vision.model` is still read
+  # as a fallback for either, so an older config file keeps working, but
+  # setting it means one name has to serve both again - prefer the two
+  # keys below. The startup line "Vision: <model> at <host>" shows which
+  # tag the desktop processor ended up with.
+  cloud_model: gemini-3.6-flash
+  ollama_model: qwen2.5vl:7b
+
   fallback_model: openrouter/free
+
   max_pixels: 1500000
   jpeg_quality: 75
 
@@ -41,14 +153,45 @@ avatar:
   enabled: false
 
 tools:
-  enabled: false
-  allowed: []
+  # Tools are the only way Aura can do something rather than say
+  # something, so both switches below are deliberate decisions.
+  #
+  #   enabled  whether tools exist at all
+  #   allowed  which of them may run - an empty list grants nothing,
+  #            even with `enabled: true`
+  #
+  # `current_time` only is not an oversight. It is SAFE, it reads a clock,
+  # and it is enough for a conversation to prove it can request a tool,
+  # receive the real result and answer from it. Anything that can change
+  # the machine - open_application, and the filesystem tools - stays
+  # unlisted until the user adds it on purpose.
+  enabled: true
+  allowed:
+    - current_time
 
+  # Which risk levels run without asking a human. SAFE only. A SENSITIVE
+  # or DANGEROUS call needs a live yes from the confirmation handler, and
+  # in server mode there is no human to ask, so it is refused - see
+  # _build_tools in launcher/services.py.
   auto_approve:
     - safe
 
+  # Roots read_file and list_directory may read under. Empty means those
+  # tools are not even registered.
   allowed_paths: []
-  applications: []
+
+  # Nickname -> command for open_application. A MAPPING, not a list: this
+  # read `[]` and, because an empty list is as falsy as an empty mapping,
+  # the tool was never registered and nothing anywhere said why
+  # (AURA-P0-004). Add entries as:
+  #
+  #   applications:
+  #     notepad: notepad.exe
+  #     browser: ["chrome.exe", "--new-window"]
+  #
+  # Adding one is not enough on its own - open_application is DANGEROUS,
+  # so it also has to be named in `allowed` above.
+  applications: {}
 
 server:
   screen:

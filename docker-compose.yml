@@ -12,10 +12,15 @@ services:
       # These can be overridden at `docker compose up` time
       - AURA_SERVER_HOST=0.0.0.0
       - AURA_SERVER_PORT=8000
-      # CORS: restrict in production. * is only for local dev.
+      # CORS: restrict in production. `*` is only for local dev, and when
+      # it is `*` the server refuses to send credentials with it.
       - AURA_SERVER_CORS_ORIGINS=${AURA_SERVER_CORS_ORIGINS:-*}
       # Log level
       - AURA_SERVER_LOG_LEVEL=${AURA_SERVER_LOG_LEVEL:-INFO}
+      # AURA_SERVER_AUTH_TOKEN comes from `.env` above and is REQUIRED:
+      # without it the container exits at startup rather than serving an
+      # unauthenticated API on a mapped port. To run without a token
+      # locally, set AURA_ALLOW_INSECURE=1 in `.env` deliberately.
     ports:
       - "8000:8000"
     volumes:
@@ -24,9 +29,11 @@ services:
       # Optional: keep logs across restarts
       - aura-logs:/app/logs
     healthcheck:
-      # `/api/health` is authenticated in production; the root route is
-      # deliberately public and confirms the app has completed startup.
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/"]
+      # `/api/ready` is the readiness route: it 503s until the runtime and
+      # provider chain have actually initialized, so "healthy" now means
+      # "can answer a chat", not merely "HTTP server is alive". It is
+      # unauthenticated by design - a healthcheck has no bearer token.
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/ready"]
       interval: 30s
       timeout: 5s
       retries: 3

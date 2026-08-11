@@ -245,12 +245,15 @@ def test_something():
 ### Test organization
 
 - `tests/test_*.py` - Hermetic unit tests
-- `tests/manual_*.py` - Side-effecting scripts (API calls, database writes)
+- `scripts/manual_*.py` - Side-effecting scripts (API calls, database
+  writes). They live outside `tests/` because they are utilities, not
+  pytest modules: none defines a `test_` function, and pytest never
+  collected them.
 
 Run manual scripts explicitly:
 
 ```bash
-python tests/manual_gemini_test.py
+python scripts/manual_gemini_test.py
 ```
 
 ## Debugging
@@ -276,7 +279,7 @@ prompt = builder.build(
 print(prompt)
 ```
 
-Or use `tests/manual_prompt_test.py` to see the real prompt with your conversation history.
+Or use `scripts/manual_prompt_test.py` to see the real prompt with your conversation history.
 
 ### Check what tools are registered
 

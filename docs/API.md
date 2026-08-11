@@ -83,18 +83,62 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health
     "voice_output": "disabled",
     "voice_input": "disabled",
     "screen": "disabled",
-    "companion": "disabled"
+    "companion": "disabled",
+    "proactive": "disabled"
   }
 }
 ```
 
-`llm_provider` is the **configured provider name**, read without forcing
-the provider to be constructed — asking whether the server is alive must
-not open a network connection.
+`llm_provider` is the chain that was **actually built** — `"gemini->groq"`
+when a fallback initialized, not merely what `config.yaml` requested.
+Obtaining it constructs the lazy provider, which is why this is a
+diagnostic route and not something to poll.
+
+`screen`, `companion` and `proactive` each say whether a class of
+unprompted message can arrive: screen observations are only accepted
+when `screen` is enabled, and the two notification engines are only
+meaningful when their flag says so. A client should not offer a setting
+for a capability the server cannot deliver.
 
 The payload deliberately contains no API keys, no token, no filesystem
 paths, no hostnames and no memory contents. `tests/test_server.py`
 asserts this against a marker list rather than trusting review.
+
+---
+
+## `GET /api/ready`
+
+Readiness: can this process answer a chat turn? **Unauthenticated**, so a
+container healthcheck or platform probe can use it.
+
+```bash
+curl http://localhost:8000/api/ready
+```
+
+```json
+{"ready": true, "llm_provider": "gemini->groq", "problems": []}
+```
+
+`200` when ready, `503` when not:
+
+```json
+{"ready": false, "llm_provider": "unknown",
+ "problems": ["provider chain unavailable (ValueError)"]}
+```
+
+This is the question a liveness probe cannot answer: a server whose
+provider chain never initialized is perfectly alive and cannot do the one
+thing it exists for.
+
+It reports only what a chat turn requires — a started runtime and a
+constructible provider. Vision, voice, screen and companion are optional
+by design and excluded on purpose: a probe that failed because TTS was
+off would restart a healthy server forever. It does **not** call the
+provider; a probe that made a network request per poll would bill you for
+being observed and turn one outage into a restart loop.
+
+`problems` carries failure *categories* (the exception type, not its
+text), because this route is public.
 
 ---
 
@@ -148,12 +192,24 @@ curl -X POST http://localhost:8000/api/chat \
 |---|---|
 | `401` | Missing, malformed or wrong token |
 | `422` | Empty message, or over the length limit |
-| `500` | The provider failed |
+| `429` | The provider is rate limited |
+| `503` | The provider is temporarily unavailable |
+| `500` | Anything else |
 
-A `500` carries `{"error": "chat_failed", "message_id": ..., "elapsed_seconds": ...}`
-and **not** the exception text. Provider exceptions routinely embed hosts,
-ports, filesystem paths and occasionally key fragments; those are logged
-server-side and never returned.
+A failure carries `{"error": <code>, "message": <safe text>,
+"message_id": ..., "elapsed_seconds": ...}` and **not** the exception
+text. Provider exceptions routinely embed hosts, ports, filesystem paths
+and occasionally key fragments; those are logged server-side and never
+returned.
+
+| `error` | Status | Meaning |
+|---|---|---|
+| `rate_limited` | `429` | Provider rate limit; retry later (also a `Retry-After` header when the provider supplied one) |
+| `provider_unavailable` | `503` | Transient provider outage; a fallback provider may be trying next |
+| `chat_failed` | `500` | Anything else — see server logs with the `message_id` |
+
+The codes are produced by `server/errors.py` from the typed provider
+errors, and the same mapping drives the WebSocket path.
 
 ---
 
@@ -214,8 +270,16 @@ phrase; no fact, path, command or version is altered.
 | `invalid_json` | The frame was not JSON |
 | `empty_message` | No message text |
 | `message_too_long` | Over `max_message_length` |
-| `stream_failed` | The provider failed mid-generation |
-| `internal_error` | Anything else |
+| `rate_limited` | Provider rate limit (carries `retry_after` when known) |
+| `provider_unavailable` | Transient provider outage |
+| `stream_failed` | The provider failed mid-generation, cause unrecognised |
+| `internal_error` | Anything else, outside generation |
+
+`rate_limited` and `provider_unavailable` are the same categories the
+REST path uses — one mapping in `server/errors.py` serves both, so the
+two transports cannot drift. An error frame also carries a `message`
+field with client-safe text; as on the REST path, the provider's own
+exception text is never sent.
 
 The generator is pumped through `starlette.concurrency.iterate_in_threadpool`,
 so a blocking provider call cannot stall the event loop — `/api/health`

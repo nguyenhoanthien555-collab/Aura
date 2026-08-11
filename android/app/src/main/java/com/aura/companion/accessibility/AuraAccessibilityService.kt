@@ -119,6 +119,13 @@ class AuraAccessibilityService : AccessibilityService() {
             var finalMessage = "Task failed to complete."
             var lastActionError: String? = null
             val failedActionsCount = mutableMapOf<String, Int>()
+            var parseFailures = 0
+
+            // Set by every path that ends the loop on purpose. Without
+            // it, a task that finished on the final step was reported as
+            // a timeout, because `stepCount >= maxSteps` was true for
+            // both "ran out of steps" and "used the last one well".
+            var settled = false
 
             while (stepCount < maxSteps) {
                 stepCount++
@@ -166,7 +173,7 @@ class AuraAccessibilityService : AccessibilityService() {
                 val jsonContext = Json.encodeToJsonElement(snapshot).jsonObject
 
                 Log.d("AuraAgent", "Sending screen snapshot to backend...")
-                val result = repository.send("agent_tick", jsonContext)
+                val result = repository.send(AGENT_TICK, jsonContext)
 
                 // Recycle tree node references immediately after sending request to prevent leaks
                 nodeMap.values.forEach { it.recycle() }
@@ -176,68 +183,97 @@ class AuraAccessibilityService : AccessibilityService() {
                         val reply = result.value.reply.trim()
                         Log.d("AuraAgent", "Backend response: $reply")
 
-                        val action = runCatching {
-                            Json.decodeFromString<AgentAction>(reply)
-                        }.getOrNull()
+                        when (val parsed = AgentActionParser.parse(reply)) {
 
-                        if (action != null) {
-                            if (action.action == "complete") {
-                                finalMessage = action.message ?: "Task completed successfully!"
-                                Log.d("AuraAgent", "Task complete: $finalMessage")
-                                break
-                            }
+                            is AgentActionParser.ParseResult.Failure -> {
+                                // Not fatal. A model that fenced its JSON
+                                // or added a field is one correction away
+                                // from a usable answer, and the correction
+                                // travels on `last_action_error` - the
+                                // same channel a failed tap uses. The
+                                // outer `stepCount < maxSteps` is what
+                                // bounds the retrying.
+                                parseFailures++
+                                Log.w(
+                                    "AuraAgent",
+                                    "Unparseable reply ($parseFailures/$MAX_PARSE_FAILURES): ${parsed.reason}"
+                                )
 
-                            // Check consecutive failures for this node/action
-                            val actionKey = "${action.action}:${action.nodeId}"
-                            if ((failedActionsCount[actionKey] ?: 0) >= 2) {
-                                lastActionError = "Action ${action.action} on ${action.nodeId} failed repeatedly (${failedActionsCount[actionKey]} times). Target is not actionable. Try a different approach."
-                                Log.w("AuraAgent", lastActionError!!)
-                                // Reset counter so the LLM has a chance to try a new path
-                                failedActionsCount.remove(actionKey)
-                                continue
-                            }
-
-                            val execResult = executeActionWithRecovery(action, tree)
-                            when (execResult) {
-                                is ExecutionResult.Verified -> {
-                                    failedActionsCount.remove(actionKey)
-                                    delay(500) // Short stabilization after verified success
-                                }
-                                is ExecutionResult.Unverified -> {
-                                    // The action executed without error, but we could not confirm UI change.
-                                    // Treat as conditional success — let the LLM see the next screen state.
-                                    // But track it: if the same action keeps being unverified, it's likely failing.
-                                    val count = (failedActionsCount[actionKey] ?: 0) + 1
-                                    failedActionsCount[actionKey] = count
-                                    if (count >= 2) {
-                                        lastActionError = "Action ${action.action} on ${action.nodeId} executed but UI did not change (${count} times). The action may not be working."
-                                    }
-                                    delay(500)
-                                }
-                                is ExecutionResult.Blocked -> {
-                                    finalMessage = "Action blocked for safety: attempted ${action.action} containing sensitive targets."
+                                if (parseFailures >= MAX_PARSE_FAILURES) {
+                                    finalMessage =
+                                        "Aura could not read the action plan after " +
+                                        "$parseFailures attempts, so nothing was done."
+                                    settled = true
                                     break
                                 }
-                                is ExecutionResult.Failed -> {
-                                    failedActionsCount[actionKey] = (failedActionsCount[actionKey] ?: 0) + 1
-                                    lastActionError = "Action ${action.action} on ${action.nodeId} failed. Target not clickable or not found."
+
+                                lastActionError = parsed.reason
+                            }
+
+                            is AgentActionParser.ParseResult.Success -> {
+                                val action = parsed.action
+
+                                // A reply we could read resets the budget:
+                                // the allowance is for consecutive
+                                // failures, not for the task as a whole.
+                                parseFailures = 0
+
+                                if (action.action == "complete") {
+                                    finalMessage = action.message ?: "Task completed successfully!"
+                                    Log.d("AuraAgent", "Task complete: $finalMessage")
+                                    settled = true
+                                    break
+                                }
+
+                                // Check consecutive failures for this node/action
+                                val actionKey = "${action.action}:${action.nodeId}"
+                                if ((failedActionsCount[actionKey] ?: 0) >= 2) {
+                                    lastActionError = "Action ${action.action} on ${action.nodeId} failed repeatedly (${failedActionsCount[actionKey]} times). Target is not actionable. Try a different approach."
+                                    Log.w("AuraAgent", lastActionError!!)
+                                    // Reset counter so the LLM has a chance to try a new path
+                                    failedActionsCount.remove(actionKey)
+                                    continue
+                                }
+
+                                when (executeActionWithRecovery(action, tree)) {
+                                    is ExecutionResult.Verified -> {
+                                        failedActionsCount.remove(actionKey)
+                                        delay(500) // Short stabilization after verified success
+                                    }
+                                    is ExecutionResult.Unverified -> {
+                                        // The action executed without error, but we could not confirm UI change.
+                                        // Treat as conditional success — let the LLM see the next screen state.
+                                        // But track it: if the same action keeps being unverified, it's likely failing.
+                                        val count = (failedActionsCount[actionKey] ?: 0) + 1
+                                        failedActionsCount[actionKey] = count
+                                        if (count >= 2) {
+                                            lastActionError = "Action ${action.action} on ${action.nodeId} executed but UI did not change (${count} times). The action may not be working."
+                                        }
+                                        delay(500)
+                                    }
+                                    is ExecutionResult.Blocked -> {
+                                        finalMessage = "Action blocked for safety: attempted ${action.action} containing sensitive targets."
+                                        settled = true
+                                        break
+                                    }
+                                    is ExecutionResult.Failed -> {
+                                        failedActionsCount[actionKey] = (failedActionsCount[actionKey] ?: 0) + 1
+                                        lastActionError = "Action ${action.action} on ${action.nodeId} failed. Target not clickable or not found."
+                                    }
                                 }
                             }
-                        } else {
-                            finalMessage = "Failed to parse action from server: $reply"
-                            Log.e("AuraAgent", finalMessage)
-                            break
                         }
                     }
                     is AuraResult.Failed -> {
                         finalMessage = "Aura server request failed: ${result.error.userMessage}"
                         Log.e("AuraAgent", finalMessage)
+                        settled = true
                         break
                     }
                 }
             }
 
-            if (stepCount >= maxSteps) {
+            if (!settled && stepCount >= maxSteps) {
                 finalMessage = "Task timed out: maximum number of steps reached."
             }
 
@@ -345,7 +381,7 @@ class AuraAccessibilityService : AccessibilityService() {
      * Verifies that an action actually changed the UI state.
      *
      * Different action types have different verification criteria:
-     * - open_app: package must change to the target package
+     * - open_app: the foreground package must BE the requested package
      * - click: either package changed, node count changed, or content changed
      * - input_text: content hash should change
      * - scroll: node count or content hash should change
@@ -360,15 +396,7 @@ class AuraAccessibilityService : AccessibilityService() {
         if (pre == null || post == null) return false
 
         return when (action.action) {
-            "open_app" -> {
-                // For open_app, the package MUST change to the target
-                val targetPkg = action.packageName.orEmpty()
-                val changed = post.packageName != pre.packageName || post.packageName == targetPkg
-                if (!changed) {
-                    Log.w("AuraAgent", "open_app verification FAILED: expected package=$targetPkg, got=${post.packageName} (was ${pre.packageName})")
-                }
-                changed
-            }
+            "open_app" -> verifyOpenApp(action.packageName.orEmpty(), pre, post)
             "click" -> {
                 // For clicks, any meaningful state change counts
                 val packageChanged = post.packageName != pre.packageName
@@ -411,6 +439,82 @@ class AuraAccessibilityService : AccessibilityService() {
 
     companion object {
         private val instance = AtomicReference<AuraAccessibilityService?>(null)
+
+        /**
+         * The message body of an agent step.
+         *
+         * A label for the log line, not a contract: the server decides a
+         * turn is an agent step from the context object carrying the
+         * screen, never from this string (see brain/agent_mode.py).
+         */
+        const val AGENT_TICK = "agent_tick"
+
+        /**
+         * Consecutive replies we cannot read before giving up.
+         *
+         * Above one, because a fenced or prose-wrapped reply usually
+         * becomes valid JSON once the model is told what was wrong. Well
+         * below `maxSteps`, so a model that has genuinely lost the format
+         * does not spend the whole step budget failing the same way, and
+         * the user hears about it while it is still their request.
+         */
+        const val MAX_PARSE_FAILURES = 3
+
+        /**
+         * Did `open_app` actually put [target] in the foreground?
+         *
+         * When the target is known this is an identity check and nothing
+         * weaker. The previous rule accepted *any* package change, which
+         * made a launcher redirect, a permission dialog, a chooser sheet
+         * or a crash back to the home screen all count as "YouTube is
+         * open" - the agent then reported success for an app that was
+         * never opened, which is the one thing this loop must never do
+         * (AURA-P1-003). Being wrong here is worse than being unsure:
+         * an `Unverified` result costs one more screen for the model to
+         * look at, while a false `Verified` ends the task with a lie.
+         *
+         * With no target named, an identity check has nothing to compare
+         * against, so a package change is the strongest evidence
+         * available and is accepted as such.
+         *
+         * Sits in the companion object because the enclosing class is an
+         * [AccessibilityService] and cannot be constructed in a JVM unit
+         * test, and a verification rule that decides whether Aura claims
+         * success is worth testing directly.
+         */
+        fun verifyOpenApp(
+            target: String,
+            pre: ScreenFingerprint,
+            post: ScreenFingerprint
+        ): Boolean {
+
+            if (target.isBlank()) {
+
+                val changed = post.packageName != pre.packageName
+
+                if (!changed) {
+                    Log.w(
+                        "AuraAgent",
+                        "open_app verification FAILED: no package named and " +
+                            "foreground unchanged (${pre.packageName})"
+                    )
+                }
+
+                return changed
+            }
+
+            val arrived = post.packageName == target
+
+            if (!arrived) {
+                Log.w(
+                    "AuraAgent",
+                    "open_app verification FAILED: expected package=$target, " +
+                        "got=${post.packageName} (was ${pre.packageName})"
+                )
+            }
+
+            return arrived
+        }
 
         fun isEnabled(): Boolean = instance.get() != null
 

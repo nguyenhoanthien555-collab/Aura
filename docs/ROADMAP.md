@@ -116,30 +116,20 @@ there is exactly one owner of that state.
 removed — its accurate content is folded into ARCHITECTURE.md, and its
 "tests not yet run" section had been superseded.
 
-## In progress
-
 ### Section 11 — Testing
 
-559 test functions across 17 files are written. **None of them have been
-executed in any session recorded here.** Shell execution was unavailable
-throughout, so there is no measured result for any part of this suite —
-not for Sections 8 and 9, and not for the foundation either.
+Done. `.venv/Scripts/python.exe -m pytest -q` reports **1160 passed, 1
+deselected** as of the Phase 7 sweep — 1000 `def test_` functions across
+32 files, the difference being parametrization. The one deselected test
+is the opt-in Gemini integration test; `pytest.ini` excludes it with
+`-m "not integration"` so the suite needs no API keys.
 
-Sections 8 and 9 were instead reviewed statically, assertion by assertion
-against the code they exercise. That found and fixed one real defect: a
-missing `from types import ModuleType` in `tests/test_plugins.py` that
-would have failed eight discovery tests on `NameError`. Static review
-catches missing names and changed signatures; it does not catch a wrong
-assertion about correct code.
+`.github/workflows/tests.yml` runs the same command on every push and
+pull request.
 
-This is the next thing to do, and it blocks the cleanup pass:
-
-```bash
-./.venv/Scripts/python.exe -m pytest -q
-```
-
-Fix whatever fails, run again, repeat until green. Do not treat the
-sections above as finished until this has actually run.
+An earlier revision of this file said none of these tests had ever been
+executed, because shell execution was unavailable in those sessions.
+That is no longer the case.
 
 ## Not started
 
@@ -150,10 +140,8 @@ removing it without knowing what depended on it.
 
 Known items:
 
-- A top-level `tts/` package (`base.py`, `manager.py`,
-  `providers/edge.py`, `elevenlabs.py`, `kokoro.py`) sits alongside the
-  live `voice/tts/`. It predates the current implementation. Check for
-  importers, then remove.
+- ~~A top-level `tts/` package alongside the live `voice/tts/`.~~ Removed
+  in Phase 7 after confirming zero importers.
 - Unused imports across modules touched by Sections 1–10.
 - `main.py` is the original text harness and overlaps `launcher.py`.
   Decide whether it is still worth keeping as the minimal path.
@@ -166,23 +154,37 @@ accommodate them:
 - Live2D and VRM backends behind the existing `avatar/backends.py`
   protocol
 - Persistent companion memory (currently session-only, resets on restart)
-- Web and mobile front ends over `AuraRuntime`
 - Multi-user support, which the current single-SQLite-session design does
   not accommodate
-- Retry and graceful degradation on provider failure — right now a
-  provider error propagates to the caller
+
+Two entries that were here have since been built: a mobile front end over
+`AuraRuntime` (`server/` plus the Kotlin app in `android/`), and retry and
+graceful degradation on provider failure (`brain/providers/fallback.py`,
+driven by `llm.fallback_providers`).
 
 ## Known limitations
 
-Honest list, current as of this document:
+Honest list, re-checked against the code in the Phase 7 sweep:
 
-1. One conversation thread. No parallel conversations.
-2. Local only. No remote access.
-3. SQLite memory, single session per `MemoryManager` instance. Concurrent
-   `ChatEngine` instances share the database with separate sessions.
-4. Companion memory is in-memory and resets on restart.
-5. No authentication. Designed for one person on their own machine.
+1. One conversation thread per session. No parallel conversations within
+   a session.
+2. SQLite memory. Concurrent `ChatEngine` instances share the database
+   file with separate sessions.
+3. Companion memory is in-memory and resets on restart. `memory/companion.py`
+   holds Protocols plus an in-memory implementation and no schema — the
+   durable half is `memory/profile.py` (SQLite `UserFact`).
+4. Recall is lexical, not semantic. `KeywordRetriever` does a keyword
+   search over the messages table. There is no vector store and no
+   embedding model anywhere in this codebase.
+5. Multi-user is not supported. Server sessions isolate conversation
+   *state*, not identity; the profile store is one person's.
 6. Primary development and testing on Windows.
-7. The test suite has never been executed to a reported result. Every
-   claim above about behaviour is a claim about code that was read, not
-   code that was run.
+7. Desktop actions require the desktop. The server process can only run
+   tools inside its own container — a cloud deployment cannot touch the
+   user's PC, and is built to say so rather than claim success.
+
+Items 2, 5 and 7 in the previous revision of this list ("local only, no
+remote access", "no authentication", "the test suite has never been
+executed") are obsolete: `server/` exposes an authenticated HTTP and
+WebSocket API with a mandatory bearer token, and the suite runs at 1160
+passed, 1 deselected.

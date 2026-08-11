@@ -45,6 +45,22 @@ This document covers deploying Aura Cloud Core to a $0/month hosting platform. T
 2. Name: `aura-data`, Mount path: `/app/data`, Size: 1 GB (free)
 3. This persists `data/memory.db` across deploys and restarts.
 
+**This step is not optional if you want Aura to remember anything.**
+`memory/sqlite.py` writes `data/memory.db` under the application
+directory, and a Render container filesystem is ephemeral: without the
+disk, every deploy, restart, crash and idle-spindown starts Aura from an
+empty database. Conversation history, the user profile and companion
+state all go with it. Nothing warns you — the server comes up healthy and
+simply has no past.
+
+The mount path must be exactly `/app/data`; that is where `DATA_DIR`
+points inside the image, and it is the same path `docker-compose.yml`
+mounts the `aura-data` volume on. The disk is within Render's free tier,
+so this is a configuration step, not a paid feature.
+
+If you deliberately want a stateless deployment — a demo, a smoke test —
+skip the disk and expect exactly that.
+
 ### 3. Ollama on Render (if using local LLM)
 
 Render does not allow sidecar containers on the free tier. Options:
@@ -205,15 +221,40 @@ The Android app sends no `Origin` header, so it works regardless. This setting o
 
 ## Health check
 
-Render should probe the public root route, because `/api/health` is an
-authenticated diagnostic endpoint:
+Three routes, answering different questions. Point your platform's probe
+at the one that matches what you want it to react to.
+
+| Route | Auth | Answers |
+|---|---|---|
+| `/` | public | Is the HTTP server up? (liveness) |
+| `/api/ready` | public | Can it answer a chat turn? (readiness) |
+| `/api/health` | **bearer** | Full runtime diagnostics |
 
 ```bash
-curl https://your-service.onrender.com/
+curl https://your-service.onrender.com/api/ready
 ```
 
-Expected: `{"name":"Aura",...,"status":"running"}`. For authenticated
-runtime diagnostics, use `GET /api/health` with `Authorization: Bearer <token>`.
+Expected: `{"ready":true,"llm_provider":"gemini->groq","problems":[]}`.
+
+`/api/ready` returns **503** with the reasons in `problems` when the
+runtime has not finished starting or the provider chain cannot be built —
+the case a liveness probe cannot see, where the server is perfectly alive
+and cannot do the one thing it exists for. This is what
+`docker-compose.yml` now uses as its healthcheck.
+
+It reports only what a chat turn actually requires. Vision, voice, screen
+and companion are optional by design and are deliberately excluded: a
+probe that failed because TTS was off would restart a healthy server
+forever. It also does not call the provider — a readiness probe that made
+a network request per poll would bill you for being observed and turn one
+provider outage into a restart loop.
+
+It is unauthenticated for the same reason `/` is: a container healthcheck
+holds no bearer token. The body is a boolean plus failure categories — no
+configuration, no versions, no secrets.
+
+For full runtime diagnostics, use `GET /api/health` with
+`Authorization: Bearer <token>`.
 
 ## Cold start behaviour
 
@@ -251,7 +292,7 @@ Database migrations: none yet (SQLAlchemy `create_all` on startup). When schema 
 
 ## Known Limitations (current phase)
 
-1. **OpenAI not wired** — `brain/providers/openai.py` is empty and `BrainRouter._create_provider` has no `"openai"` branch. Only Gemini and Ollama work.
+1. **OpenAI not wired** — `BrainRouter._create_provider` has no `"openai"` branch, and the empty `brain/providers/openai.py` placeholder was removed in the Phase 7 cleanup. The providers that do work are `mock`, `gemini`, `groq`, `mistral`, `openrouter` and `ollama`; the chain that actually runs is `llm.provider` plus `llm.fallback_providers` in config.yaml. A provider whose key is missing is skipped by name at startup.
 2. **SQLite on ephemeral FS** — Render/Fly volumes solve this; Cloud Run needs Cloud SQL or Filestore.
 3. **Ollama sidecar** — Only Fly.io supports a free private-network sidecar natively. On Render you need a separate paid service or hosted Ollama.
 4. **No horizontal scale** — Single container. For HA, run 2+ replicas with a shared Postgres (not SQLite).

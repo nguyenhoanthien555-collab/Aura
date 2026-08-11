@@ -41,9 +41,22 @@ async def get_notifications(
     Returns an empty list rather than an error when the companion is off,
     so a client can poll unconditionally without branching on server
     configuration.
+
+    The poll is also what gives the proactive engine its chance to speak,
+    and it happens *before* the drain so that a message decided on this
+    poll leaves on this poll rather than waiting for the next one. This
+    reuses the transport a client already runs instead of adding a second
+    one; the cost is that Aura can only consider speaking while something
+    is polling, which `ServerRuntime.consider_proactive` documents.
+
+    A proactive decision is not reported in the response. A device needs
+    the notifications it has to display, not the reasoning behind the
+    silence it mostly gets.
     """
 
     runtime = get_runtime()
+
+    runtime.consider_proactive()
 
     pending = runtime.notifications.drain(device_id)
 

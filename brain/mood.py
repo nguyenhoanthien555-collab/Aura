@@ -35,6 +35,7 @@ here.
 """
 
 from brain.ports import EventPublisher
+from core.logger import logger
 from events.types import Mood, MoodChangedEvent
 
 
@@ -174,8 +175,15 @@ class MoodTracker:
 
         try:
             self.events.publish(event)
-        except Exception:
-            pass
+        except Exception as error:
+            # The mood did change; only the announcement was lost. An
+            # avatar stuck on one expression is the visible symptom, and
+            # without this line there is nothing to find.
+            logger.debug(
+                "Mood event publish failed (%s): %s",
+                type(event).__name__,
+                error,
+            )
 
     def __repr__(self) -> str:
         return f"MoodTracker({self._mood.value})"

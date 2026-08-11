@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from server.runtime import get_runtime
 from server.session import session_manager
 from server.auth import verify_token
+from server.errors import classify
 from server.models import ChatRequest, ChatResponse
 from core.logger import logger
 
@@ -62,22 +63,38 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
     except Exception as e:
         elapsed = time.time() - start_time
 
+        failure = classify(e)
+
         # The exception text can carry internal hosts, filesystem paths or
-        # provider key fragments, so it is logged and never returned.
+        # provider key fragments, so it is logged and never returned. The
+        # log is where "which provider, which exception" lives; the client
+        # gets the category and the message_id that ties the two together.
         logger.error(
-            "Chat failed (message_id=%s): %s: %s",
+            "Chat failed (message_id=%s, classified=%s): %s: %s",
             message_id,
+            failure.code,
             type(e).__name__,
             e,
         )
 
+        detail = {
+            "error": failure.code,
+            "message": failure.message,
+            "elapsed_seconds": elapsed,
+            "message_id": message_id,
+        }
+
+        headers = None
+
+        if failure.retry_after is not None:
+            # Standard, and the reason a 429 is worth distinguishing at
+            # all: a client can obey it without parsing the body.
+            headers = {"Retry-After": str(int(failure.retry_after))}
+
         raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "chat_failed",
-                "elapsed_seconds": elapsed,
-                "message_id": message_id,
-            }
+            status_code=failure.status,
+            detail=detail,
+            headers=headers,
         )
 
 

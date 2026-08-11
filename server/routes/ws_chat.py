@@ -27,6 +27,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from core.logger import logger
 from server.config import settings
+from server.errors import classify
 from server.runtime import get_runtime
 from server.session import session_manager
 
@@ -178,33 +179,66 @@ async def chat_stream(
             })
 
         except Exception as exc:
+            failure = classify(exc)
+
             # Logged, not returned: provider errors carry hosts and paths.
             logger.error(
-                "Stream failed (message_id=%s): %s: %s",
+                "Stream failed (message_id=%s, classified=%s): %s: %s",
                 message_id,
+                failure.code,
                 type(exc).__name__,
                 exc,
             )
 
-            await websocket.send_json({
+            frame = {
                 "type": "error",
                 "session_id": session_id,
                 "message_id": message_id,
-                "error": "stream_failed",
+                # `stream_failed` stays the code for an unclassified
+                # failure. It is the existing WebSocket vocabulary
+                # (docs/API.md, AuraStreamClient.kt) and renaming it would
+                # be a protocol change this phase has no reason to make;
+                # only the recognisable provider failures get new codes.
+                "error": (
+                    "stream_failed"
+                    if failure.code == "chat_failed"
+                    else failure.code
+                ),
+                "message": failure.message,
                 "elapsed_seconds": time.time() - received_at,
                 "chunks_sent": chunk_index,
-            })
+            }
+
+            if failure.retry_after is not None:
+                frame["retry_after"] = failure.retry_after
+
+            await websocket.send_json(frame)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected (session=%s)", session_id)
     except Exception as exc:
-        logger.error("WebSocket error: %s: %s", type(exc).__name__, exc)
+        failure = classify(exc)
+
+        logger.error(
+            "WebSocket error (classified=%s): %s: %s",
+            failure.code,
+            type(exc).__name__,
+            exc,
+        )
         try:
             await websocket.send_json({
                 "type": "error",
                 "session_id": session_id,
                 "message_id": message_id,
-                "error": "internal_error",
+                "error": (
+                    # `internal_error` remains the documented code for a
+                    # failure outside generation (docs/API.md). Only a
+                    # recognised provider failure changes it.
+                    "internal_error"
+                    if failure.code == "chat_failed"
+                    else failure.code
+                ),
+                "message": failure.message,
             })
         except Exception:
             pass

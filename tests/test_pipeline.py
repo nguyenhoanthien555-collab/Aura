@@ -198,6 +198,50 @@ def test_brain_message_and_db_message_are_distinct_types():
     assert Message is not DBMessage
 
 
+# ----------------------------------------------------------------------
+# StreamingLLM: one protocol, not two of the same name
+# ----------------------------------------------------------------------
+#
+# The opposite of the Message case above. Message is deliberately two
+# types because the brain must not import the ORM; StreamingLLM was
+# accidentally two, defined in both `brain/streaming.py` and
+# `brain/ports.py` with *different* required members, while the ports
+# docstring called itself a re-export. Nothing imported either one, so
+# nothing failed - the disagreement would have surfaced the first time
+# someone isinstance-checked against the wrong import.
+
+def test_streaming_llm_is_one_protocol_not_two():
+    from brain import ports, streaming
+
+    assert ports.StreamingLLM is streaming.StreamingLLM
+
+
+def test_streaming_llm_asks_only_for_stream():
+    # A provider is a StreamingLLM because it can stream, not because it
+    # also implements generate. Requiring both - as the removed ports
+    # copy did - would have excluded a stream-only provider.
+    from brain.ports import StreamingLLM
+
+    class StreamOnly:
+        def stream(self, prompt):
+            yield "hi"
+
+    assert isinstance(StreamOnly(), StreamingLLM)
+
+
+def test_a_generate_only_provider_is_an_llm_but_not_a_streaming_one():
+    from brain.ports import LLM, StreamingLLM
+
+    class GenerateOnly:
+        def generate(self, prompt):
+            return "hi"
+
+    provider = GenerateOnly()
+
+    assert isinstance(provider, LLM)
+    assert not isinstance(provider, StreamingLLM)
+
+
 def test_record_to_message_conversion():
     record = DBMessage(role="user", content="hi")
 

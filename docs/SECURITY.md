@@ -46,18 +46,45 @@ written to a log.
 
 ### The unauthenticated case
 
-An empty `AURA_SERVER_AUTH_TOKEN` disables authentication. This is
-deliberate — it makes local development on `127.0.0.1` frictionless — and
-the server logs a warning at startup when it happens:
+An empty `AURA_SERVER_AUTH_TOKEN` used to disable authentication silently:
+the server logged a warning and then served every request anyway. A
+forgotten environment variable on a public host was therefore enough to
+publish an unauthenticated LLM (AURA-P1-008).
+
+**The server now refuses to start.** Startup aborts with a configuration
+error naming the variable, before the port is bound:
 
 ```
-AURA_SERVER_AUTH_TOKEN is not set - the API is UNAUTHENTICATED.
-Bind to localhost only, or set a token before exposing it.
+AURA_SERVER_AUTH_TOKEN is not set, so the API would accept every request.
+Set a token, or set AURA_ALLOW_INSECURE=1 to allow this deliberately for
+local development.
 ```
 
-**Never run with an empty token on a non-loopback bind.** The default
-host in `.env.example` is `127.0.0.1` for exactly this reason; `0.0.0.0`
-is an explicit choice you make after setting a token.
+Local development without a token is still supported, but it has to be
+asked for:
+
+```
+AURA_ALLOW_INSECURE=1
+```
+
+Only `1`, `true` and `yes` count; anything else — including a leftover
+`AURA_ALLOW_INSECURE=0` or a typo — means "no", so a mistake fails in the
+safe direction. When the opt-in is present the server starts and logs a
+warning that names the bind:
+
+```
+AURA_ALLOW_INSECURE is set: the API is UNAUTHENTICATED and will accept
+every request (host 0.0.0.0 is not loopback). Never use this on a
+deployed server.
+```
+
+Loopback is **not** an exemption — it downgrades the wording, not the
+warning. Docker port mapping makes "bound to localhost" a claim about the
+container, not about the network.
+
+**Never set `AURA_ALLOW_INSECURE` on a deployed server.** It exists so
+that a developer on `127.0.0.1` is not forced to invent a token, and for
+no other reason.
 
 ### WebSocket
 
@@ -136,22 +163,50 @@ it is so convenient to return. Aura does not return it.
 A provider failure produces, server-side:
 
 ```
-ERROR Chat failed (message_id=b93a...): ConnectionError:
-  HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded
+ERROR Chat failed (message_id=b93a..., classified=provider_unavailable):
+  ConnectionError: HTTPConnectionPool(host='localhost', port=11434):
+  Max retries exceeded
 ```
 
 and, over the wire:
 
 ```json
-{"error": "chat_failed", "message_id": "b93a...", "elapsed_seconds": 3.1}
+{"error": "provider_unavailable",
+ "message": "The language model is temporarily unavailable.",
+ "message_id": "b93a...", "elapsed_seconds": 3.1}
 ```
 
 The `message_id` correlates the two, so a failure is still diagnosable
 from a log without the client ever learning the internal host, the port,
 the filesystem layout or any fragment of a key.
 
-The same rule applies to `/api/screen` (`screen_failed`) and to the
-WebSocket (`stream_failed`).
+### The taxonomy
+
+`/api/chat` used to answer every failure with the same opaque
+`chat_failed` 500 (AURA-P1-014), so a client could not tell "wait and
+retry" from "this will never work". The categories come from the typed
+provider errors that already exist in `brain/providers/errors.py`; the
+mapping lives in `server/errors.py` and is shared by the HTTP and
+WebSocket paths so the two cannot drift.
+
+| Provider error | HTTP | `error` | WebSocket `error` |
+|---|---|---|---|
+| `ProviderRateLimitError` | `429` | `rate_limited` | `rate_limited` |
+| `ProviderUnavailableError` | `503` | `provider_unavailable` | `provider_unavailable` |
+| anything else | `500` | `chat_failed` | `stream_failed` |
+
+A 429 also carries `Retry-After` (and `retry_after` in the WebSocket
+frame) when the provider supplied one — that is scheduling information,
+not an internal detail.
+
+Anything unrecognised stays a 500 on purpose. Guessing "provider problem"
+for an exception this layer was never taught to read is the same mistake
+`_category_of` was fixed for in Phase 1.
+
+Every client-facing message is a constant in `server/errors.py`. The
+exception's own text is logged and never returned.
+
+The same rule applies to `/api/screen` (`screen_failed`).
 
 `tests/test_server.py` asserts this rather than trusting review: it
 drives a deliberately broken provider and scans every response body for a
@@ -202,6 +257,23 @@ proxy if the server is exposed. See [DEPLOYMENT.md](DEPLOYMENT.md).
 ## CORS
 
 `AURA_SERVER_CORS_ORIGINS` is a comma-separated list, or `*`.
+
+**Wildcard origins and credentials are never combined.** When the list is
+`*` the server sends `Access-Control-Allow-Origin: *` and does *not* send
+`Access-Control-Allow-Credentials`. When the list names origins, both are
+sent for those origins only.
+
+That pairing was AURA-P1-007, and it was not cosmetic. With `*` plus
+credentials, Starlette sets `preflight_explicit_allow_origin`, so a
+**preflight** response echoed whichever origin asked —
+`Access-Control-Allow-Origin: https://evil.example` together with
+`Access-Control-Allow-Credentials: true`, which browsers do honour. (A
+simple GET sent a literal `*`, which browsers reject for credentialed
+requests. The hole opened through preflight, not through GET.)
+
+Aura's own clients are unaffected: the bearer token is a header the
+client sets explicitly, which is not "credentials mode", so `*` remains
+usable for local development.
 
 A native Android client sends no `Origin` header, so it is unaffected by
 CORS entirely — `*` is only needed if you point a browser at the API.

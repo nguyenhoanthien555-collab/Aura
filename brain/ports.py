@@ -12,6 +12,14 @@ Rules:
 
 from typing import Iterator, Protocol, Sequence, runtime_checkable
 
+# The streaming capability, defined next to the helpers that consume it.
+# Imported rather than restated: this file used to carry a second
+# definition of StreamingLLM whose docstring claimed to be a re-export
+# while actually requiring `generate` as well as `stream`, so the two
+# protocols of the same name disagreed about what satisfied them.
+# `brain.streaming` imports nothing from `brain`, so there is no cycle.
+from brain.streaming import StreamingLLM
+
 
 @runtime_checkable
 class LLM(Protocol):
@@ -22,30 +30,6 @@ class LLM(Protocol):
     """
 
     def generate(self, prompt: str) -> str:
-        ...
-
-
-@runtime_checkable
-class StreamingLLM(Protocol):
-    """
-    An LLM that can also yield its reply in pieces.
-
-    A separate protocol rather than a second method on LLM, and that is
-    load bearing: LLM is runtime_checkable, so adding `stream` to it
-    would make isinstance fail for every provider that does not
-    implement one - including a user's own. Streaming is a capability
-    some providers have, not part of the contract all of them meet.
-
-    `brain.streaming.stream_of` is the usual way to consume either kind
-    without branching. The canonical definition lives there, next to the
-    helpers; it is re-exported here so the full set of brain contracts is
-    readable in one file.
-    """
-
-    def generate(self, prompt: str) -> str:
-        ...
-
-    def stream(self, prompt: str) -> Iterator[str]:
         ...
 
 
@@ -132,4 +116,48 @@ class KnowledgeProvider(Protocol):
     """
 
     def get_knowledge(self, query: str) -> list[str]:
+        ...
+
+
+class ToolResultLike(Protocol):
+    """
+    What running a tool produced, as far as the brain is concerned.
+
+    tools.base.ToolResult satisfies this structurally, so a conversation
+    can be grounded in a real outcome without brain/ importing tools/.
+
+    Not runtime_checkable: protocols with non-method members cannot be
+    used with isinstance().
+    """
+
+    ok: bool
+    output: str
+    error: str
+    tool: str
+
+
+@runtime_checkable
+class ToolRunner(Protocol):
+    """
+    Somewhere a requested tool can actually be run.
+
+    Implemented by tools.executor.ToolExecutor, which is the only thing in
+    Aura permitted to execute anything. The brain reads this port to learn
+    what exists and to hand over a request; it never runs a tool, never
+    sees the registry, and never decides whether a call is permitted -
+    every gate stays behind `execute`.
+
+    `catalogue` returns the tools policy would currently allow, already
+    described. Empty means the conversation offers no tools at all, which
+    is the default and must stay indistinguishable from tools never having
+    been wired up.
+    """
+
+    def available(self) -> list[str]:
+        ...
+
+    def catalogue(self) -> str:
+        ...
+
+    def execute(self, name: str, arguments: dict | None = None) -> ToolResultLike:
         ...

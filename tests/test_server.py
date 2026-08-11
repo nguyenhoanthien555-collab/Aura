@@ -11,6 +11,9 @@ so a failure here is a failure in the server layer, not in the machine
 the tests happen to run on.
 """
 
+import os
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -22,7 +25,7 @@ from memory.models import Base
 from server import config as server_config
 from server.main import app
 from server.runtime import init_runtime, shutdown_runtime
-from server.session import session_manager
+from server.session import session_manager, SessionManager
 
 
 TEST_CONFIG = {
@@ -93,6 +96,13 @@ def client(isolated_memory):
     previous_token = server_config.settings.auth_token
     server_config.settings.auth_token = ""
 
+    # Since AURA-P1-008, an unauthenticated server refuses to start unless
+    # that was asked for. These tests are asking for it: the opt-in is the
+    # supported way to run without a token, so stating it here is what the
+    # development mode being tested actually looks like.
+    previous_insecure = os.environ.get(server_config.INSECURE_ENV_VAR)
+    os.environ[server_config.INSECURE_ENV_VAR] = "1"
+
     init_runtime(dict(TEST_CONFIG), memory=isolated_memory)
 
     try:
@@ -101,6 +111,10 @@ def client(isolated_memory):
     finally:
         shutdown_runtime()
         server_config.settings.auth_token = previous_token
+        if previous_insecure is None:
+            os.environ.pop(server_config.INSECURE_ENV_VAR, None)
+        else:
+            os.environ[server_config.INSECURE_ENV_VAR] = previous_insecure
 
 
 
@@ -238,6 +252,26 @@ def test_sessions_do_not_share_activity_counters(client):
 
     assert client.get("/api/sessions/iso-a").json()["message_count"] == 1
     assert client.get("/api/sessions/iso-b").json()["message_count"] == 2
+
+
+def test_sessions_share_one_memory_store(client, isolated_memory):
+    """
+    Single tenant, deliberately (AURA-P1-005).
+
+    `session_id` scopes the metadata endpoint above and nothing else: two
+    sessions write into one transcript. This is the documented deployment
+    - one person, one Aura, with the auth token as the identity boundary -
+    and it is pinned here so that partitioning memory later cannot happen
+    by accident and go unnoticed.
+    """
+
+    client.post("/api/chat", json={"session_id": "tenant-a", "message": "from a"})
+    client.post("/api/chat", json={"session_id": "tenant-b", "message": "from b"})
+
+    stored = [record.content for record in isolated_memory.get_recent(limit=50)]
+
+    assert "from a" in stored
+    assert "from b" in stored
 
 
 # ----------------------------------------------------------------------
@@ -378,6 +412,140 @@ def test_a_wrong_token_is_rejected(client, auth_enabled):
     assert response.status_code == 401
 
 
+# ----------------------------------------------------------------------
+# Error taxonomy over HTTP (AURA-P1-014)
+# ----------------------------------------------------------------------
+
+def test_a_rate_limited_provider_is_429(client, monkeypatch):
+    """
+    The existing typed provider error maps to HTTP 429, and the
+    provider-supplied Retry-After reaches the client as a header - which
+    is the reason a 429 is worth distinguishing at all.
+    """
+
+    from brain.providers.errors import ProviderRateLimitError
+    from server.runtime import get_runtime
+
+    conversation = get_runtime().engine.conversation
+
+    def limit(*args, **kwargs):
+        raise ProviderRateLimitError("rate limit hit", retry_after=42)
+
+    monkeypatch.setattr(conversation, "chat", limit)
+
+    response = client.post(
+        "/api/chat", json={"session_id": "rl", "message": "hi"}
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"]["error"] == "rate_limited"
+    assert response.headers["retry-after"] == "42"
+
+
+def test_an_unavailable_provider_is_503(client, monkeypatch):
+    """A transient provider outage is HTTP 503, not an opaque 500."""
+
+    from brain.providers.errors import ProviderUnavailableError
+    from server.runtime import get_runtime
+
+    conversation = get_runtime().engine.conversation
+
+    def down(*args, **kwargs):
+        raise ProviderUnavailableError("connection refused at 10.0.0.5:11434")
+
+    monkeypatch.setattr(conversation, "chat", down)
+
+    response = client.post(
+        "/api/chat", json={"session_id": "down", "message": "hi"}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "provider_unavailable"
+
+    # The new taxonomy must not become a new leak: the category is public,
+    # the provider's own words are not.
+    assert "10.0.0.5" not in response.text
+
+
+def test_an_unexpected_error_is_still_a_500(client, monkeypatch):
+    """
+    Everything unrecognised keeps the existing contract: 500 with
+    `chat_failed`, and no trace of the provider's exception text.
+    """
+
+    from server.runtime import get_runtime
+
+    conversation = get_runtime().engine.conversation
+
+    def explode(*args, **kwargs):
+        raise RuntimeError(
+            "Ollama provider failed: <urlopen error [WinError 10061] "
+            "C:\\Users\\secret\\path>"
+        )
+
+    monkeypatch.setattr(conversation, "chat", explode)
+
+    response = client.post(
+        "/api/chat", json={"session_id": "boom2", "message": "hi"}
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["error"] == "chat_failed"
+    assert "WinError" not in response.text
+    assert "C:\\Users" not in response.text
+
+
+# ----------------------------------------------------------------------
+# Readiness (STEP 6)
+# ----------------------------------------------------------------------
+
+def test_ready_is_public_and_reports_a_working_stack(client):
+    """
+    Unauthenticated on purpose - a container healthcheck holds no bearer
+    token - and it answers a real question rather than "HTTP is up".
+    """
+
+    response = client.get("/api/ready")
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["ready"] is True
+    assert body["problems"] == []
+
+
+def test_ready_reports_503_when_the_provider_chain_cannot_be_built(
+    client, monkeypatch
+):
+    """
+    The case the old healthcheck could not see: the HTTP server is
+    perfectly alive and the process cannot answer a single chat turn.
+    """
+
+    from server.runtime import get_runtime
+
+    runtime = get_runtime()
+
+    class DeadLLM:
+        def active_chain(self):
+            raise RuntimeError("GEMINI_API_KEY is not set")
+
+    monkeypatch.setattr(runtime.engine.conversation, "llm", DeadLLM())
+
+    response = client.get("/api/ready")
+
+    assert response.status_code == 503
+
+    body = response.json()
+
+    assert body["ready"] is False
+    assert any("provider chain unavailable" in p for p in body["problems"])
+
+    # Categories, not exception text: this route is public.
+    assert "GEMINI_API_KEY" not in response.text
+
+
 def test_a_non_bearer_scheme_is_rejected(client, auth_enabled):
 
     response = client.get(
@@ -474,10 +642,10 @@ def test_health_exposes_only_the_documented_keys(client):
 
     assert set(data) == {"status", "version", "uptime_seconds", "runtime"}
 
-    # The exact contract documented in docs/API.md. `screen` and
-    # `companion` are intentional: a client needs to know whether screen
-    # observation will be accepted and whether unprompted messages can
-    # arrive, before it offers either as a setting.
+    # The exact contract documented in docs/API.md. `screen`, `companion`
+    # and `proactive` are intentional: a client needs to know whether
+    # screen observation will be accepted and whether unprompted messages
+    # can arrive, before it offers either as a setting.
     assert set(data["runtime"]) == {
         "llm_provider",
         "memory",
@@ -486,6 +654,7 @@ def test_health_exposes_only_the_documented_keys(client):
         "voice_input",
         "screen",
         "companion",
+        "proactive",
     }
 
 
@@ -599,6 +768,184 @@ def test_stream_with_the_correct_token_connects(client, auth_enabled):
         socket.send_json({"message": "hi"})
 
         assert socket.receive_json()["type"] == "started"
+
+
+def test_a_rate_limited_stream_says_so_instead_of_stream_failed(
+    client, monkeypatch
+):
+    """
+    The WebSocket taxonomy was verified separately from HTTP, because the
+    two paths are not the same code and did not have the same vocabulary.
+    A recognised provider failure now names itself here too.
+    """
+
+    from brain.providers.errors import ProviderRateLimitError
+    from server.runtime import get_runtime
+
+    runtime = get_runtime()
+
+    def limit(*args, **kwargs):
+        raise ProviderRateLimitError("quota for key sk-live-abc", retry_after=7)
+
+    monkeypatch.setattr(runtime, "chat_stream", limit)
+
+    with client.websocket_connect(
+        "/api/chat/stream?session_id=stream-rl"
+    ) as socket:
+
+        socket.send_json({"message": "hi"})
+
+        assert socket.receive_json()["type"] == "started"
+
+        frame = socket.receive_json()
+
+    assert frame["type"] == "error"
+    assert frame["error"] == "rate_limited"
+    assert frame["retry_after"] == 7.0
+    assert "sk-live" not in str(frame)
+
+
+def test_an_unrecognised_stream_failure_keeps_the_documented_code(
+    client, monkeypatch
+):
+    """
+    `stream_failed` is the existing WebSocket vocabulary (docs/API.md and
+    AuraStreamClient.kt map it). Only recognised provider errors get a new
+    code; renaming the generic one would be a protocol change this phase
+    has no reason to make.
+    """
+
+    from server.runtime import get_runtime
+
+    runtime = get_runtime()
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("[WinError 10061] C:\\Users\\secret\\path")
+
+    monkeypatch.setattr(runtime, "chat_stream", explode)
+
+    with client.websocket_connect(
+        "/api/chat/stream?session_id=stream-boom"
+    ) as socket:
+
+        socket.send_json({"message": "hi"})
+
+        assert socket.receive_json()["type"] == "started"
+
+        frame = socket.receive_json()
+
+    assert frame["error"] == "stream_failed"
+    assert "WinError" not in str(frame)
+    assert "C:\\Users" not in str(frame)
+
+
+# ----------------------------------------------------------------------
+# Session expiry (AURA-P1-006)
+# ----------------------------------------------------------------------
+#
+# `cleanup_old` existed with no caller anywhere in the server, so every
+# client-supplied session_id stayed in the dict for the life of the
+# process. These pin that it is now reachable from a normal request.
+
+
+def test_stale_sessions_are_dropped_by_a_create():
+    """The leak itself: an idle session goes when the next one arrives."""
+
+    manager = SessionManager(max_age_seconds=0.01, sweep_interval_seconds=0)
+
+    stale = manager.ensure_session("stale-id")
+
+    time.sleep(0.02)
+
+    manager.ensure_session("fresh-id")
+
+    assert manager.get_session(stale.session_id) is None
+    assert manager.get_session("fresh-id") is not None
+
+
+def test_active_sessions_survive_a_sweep():
+    """Expiry is on idle time, so a session still in use is not collected."""
+
+    manager = SessionManager(max_age_seconds=60, sweep_interval_seconds=0)
+
+    manager.ensure_session("busy")
+
+    for _ in range(3):
+        manager.update_activity("busy")
+        manager.ensure_session("other")
+
+    assert manager.get_session("busy") is not None
+
+
+def test_sweeping_is_throttled():
+    """
+    A long interval means the create path does not scan every request.
+
+    Without the throttle this is O(n) per call on a dict that only ever
+    grows.
+    """
+
+    manager = SessionManager(max_age_seconds=0.01, sweep_interval_seconds=3600)
+
+    manager.ensure_session("first")
+
+    time.sleep(0.02)
+
+    manager.ensure_session("second")
+
+    # Idle past max_age, but the interval has not elapsed - still there.
+    assert manager.get_session("first") is not None
+
+
+def test_cleanup_old_still_reports_its_count():
+    """The public entry point keeps working for a caller that wants now."""
+
+    manager = SessionManager(max_age_seconds=0.01, sweep_interval_seconds=3600)
+
+    manager.ensure_session("a")
+    manager.ensure_session("b")
+
+    time.sleep(0.02)
+
+    assert manager.cleanup_old() == 2
+    assert manager.cleanup_old() == 0
+
+
+def test_cleanup_old_does_not_deadlock():
+    """
+    The lock is not reentrant.
+
+    `cleanup_old` and the sweep share an unlocked `_expire` for exactly
+    this reason; if either ever calls the other's public method instead,
+    this hangs rather than fails.
+    """
+
+    manager = SessionManager(max_age_seconds=0, sweep_interval_seconds=0)
+
+    manager.ensure_session("x")
+
+    assert manager.cleanup_old(max_age_seconds=999) == 0
+
+
+def test_expiry_drops_no_conversation_history(client):
+    """
+    A Session is metadata. History lives in memory/, so a swept session
+    does not take the transcript with it - the next turn on the same id
+    continues where it left off.
+    """
+
+    client.post("/api/chat", json={"session_id": "keeps-history", "message": "one"})
+
+    assert session_manager.cleanup_old(max_age_seconds=0) >= 1
+    assert session_manager.get_session("keeps-history") is None
+
+    again = client.post(
+        "/api/chat",
+        json={"session_id": "keeps-history", "message": "two"},
+    )
+
+    assert again.status_code == 200
+    assert again.json()["session_id"] == "keeps-history"
 
 
 if __name__ == "__main__":

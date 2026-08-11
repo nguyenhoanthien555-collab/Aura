@@ -1,8 +1,24 @@
 # Aura Cloud Migration Audit
 
-**Date:** 2026-08-09  
-**Branch:** feature/aura-identity  
-**Tests:** 659 passing
+**Date:** 2026-08-09
+**Branch:** feature/aura-identity
+**Tests at the time of the audit:** 659 passing
+
+> **Status: historical snapshot, superseded in part.**
+>
+> This document records what the codebase looked like when the migration
+> audit was taken, including problems that have since been fixed. It is
+> kept for the reasoning, not as a current status page. Read it as "what
+> we found", not "what is true now".
+>
+> As of the Phase 7 sweep the suite reports **1160 passed, 1 deselected**
+> (`.venv/Scripts/python.exe -m pytest -q`). The findings this audit
+> raised as AURA-P0-* and AURA-P1-* were worked through in Phases 1-6;
+> `.claude/task-queue.md` carries the per-item status and
+> `.claude/progress.md` the record of what changed.
+>
+> For current state, prefer `docs/IMPLEMENTATION_STATUS.md` and
+> `.claude/project-state.md`.
 
 ---
 
@@ -93,7 +109,8 @@ ResponseEvent(streamed=True)
 ```
 BrainRouter (lazy init on first .provider access)
     ↓
-_create_provider(name) → MockProvider | GeminiProvider | OllamaProvider | OpenAIProvider
+_create_provider(name) → MockProvider | GeminiProvider | GroqProvider |
+                        MistralProvider | OpenRouterProvider | OllamaProvider
     ↓
 Provider.generate(prompt) → str
     ↓
@@ -191,10 +208,11 @@ VisionUpdateEvent published if description changed
 
 ## 2. TEST BASELINE
 
-**Total Tests:** 659 passed, 1 skipped, 1 deselected  
+**At the time of this audit:** 659 passed, 1 skipped, 1 deselected
 **Duration:** 2.00s
 
-All existing tests pass - the foundation is solid.
+That was the baseline the migration work started from. It is not the
+current number - see the status note at the top of this file.
 
 ---
 

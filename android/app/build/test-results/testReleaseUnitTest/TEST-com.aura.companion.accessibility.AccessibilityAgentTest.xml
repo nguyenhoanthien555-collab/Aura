@@ -1,12 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.aura.companion.accessibility.AccessibilityAgentTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:23:00" hostname="MSI" time="0.029">
+<testsuite name="com.aura.companion.accessibility.AccessibilityAgentTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:42:45" hostname="MSI" time="0.037">
   <properties/>
-  <testcase name="testSafetyGuardStillBlocksDangerousActions" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.018"/>
-  <testcase name="testVietnameseUtf8Tasks" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.006"/>
-  <testcase name="testAccessibilityNodeModel" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.004"/>
+  <testcase name="testAgentActionCompleteMessage" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.001"/>
+  <testcase name="testSnapshotWithAllFields" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.021"/>
+  <testcase name="testSafetyGuardStillBlocksDangerousActions" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.007"/>
+  <testcase name="testAccessibilityNodeDefaults" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testScreenFingerprintPackageChange" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testScreenFingerprintNoChange" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testExecutionResultTypes" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testVerificationDetectsRealPackageChange" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultCompletedIsSuccess" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.001"/>
+  <testcase name="testScreenFingerprintEquality" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testVerificationDetectsContentChangeWithinSameApp" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultSealedTypeDistinguishability" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.003"/>
+  <testcase name="testVietnameseUtf8Tasks" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testAccessibilityNodeModel" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testVerificationDetectsFalsePositive" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultCancelledIsNotSuccess" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
   <testcase name="testSafetyGuardKeywords" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
-  <testcase name="testActionExecutorValidation" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
-  <testcase name="testSafetyGuardOpenApp" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.001"/>
+  <testcase name="testActionExecutorValidation" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.001"/>
+  <testcase name="testScreenFingerprintContentHashChange" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultErrorIsNotSuccess" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testSafetyGuardOpenApp" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultDispatchRejectedIsNotSuccess" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testScreenFingerprintNodeCountChange" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
+  <testcase name="testGestureResultTimeoutIsNotSuccess" classname="com.aura.companion.accessibility.AccessibilityAgentTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

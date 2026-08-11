@@ -150,6 +150,13 @@ class TestRemoteScreenSource:
 
         assert source.capture() is frame
 
+    def test_an_image_only_observation_is_accepted(self):
+        source = RemoteScreenSource()
+        frame = Frame(data=b"jpeg-bytes", image_format="jpeg", source="phone")
+
+        assert source.submit(ScreenObservation(frame=frame)) is not None
+        assert source.capture() is frame
+
     def test_clear_forgets_everything(self):
         source = RemoteScreenSource()
         source.submit(observation())

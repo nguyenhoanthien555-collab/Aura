@@ -4,6 +4,37 @@ from core.logger import logger
 from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
 
 
+# The one category that stops failover rather than continuing it, named
+# so the check below cannot drift from the string that produces it.
+ACCOUNT_LIMIT = "account/project quota exhaustion"
+
+
+def _category_of(error: Exception) -> str:
+    """
+    Why a provider failed, in the terms failover cares about.
+
+    Only the typed provider errors can be categorised with any
+    confidence. Anything else is a provider raising something this layer
+    was never taught to read - a urllib3 timeout, a JSON decode failure,
+    a genuine misconfiguration - and calling that "authentication error"
+    sends whoever reads the log looking for a key problem that is not
+    there. The exception type is reported instead, by the caller, and
+    the category says plainly that it is unclassified.
+    """
+
+    if isinstance(error, ProviderRateLimitError):
+
+        if getattr(error, "is_account_limit", False):
+            return ACCOUNT_LIMIT
+
+        return "model/provider rate limit"
+
+    if isinstance(error, ProviderUnavailableError):
+        return "transient/unavailable"
+
+    return "unclassified provider error"
+
+
 class FallbackProvider:
     """Try a configured cloud provider once, then the next one.
 
@@ -36,25 +67,18 @@ class FallbackProvider:
             except Exception as error:
                 last_error = error
 
-                if isinstance(error, ProviderRateLimitError):
-                    if getattr(error, "is_account_limit", False):
-                        category = "account/project quota exhaustion"
-                    else:
-                        category = "model/provider rate limit"
-                elif isinstance(error, ProviderUnavailableError):
-                    category = "transient/unavailable"
-                else:
-                    category = "authentication/configuration error"
+                category = _category_of(error)
 
                 logger.warning(
-                    "Provider failed: %s | Failure category: %s | Error: %s",
+                    "Provider failed: %s | Failure category: %s | %s: %s",
                     p_name,
                     category,
+                    type(error).__name__,
                     str(error)
                 )
 
                 # If it's an account-level limit, do NOT try next providers. Stop immediately!
-                if category == "account/project quota exhaustion":
+                if category == ACCOUNT_LIMIT:
                     logger.warning("Account-level quota exhaustion detected; stopping provider failover immediately.")
                     break
 

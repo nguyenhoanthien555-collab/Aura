@@ -211,5 +211,12 @@ class TTSEngine:
 
         try:
             self.events.publish(event)
-        except Exception:
-            pass
+        except Exception as error:
+            # Aura still speaks. Only the notification that she is
+            # speaking was lost, which a lip-sync or avatar subscriber
+            # would experience as silence it cannot explain.
+            logger.debug(
+                "Speech event publish failed (%s): %s",
+                type(event).__name__,
+                error,
+            )

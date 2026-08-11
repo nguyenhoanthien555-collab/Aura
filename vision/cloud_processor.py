@@ -9,6 +9,7 @@ from brain.providers.openrouter import OpenRouterProvider
 from core.logger import logger
 from vision.capture import Frame
 from vision.processor import MAX_DESCRIPTION
+from vision.settings import cloud_model
 
 
 class CloudVisionProcessor:
@@ -154,7 +155,7 @@ def build_cloud_vision_processor(config: dict) -> CloudVisionProcessor | None:
     llm = config.get("llm") or {}
     providers = []
     if os.getenv("GEMINI_API_KEY"):
-        prov = GeminiVisionProvider(vision.get("model") or llm.get("model"))
+        prov = GeminiVisionProvider(cloud_model(config))
         if getattr(prov, "supports_vision", False):
             providers.append(prov)
     if os.getenv("OPENROUTER_API_KEY"):

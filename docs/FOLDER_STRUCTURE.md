@@ -11,15 +11,20 @@ launcher.py           desktop runtime: avatar, CLI, flags
 conftest.py           puts the project root on sys.path for pytest
 config.yaml           user configuration, created on first run
 requirements.txt      core dependencies, with optional extras documented
+requirements-server.txt  the subset a container needs
 pytest.ini            integration tests excluded by default
-.env                  GEMINI_API_KEY (not committed)
+Dockerfile            the server image
+docker-compose.yml    server plus a persistent volume
+.dockerignore
+.env.example          every variable, documented; committed
+.env                  the real keys; gitignored, never committed
 ```
 
 `launcher.py` sits next to the `launcher/` package. Python resolves
 packages before modules, so `import launcher.cli` finds the package while
 `python launcher.py` runs the file as `__main__`.
 
-## core/ — 6 files
+## core/ — 5 files
 
 Shared foundations. Every other package may import this one.
 
@@ -27,13 +32,15 @@ Shared foundations. Every other package may import this one.
 __init__.py
 app.py                Aura, the foundation-era composition object
 config.py             DEFAULT_CONFIG, load_config, deep_merge
-events.py             legacy event helpers
 logger.py             the shared logger
 paths.py              PROJECT_ROOT and everything anchored to it
 ```
 
 `paths.py` exists because relative paths broke when Aura was launched from
 a parent directory.
+
+An empty `core/events.py` was removed in Phase 7. It held no code and had
+no importers, and its name was a trap next to the live `events/` package.
 
 ## events/ — 3 files
 
@@ -45,7 +52,7 @@ types.py              every event dataclass
 
 Events are facts ("the user said X"), never UI state.
 
-## brain/ — 25 files
+## brain/ — 32 files
 
 The conversation engine. Imports `core/` and `events/`, nothing else
 horizontal.
@@ -59,11 +66,15 @@ message.py            Message dataclass (role, content)
 response.py           Response dataclass
 ports.py              LLM, ConversationStore, MessageRecord, and friends
 router.py             BrainRouter: picks and lazily builds a provider
-llm.py                provider-facing helpers
+llm.py                back-compat shim re-exporting brain.ports.LLM
+
+agent_mode.py         the machine-turn path: JSON in, JSON out
+tool_calling.py       the tool-calling loop                (Phase 3)
 
 prompt_builder.py     assembles the prompt from its sections
 prompt_sections.py    the section headers, in load-bearing order
-prompt.py             prompt helpers
+prompt.py             an early Prompt dataclass, superseded by
+                      prompt_builder.py and now unreferenced
 system.py             loads prompts/system.md
 personality.py        loads prompts/personality.md
 context_loader.py     loads prompts/contexts/*.md
@@ -75,15 +86,26 @@ streaming.py          fragment and sentence streaming   (Section 3)
 
 providers/
     __init__.py
-    base.py           shared provider behaviour
+    base.py           BaseProvider, split_prompt
+    errors.py         the provider error taxonomy
+    fallback.py       FallbackProvider: the failover chain
     gemini.py         Google Gemini
-    mock.py           offline default
+    groq.py           Groq
+    mistral.py        Mistral
+    openrouter.py     OpenRouter, text and vision
     ollama.py         local models
-    openai.py         OpenAI-compatible endpoints
+    cerebras.py       written, deliberately not registered
+    mock.py           offline default
 ```
 
 `consistency.py`, `style.py`, and `mood.py` are the three personality
 layers, in descending permanence.
+
+`_create_provider` in `router.py` is the list of providers that can
+actually be selected: mock, gemini, groq, mistral, openrouter, ollama.
+`cerebras.py` is not among them on purpose — its docstring says why. An
+empty `providers/openai.py` was removed in Phase 7; there was never an
+`"openai"` branch to reach it.
 
 ## memory/ — 8 files
 
@@ -98,7 +120,7 @@ companion.py          session context: projects, goals, style  (Section 6)
 knowledge.py          MemoryKnowledgeProvider: composes the above
 ```
 
-## voice/ — 23 files
+## voice/ — 21 files
 
 ```
 __init__.py
@@ -130,22 +152,7 @@ tts/
         sapi.py       Windows built-in voices
 ```
 
-## tts/ — 6 files (legacy)
-
-```
-__init__.py
-base.py
-manager.py
-providers/
-    edge.py
-    elevenlabs.py
-    kokoro.py
-```
-
-Predates `voice/tts/`, which is the live implementation. Flagged for the
-cleanup pass; removal should follow a check for importers.
-
-## vision/ — 7 files
+## vision/ — 9 files
 
 ```
 __init__.py
@@ -154,6 +161,8 @@ capture.py            ScreenshotCapture (needs mss)
 context.py            VisionContext: source and description
 processor.py          turns a capture into a description
 ollama_processor.py   local vision model (needs pillow)
+cloud_processor.py    Gemini/OpenRouter vision, used in server mode
+remote.py             screen observations supplied by the phone
 debug.py              python -m vision.debug: verify what the model sees
 ```
 
@@ -164,6 +173,10 @@ Off by default. Reading someone's screen is opt in, always.
 defaults to the former, and `launcher/services.py` injects the latter when
 `vision.capture_screen` is on, so importing `vision.capture` never pulls in
 the image stack.
+
+`cloud_processor.py` and `remote.py` are the server's half: there is no
+screen to grab in a container, so the pixels arrive over HTTP from the
+Android app and are described by a cloud model.
 
 ## avatar/ — 8 files
 
@@ -180,7 +193,7 @@ backends.py           backend protocol for Live2D/VRM   (Section 4)
 
 Degrades to a null renderer with no display.
 
-## tools/ — 11 files
+## tools/ — 10 files
 
 ```
 __init__.py
@@ -226,6 +239,56 @@ cli.py                AuraCLI: the terminal front end
 vision, avatar, tools, and plugins together. That is precisely why none of
 those import each other.
 
+## server/ — 14 files
+
+The cloud half. FastAPI over the same `AuraRuntime` the desktop uses —
+no avatar, no CLI, no microphone.
+
+```
+__init__.py
+main.py               the FastAPI app and its lifespan
+config.py             ServerConfig: env-driven settings
+auth.py               bearer token, mandatory unless AURA_ALLOW_INSECURE
+errors.py             error responses that name the failure
+models.py             request and response schemas
+session.py            SessionStore: per-client conversation state
+runtime.py            server-mode runtime construction
+notifications.py      notification fan-out
+routes/
+    health.py         / , /api/ready , /api/health
+    chat.py           POST /api/chat
+    ws_chat.py        the streaming WebSocket
+    screen.py         screen observations posted by the phone
+    notifications.py  device notifications
+```
+
+The routes look unreferenced to a naive search: nothing imports them by
+name except `main.py`, which registers each with `include_router`.
+
+This process cannot touch the machine the user is sitting at. It runs
+tools inside its own container or not at all, and `tests/test_device_boundary.py`
+pins that it never claims otherwise.
+
+## companion/ — 6 files
+
+Proactive behaviour: deciding whether Aura should say something
+unprompted, and refusing to become noise.
+
+```
+__init__.py
+engine.py             observe(observation) -> CompanionDecision
+detector.py           gate 1: did the screen actually change?
+evaluator.py          gate 2: is the change worth a word?
+policy.py             gate 3: is now a reasonable moment to say it?
+decision.py           the frozen decision record
+```
+
+Three gates in order, stopping at the first "no". They are separate
+because they fail differently — a wrong relevance call and a badly timed
+one are not the same mistake. `decision.py` records the reasoning on a
+"no" as well as a "yes", because a decision that only explains itself
+when it fires cannot be tuned.
+
 ## prompts/
 
 ```
@@ -239,37 +302,57 @@ contexts/
     vision.md
 ```
 
-## tests/ — 23 files (17 `test_*`, 6 `manual_*`)
+## tests/ — 32 files, all `test_*`
 
 ```
 test_pipeline.py                foundation pipeline
 test_config.py                  config loading and merging
 test_events.py                  the bus
 test_memory_v2.py               profile, retrieval, knowledge
+test_companion.py               companion stores
 test_companion_memory.py        session context      (Section 6)
 test_voice.py                   engines and providers
 test_voice_edge.py              Edge TTS             (Section 5)
 test_voice_cancel.py            cancellation         (Section 5)
+test_cli_voice.py               CLI voice wiring
 test_vision.py                  observation and prompt section
+test_vision_monitor.py          monitor selection
+test_vision_ollama.py           local vision processor
+test_remote_vision.py           phone-supplied screen source
 test_avatar.py                  controller and state
 test_tools.py                   registry and executor
 test_tool_framework.py          structural tools     (Section 7)
+test_tool_calling.py            the tool-calling loop
 test_plugins.py                 plugin lifecycle     (Section 8)
 test_character_consistency.py   the drift guard      (Section 9)
 test_personality_style.py       style layer
 test_integration_flows.py       cross-subsystem
+test_machine_turns.py           agent turns vs chat turns
+test_accessibility_agent.py     Android accessibility agent
+test_device_boundary.py         what the server may not claim to do
+test_provider_resolution.py     which provider is chosen, and why
+test_cloud_failover.py          the fallback chain
+test_error_visibility.py        failures reach a log or a caller
+test_security_hardening.py      auth, CORS, limits
+test_server.py                  routes and sessions
+test_notifications.py           notification routing
 test_gemini_integration.py      opt in: AURA_RUN_INTEGRATION=1
+```
 
-manual_clear_memory.py          side-effecting scripts, run by hand
+All of these are hermetic except the last, which is marked `integration`
+and deselected by default. The side-effecting `manual_*` scripts moved to
+`scripts/` in Phase 7; they were never pytest modules.
+
+## scripts/ — 6 files
+
+```
+manual_clear_memory.py          side-effecting, run by hand
 manual_env_check.py
 manual_gemini_test.py
 manual_list_models.py
 manual_memory_test.py
 manual_prompt_test.py
 ```
-
-`test_*` files are hermetic. `manual_*` files touch the network or the
-database and are named so pytest does not collect them.
 
 ## docs/
 
@@ -279,9 +362,19 @@ IMPLEMENTATION_STATUS.md  what is built, what is not
 DEVELOPER_GUIDE.md        how to work on it
 ROADMAP.md                where it has been and is going
 FOLDER_STRUCTURE.md       this file
+API.md                    the HTTP and WebSocket surface
+ANDROID.md                the Kotlin app
+DEPLOYMENT.md             free-tier hosting, platform by platform
+SECURITY.md               the threat model and what enforces it
+PERFORMANCE.md            measured costs
+CLOUD_MIGRATION_AUDIT.md  historical snapshot, superseded in part
 ```
 
 ## Totals
 
-131 Python files outside `.venv/`. Largest packages are `brain/` (25) and
-`voice/` (23); the rest are under a dozen each.
+168 Python files outside `.venv/`, `__pycache__/` and the vendored
+`awesome-claude-skills/`. Largest are `brain/` (32) and `tests/` (32),
+then `voice/` (21) and `server/` (14); the rest are under a dozen each.
+
+There is also `android/`, which is Kotlin rather than Python and is
+documented in `docs/ANDROID.md`.

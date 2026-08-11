@@ -3,6 +3,8 @@ package com.aura.companion.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.aura.companion.accessibility.AuraAccessibilityService
+import com.aura.companion.accessibility.IntentRouter
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
@@ -170,30 +172,6 @@ class ChatViewModel(
             author = ChatMessage.Author.USER,
         )
 
-        if (com.aura.companion.accessibility.AuraAccessibilityService.isEnabled()) {
-            _state.update {
-                it.copy(
-                    messages = it.messages + outgoing,
-                    draft = "",
-                    isSending = true,
-                    error = null,
-                )
-            }
-            val success = com.aura.companion.accessibility.AuraAccessibilityService.startAgentTask(text) { finalReply ->
-                _state.update { current ->
-                    current.copy(
-                        messages = current.messages + ChatMessage(
-                            id = UUID.randomUUID().toString(),
-                            text = finalReply,
-                            author = ChatMessage.Author.AURA,
-                        ),
-                        isSending = false
-                    )
-                }
-            }
-            if (success) return
-        }
-
         _state.update {
             it.copy(
                 messages = it.messages + outgoing,
@@ -204,6 +182,14 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+
+            // Only a message that actually asks for something to happen
+            // on the phone goes into the agent loop. Deciding this needs
+            // a server round-trip, so it happens here rather than in
+            // `send` itself, which is not suspending.
+            if (wantsDeviceAction(text) && startAgentTask(text)) {
+                return@launch
+            }
 
             val slowNotice = launch {
                 delay(WAKE_NOTICE_MS)
@@ -225,6 +211,49 @@ class ChatViewModel(
             }
         }
     }
+
+    /**
+     * Should this message drive the phone rather than be answered?
+     *
+     * False whenever there is no accessibility service to drive it, and
+     * false whenever the routing question itself could not be answered.
+     * A probe that fails means the server is unreachable, and the normal
+     * path reports that honestly - starting a device loop against a
+     * server the loop is about to need would fail later and less
+     * clearly.
+     */
+    private suspend fun wantsDeviceAction(text: String): Boolean {
+
+        if (!AuraAccessibilityService.isEnabled()) return false
+
+        return when (val result = repository.send(text, IntentRouter.PROBE_CONTEXT)) {
+            is AuraResult.Ok -> IntentRouter.isAction(result.value.reply)
+            is AuraResult.Failed -> false
+        }
+    }
+
+    /**
+     * Hand the request to the accessibility agent.
+     *
+     * False if the service went away between the check and here - it can
+     * be switched off in Settings mid-turn - in which case the caller
+     * falls through to the conversational path and the user gets an
+     * answer instead of silence.
+     */
+    private fun startAgentTask(text: String): Boolean =
+
+        AuraAccessibilityService.startAgentTask(text) { finalReply ->
+            _state.update { current ->
+                current.copy(
+                    messages = current.messages + ChatMessage(
+                        id = UUID.randomUUID().toString(),
+                        text = finalReply,
+                        author = ChatMessage.Author.AURA,
+                    ),
+                    isSending = false,
+                )
+            }
+        }
 
     /**
      * Stream the reply, returning false if the socket never delivered one.

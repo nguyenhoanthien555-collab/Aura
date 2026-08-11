@@ -361,6 +361,41 @@ class ChatViewModelTest {
         assertEquals(0, server.requestCount)
     }
 
+    @Test
+    fun `with no accessibility service attached nothing is asked about routing`() {
+
+        // Routing costs a server round-trip, so it is only worth asking
+        // when there is something that could act on the answer. There is
+        // no service in a JVM test, so exactly one chat request should
+        // leave: the message itself, and no intent probe ahead of it.
+        streamRoute = { MockResponse().setResponseCode(404) }
+        chatRoute = { chatOk("Hey.") }
+
+        val viewModel = viewModel()
+
+        await(viewModel, "the connection banner") {
+            it.connection is ConnectionState.Connected
+        }
+
+        viewModel.onDraftChanged("hello")
+        viewModel.send()
+
+        await(viewModel, "the reply") { state ->
+            state.messages.any { it.author == ChatMessage.Author.AURA }
+        }
+
+        val paths = buildList {
+            repeat(server.requestCount) {
+                add(
+                    server.takeRequest(1, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        ?.path.orEmpty()
+                )
+            }
+        }
+
+        assertEquals(1, paths.count { it.startsWith("/api/chat") && !it.startsWith("/api/chat/stream") })
+    }
+
     // ------------------------------------------------------------------
     // Connection
     // ------------------------------------------------------------------

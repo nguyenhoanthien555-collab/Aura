@@ -4,6 +4,7 @@ python-dotenv
 pyyaml
 sqlalchemy
 google-genai
+pillow
 pytest
 
 # ----------------------------------------------------------------------

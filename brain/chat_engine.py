@@ -12,6 +12,11 @@ Sprint 5 added three optional collaborators - an event publisher, a
 vision provider and a knowledge provider. All default to None, so
 `ChatEngine()` still produces exactly the Sprint 4 pipeline. The
 launcher is what supplies them.
+
+A tool runner joins them on the same terms: None by default, injected by
+the launcher, and never constructed here. The engine does not import
+tools/ and could not run one if it wanted to - it passes the port
+through to the conversation, which hands requests to it.
 """
 
 from brain.consistency import IdentityAnchor, build_anchor
@@ -21,6 +26,7 @@ from brain.ports import (
     EventPublisher,
     KnowledgeProvider,
     LLM,
+    ToolRunner,
     VisionProvider,
 )
 from brain.prompt_builder import PromptBuilder
@@ -43,11 +49,24 @@ class ChatEngine:
         knowledge: KnowledgeProvider | None = None,
         style: ResponseStyler | None = None,
         identity: IdentityAnchor | None = None,
+        tools: ToolRunner | None = None,
+        clock=None,
+        pipeline=None,
     ):
         """
         Create the chat engine with dependency injection.
 
         Defaults create production components; tests can inject fakes.
+
+        `clock` and `pipeline` have no defaults on purpose. They are the
+        Phase 8 temporal context and memory pipeline; the launcher
+        supplies them, and a ChatEngine built with defaults stays
+        byte-for-byte the Sprint 4 prompt pipeline.
+
+        `tools` has no default on purpose. Every other collaborator here
+        can be built from config if absent; a tool runner is the one thing
+        that can change the world, so it exists only when a composition
+        root deliberately built one and handed it over.
         """
 
         if memory is None:
@@ -75,6 +94,9 @@ class ChatEngine:
             knowledge=knowledge,
             style=style,
             identity=identity,
+            tools=tools,
+            clock=clock,
+            pipeline=pipeline,
         )
 
     @staticmethod

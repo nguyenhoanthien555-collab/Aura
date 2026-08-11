@@ -3,11 +3,13 @@ Ollama Local LLM Provider.
 """
 
 import json
+import os
 from typing import Iterator
 import urllib.error
 import urllib.request
 
 from brain.providers.base import BaseProvider
+from brain.providers.errors import ProviderUnavailableError
 from core.config import load_config
 from core.logger import logger
 
@@ -29,14 +31,22 @@ class OllamaProvider(BaseProvider):
         config = load_config()
         llm_cfg = config.get("llm") or {}
 
-        configured_model = llm_cfg.get("model")
+        # Dedicated Ollama setting, mirroring groq_model/mistral_model.
+        # llm.model names the cloud model (e.g. "gemini-3.6-flash") and is
+        # never a valid Ollama tag, so the two must not be coupled.
+        configured_model = llm_cfg.get("ollama_model")
         if not model:
-            if configured_model and not configured_model.startswith("gemini"):
-                model = configured_model
-            else:
-                model = "qwen3:8b"
+            model = configured_model or "qwen3:8b"
 
-        self.host = (host or llm_cfg.get("host") or "http://127.0.0.1:11434").rstrip("/")
+        # Host precedence: explicit argument, then config, then the
+        # environment, then the loopback default. OLLAMA_HOST is the one
+        # documented way to point a deployment at a real host.
+        self.host = (
+            host
+            or llm_cfg.get("host")
+            or os.getenv("OLLAMA_HOST")
+            or "http://127.0.0.1:11434"
+        ).rstrip("/")
         self.model = model
         self.timeout = timeout if timeout is not None else float(llm_cfg.get("timeout", 60.0))
 
@@ -66,8 +76,13 @@ class OllamaProvider(BaseProvider):
                 return res_json.get("response", "") or ""
 
         except urllib.error.URLError as error:
+            # Typed, so FallbackProvider._category_of reads this as
+            # "transient/unavailable" and moves to the next provider. A
+            # bare RuntimeError classifies as "unclassified provider
+            # error", which is exactly what an unreachable local host is
+            # not - it is the most ordinary failure Ollama has.
             logger.warning("Ollama API request failed: %s", error)
-            raise RuntimeError(f"Ollama provider failed: {error}") from error
+            raise ProviderUnavailableError(f"Ollama is unreachable at {self.host}") from error
         except Exception as error:
             logger.warning("Ollama generation failed: %s", error)
             raise RuntimeError(f"Ollama provider failed: {error}") from error
@@ -111,7 +126,7 @@ class OllamaProvider(BaseProvider):
 
         except urllib.error.URLError as error:
             logger.warning("Ollama stream request failed: %s", error)
-            raise RuntimeError(f"Ollama streaming failed: {error}") from error
+            raise ProviderUnavailableError(f"Ollama is unreachable at {self.host}") from error
         except Exception as error:
             logger.warning("Ollama streaming failed: %s", error)
             raise RuntimeError(f"Ollama streaming failed: {error}") from error

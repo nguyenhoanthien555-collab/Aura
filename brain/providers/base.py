@@ -13,7 +13,7 @@ class BaseProvider(ABC):
         """
         Generate a response from the prompt.
         """
-        pass
+        ...
 
 
 def split_prompt(prompt: str) -> tuple[str, str]:
@@ -22,6 +22,16 @@ def split_prompt(prompt: str) -> tuple[str, str]:
 
     System instruction gathers SYSTEM, PERSONALITY, IDENTITY, and STYLE sections.
     User content contains the remaining sections (CONTEXT, MEMORY, VISION, HISTORY, USER, etc.).
+
+    The split is by what a section *is*, not where it sits: an
+    instruction telling the model how to answer belongs in the system
+    slot, and everything the model is answering *about* - the transcript,
+    the screen, the accessibility tree - belongs in the user slot. That
+    is why AGENT RULES and INTENT RULES are here and DEVICE STATE is not.
+
+    TOOLS and TOOL RESULTS divide along the same line, and they divide:
+    the catalogue of what may be requested is an instruction, while what
+    running one actually produced is evidence about this turn.
     """
     # Match any section header: "===== [A-Z_ ]+ ====="
     pattern = re.compile(r"^(===== [A-Z_ ]+ =====)\s*$", re.MULTILINE)
@@ -36,7 +46,9 @@ def split_prompt(prompt: str) -> tuple[str, str]:
         "===== PERSONALITY =====",
         "===== WHO YOU ARE =====",
         "===== RESPONSE STYLE =====",
-        "===== AGENT RULES ====="
+        "===== AGENT RULES =====",
+        "===== INTENT RULES =====",
+        "===== TOOLS =====",
     }
 
     if parts[0].strip():

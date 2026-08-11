@@ -24,6 +24,25 @@ rather than left to a default:
     *possible*; it does not make a SQLAlchemy Session thread-safe. The
     lock is what actually makes it correct, so the two belong together
     and neither should be removed without the other.
+
+Schema changes
+--------------
+`init_database` creates only the two tables that existed before Phase 8
+(`messages`, `user_facts`). The Phase 8 tables (`episodic_memories`,
+`user_model`) are created by the composition root when it builds the
+pipeline, guarded by the pipeline being enabled - and a pre-existing
+database that predates them gets them added by the pipeline's own
+`create_all`, never by `init_database`.
+
+The reason for the split is a deployment without a migration system
+(docs/DEPLOYMENT.md is explicit that there are none yet). A `create_all`
+is additive and idempotent: it creates missing tables and touches no
+existing rows, so running it once at upgrade time against an old
+database is safe. Running it unconditionally at startup would be the
+same thing - but keeping it in the composition root keeps the guard
+("the pipeline is off" -> "the pipeline's tables are not created") in
+the same file as the decision, and makes a server run that disables
+pipeline memory leave the database exactly as it found it.
 """
 
 from threading import RLock
@@ -32,7 +51,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.paths import DATA_DIR
-from memory.models import Base
+from memory.models import Base, EpisodicMemory, Message, UserFact, UserModelEntry
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -65,4 +84,30 @@ db_lock = RLock()
 
 
 def init_database():
-    Base.metadata.create_all(engine)
+    """
+    Create the transcript and profile tables.
+
+    Scoped to the two pre-Phase-8 tables. See the module docstring: the
+    Phase 8 tables belong to the pipeline, and are created where the
+    pipeline is built.
+    """
+
+    Base.metadata.create_all(
+        engine,
+        tables=[Message.__table__, UserFact.__table__],
+    )
+
+
+def init_pipeline_tables(bind=None):
+    """
+    Create the Memory 2.0 tables, if they are missing.
+
+    Additive and idempotent - `create_all` issues CREATE TABLE IF NOT
+    EXISTS and leaves existing rows alone, so this is safe to call on
+    every start and safe on a database written before Phase 8.
+    """
+
+    Base.metadata.create_all(
+        bind or engine,
+        tables=[EpisodicMemory.__table__, UserModelEntry.__table__],
+    )

@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 
 from companion.decision import CompanionDecision, Priority
+from core.temporal import in_quiet_hours
 
 
 DEFAULT_COOLDOWN = 300.0
@@ -212,27 +213,14 @@ class CompanionPolicy:
     # ------------------------------------------------------------------
 
     def _in_quiet_hours(self) -> bool:
+        """
+        Delegated to `core.temporal`, which the proactive scheduler reads
+        too. "Quiet" has to mean the same thing to everything in Aura
+        that can speak unprompted, and two copies of a midnight-wrapping
+        range check would eventually disagree.
+        """
 
-        hour = self.local_hour()
-
-        for window in self.settings.quiet_hours:
-
-            try:
-                start, end = int(window[0]), int(window[1])
-            except (TypeError, ValueError, IndexError):
-                continue
-
-            if start == end:
-                continue
-
-            # A window that wraps midnight is two ranges, not one.
-            if start < end:
-                if start <= hour < end:
-                    return True
-            elif hour >= start or hour < end:
-                return True
-
-        return False
+        return in_quiet_hours(self.local_hour(), self.settings.quiet_hours)
 
     @staticmethod
     def _normalise(message: str) -> str:

@@ -10,7 +10,7 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 - ✅ Protocol-based optional collaborators
 - ✅ Composition root pattern
 - ✅ Path independence (all paths anchored to PROJECT_ROOT)
-- ✅ Test infrastructure (pytest, conftest, 559 test functions written)
+- ✅ Test infrastructure (pytest, conftest) — see Test Status below
 
 ### Section 1: Expression System
 - ✅ `avatar/expression.py` - Mood-driven expression selection
@@ -45,7 +45,10 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 
 ### Section 6: Memory Improvements
 - ✅ `memory/profile.py` - Persistent user facts (SQLite)
-- ✅ `memory/retrieval.py` - Keyword-based recall over old transcript
+- ✅ `memory/retrieval.py` - Keyword-based recall over old transcript.
+  Implemented and tested, but `memory.recall` ships **false** - see the
+  rationale in config.yaml. Lexical token overlap, not semantic: there is
+  no embedding model and no vector store anywhere in this codebase.
 - ✅ `memory/companion.py` - Session-only companion memory
   - Facts, preferences, goals, projects
   - Coding style observations
@@ -101,63 +104,34 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 
 ## Test Status
 
-**No test in this repository has been executed in a session that is
-recorded here.** Shell execution was unavailable throughout, so the
-suite has never been run to a reported result. Per project requirements:
-*"Never fabricate execution results. If infrastructure prevents
-execution, explicitly state that tests were NOT executed."*
+The suite runs. Measured with `.venv/Scripts/python.exe -m pytest -q`
+during the Phase 7 sweep:
 
-That applies to the earlier "287 tests passing" claim as much as to
-Sections 8 and 9 — it was never measured and has been removed.
+```
+1160 passed, 1 deselected
+```
 
-What is actually known, by counting `^def test_` in the working tree:
+The deselected test is `tests/test_gemini_integration.py`, gated by
+`-m "not integration"` in `pytest.ini` and opt-in via
+`AURA_RUN_INTEGRATION=1`. It is the only test that touches the network,
+so the hermetic suite passes with no API keys at all — which is what CI
+runs.
 
-| File | Test functions |
-|---|---|
-| `test_personality_style.py` | 80 |
-| `test_tools.py` | 52 |
-| `test_plugins.py` | 42 |
-| `test_companion_memory.py` | 40 |
-| `test_tool_framework.py` | 39 |
-| `test_voice.py` | 39 |
-| `test_memory_v2.py` | 38 |
-| `test_voice_edge.py` | 38 |
-| `test_config.py` | 31 |
-| `test_integration_flows.py` | 31 |
-| `test_pipeline.py` | 23 |
-| `test_vision.py` | 23 |
-| `test_avatar.py` | 22 |
-| `test_voice_cancel.py` | 22 |
-| `test_character_consistency.py` | 21 |
-| `test_events.py` | 17 |
-| `test_gemini_integration.py` | 1 (opt in) |
+1160 collected comes from 1003 `def test_` functions across 32 files; the
+difference is parametrization. Per-file counts are not reproduced here
+because they go stale on every commit — get them from pytest, not from
+this file.
 
-559 test functions across 17 files. A count is not a result: collection
-could fail, and a function that is collected is not a function that
-passes.
-
-### Verified by static review instead
-
-Sections 8 and 9 were checked by reading each assertion against the
-implementation it exercises. That found one real defect:
-
-- `tests/test_plugins.py` called `ModuleType(...)` in its `fake_module`
-  helper without importing it. Eight discovery tests would have failed
-  on `NameError`. **Fixed** — `from types import ModuleType` added.
-
-Everything else lines up: `ToolRegistry` has the `register`/`unregister`/
-`names` the plugin tests use, `EventBus.subscribe` returns the
-unsubscribe callable `session_stats` stores, `handler_count` exists,
-`PromptBuilder.build` takes `identity` as a keyword before `style`, and
-every symbol `test_character_consistency.py` imports is exported from
-`brain/consistency.py`.
-
-Static review is not execution. It catches missing names and changed
-signatures; it does not catch a wrong assertion about correct code.
+An earlier revision of this document said no test had ever been executed
+and listed 559 functions across 17 files. Both statements were true when
+written (shell execution was unavailable in those sessions) and are now
+superseded.
 
 ## Configuration Schema
 
-Current `config.yaml` structure:
+The shipped `config.yaml`, abridged to the keys and defaults that decide
+behaviour. `core/config.py` holds the full default tree and merges this
+file over it, so an absent key is a default rather than an error.
 
 ```yaml
 app:
@@ -165,99 +139,72 @@ app:
   version: 0.2.0
 
 llm:
-  provider: mock | gemini
-  model: gemini-2.5-flash
-  temperature: 0.7
-  max_output_tokens: 4096
+  provider: gemini
+  model: gemini-3.6-flash
+  # Authoritative. The singular `fallback_provider` is its superseded
+  # form, read only when this list is empty; setting both warns at boot.
+  fallback_providers: [groq, mistral, openrouter]
+  fallback_model: openrouter/free   # OpenRouter's model, not a provider
+  ollama_model: qwen3:8b            # only read when ollama is in the chain
+  timeout: 120
+  max_output_tokens: 768
 
 memory:
-  history_limit: 20
+  history_limit: 10
   profile: true
-  recall: false
-  max_facts: 8
-  max_recalled: 3
-  companion: true
-  max_companion: 10
-  max_highlights: 3
-
-personality:
-  style:
-    enabled: true
-    strip_filler: true
-    hint: ""
-    avoid_repeats: 3
-  
-  consistency:
-    enabled: true
-    after_messages: 6
-    contradiction_after: 20
-    anchor: ""
+  recall: false        # keyword search over the transcript; off by default
+  max_facts: 5
+  max_recalled: 2
 
 voice:
-  tts:
-    enabled: false
-    provider: auto | edge | pyttsx3 | sapi
-    voice: ""
-    rate: "+5%"
-    pitch: "+10Hz"
-    volume: 100
-    timeout: 60.0
-    playback_timeout: 300.0
-    playback: true
-  
-  stt:
-    enabled: false
-    provider: mock | whisper
-    model: base
-    language: ""
-    record_seconds: 5.0
-    wake_word: ""
+  tts: {enabled: false}
+  stt: {enabled: false}
 
 vision:
-  enabled: false
-  min_interval: 2.0
-  capture_screen: false
-  monitor: 1
+  enabled: true         # screen awareness at all
+  capture_screen: false # pixels. false = window titles only
+  cloud_model: gemini-3.6-flash
+  ollama_model: qwen2.5vl:7b
+  fallback_model: openrouter/free
+  max_pixels: 1500000
+  jpeg_quality: 75
 
 avatar:
-  enabled: true
-  size: 160
-  scale: 1.0
-  opacity: 0.95
-  position: null
-  sprites_dir: ""
+  enabled: false
 
 tools:
-  enabled: false
-  allowed: []
-  auto_approve: [safe]
-  timeout: 30.0
-  allowed_paths: []
-  applications: {}
+  enabled: true         # whether tools exist at all
+  allowed: [current_time]   # which may run; empty grants nothing
+  auto_approve: [safe]  # risk levels that skip confirmation
+  allowed_paths: []     # empty = the filesystem tools do not register
+  applications: {}      # empty = open_application does not register
 
-plugins:
-  enabled: []
-  directory: ""
-  config: {}
+server:
+  screen: {enabled: true, min_interval: 8.0}
 
 logging:
-  level: INFO
+  level: INFO           # AURA_LOG_LEVEL in the environment outranks this
 ```
+
+`tools.allowed` naming only `current_time` is deliberate, not an
+oversight: it is SAFE and reads a clock. Everything that could change a
+machine stays unlisted until someone adds it on purpose.
 
 ## Not Yet Implemented
 
 From the original roadmap, still pending:
 
 ### Section 11: Testing
-- **Status:** Code complete, 559 test functions written, none executed
-- **Next:** Run `./.venv/Scripts/python.exe -m pytest -q` once shell
-  execution is available, fix what fails, repeat until green
-- **Expected:** unknown, and it stays unknown until it runs
+- **Status:** Executed. `.venv/Scripts/python.exe -m pytest -q` reports
+  **1160 passed, 1 deselected** (the deselected one is the opt-in
+  integration test, gated by `-m "not integration"` in `pytest.ini`).
+- **CI:** `.github/workflows/tests.yml` runs the same hermetic suite on
+  every push and pull request. No secrets: the suite must pass with no
+  API keys at all.
 
 ### Section 12: Documentation
-- **Status:** In progress (this session)
-- **Completed:** README.md, ARCHITECTURE.md, this file
-- **Remaining:** Developer guide, update roadmap with completion markers
+- **Status:** README.md, ARCHITECTURE.md, DEVELOPER_GUIDE.md and this
+  file exist and were re-checked against the code in the Phase 7 sweep.
 
 ### Future Work (Not in Current Roadmap)
 - Live2D backend implementation
@@ -291,28 +238,29 @@ Python files by subsystem (counted from the working tree, excluding
 
 | Package | Files |
 |---|---|
-| `brain/` | 25 (including `providers/`) |
-| `voice/` | 23 (including `stt/`, `tts/`, their providers) |
-| `tests/` | 22 (16 `test_*`, 6 `manual_*`) |
-| `tools/` | 11 (including `builtins/`) |
+| `brain/` | 32 (including `providers/`) |
+| `tests/` | 32 (all `test_*`) |
+| `voice/` | 21 (including `stt/`, `tts/`, their providers) |
+| `server/` | 14 (HTTP + WebSocket API) |
+| `tools/` | 10 (including `builtins/`) |
+| `vision/` | 9 |
 | `memory/` | 8 |
 | `avatar/` | 8 |
 | `plugins/` | 7 (including `builtins/`) |
-| `tts/` | 6 (legacy — see below) |
-| `core/` | 6 |
-| `vision/` | 5 |
+| `scripts/` | 6 (side-effecting `manual_*`, run by hand) |
+| `companion/` | 6 (unprompted-notification pipeline) |
+| `core/` | 5 |
 | `launcher/` | 4 (plus `launcher.py` at root) |
 | `events/` | 3 |
 
-Total: 131 Python files, including `main.py`, `launcher.py`, and
-`conftest.py` at the root. Line count not measured — shell execution was
-unavailable this session.
+Total: 168 Python files, including `main.py`, `launcher.py`, and
+`conftest.py` at the root. Counted from the working tree, excluding
+`.venv/`, `.venv-py314-backup/`, `awesome-claude-skills/` and `android/`
+— the first three are gitignored and none are Aura source.
 
-**Legacy duplicate:** a top-level `tts/` package (`base.py`, `manager.py`,
-`providers/edge.py`, `elevenlabs.py`, `kokoro.py`) exists alongside
-`voice/tts/`. The live implementation is `voice/tts/`; the top-level
-package predates it. Flagged for the cleanup pass, not removed yet —
-removal should follow a check that nothing imports it.
+The top-level `tts/` package that used to sit alongside `voice/tts/` was
+removed in the Phase 7 cleanup. It had no importers and every file but
+one was empty. `voice/tts/` is the live implementation.
 
 ## Dependencies
 
@@ -334,18 +282,32 @@ removal should follow a check that nothing imports it.
 ## Known Limitations
 
 1. **Single conversation thread** - No parallel conversations
-2. **Local only** - No remote access or web interface
+2. **Single tenant** - every session reads and writes one transcript, one
+   profile and one companion store. `session_id` scopes the metadata
+   endpoint only; the auth token is the identity boundary. Two people
+   sharing the token share Aura's memory.
 3. **SQLite memory** - No distributed memory backend
-4. **Session-only companion memory** - Resets on restart
-5. **No authentication** - Designed for single user on local machine
+4. **Session-only companion memory** - `memory/companion.py` holds
+   Protocols plus an in-memory implementation and no schema, so it resets
+   on restart. The durable half is `memory/profile.py`.
+5. **Recall is lexical, not semantic** - token overlap over the messages
+   table. No embedding model, no vector store, anywhere in this codebase.
 6. **Windows-optimized** - Primary development/testing on Windows
-7. **Test execution pending** - the suite has never been run to a
-   reported result in any recorded session
+7. **No desktop execution from the server** - Render cannot touch a
+   physical PC, and says so rather than describing the action. See
+   `tests/test_device_boundary.py`.
+
+Two entries in the previous revision of this list - "local only, no
+remote access" and "no authentication, designed for single user on local
+machine" - were obsolete: `server/` exposes an authenticated HTTP and
+WebSocket API and the bearer token is mandatory at startup
+(AURA-P1-008). A third, "test execution pending", is superseded by the
+Test Status section above.
 
 ## Next Steps
 
-1. **Execute test suite** - Once shell classifier returns
-2. **Fix any test failures** - Iterate until green
-3. **Complete documentation** - Developer guide, updated roadmap
-4. **Clean up** - Remove obsolete files, unused imports
-5. **User testing** - Real-world usage validation
+The local Windows device agent, which is the only substantial feature
+work still outstanding. `.claude/task-queue.md` carries the four items;
+`docs/DEPLOYMENT.md` and `.claude/decisions.md` carry the transport
+decision (outbound long-poll, because a container cannot reach a home
+machine unsolicited).

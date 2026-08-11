@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.aura.companion.data.AuraRepositoryTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:23:00" hostname="MSI" time="0.359">
+<testsuite name="com.aura.companion.data.AuraRepositoryTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-08-09T13:42:45" hostname="MSI" time="0.362">
   <properties/>
-  <testcase name="a screen observation carries the device id and the session" classname="com.aura.companion.data.AuraRepositoryTest" time="0.265"/>
+  <testcase name="a screen observation carries the device id and the session" classname="com.aura.companion.data.AuraRepositoryTest" time="0.266"/>
   <testcase name="chat posts to api slash chat in the server's field names" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
-  <testcase name="502 and 504 are read as a cold start rather than a fault" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
+  <testcase name="502 and 504 are read as a cold start rather than a fault" classname="com.aura.companion.data.AuraRepositoryTest" time="0.006"/>
   <testcase name="a 503 naming screen_disabled is Aura declining, not Aura waking" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
-  <testcase name="the first message carries no session and the second carries the server's" classname="com.aura.companion.data.AuraRepositoryTest" time="0.006"/>
-  <testcase name="an empty notification list is a success with nothing in it" classname="com.aura.companion.data.AuraRepositoryTest" time="0.007"/>
+  <testcase name="the first message carries no session and the second carries the server's" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
+  <testcase name="an empty notification list is a success with nothing in it" classname="com.aura.companion.data.AuraRepositoryTest" time="0.009"/>
   <testcase name="a dropped connection becomes Offline" classname="com.aura.companion.data.AuraRepositoryTest" time="0.006"/>
   <testcase name="no Authorization header is sent when no token is configured" classname="com.aura.companion.data.AuraRepositoryTest" time="0.004"/>
   <testcase name="an unconfigured server URL fails before any request" classname="com.aura.companion.data.AuraRepositoryTest" time="0.002"/>
-  <testcase name="the client identifies itself in metadata" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
+  <testcase name="the client identifies itself in metadata" classname="com.aura.companion.data.AuraRepositoryTest" time="0.004"/>
   <testcase name="resetSession makes the next message start a new conversation" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
-  <testcase name="401 and 403 both mean the token was refused" classname="com.aura.companion.data.AuraRepositoryTest" time="0.006"/>
+  <testcase name="401 and 403 both mean the token was refused" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
   <testcase name="a 500 is reported with its code and never its body" classname="com.aura.companion.data.AuraRepositoryTest" time="0.004"/>
   <testcase name="every request carries the bearer token" classname="com.aura.companion.data.AuraRepositoryTest" time="0.004"/>
-  <testcase name="a screen the server ignores yields no decision" classname="com.aura.companion.data.AuraRepositoryTest" time="0.003"/>
+  <testcase name="a screen the server ignores yields no decision" classname="com.aura.companion.data.AuraRepositoryTest" time="0.004"/>
   <testcase name="notifications are fetched for this device and parsed" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
   <testcase name="a malformed body is a failure, not a crash" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
   <testcase name="a token changed in settings takes effect on the next request" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
-  <testcase name="a bare 503 is a cold start" classname="com.aura.companion.data.AuraRepositoryTest" time="0.003"/>
-  <testcase name="health exposes the runtime map the settings screen reads" classname="com.aura.companion.data.AuraRepositoryTest" time="0.006"/>
+  <testcase name="a bare 503 is a cold start" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
+  <testcase name="health exposes the runtime map the settings screen reads" classname="com.aura.companion.data.AuraRepositoryTest" time="0.005"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

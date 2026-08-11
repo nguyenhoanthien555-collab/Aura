@@ -89,20 +89,22 @@ def describe(frame, path: str, use_model: bool) -> None:
     image in the request are the same bytes by construction.
     """
 
-    settings = load_config().get("vision") or {}
+    config = load_config()
+    settings = config.get("vision") or {}
 
     try:
         from vision.ollama_processor import (
             DEFAULT_HOST,
-            DEFAULT_MODEL,
             OllamaVisionProcessor,
         )
     except ImportError as error:
         print(f"Cannot build the vision processor: {error}")
         return
 
+    from vision.settings import ollama_model
+
     processor = OllamaVisionProcessor(
-        model=settings.get("model") or DEFAULT_MODEL,
+        model=ollama_model(config),
         host=settings.get("host") or DEFAULT_HOST,
         timeout=settings.get("timeout") or 120.0,
         debug_path=path,

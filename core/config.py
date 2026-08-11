@@ -36,11 +36,23 @@ DEFAULT_CONFIG = {
     "llm": {
         "provider": "mock",
         "model": "gemini-2.5-flash",
-        "fallback_provider": "",
-        "fallback_model": "",
+
+        # The fallback chain, in order. This is the authoritative
+        # setting; `fallback_provider` below is its superseded singular
+        # form, still read when the list is empty so an older config.yaml
+        # does not silently lose its failover.
         "fallback_providers": [],
+        "fallback_provider": "",
+
+        # Per-provider models. `model` above names the *primary* cloud
+        # model and is not a valid tag for any of these, so each provider
+        # that needs a different one says so here rather than having it
+        # inferred from the primary's name.
+        "fallback_model": "",
         "groq_model": "llama-3.3-70b-versatile",
         "mistral_model": "mistral-small-latest",
+        "ollama_model": "qwen3:8b",
+
         "temperature": 0.7,
         "max_output_tokens": 768,
     },
@@ -62,6 +74,71 @@ DEFAULT_CONFIG = {
         "companion": True,
         "max_companion": 10,
         "max_highlights": 3,
+
+        # Memory 2.0: the episodic store, the temporary context and the
+        # structured user model, behind one pipeline. On by default -
+        # without it Aura keeps the transcript and the older profile
+        # recall, which is Sprint 5 behaviour.
+        "pipeline": True,
+
+        # Write the bundled profile into the user model at startup.
+        # Idempotent, and it never overwrites a confirmed entry or undoes
+        # a correction, so leaving it on costs one query per entry per
+        # restart. Turn it off to start from an empty model.
+        "seed_profile": True,
+
+        # How much of the transcript ranked recall may consider. A
+        # ceiling, not a target: the ranker still returns `max_recalled`.
+        "retrieval_scope": 500,
+    },
+
+    # What time Aura thinks it is.
+    #
+    # Empty means this machine's timezone, which is right for a desktop
+    # and wrong for a container in another region - a server deployment
+    # should set it to the user's zone, not the host's. Named zones need
+    # the `tzdata` package on Windows; UTC never does.
+    "temporal": {
+        "timezone": "",
+    },
+
+    # Speaking first.
+    #
+    # Off by default, and that is the correct default for something that
+    # can interrupt: it is turned on deliberately, per deployment, by
+    # someone who wants it. Every value below is a ceiling on how often
+    # Aura may speak unprompted, and the defaults are conservative
+    # enough to be dull.
+    "proactive": {
+        "enabled": False,
+
+        # Nothing unprompted within two hours of anything else
+        # unprompted, whatever the category.
+        "cooldown_seconds": 7200,
+
+        # And at most this many in one calendar day.
+        "max_per_day": 4,
+
+        # Per-category cooldowns, in seconds. A greeting is a
+        # once-a-part-of-day thing; an appreciation should be rare
+        # enough to mean something.
+        "category_cooldowns": {
+            "greeting": 21600,
+            "appreciation": 86400,
+            "wellbeing": 43200,
+            "task": 14400,
+        },
+
+        # Hours Aura stays quiet, as [start, end] pairs that may wrap
+        # midnight. 22:00 to 08:00 by default.
+        "quiet_hours": [[22, 8]],
+
+        # Don't repeat a message within this window...
+        "duplicate_window_seconds": 21600,
+
+        # ...and don't send a near-miss of one either. Jaccard overlap
+        # above this counts as the same message.
+        "similarity_threshold": 0.6,
     },
 
     "personality": {
@@ -199,9 +276,15 @@ DEFAULT_CONFIG = {
         "capture_screen": False,
         "monitor": 1,
 
-        # The local vision model that reads captured frames. Only used
-        # when capture_screen is on. Empty host falls back to llm.host.
-        "model": "qwen2.5vl:7b",
+        # Two model keys, because two processors read this section and
+        # want different kinds of name. `cloud_model` is a hosted model
+        # name for vision/cloud_processor.py (server mode);
+        # `ollama_model` is an Ollama tag posted to a local daemon when
+        # capture_screen is on. `vision.settings` resolves both, and
+        # still honours a legacy `vision.model` written before the split.
+        # Empty host falls back to llm.host.
+        "cloud_model": "",
+        "ollama_model": "qwen2.5vl:7b",
         "host": "",
         "timeout": 120.0,
 

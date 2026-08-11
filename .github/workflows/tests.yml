@@ -1,0 +1,37 @@
+# The hermetic suite, on every push and pull request.
+#
+# Deliberately small. `pytest.ini` already encodes what a default run
+# means - `testpaths = tests` and `-m "not integration"` - so this file
+# does not restate it and cannot drift from it. Integration tests stay
+# opt-in (AURA_RUN_INTEGRATION=1) and are not run here: they touch the
+# network and would make a red build mean "an API had a bad day".
+#
+# No secrets are referenced. The suite must pass with no API keys at all,
+# which is also the property that keeps it honest about provider failure.
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # The version the project is developed against.
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the hermetic suite
+        run: pytest -q
