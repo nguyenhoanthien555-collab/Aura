@@ -346,5 +346,24 @@ class AccessibilityAgentTest {
         assertEquals("open_app(com.google.android.youtube) [VERIFIED]", snapshot.completedActions[0])
         assertEquals("click(search_button) [VERIFIED]", snapshot.completedActions[1])
     }
+
+    @Test
+    fun testIsSearchTaskComplete() {
+        val inputAction = AgentAction(action = "input_text", nodeId = "search_edit_text", text = "Minecraft")
+        val submitAction = AgentAction(action = "submit")
+        val clickAction = AgentAction(action = "click", nodeId = "search_button")
+
+        // Search task completes on input_text or submit
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", inputAction, emptyList()))
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open Chrome and search Google", submitAction, emptyList()))
+
+        // Non-search requests do not auto-complete on search check
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube", inputAction, emptyList()))
+
+        // Click action alone is not search completion unless input/submit history exists
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", clickAction, emptyList()))
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", clickAction, listOf("input_text(search_edit_text, \"Minecraft\") [VERIFIED]")))
+    }
 }
+
 

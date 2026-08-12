@@ -138,15 +138,19 @@ class AuraAccessibilityService : AccessibilityService() {
             // a timeout, because `stepCount >= maxSteps` was true for
             // both "ran out of steps" and "used the last one well".
             var settled = false
+            var skipScreenshot = false
+
 
             while (stepCount < maxSteps) {
                 stepCount++
+                val stepStartMs = System.currentTimeMillis()
                 Log.d("AuraAgent", "Starting agent step $stepCount for task: $currentRequest")
 
+                val t0 = System.currentTimeMillis()
                 val root = rootInActiveWindow
                 if (root == null) {
-                    Log.d("AuraAgent", "No active window root found. Retrying in 1s...")
-                    delay(1000)
+                    Log.d("AuraAgent", "No active window root found. Retrying in 300ms...")
+                    delay(300)
                     continue
                 }
 
@@ -169,25 +173,22 @@ class AuraAccessibilityService : AccessibilityService() {
                         ).toString()
                     }.getOrDefault(activePackage)
                 )
+                val snapshotMs = System.currentTimeMillis() - t0
 
-                // Vision, for this step, before the tick that describes it.
-                //
-                // `screenshot_available` is the outcome of *this* upload and
-                // nothing weaker. It used to be the literal `false`, which
-                // was at least honest; a literal `true` would have been the
-                // worse bug, because the field is a claim about what the
-                // server is holding, not about what this build can do. Every
-                // gate - the two privacy switches, the Android version, the
-                // interval - lives in the uploader, so a false here means one
-                // of them said no and the model is right not to expect
-                // pixels.
-                val screenshot = screenshots.upload(
-                    application = appInfo.label ?: activePackage,
-                    packageName = activePackage,
-                )
+                val screenshot = if (skipScreenshot) {
+                    ScreenshotOutcome.Skipped("disabled for loop")
+                } else {
+                    screenshots.upload(
+                        application = appInfo.label ?: activePackage,
+                        packageName = activePackage,
+                    )
+                }
 
                 if (screenshot is ScreenshotOutcome.Failed) {
                     Log.w("AuraAgent", "Screenshot not delivered: ${screenshot.reason}")
+                    if (screenshot.reason.contains("503") || screenshot.reason.contains("screen_disabled") || screenshot.reason.contains("waking up")) {
+                        skipScreenshot = true
+                    }
                 }
 
                 val snapshot = AccessibilitySnapshot(
@@ -206,7 +207,9 @@ class AuraAccessibilityService : AccessibilityService() {
                 val jsonContext = Json.encodeToJsonElement(snapshot).jsonObject
 
                 Log.d("AuraAgent", "Sending screen snapshot to backend...")
+                val netStartMs = System.currentTimeMillis()
                 val result = repository.send(AGENT_TICK, jsonContext)
+                val networkMs = System.currentTimeMillis() - netStartMs
 
                 // Recycle tree node references immediately after sending request to prevent leaks
                 nodeMap.values.forEach { it.recycle() }
@@ -219,13 +222,6 @@ class AuraAccessibilityService : AccessibilityService() {
                         when (val parsed = AgentActionParser.parse(reply)) {
 
                             is AgentActionParser.ParseResult.Failure -> {
-                                // Not fatal. A model that fenced its JSON
-                                // or added a field is one correction away
-                                // from a usable answer, and the correction
-                                // travels on `last_action_error` - the
-                                // same channel a failed tap uses. The
-                                // outer `stepCount < maxSteps` is what
-                                // bounds the retrying.
                                 parseFailures++
                                 Log.w(
                                     "AuraAgent",
@@ -246,9 +242,6 @@ class AuraAccessibilityService : AccessibilityService() {
                             is AgentActionParser.ParseResult.Success -> {
                                 val action = parsed.action
 
-                                // A reply we could read resets the budget:
-                                // the allowance is for consecutive
-                                // failures, not for the task as a whole.
                                 parseFailures = 0
 
                                 if (action.action == "complete") {
@@ -270,40 +263,42 @@ class AuraAccessibilityService : AccessibilityService() {
                                 if ((failedActionsCount[actionKey] ?: 0) >= 2) {
                                     lastActionError = "Action ${action.action} on ${action.nodeId} failed repeatedly (${failedActionsCount[actionKey]} times). Target is not actionable. Try a different approach."
                                     Log.w("AuraAgent", lastActionError!!)
-                                    // Reset counter so the LLM has a chance to try a new path
                                     failedActionsCount.remove(actionKey)
                                     continue
                                 }
 
-                                when (executeActionWithRecovery(action, tree)) {
+                                val execStartMs = System.currentTimeMillis()
+                                val execResult = executeActionWithRecovery(action, tree)
+                                val execVerifyMs = System.currentTimeMillis() - execStartMs
+                                val stepTotalMs = System.currentTimeMillis() - stepStartMs
+                                Log.d("AuraAgent", "PERF step=$stepCount snapshot=${snapshotMs}ms network=${networkMs}ms execVerify=${execVerifyMs}ms total=${stepTotalMs}ms")
+
+                                when (execResult) {
                                     is ExecutionResult.Verified -> {
                                         failedActionsCount.remove(actionKey)
                                         lastVerifiedAction = action
                                         completedActions.add(formatActionHistory(action))
                                         lastActionError = null
 
-                                        if (shouldAutoComplete(currentRequest, action)) {
+                                        if (shouldAutoComplete(currentRequest, action) || isSearchTaskComplete(currentRequest, action, completedActions)) {
                                             finalMessage = action.message ?: completionMessageForAction(action)
-                                            Log.d("AuraAgent", "Single-action task completed: $finalMessage")
+                                            Log.d("AuraAgent", "Task completed: $finalMessage")
                                             settled = true
                                             break
                                         }
-                                        delay(500) // Short stabilization after verified success
+                                        delay(150) // Reduced stabilization after verified success
                                     }
 
-
                                     is ExecutionResult.Unverified -> {
-                                        // The action executed without error, but we could not confirm UI change.
-                                        // Treat as conditional success — let the LLM see the next screen state.
-                                        // But track it: if the same action keeps being unverified, it's likely failing.
                                         val count = (failedActionsCount[actionKey] ?: 0) + 1
                                         failedActionsCount[actionKey] = count
                                         if (count >= 2) {
                                             lastActionError = "Action ${action.action} on ${action.nodeId} executed but UI did not change (${count} times). The action may not be working."
                                         }
-                                        delay(500)
+                                        delay(150)
                                     }
                                     is ExecutionResult.Blocked -> {
+
                                         finalMessage = "Action blocked for safety: attempted ${action.action} containing sensitive targets."
                                         settled = true
                                         break
@@ -401,7 +396,7 @@ class AuraAccessibilityService : AccessibilityService() {
 
             if (success) {
                 // --- Verify action: capture post-action state ---
-                delay(1200) // Wait for UI to settle
+                delay(250) // Wait for UI to settle
 
                 val postRoot = rootInActiveWindow
                 val postFingerprint = if (postRoot != null) {
@@ -422,9 +417,10 @@ class AuraAccessibilityService : AccessibilityService() {
             } else {
                 Log.w("AuraAgent", "Attempt $attempt failed for action ${action.action}")
                 if (attempt < maxAttempts) {
-                    delay(1000)
+                    delay(300)
                 }
             }
+
         }
         return ExecutionResult.Failed
     }
@@ -644,11 +640,23 @@ class AuraAccessibilityService : AccessibilityService() {
             }
         }
 
+        fun isSearchTaskComplete(request: String, action: AgentAction, completedActions: List<String>): Boolean {
+            val reqLower = request.lowercase().trim()
+            val isSearchReq = reqLower.contains("search") || reqLower.contains("tìm")
+            if (!isSearchReq) return false
+
+            val isInputOrSubmit = action.action == "input_text" || action.action == "submit"
+            val hasInputOrSubmitHistory = completedActions.any { it.startsWith("input_text") || it.startsWith("submit") }
+
+            return isInputOrSubmit || hasInputOrSubmitHistory
+        }
+
         fun isRepeatedVerifiedAction(
             action: AgentAction,
             lastVerifiedAction: AgentAction?,
             currentPackage: String
         ): Boolean {
+
             if (lastVerifiedAction == null) return false
             if (action.action != lastVerifiedAction.action) return false
 

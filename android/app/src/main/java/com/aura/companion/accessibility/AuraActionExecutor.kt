@@ -208,14 +208,26 @@ class AuraActionExecutor(
                 val arguments = Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
                 }
-                if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
-                    true
-                } else {
+                var setSuccess = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+                if (!setSuccess) {
                     node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                    node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+                    setSuccess = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
                 }
+                if (setSuccess) {
+                    tryPerformImeSubmit(node, service)
+                }
+                setSuccess
+            }
+            "submit" -> {
+                val node = resolvedNode ?: service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                val ok = tryPerformImeSubmit(node, service)
+                if (node != null && node != resolvedNode) {
+                    node.recycle()
+                }
+                ok
             }
             "clear_text" -> {
+
                 val node = resolvedNode ?: return false
                 val arguments = Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
@@ -422,4 +434,38 @@ class AuraActionExecutor(
         }
         return null
     }
+
+    private fun tryPerformImeSubmit(node: AccessibilityNodeInfo?, service: AccessibilityService): Boolean {
+        if (node == null) return false
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+                return true
+            }
+        }
+
+        if (node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return true
+        }
+
+        var current = node.parent
+        while (current != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                if (current.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+                    current.recycle()
+                    return true
+                }
+            }
+            if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                current.recycle()
+                return true
+            }
+            val parent = current.parent
+            current.recycle()
+            current = parent
+        }
+
+        return false
+    }
 }
+
