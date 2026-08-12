@@ -303,4 +303,48 @@ class AccessibilityAgentTest {
         val click = AgentAction(action = "click", nodeId = "btn_1")
         assertFalse(AuraAccessibilityService.shouldAutoComplete("mở YouTube", click))
     }
+
+    @Test
+    fun testRepeatedVerifiedActionGuard() {
+        val openAppYoutube = AgentAction(action = "open_app", packageName = "com.google.android.youtube")
+        val openAppChrome = AgentAction(action = "open_app", packageName = "com.android.chrome")
+        val homeAction = AgentAction(action = "home")
+        val clickNode1 = AgentAction(action = "click", nodeId = "node_1")
+        val clickNode2 = AgentAction(action = "click", nodeId = "node_2")
+
+        // Identical verified open_app when already in target package or matching last verified action
+        assertTrue(AuraAccessibilityService.isRepeatedVerifiedAction(openAppYoutube, openAppYoutube, "com.google.android.youtube"))
+        assertTrue(AuraAccessibilityService.isRepeatedVerifiedAction(openAppYoutube, openAppYoutube, "com.aura.companion"))
+
+        // Different app target is NOT repeated
+        assertFalse(AuraAccessibilityService.isRepeatedVerifiedAction(openAppChrome, openAppYoutube, "com.google.android.youtube"))
+
+        // Repeated home action is guarded
+        assertTrue(AuraAccessibilityService.isRepeatedVerifiedAction(homeAction, homeAction, "com.sec.android.app.launcher"))
+
+        // Repeated click on same node_id is guarded
+        assertTrue(AuraAccessibilityService.isRepeatedVerifiedAction(clickNode1, clickNode1, "com.google.android.youtube"))
+        assertFalse(AuraAccessibilityService.isRepeatedVerifiedAction(clickNode2, clickNode1, "com.google.android.youtube"))
+    }
+
+    @Test
+    fun testAccessibilitySnapshotCompletedActionsProgress() {
+        val completedList = listOf(
+            "open_app(com.google.android.youtube) [VERIFIED]",
+            "click(search_button) [VERIFIED]"
+        )
+        val snapshot = AccessibilitySnapshot(
+            device = DeviceState(1080, 2400),
+            app = AppInfo("com.google.android.youtube", label = "YouTube"),
+            accessibilityTree = emptyMap(),
+            screenshotAvailable = false,
+            userRequest = "open YouTube and search Minecraft",
+            completedActions = completedList
+        )
+
+        assertEquals(2, snapshot.completedActions.size)
+        assertEquals("open_app(com.google.android.youtube) [VERIFIED]", snapshot.completedActions[0])
+        assertEquals("click(search_button) [VERIFIED]", snapshot.completedActions[1])
+    }
 }
+

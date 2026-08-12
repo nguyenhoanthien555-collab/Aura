@@ -43,8 +43,10 @@ data class AccessibilitySnapshot(
     @SerialName("accessibility_tree") val accessibilityTree: Map<String, AccessibilityNode>,
     @SerialName("screenshot_available") val screenshotAvailable: Boolean = false,
     @SerialName("user_request") val userRequest: String? = null,
-    @SerialName("last_action_error") val lastActionError: String? = null
+    @SerialName("last_action_error") val lastActionError: String? = null,
+    @SerialName("completed_actions") val completedActions: List<String> = emptyList()
 )
+
 
 @Serializable
 data class AgentAction(

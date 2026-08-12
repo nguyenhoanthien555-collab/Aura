@@ -13,10 +13,12 @@ from brain.agent_mode import is_agent_tick, is_intent_probe
 
 from brain.prompt_sections import (
     ACCESSIBILITY_TREE,
+    ACTION_HISTORY,
     AGENT_RULES,
     DEVICE_STATE,
     INTENT_RULES,
     LAST_ACTION_ERROR,
+
     SYSTEM,
     PERSONALITY,
     CONTEXT,
@@ -375,6 +377,15 @@ class PromptBuilder:
             prompt.extend([
                 LAST_ACTION_ERROR,
                 context["last_action_error"],
+            ])
+
+        # 2.6 Progress / Completed actions in the current agent loop
+        completed_actions = context.get("completed_actions") or context.get("action_history") or []
+        if completed_actions:
+            action_lines = [f"- {act}" for act in completed_actions]
+            prompt.extend([
+                ACTION_HISTORY,
+                "\n".join(action_lines),
             ])
 
         # 3. Agent rules

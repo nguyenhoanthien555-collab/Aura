@@ -130,6 +130,8 @@ class AuraAccessibilityService : AccessibilityService() {
             var lastActionError: String? = null
             val failedActionsCount = mutableMapOf<String, Int>()
             var parseFailures = 0
+            val completedActions = mutableListOf<String>()
+            var lastVerifiedAction: AgentAction? = null
 
             // Set by every path that ends the loop on purpose. Without
             // it, a task that finished on the final step was reported as
@@ -194,7 +196,8 @@ class AuraAccessibilityService : AccessibilityService() {
                     accessibilityTree = tree,
                     screenshotAvailable = screenshot is ScreenshotOutcome.Sent,
                     userRequest = currentRequest,
-                    lastActionError = lastActionError
+                    lastActionError = lastActionError,
+                    completedActions = completedActions.toList()
                 )
 
                 // Clear error so we only send it once
@@ -255,6 +258,13 @@ class AuraAccessibilityService : AccessibilityService() {
                                     break
                                 }
 
+                                // Deterministic repeated-action guard
+                                if (isRepeatedVerifiedAction(action, lastVerifiedAction, activePackage)) {
+                                    lastActionError = "This action (${action.action}) was already successfully executed. Do not repeat it. Continue with the next unfinished part of the user's task."
+                                    Log.w("AuraAgent", lastActionError!!)
+                                    continue
+                                }
+
                                 // Check consecutive failures for this node/action
                                 val actionKey = "${action.action}:${action.nodeId}"
                                 if ((failedActionsCount[actionKey] ?: 0) >= 2) {
@@ -268,6 +278,10 @@ class AuraAccessibilityService : AccessibilityService() {
                                 when (executeActionWithRecovery(action, tree)) {
                                     is ExecutionResult.Verified -> {
                                         failedActionsCount.remove(actionKey)
+                                        lastVerifiedAction = action
+                                        completedActions.add(formatActionHistory(action))
+                                        lastActionError = null
+
                                         if (shouldAutoComplete(currentRequest, action)) {
                                             finalMessage = action.message ?: completionMessageForAction(action)
                                             Log.d("AuraAgent", "Single-action task completed: $finalMessage")
@@ -276,6 +290,7 @@ class AuraAccessibilityService : AccessibilityService() {
                                         }
                                         delay(500) // Short stabilization after verified success
                                     }
+
 
                                     is ExecutionResult.Unverified -> {
                                         // The action executed without error, but we could not confirm UI change.
@@ -618,7 +633,40 @@ class AuraAccessibilityService : AccessibilityService() {
             }
         }
 
+        fun formatActionHistory(action: AgentAction): String {
+            return when (action.action) {
+                "open_app" -> "open_app(${action.packageName.orEmpty()}) [VERIFIED]"
+                "home" -> "home() [VERIFIED]"
+                "back" -> "back() [VERIFIED]"
+                "click" -> "click(${action.nodeId.orEmpty()}) [VERIFIED]"
+                "input_text" -> "input_text(${action.nodeId.orEmpty()}, \"${action.text.orEmpty()}\") [VERIFIED]"
+                else -> "${action.action}() [VERIFIED]"
+            }
+        }
+
+        fun isRepeatedVerifiedAction(
+            action: AgentAction,
+            lastVerifiedAction: AgentAction?,
+            currentPackage: String
+        ): Boolean {
+            if (lastVerifiedAction == null) return false
+            if (action.action != lastVerifiedAction.action) return false
+
+            return when (action.action) {
+                "open_app" -> {
+                    val targetPkg = action.packageName?.trim().orEmpty()
+                    targetPkg.isNotEmpty() && (targetPkg == lastVerifiedAction.packageName?.trim() || currentPackage == targetPkg)
+                }
+                "home", "open_notifications", "open_quick_settings" -> true
+                "click", "long_click", "clear_text" -> {
+                    action.nodeId != null && action.nodeId == lastVerifiedAction.nodeId
+                }
+                else -> false
+            }
+        }
+
         fun isEnabled(): Boolean = instance.get() != null
+
 
 
         fun startAgentTask(request: String, onComplete: (String) -> Unit): Boolean {
