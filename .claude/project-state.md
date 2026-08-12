@@ -11,17 +11,29 @@ Phases 0-7 of the repair mandate are complete, PHASE 8 (Memory 2.0 +
 Temporal Context + User Model + Proactive System) is complete, PHASE 9
 (Android Control Hub, modern UI, provider/API-key management, feature
 controls) is complete, and PHASE 10 (Android <-> server settings
-contract) is complete: **1628 passed, 1 deselected** on the backend,
-**175 Android unit tests** passing across 11 classes, and a verified
-19.6 MB debug APK. The "local Windows device agent" that earlier notes
-deferred is still deferred - it was not part of the Phase 8, 9 or 10
-spec.
+contract) is complete. The "local Windows device agent" that earlier
+notes deferred is still deferred - it was not part of the Phase 8, 9, 10
+or 11 spec.
 
-**Nothing from Phase 9 or Phase 10 is committed.** HEAD is `35589a0` on
-`feature/aura-identity`; both phases forbade committing. The deployed
-Render revision predates `35589a0`, which is why its `/api/settings`,
-`/api/providers` and `/api/providers/health` return 404 - a redeploy of
-that branch is the user's outstanding action.
+PHASE 11 is nearly done. Both suites are green: backend **1752 passed,
+1 skipped, 1 deselected**; Android **225 passed across 15 classes, 0
+failures, 0 errors** (the Phase 10 note here read "175 across 11
+classes", which was true when written and is now four test classes
+behind). Delivered: the Render startup crash fixed and verified on a
+real 3.14.6 interpreter, provider coverage reaching all ten providers
+the spec names, and the Android Hub redesign. The debug APK is built
+(`android/app/build/outputs/apk/debug/app-debug.apk`, 19,548,367 bytes).
+The build-artifact untracking that earlier notes list as remaining was
+already done by `35589a0`. Remaining: the commit.
+
+**Phase 9 and Phase 10 ARE committed.** HEAD is `b5ec777 Fix settings
+connectivity and provider management` on `feature/aura-identity` with a
+clean tree. The earlier note here claiming otherwise, and naming
+`35589a0` as HEAD, was stale. What remains outstanding is the user's
+*redeploy*: the deployed Render revision predates the settings routes,
+which is why `/api/settings`, `/api/providers` and
+`/api/providers/health` return 404 there, and it also predates the
+SQLAlchemy pin the service needs to boot on Python 3.14 at all.
 
 ## Phase 10 architecture (standing)
 - **Connectivity is a ladder, not a boolean.** `ServerReach`
@@ -133,24 +145,36 @@ Pinned by `tests/test_device_boundary.py` and re-pinned by
 `tests/test_security_hardening.py`.
 
 ## Repository invariants (Phase 7)
-- Build artifacts were untracked in Phase 7 (~2400 Gradle/dex/class files
-  via `git rm -r --cached`) and are ignored. **This has since regressed**:
-  commits 4ba906e and 1fe3368 re-added ~2100 files under
-  `android/app/build/` and `android/.gradle/`, because `.gitignore` does
-  not apply to already-tracked paths. Every Android build now dirties
-  hundreds of files. Fix with `git rm -r --cached android/app/build
-  android/.gradle` in a commit of its own - NOT mixed into feature work.
-  `android/gradle/wrapper/` STAYS tracked - the wrapper jar is source and
-  a checkout cannot build without it.
+- Build artifacts are NOT tracked. Phase 7 untracked ~2400 Gradle/dex/
+  class files via `git rm -r --cached`; commits 4ba906e and 1fe3368 then
+  re-added ~2100 of them, because `.gitignore` does not apply to paths
+  already in the index; `35589a0` removed them again (2139 files under
+  those two directories, 61183 deletions, no insertions). At HEAD both
+  `git ls-files android/app/build` and `git ls-files android/.gradle`
+  return nothing, and `.gitignore:37-38` covers both. Earlier notes in
+  this file and in `docs/IMPLEMENTATION_STATUS.md` prescribed a `git rm
+  -r --cached` commit; that work is done and must not be repeated. The
+  hazard is structural rather than fixed - ignoring a path does not
+  untrack it, so a future `git add -A` over an uncleaned build can re-add
+  them. `android/gradle/wrapper/` STAYS tracked - the wrapper jar is
+  source and a checkout cannot build without it.
 - CI is `.github/workflows/tests.yml`: `pytest -q` on Python 3.11. It
   restates nothing from `pytest.ini` so it cannot drift, and references
   no secrets - the hermetic suite must pass with no API keys at all.
 - `scripts/manual_*.py` are side-effecting utilities, deliberately
   outside `tests/`. None defines a `test_` function; pytest never
   collected them.
-- Providers reachable from `_create_provider`: mock, gemini, groq,
-  mistral, openrouter, ollama. Cerebras is written and deliberately
-  unregistered. There is no OpenAI branch and no DeepSeek provider.
+- Providers reachable from `_create_provider`: mock, ollama, gemini,
+  groq, mistral, openrouter, and - added in Phase 11 on the shared
+  `brain/providers/http_chat.py` client - openai, anthropic, cerebras,
+  xai, deepseek, qwen. `PROVIDER_KEYS` is the registry; the six new ones
+  are also rows in `HTTP_CHAT_PROVIDERS`, which is the only place naming
+  their modules. None of the six has been called against its live API
+  from this deployment - there is no key for any of them here.
+- `split_prompt` lives in `HttpChatProvider.generate`, not in each new
+  provider. That is what made Cerebras registrable (AURA-P2-003 was a
+  copy whose `generate` skipped the split), and a test asserts the method
+  is never overridden.
 - Memory is SQLite plus lexical keyword recall. There is NO vector
   store, NO embedding model and NO semantic search anywhere in this
   codebase; any claim otherwise is wrong.

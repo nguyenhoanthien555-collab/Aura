@@ -137,6 +137,55 @@ data class HubUiState(
         !supports(path) -> "This Aura server does not support this setting"
         else -> null
     }
+
+    // ------------------------------------------------------------------
+    // The primary provider, and where its model lives
+    // ------------------------------------------------------------------
+
+    /**
+     * The provider Aura would use first.
+     *
+     * Matched on the configured name rather than trusting `is_primary`
+     * alone, so a stale providers document cannot disagree with the
+     * settings document the rest of the screen renders. Null when the
+     * providers route has not answered, or names a provider this build
+     * does not list.
+     */
+    val primaryProvider: ProviderDto?
+        get() = server.providers.firstOrNull { it.name == server.config.llm.provider }
+
+    /**
+     * The settings path that holds the primary provider's model.
+     *
+     * WHY THIS IS NOT ALWAYS `llm.model`
+     * ----------------------------------
+     * It was, and that was a bug: the model picker wrote `llm.model` for
+     * every provider, but `brain/router.py` reads `llm.anthropic_model` for
+     * Anthropic, `llm.qwen_model` for Qwen, `llm.fallback_model` for
+     * OpenRouter, and so on. Choosing a Claude model while Claude was
+     * primary saved a name only Gemini would ever read - a control that
+     * appeared to work and could not. The server reports the mapping per
+     * provider ([ProviderDto.modelSetting]) so this stays in one place.
+     *
+     * `llm.model` remains the fallback: an older server sends no
+     * `model_setting`, and on those the old behaviour is the correct one.
+     */
+    val modelSetting: String
+        get() = primaryProvider?.modelSettingOr() ?: "llm.model"
+
+    /**
+     * The model the primary provider would actually be built with.
+     *
+     * Read from the providers document, which resolved it through the same
+     * setting the router reads. Falls back to `llm.model` for a server that
+     * does not report it.
+     */
+    val activeModel: String
+        get() = primaryProvider?.model?.ifBlank { null } ?: server.config.llm.model
+
+    /** Model names this build knows for the primary provider; may be empty. */
+    val modelChoices: List<String>
+        get() = primaryProvider?.models ?: emptyList()
 }
 
 data class ServerState(
@@ -498,7 +547,16 @@ class HubViewModel(
 
     fun setPrimaryProvider(name: String) = setText("llm.provider", name)
 
-    fun setModel(name: String) = setText("llm.model", name)
+    /**
+     * Set the primary provider's model.
+     *
+     * Writes whichever `llm.*_model` setting that provider reads, per
+     * [HubUiState.modelSetting] - not a hardcoded `llm.model`, which only
+     * Gemini reads. `setting` is a parameter so a caller with a specific
+     * provider in hand (the fallback editor) can name its path directly.
+     */
+    fun setModel(name: String, setting: String = _state.value.modelSetting) =
+        setText(setting, name)
 
     /**
      * Add or remove a provider from the fallback chain.

@@ -869,15 +869,256 @@ and are now removed from the index (kept on disk) - `android/`
 `local.properties`, which carries the machine username in `sdk.dir`,
 plus `source.properties` and `NOTICE.txt`.
 
+## Phase 11 - Render startup, provider coverage, Hub redesign
+
+### Render startup crash - FIXED, verified on a real 3.14 interpreter
+
+**The reported crash**, at Render startup on Python 3.14.3:
+
+```text
+TypeError: descriptor '__getitem__' requires a 'typing.Union' object
+but received a 'tuple'
+```
+
+traceback ending in `memory/models.py`, `class UserModelEntry(Base)`.
+
+**It was not the annotation.** `Mapped[str | None]` is correct and stayed
+correct. The defect was a *pairing* of two pinned things, and the
+annotation was merely the first place the pairing was exercised.
+
+Python 3.14 implements PEP 604 by making `typing.Union` an **alias of**
+`types.UnionType` rather than a separate special form. So `Union` became a
+class and `Union.__getitem__` became an unbound slot wrapper.
+`sqlalchemy/util/typing.py` in 2.0.36 built unions as
+
+```python
+return cast(Any, Union).__getitem__(types)      # 2.0.36, line 478
+```
+
+which is a bound call on 3.13 and an unbound descriptor handed a tuple on
+3.14. `_init_column_for_annotation` -> `de_optionalize_union_types` ->
+`make_union_type` runs for every optional column, so the first
+`Mapped[str | None]` in the metadata took the process down at import:
+`UserModelEntry.last_confirmed_at`. That is why the traceback named a
+class nobody had touched in months. 2.0.51 is `return Union[types]`.
+
+**Proven, not inferred.** Reproduced the message directly on 3.14.6, then
+restored 2.0.36's exact expression under SQLAlchemy 2.0.51 by monkeypatch
+and got the reported traceback back, frame for frame, ending at
+`UserModelEntry`. Removing the monkeypatch made it import cleanly.
+
+**Root cause, two halves.** `requirements-server.txt` pinned
+`sqlalchemy==2.0.36` and `docs/DEPLOYMENT.md` tells Render to build from
+that file; *nothing pinned the interpreter*, so Render's native Python
+runtime followed its own default, which had moved to 3.14. A pinned
+dependency set under a floating interpreter is not a reproducible deploy.
+
+**Fix - four lines of configuration and no architecture.**
+`requirements-server.txt` pins `sqlalchemy==2.0.51` (the crash cannot
+recur even if the interpreter pin is removed); `requirements.txt` replaces
+bare `sqlalchemy` with `>=2.0.51`, because a bare line is what let a 3.14
+interpreter resolve a 3.13-era release; new `.python-version` pins 3.12,
+matching `Dockerfile`, so the two production paths run one interpreter.
+`docs/DEPLOYMENT.md` §1a records the whole chain. No annotation was
+changed, no dependency downgraded, no `type: ignore` added, no
+SQLAlchemy typing disabled.
+
+**Tests: `tests/test_deploy_startup.py` (15).** Split by what they can
+actually catch, which is the point. `TestOptionalColumnsMap` covers the
+mechanism on whatever interpreter is running - the three optional columns
+stay nullable *and the required ones stay required* (a fix that made
+everything nullable would pass a weaker test), the schema emits DDL, a
+model defined inside the test exercises the scan live, and
+`de_optionalize_union_types` is asserted by name so a recurrence reads as
+"this function broke" rather than an unexplained ImportError.
+`TestDeclaredPins` covers the *combination*, reading
+`requirements.txt`, `requirements-server.txt`, `.python-version` and
+`Dockerfile` as data: the pin must support 3.14, the floor must admit no
+broken version, the two must agree, the interpreter must be pinned at
+all, and the pin must match both the Docker base image and the
+site-packages path the Dockerfile copies between stages. Those are
+interpreter-independent on purpose - CI runs 3.11, so an assertion that
+only fires on 3.14 would never run, which is exactly how this reached
+production.
+
+**Live validation on 3.14.** Booted `python -m server.main` under Python
+**3.14.6** with SQLAlchemy 2.0.51: startup completed and all four routes
+answered `200` authenticated / `401` unauthenticated -
+`/api/health`, `/api/settings`, `/api/providers`, `/api/providers/health`.
+That run had **no provider key**, so it also demonstrates §3 of the
+mandate: `llm_provider` reported `unavailable`, `/api/providers/health`
+returned 200 carrying `provider chain unavailable (ValueError)`, and
+`/api/ready` correctly returned 503 - a dead provider does not make the
+server look dead.
+
+Backend after this step: **1642 passed, 1 skipped, 1 deselected**
+(baseline 1628), with SQLAlchemy upgraded to the pinned 2.0.51 in the
+development venv too - testing against a version the project declares too
+old is the same mistake in miniature.
+
+### Provider coverage - six providers added, one live bug found
+
+The mandate's §6 names ten providers. Six of them - OpenAI, Anthropic,
+Cerebras, xAI, DeepSeek, Qwen - could not be selected at all:
+`_instantiate_provider` had branches for gemini, groq, mistral,
+openrouter, ollama and mock, so `provider: openai` raised "could not be
+initialized" and `PUT /api/providers/openai/key` returned 422. §6 also
+says "do not hardcode fake support", which rules out the shortcut of
+listing them in the capabilities table and leaving the router alone.
+
+**Why a shared client rather than six more files like the existing four.**
+`groq.py`, `mistral.py`, `openrouter.py` and `cerebras.py` were already
+four near-identical OpenAI-compatible urllib clients. Adding six more of
+the same would have made ten copies of the same request builder, and the
+history of this repository says what happens then: `cerebras.py` was one
+of those copies whose `generate` forgot to call `split_prompt`
+(AURA-P2-003), which is why it shipped deliberately unregistered for six
+phases. A copy that forgets one line is invisible until the system prompt
+- carrying the Phase 4 device-action boundary - arrives as chat text.
+
+So the split is now in the base class:
+
+```text
+brain/providers/http_chat.py         keys, timeouts, error taxonomy,
+                                    ONE generate() that calls split_prompt
+  -> openai_compatible.py           the OpenAI wire format + SSE stream
+       -> openai.py cerebras.py xai.py deepseek.py qwen.py
+  -> anthropic.py                   its own wire format, deliberately NOT
+                                    an OpenAICompatibleProvider subclass
+```
+
+Each leaf is ~45 lines: name, label, env vars, default URL, default
+model. No new dependency - urllib throughout, no `openai` or `anthropic`
+package. `anthropic.py` sits beside `openai_compatible.py` rather than
+under it because four things differ, not one: `x-api-key` instead of
+`Authorization: Bearer`, an `anthropic-version` header, a top-level
+`system` field instead of a system message, `max_tokens` required, and
+content blocks instead of a string. Faking that through a subclass would
+have meant overriding every method it inherited.
+
+**Cerebras is registered now, and not by fixing its `generate`.** Its
+`generate` was deleted; it inherits the base one. The defect is
+structurally unreachable rather than corrected, and
+`test_cerebras_cannot_regain_the_defect_that_unwired_it` asserts
+`CerebrasProvider.generate is HttpChatProvider.generate` so a future
+override fails the build. Its default model is unchanged from the
+unregistered version, so registering it did not quietly also change which
+model it asks for.
+
+**Registration is a table, not six branches.** `HTTP_CHAT_PROVIDERS` in
+`brain/router.py` maps name -> (module, class, `llm.*` model key) and is
+the only place that names a module. `_instantiate_provider` gained one
+generic branch after the five hand-written ones, which are byte-identical;
+so are `gemini.py`, `groq.py`, `mistral.py`, `openrouter.py`, `ollama.py`.
+`tests/test_provider_resolution.py` now asserts the registry is closed in
+both directions - every name in `PROVIDER_KEYS` builds a real provider,
+and a key alone still conjures nothing (`MYSTERYAI_API_KEY` builds no
+provider) - because a half-registered provider reaches the phone as
+"unknown provider" and reads as a typo by the operator.
+
+**The bug found on the way, which had nothing to do with the six.**
+`server/settings_service.test_provider` calls
+`BrainRouter._instantiate_provider(name, config)` unbound. It was an
+instance method, so `self` took the provider name, `config` was missing,
+and it raised `TypeError` - which the route's `except Exception` reported
+as `"not configured"`. **Every `POST /api/providers/test` has always
+failed, for every provider, whether or not its key was present.** Nothing
+failed loudly, because "not configured" is a plausible answer on a
+deployment with no keys. It is a `@staticmethod` now (it used no `self`),
+which also leaves the internal `self._instantiate_provider(...)` calls
+working. Six tests in `TestProviderTestRoute` pin it.
+
+While there, the same function's error reporting was corrected: it
+answered `"unreachable"` for every failure including a bad key. It now
+classifies `ProviderAuthError` -> "invalid api key",
+`ProviderRateLimitError` -> "quota exhausted" or "rate limited" by
+`is_account_limit`, `ProviderUnavailableError` -> "unreachable", and
+anything unclassified -> "request failed" rather than claiming a network
+fault it did not observe. Still category-only, never the provider's raw
+text, so a key cannot leak through an error message.
+
+**One bounded repair retry.** OpenAI's reasoning models reject
+`max_tokens` (wanting `max_completion_tokens`) and reject an explicit
+`temperature`. §7 requires a real Temperature control, so dropping the
+field globally was not acceptable and neither was 400-ing. `_send`
+retries at most once, and only for the field the provider itself named in
+`error.param` - not by pattern-matching model names, which is how this
+kind of code rots. `test_the_repair_is_attempted_at_most_once` refuses two
+*different* fields in turn to prove the bound in the case where a second
+repair would otherwise have been possible.
+
+**What `GET /api/providers` publishes about a base URL.**
+`PROVIDER_CAPABILITIES` now has 12 entries carrying `api_base`,
+`api_key_env` and `model_setting`. `api_base` is the *default*, never the
+effective value, and the override is reported as a boolean
+(`api_base_overridden`) because some gateways carry a token in the query
+string and this response renders on a phone. A test asserts the secret
+query value is absent from `response.text`. Capabilities stay
+per-implementation, not per-vendor: the six report `streaming: true`
+because the shared class really implements `stream()`, and `vision: false`
+because none is wired into `vision/cloud_processor.py`.
+
+`mock` is handled inside `test_provider`, not taught to the router: a
+`mock` *fallback* would answer every outage with a canned reply and hide
+it, which §3 forbids.
+
+**Five existing tests had to be rewritten, and were not weakened.**
+`tests/test_settings_api.py` used `"deepseek"` as its stand-in for an
+unsupported provider name. DeepSeek is supported now, so five tests
+asserting a 422 quietly became five tests asserting that a supported
+provider accepts a key. Replaced with `UNKNOWN_PROVIDER = "notaprovider"`
+plus `test_the_placeholder_provider_name_is_really_unsupported`, which
+checks the constant against the registry so the same rot cannot recur.
+
+New: `brain/providers/{http_chat,openai_compatible,openai,anthropic,xai,
+deepseek,qwen}.py`, `tests/test_cloud_providers.py` (9 sections).
+Rewritten: `brain/providers/cerebras.py`.
+Modified: `brain/router.py`, `core/config.py`, `core/settings_store.py`,
+`server/routes/settings.py`, `server/settings_service.py`,
+`tests/test_provider_resolution.py`, `tests/test_settings_api.py`,
+`tests/test_settings_contract.py`.
+Docs corrected, all four of which asserted things that are now false -
+`.env.example` ("DEEPSEEK_API_KEY has no effect"), `docs/DEPLOYMENT.md`
+("OpenAI: not yet wired"), `docs/FOLDER_STRUCTURE.md` ("cerebras.py
+written, deliberately not registered"; "there was never an `openai`
+branch"), `docs/IMPLEMENTATION_STATUS.md` (file counts, plus a new Known
+Limitation stating the six are unverified against live APIs).
+
+Backend after this step: **1752 passed, 1 skipped, 1 deselected** (+110).
+
+**Not live-validated.** There is no key for any of the six here, so not
+one has exchanged a request with its vendor. What is pinned is the request
+Aura sends, which is where every historical provider bug in this
+repository actually lived.
+
 ## Current
 
-Phase 10 complete. Nothing committed - the phase forbade it.
+Phase 11: 11.1 (Render startup), 11.3 (provider coverage) and 11.4
+(Android Hub redesign) are done; 11.5 (APK, untracking, commit) is what
+is left. Both suites are green as of this entry - backend **1752 passed,
+1 skipped, 1 deselected**, Android **225 passed across 15 classes, 0
+failures, 0 errors**. Uncommitted - Phase 11 commits at 11.5, per the
+mandate's §21.
 
-**The user's next action is a redeploy.** The client fix stops the app
-lying about the connection, but the deployed server still has to contain
-the three routes: Render must track `feature/aura-identity` at `35589a0`
-or later. Until then Aura reads "Connected / Settings unavailable", which
-is now the truth.
+11.4's real result was not the visuals. The app's most visible sentence
+lived inside a `@Composable`, and this module has no JVM Compose harness
+and no Robolectric, so it was also its least testable one. The verdict
+logic now sits in pure Kotlin - `HubOverview.kt`, `ProviderSummary.kt`,
+`AuraMotion.kt` - and the four new test classes (`HubOverviewTest` 18,
+`ProviderSummaryTest` 16, `ModelSettingTest` 10, `AuraMotionTest` 5) are
+what took the suite from 175 to 225. §16's regression - `/api/health`
+200 + `/api/settings` 404 must read **Connected** - is an assertion now
+rather than a paragraph.
+
+Android lint was **not** re-run after the redesign. The last measured
+figure is Phase 9's `0 errors, 44 warnings`, and it should not be quoted
+as current.
+
+**The user's next action is still a redeploy.** Render must track
+`feature/aura-identity` at `b5ec777` or later for the settings routes to
+exist at all, and at the Phase 11 commit for the SQLAlchemy pin that lets
+the service boot on Python 3.14. Until then Aura reads "Connected /
+Settings unavailable", which is now the truth rather than a bug.
 
 ## Blockers
 

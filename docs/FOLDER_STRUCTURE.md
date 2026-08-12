@@ -52,7 +52,7 @@ types.py              every event dataclass
 
 Events are facts ("the user said X"), never UI state.
 
-## brain/ — 32 files
+## brain/ — 39 files
 
 The conversation engine. Imports `core/` and `events/`, nothing else
 horizontal.
@@ -94,18 +94,36 @@ providers/
     mistral.py        Mistral
     openrouter.py     OpenRouter, text and vision
     ollama.py         local models
-    cerebras.py       written, deliberately not registered
+    http_chat.py      shared HTTP client: keys, errors, prompt split
+    openai_compatible.py  the OpenAI wire format, on top of http_chat
+    openai.py         OpenAI
+    anthropic.py      Anthropic Claude (its own wire format)
+    cerebras.py       Cerebras
+    xai.py            xAI Grok
+    deepseek.py       DeepSeek
+    qwen.py           Alibaba DashScope
     mock.py           offline default
 ```
 
 `consistency.py`, `style.py`, and `mood.py` are the three personality
 layers, in descending permanence.
 
-`_create_provider` in `router.py` is the list of providers that can
-actually be selected: mock, gemini, groq, mistral, openrouter, ollama.
-`cerebras.py` is not among them on purpose — its docstring says why. An
-empty `providers/openai.py` was removed in Phase 7; there was never an
-`"openai"` branch to reach it.
+`router.py` is the list of providers that can actually be selected:
+`PROVIDER_KEYS` names every cloud provider and the variable it needs,
+`KEYLESS_PROVIDERS` holds `ollama`, and `mock` is handled directly.
+`HTTP_CHAT_PROVIDERS` is the subset built on `http_chat.py` — one row per
+provider, and the only place that names the module — so
+`_instantiate_provider` has one generic branch for the six of them after
+the five hand-written ones.
+
+`http_chat.py` owns the system/user prompt split, so a provider cannot
+forget it. `cerebras.py` was written and deliberately left unregistered
+because its own `generate` skipped that split (AURA-P2-003); it is
+registered now that the split lives one level up, and a test pins
+`CerebrasProvider.generate is HttpChatProvider.generate`.
+`anthropic.py` subclasses `http_chat.py` rather than
+`openai_compatible.py`: different auth header, a top-level `system`, and
+content blocks instead of a message string.
 
 ## memory/ — 8 files
 
@@ -302,7 +320,7 @@ contexts/
     vision.md
 ```
 
-## tests/ — 32 files, all `test_*`
+## tests/ — 42 files, all `test_*`
 
 ```
 test_pipeline.py                foundation pipeline
@@ -329,12 +347,22 @@ test_personality_style.py       style layer
 test_integration_flows.py       cross-subsystem
 test_machine_turns.py           agent turns vs chat turns
 test_accessibility_agent.py     Android accessibility agent
+test_agent_protocol.py          the machine-turn JSON contract
 test_device_boundary.py         what the server may not claim to do
 test_provider_resolution.py     which provider is chosen, and why
+test_cloud_providers.py         the shared HTTP provider client
 test_cloud_failover.py          the fallback chain
+test_deploy_startup.py          the deploy boots on the deployed Python
 test_error_visibility.py        failures reach a log or a caller
 test_security_hardening.py      auth, CORS, limits
 test_server.py                  routes and sessions
+test_settings_api.py            the credential store and settings API
+test_settings_contract.py       the Android ↔ server settings contract
+test_memory_2.py                three memory kinds, one pipeline
+test_memory_integration.py      a real turn reaching that pipeline
+test_temporal.py                the injected clock
+test_proactive.py               the proactive decision engine
+test_vision_settings.py         which model each vision processor gets
 test_notifications.py           notification routing
 test_gemini_integration.py      opt in: AURA_RUN_INTEGRATION=1
 ```

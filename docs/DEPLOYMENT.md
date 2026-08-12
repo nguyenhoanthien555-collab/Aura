@@ -39,6 +39,42 @@ This document covers deploying Aura Cloud Core to a $0/month hosting platform. T
    - `AURA_SERVER_CORS_ORIGINS` — your Android app's origin, or `https://*.onrender.com`
    - `AURA_SERVER_LOG_LEVEL=INFO`
 
+### 1a. Python version — pinned on purpose
+
+`.python-version` at the repo root pins the interpreter to **3.12**, the
+same version `Dockerfile` builds on. Render's native Python runtime reads
+that file. If your Render version does not, set `PYTHON_VERSION=3.12` as
+an environment variable instead — either mechanism works, and you only
+need one.
+
+**Do not remove the pin without moving the pins in
+`requirements-server.txt` with it.** A pinned dependency set under a
+floating interpreter is not a reproducible deploy. This has already cost
+one outage: Render's default moved to Python 3.14, which made
+`typing.Union` an alias of `types.UnionType` (PEP 604). SQLAlchemy 2.0.36
+built unions by calling the now-unbound `Union.__getitem__(tuple)`, so the
+first `Mapped[str | None]` column it mapped —
+`memory.models.UserModelEntry.last_confirmed_at` — raised
+
+```text
+TypeError: descriptor '__getitem__' requires a 'typing.Union' object
+but received a 'tuple'
+```
+
+at import time, and the service never reached the point of serving a
+request. The annotation was correct; the pairing was not.
+
+Two changes now hold it shut. `requirements-server.txt` pins
+`sqlalchemy==2.0.51`, which fixed that call upstream, so the crash cannot
+recur even with the interpreter pin removed. And
+`tests/test_deploy_startup.py` asserts the declared SQLAlchemy pin is high
+enough for the interpreter running the tests, so moving one without the
+other fails CI instead of production.
+
+Aura's models are verified to map on 3.12 **and** 3.14. The rest of the
+pinned set was chosen for 3.12 and is not certified beyond it — which is
+what the pin is for.
+
 ### 2. Persistent disk (for SQLite)
 
 1. In the service settings → **Disks** → **Add Disk**
@@ -220,12 +256,42 @@ Cloud Run's filesystem is ephemeral. For SQLite you need:
 
 ## Provider keys (server-side only)
 
-| Provider | Env var | Notes |
-|----------|---------|-------|
-| Gemini | `GEMINI_API_KEY` | Google AI Studio key |
-| OpenAI | `OPENAI_API_KEY` | Not yet wired in `BrainRouter` — see Known Limitations |
-| Ollama | `OLLAMA_HOST` | Must be reachable from the cloud (see platform notes) |
-| Edge TTS | `EDGE_TTS_VOICE` | Desktop only; server does not synthesise |
+Every provider `BrainRouter` can build, the variable it needs, and the
+`config.yaml` setting that names its model. `llm.provider` picks the
+primary and `llm.fallback_providers` the chain after it; a key set for a
+provider that is in neither does nothing, and a provider in the chain
+whose key is absent is skipped by name at startup.
+
+| Provider | `llm.provider` value | Env var | Model setting |
+|----------|----------------------|---------|---------------|
+| Gemini | `gemini` | `GEMINI_API_KEY` | `llm.model` |
+| OpenAI | `openai` | `OPENAI_API_KEY` | `llm.openai_model` |
+| Anthropic Claude | `anthropic` | `ANTHROPIC_API_KEY` | `llm.anthropic_model` |
+| Groq | `groq` | `GROQ_API_KEY` | `llm.groq_model` |
+| Cerebras | `cerebras` | `CEREBRAS_API_KEY` | `llm.cerebras_model` |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | `llm.fallback_model` |
+| Mistral | `mistral` | `MISTRAL_API_KEY` | `llm.mistral_model` |
+| xAI Grok | `xai` | `XAI_API_KEY` | `llm.xai_model` |
+| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | `llm.deepseek_model` |
+| Qwen (DashScope) | `qwen` | `QWEN_API_KEY` | `llm.qwen_model` |
+| Ollama | `ollama` | `OLLAMA_HOST` (no key) | `llm.ollama_model` |
+| Mock (offline) | `mock` | none | none |
+
+Model settings are free text, so a model released today can be used
+today without a code change. Each has a default in `core/config.py` that
+matches the provider class's own default.
+
+Endpoint overrides — `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`,
+`CEREBRAS_BASE_URL`, `XAI_BASE_URL`, `DEEPSEEK_BASE_URL`,
+`QWEN_BASE_URL`, `GROQ_BASE_URL`, `MISTRAL_BASE_URL`,
+`OPENROUTER_BASE_URL` — are for a proxy or gateway and are optional.
+Either spelling works: the API root or the full endpoint URL.
+`GET /api/providers` reports *that* an override is in effect and never
+its value, because some gateways carry a token in the query string and
+that response renders on a phone.
+
+`EDGE_TTS_VOICE` is desktop only; the server synthesises nothing. Voice
+is configured in `config.yaml` under `voice.tts` / `voice.stt`.
 
 **Never put these in the Android app, the Docker image, or GitHub.**
 
@@ -310,7 +376,7 @@ Database migrations: none yet (SQLAlchemy `create_all` on startup). When schema 
 
 ## Known Limitations (current phase)
 
-1. **OpenAI not wired** — `BrainRouter._create_provider` has no `"openai"` branch, and the empty `brain/providers/openai.py` placeholder was removed in the Phase 7 cleanup. The providers that do work are `mock`, `gemini`, `groq`, `mistral`, `openrouter` and `ollama`; the chain that actually runs is `llm.provider` plus `llm.fallback_providers` in config.yaml. A provider whose key is missing is skipped by name at startup.
+1. **Cloud providers are unverified from this deployment** — `openai`, `anthropic`, `cerebras`, `xai`, `deepseek` and `qwen` are registered and buildable (`brain/router.py`: `PROVIDER_KEYS` + `HTTP_CHAT_PROVIDERS`), but no key for any of them exists here, so none has been exercised against its live API. Their request shapes are the documented ones and are pinned by `tests/test_cloud_providers.py`; the default model names in `core/config.py` are the current ones at the time of writing and are free text, so override the `llm.*_model` setting if a name has moved on. Use the settings screen's **Test** button after adding a key. `gemini`, `groq`, `mistral`, `openrouter`, `ollama` and `mock` are the ones with live history.
 2. **SQLite on ephemeral FS** — Render/Fly volumes solve this; Cloud Run needs Cloud SQL or Filestore.
 3. **Ollama sidecar** — Only Fly.io supports a free private-network sidecar natively. On Render you need a separate paid service or hosted Ollama.
 4. **No horizontal scale** — Single container. For HA, run 2+ replicas with a shared Postgres (not SQLite).

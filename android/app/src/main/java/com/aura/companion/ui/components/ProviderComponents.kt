@@ -80,6 +80,14 @@ fun ProviderCard(
     label: String,
     modifier: Modifier = Modifier,
     capabilities: List<String> = emptyList(),
+    /**
+     * Model, endpoint and health, from [providerFacts].
+     *
+     * Passed in rather than derived here so the wording is under unit test -
+     * this module has no JVM Compose harness, so nothing asserted can live
+     * inside a `@Composable`.
+     */
+    facts: List<String> = emptyList(),
     configured: Boolean = false,
     keyless: Boolean = false,
     keyMasked: String = "",
@@ -126,6 +134,22 @@ fun ProviderCard(
                 if (isPrimary) Badge("Primary", StatusTone.Good)
 
                 if (isFallback && !isPrimary) Badge("Fallback", StatusTone.Neutral)
+            }
+
+            if (facts.isNotEmpty()) {
+
+                Spacer(Modifier.height(10.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    facts.forEach { fact ->
+                        Text(
+                            text = fact,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                .copy(alpha = 0.75f),
+                        )
+                    }
+                }
             }
 
             if (capabilities.isNotEmpty()) {

@@ -7,6 +7,14 @@
 # These versions are the minimum that satisfy the server code. They are
 # not the absolute latest — the goal is a stable, auditable deploy.
 # When a CVE appears, bump the affected package here.
+#
+# THESE PINS ARE CHOSEN FOR THE INTERPRETER IN `.python-version`.
+# A pinned dependency set and a floating interpreter is not a reproducible
+# deploy, it is half of one. Render's native Python runtime follows its own
+# default when nothing pins it, and in August 2026 that default moved to
+# 3.14 — which paired this file's old `sqlalchemy==2.0.36` with a Python
+# that SQLAlchemy release had never seen, and the server stopped booting.
+# See `.python-version` and `tests/test_deploy_startup.py`.
 
 # Core server
 fastapi==0.115.4
@@ -19,7 +27,14 @@ websockets==13.1
 python-dotenv==1.0.1
 pyyaml==6.0.1
 rich==13.9.4
-sqlalchemy==2.0.36
+# 2.0.51, not 2.0.36. Python 3.14 made `typing.Union` an alias of
+# `types.UnionType` (PEP 604), so SQLAlchemy's `make_union_type` — which
+# called the unbound `Union.__getitem__(tuple)` — began raising
+# `TypeError: descriptor '__getitem__' requires a 'typing.Union' object`
+# while mapping the first `Mapped[str | None]` column it met. That is
+# `memory.models.UserModelEntry.last_confirmed_at`, and it took the whole
+# server down at import. Fixed upstream; this is the floor that contains it.
+sqlalchemy==2.0.51
 google-genai==2.17.0
 pillow==11.1.0
 

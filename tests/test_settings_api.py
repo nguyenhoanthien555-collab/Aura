@@ -20,6 +20,23 @@ from core.settings_store import RuntimeSettings, SettingsError
 SECRET = "test-secret-that-is-long-enough"
 KEY = "gsk_a-really-long-fake-key-value-12345678ABCD"
 
+# A provider name Aura does not implement, for the tests that need a
+# rejection. These tests said "deepseek" until Phase 11, which was true
+# when they were written and stopped testing anything the moment DeepSeek
+# was actually implemented - five tests asserting a 422 quietly became
+# five tests asserting that a supported provider accepts a key. The name
+# below is checked against the registry so that cannot happen silently
+# again.
+UNKNOWN_PROVIDER = "notaprovider"
+
+
+def test_the_placeholder_provider_name_is_really_unsupported():
+    from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS
+
+    assert UNKNOWN_PROVIDER not in PROVIDER_KEYS
+    assert UNKNOWN_PROVIDER not in KEYLESS_PROVIDERS
+    assert UNKNOWN_PROVIDER != "mock"
+
 
 # ----------------------------------------------------------------------
 # Masking - the only form a key may take in a response
@@ -83,7 +100,7 @@ class TestCredentialStore:
     def test_unknown_provider_rejected(self, tmp_path):
         store = CredentialStore(path=tmp_path / "cred.enc", secret=SECRET)
         with pytest.raises(CredentialError):
-            store.set("deepseek", KEY)
+            store.set(UNKNOWN_PROVIDER, KEY)
 
     def test_blank_key_rejected(self, tmp_path):
         store = CredentialStore(path=tmp_path / "cred.enc", secret=SECRET)
@@ -177,7 +194,7 @@ class TestCredentialStore:
         store = CredentialStore(path=tmp_path / "cred.enc", secret=SECRET)
 
         with pytest.raises(CredentialError) as exc:
-            store.set("deepseek", KEY)
+            store.set(UNKNOWN_PROVIDER, KEY)
 
         assert KEY not in str(exc.value)
 
@@ -212,7 +229,7 @@ class TestRuntimeSettings:
     def test_unknown_provider_rejected(self, tmp_path):
         store = RuntimeSettings(path=tmp_path / "settings.json")
         with pytest.raises(SettingsError) as exc:
-            store.update({"llm": {"provider": "deepseek"}})
+            store.update({"llm": {"provider": UNKNOWN_PROVIDER}})
         assert "gemini" in str(exc.value)  # names the real options
 
     def test_reset_clears_overrides(self, tmp_path):
@@ -395,7 +412,7 @@ class TestProvidersApi:
 
     def test_put_rejects_unknown_provider(self, api):
         response = api.put(
-            "/api/providers/deepseek/key", headers=AUTH, json={"key": KEY},
+            f"/api/providers/{UNKNOWN_PROVIDER}/key", headers=AUTH, json={"key": KEY},
         )
         assert response.status_code == 422
 
@@ -421,7 +438,7 @@ class TestProvidersApi:
     def test_test_endpoint_unknown_provider(self, api):
         response = api.post(
             "/api/providers/test", headers=AUTH,
-            json={"provider": "deepseek"},
+            json={"provider": UNKNOWN_PROVIDER},
         )
         assert response.status_code == 200
         assert response.json()["ok"] is False
@@ -476,7 +493,7 @@ class TestProvidersApi:
 
             # The rejection paths too, which is where a "bad key: %s"
             # would sit.
-            api.put("/api/providers/deepseek/key", headers=AUTH, json={"key": KEY})
+            api.put(f"/api/providers/{UNKNOWN_PROVIDER}/key", headers=AUTH, json={"key": KEY})
 
         assert KEY not in caplog.text
         assert KEY[:-4] not in caplog.text
@@ -590,7 +607,7 @@ class TestNonPersistentKeys:
 
     def test_unknown_provider_is_still_rejected(self, no_secret_api):
         response = no_secret_api.put(
-            "/api/providers/deepseek/key", headers=AUTH, json={"key": KEY},
+            f"/api/providers/{UNKNOWN_PROVIDER}/key", headers=AUTH, json={"key": KEY},
         )
         assert response.status_code == 422
 

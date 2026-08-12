@@ -53,6 +53,18 @@ DEFAULT_CONFIG = {
         "mistral_model": "mistral-small-latest",
         "ollama_model": "qwen3:8b",
 
+        # The Phase 11 providers. Each of these must equal its provider
+        # class's `default_model`, or the Control Hub would show one model
+        # and the request would carry another; the agreement is asserted in
+        # `tests/test_cloud_providers.py`. All are free text on purpose - a
+        # hardcoded list here would reject a model released this morning.
+        "openai_model": "gpt-5.1",
+        "anthropic_model": "claude-sonnet-5",
+        "cerebras_model": "llama-3.3-70b",
+        "xai_model": "grok-4",
+        "deepseek_model": "deepseek-chat",
+        "qwen_model": "qwen-plus",
+
         "temperature": 0.7,
         "max_output_tokens": 768,
     },

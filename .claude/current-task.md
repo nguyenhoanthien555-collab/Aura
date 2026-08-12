@@ -72,10 +72,115 @@ when Phase 9 began). Phase 9 backend: 1535. Phase 10 backend: 1628.
       missing, and reports served from a config snapshot taken at process
       start. Details in `progress.md`; the standing architecture is in
       `project-state.md`.
-- [ ] Next: nothing assigned. The outstanding *user* action is a Render
-      redeploy of `feature/aura-identity` at `35589a0` or later - the
-      client fix stops the app misreporting the connection, but only the
-      server can start answering `/api/settings`.
+- [ ] Phase 11 - Render startup recovery, provider coverage, Hub
+      redesign. IN PROGRESS. Task list and status in the Phase 11
+      section below.
+
+**Correction to the three entries above:** they said "nothing from
+Phase 9 or Phase 10 is committed" and named `35589a0` as HEAD. Both are
+stale. HEAD is `b5ec777 Fix settings connectivity and provider
+management` with a clean tree, so Phase 9 *and* Phase 10 are committed.
+
+## Phase 11 (IN PROGRESS)
+
+Backend baseline entering the phase: **1628 passed, 1 deselected**.
+After the Render fix: **1642 passed, 1 skipped, 1 deselected**.
+
+- [x] **11.1 Render startup crash - FIXED and verified on 3.14.6.**
+      Not the annotation. `requirements-server.txt` pinned
+      `sqlalchemy==2.0.36` while *nothing pinned the interpreter*, so
+      Render's native runtime default moved to 3.14, where PEP 604 makes
+      `typing.Union` an alias of `types.UnionType` and 2.0.36's
+      `cast(Any, Union).__getitem__(types)` becomes an unbound
+      descriptor call. It fires for every optional column, so the first
+      `Mapped[str | None]` in the metadata killed the import -
+      `UserModelEntry.last_confirmed_at`. Fix: pin `sqlalchemy==2.0.51`
+      (server), floor `>=2.0.51` (dev), new `.python-version` = 3.12
+      matching `Dockerfile`, `docs/DEPLOYMENT.md` §1a, and
+      `tests/test_deploy_startup.py` (15) asserting the *pairing* on any
+      interpreter. Booted under Python 3.14.6 and confirmed
+      `/api/health`, `/api/settings`, `/api/providers`,
+      `/api/providers/health` all 200 authenticated / 401 not - with no
+      provider key present, which also proved a dead provider does not
+      make the server look dead. Detail in `progress.md`.
+- [x] **11.2 Survey the existing surface against the Phase 11 spec.**
+      Most of §3-§9, §12, §15, §16, §18 was already delivered by
+      Phases 9/10 and needs verifying, not rebuilding. Real gaps: two.
+- [x] **11.3 Provider coverage - DONE (1752 passed, 1 skipped, 1
+      deselected).** Six providers added on one shared urllib client:
+      `brain/providers/http_chat.py` (keys, timeouts, error taxonomy, and
+      the `split_prompt` call) -> `openai_compatible.py` (the OpenAI wire
+      format) -> `openai.py`, `cerebras.py`, `xai.py`, `deepseek.py`,
+      `qwen.py`. `anthropic.py` subclasses `http_chat` only: `x-api-key`,
+      `anthropic-version`, top-level `system`, required `max_tokens`,
+      content blocks. Registered via `PROVIDER_KEYS` +
+      `HTTP_CHAT_PROVIDERS` and ONE generic `_instantiate_provider`
+      branch; the five hand-written branches and the five working
+      provider files are untouched. Cerebras is registered because the
+      split now lives in the base class, so its AURA-P2-003 defect is
+      structurally impossible - pinned by
+      `assert CerebrasProvider.generate is HttpChatProvider.generate`.
+      **Found and fixed a live bug on the way:**
+      `_instantiate_provider` was an instance method that
+      `server/settings_service.test_provider` had always called unbound,
+      so `self` took the provider name, the TypeError was swallowed by
+      `except Exception`, and EVERY `POST /api/providers/test` answered
+      "not configured" regardless of provider or key. Now a
+      `@staticmethod`, with typed error categories (invalid api key /
+      quota exhausted / rate limited / unreachable / request failed)
+      instead of "unreachable" for everything. Docs corrected:
+      `.env.example`, `docs/DEPLOYMENT.md`, `docs/FOLDER_STRUCTURE.md`,
+      `docs/IMPLEMENTATION_STATUS.md` all claimed OpenAI was unwired and
+      `DEEPSEEK_API_KEY`/`CEREBRAS_API_KEY` inert.
+- [x] **11.4 Android Hub redesign + visual identity - DONE (225 passed
+      across 15 classes, 0 failures, 0 errors).** Compose only; no GSAP,
+      no WebView. Two new theme files: `AuraMotion.kt` (three durations -
+      Quick 140 / Standard 240 / Slow 420 - plus `scaled()`, which
+      returns **0** rather than a halved duration under reduced motion,
+      and `mayLoop()`, which lets a repeating animation run only while
+      something is genuinely in flight, so the frame pipeline is not kept
+      awake for a settled status) and `AuraSurfaces.kt` (gradient and
+      glass tokens at 0.05-0.18 alpha, every one **derived from the
+      active `colorScheme`** rather than a literal - the only way any of
+      it survives dynamic colour on Android 12+). `HubScreen.kt` was
+      rebuilt into `HeroCard` + `StatusRing` + `TileGrid` + `StatusTile`
+      + `ChatCard` over the shared `SurfaceCard`, replacing the single
+      status card and 13 flat rows.
+      **The testability problem this phase actually solved:** the app's
+      most visible sentence lived inside a `@Composable`, and this module
+      has no JVM Compose harness and no Robolectric, so it was also its
+      least testable one. The verdict logic is now pure Kotlin in
+      `HubOverview.kt` (`hubHeadline`, `hubTiles`, `hubBanner`) and
+      `ProviderSummary.kt` (`modelFact` / `endpointFact` /
+      `keySourceFact` / `healthFact`), covered by `HubOverviewTest` (18),
+      `ProviderSummaryTest` (16), `ModelSettingTest` (10) and
+      `AuraMotionTest` (5). §16's regression - `/api/health` 200 +
+      `/api/settings` 404 must read **Connected**, not Disconnected - is
+      now an assertion, alongside a sweep over 8 reach states proving no
+      headline ever says "unexpected response", a status code, or "null".
+      An overridden endpoint is acknowledged (`Custom endpoint (via
+      OPENAI_BASE_URL)`) and never printed, because some gateways carry a
+      token in the base URL's query string.
+      **Found and fixed a second fake control:** the `Model` row in
+      `AuraSection` read `llm.model` directly, which is *Gemini's* field,
+      so a phone whose primary was Claude displayed a Gemini model name.
+      It now reads `state.activeModel` (the primary provider's own),
+      matching the `model_setting` fix from 11.3. `ControlDto.kt`'s five
+      new fields (`api_base`, `api_base_overridden`, `model`,
+      `model_setting`, `api_key_env`) landed with it, and
+      `ProviderComponents.kt` / `ModelsSection.kt` show the six new
+      providers.
+- [ ] **11.5 Full suites, APK, state, commit.** Suites are green as of
+      this entry - backend **1752 passed, 1 skipped, 1 deselected**,
+      Android **225 passed**. The debug APK is built and fresh -
+      `android/app/build/outputs/apk/debug/app-debug.apk`, 19,548,367
+      bytes, with `:app:packageDebug` and `:app:assembleDebug` both
+      executed rather than UP-TO-DATE - and the
+      `docs/IMPLEMENTATION_STATUS.md` test counts are corrected. The
+      `android/app/build` + `android/.gradle` untracking listed here is
+      NOT needed: `35589a0` already removed all 2139 files and
+      `git ls-files` returns zero under both paths. Remaining: commit
+      and push.
 
 ## Standing constraints
 
@@ -143,7 +248,25 @@ coding agent, not Aura's runtime, and were deliberately left alone.
 docstring lists what must be true before it is wired - chiefly that
 `generate` must call `split_prompt` like its siblings, or the system slot
 (which carries the Phase 4 device-action boundary) arrives as ordinary
-conversational text.
+conversational text. **SUPERSEDED IN PHASE 11.3:** it is registered now.
+Not by correcting its `generate` - by deleting it. `split_prompt` moved
+into `HttpChatProvider.generate`, which every new provider inherits, so
+the defect cannot be reintroduced by a copy-paste; a test asserts the
+method is not overridden.
+
+## Outstanding from Phase 11
+
+**Six of the ten cloud providers have never spoken to their vendor.**
+OpenAI, Anthropic, Cerebras, xAI, DeepSeek and Qwen are registered and
+buildable, and `tests/test_cloud_providers.py` pins the request bytes,
+the reply parsing, the failure classification and the streaming for each.
+No key for any of them exists in this deployment, so the request shapes
+are the documented ones, not the confirmed ones, and the default model
+names in `core/config.py` are current-as-of-writing rather than probed.
+The escape hatch is deliberate: every model setting is free text, so a
+renamed model is a settings change and not a code change. The settings
+screen's Test button is the confirmation step, and it works now that
+`_instantiate_provider` is callable unbound.
 
 ## Outstanding from Phase 6
 

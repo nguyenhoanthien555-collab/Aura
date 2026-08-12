@@ -2,7 +2,11 @@
 rich
 python-dotenv
 pyyaml
-sqlalchemy
+# Floor, not decoration: releases before 2.0.51 cannot map a
+# `Mapped[str | None]` column on Python 3.14. `memory/models.py` has three
+# of them, so an older SQLAlchemy on a newer interpreter is not a
+# degraded Aura, it is one that will not import.
+sqlalchemy>=2.0.51
 google-genai
 pillow
 pytest

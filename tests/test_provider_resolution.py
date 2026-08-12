@@ -39,11 +39,11 @@ from core.config import DEFAULT_CONFIG
 
 
 PROVIDER_ENV = (
-    "GEMINI_API_KEY",
-    "GROQ_API_KEY",
-    "MISTRAL_API_KEY",
-    "OPENROUTER_API_KEY",
-    "CEREBRAS_API_KEY",
+    # Derived, not written out: the hand-written list was missing every
+    # variable added after it, so a developer with one of those keys in
+    # their own environment silently changed what these tests resolved.
+    *PROVIDER_KEYS.values(),
+    *(f"{name.upper()}_BASE_URL" for name in PROVIDER_KEYS),
     "OLLAMA_HOST",
 )
 
@@ -482,48 +482,110 @@ def test_the_account_limit_category_is_the_one_that_stops_failover():
 
 
 # ======================================================================
-# 7. Orphaned providers are inert, not half-wired
+# 7. The registry is complete, and a key alone still conjures nothing
 # ======================================================================
+#
+# This section used to assert the opposite for two names: that `cerebras`
+# and `deepseek` were *absent* from the registry (AURA-P2-003, P2-004).
+# Phase 11 was asked for both providers, so those two assertions are now
+# false by design - but the promise underneath them is not, and it is
+# kept here in the stronger form that made them worth writing:
+#
+#     a key must never conjure a provider, and a provider must never be
+#     half-wired
+#
+# The old tests could only enforce that for the two names they mentioned.
+# These enforce it for every name in the registry, including the next one
+# added, which is what would have caught the original defect from the
+# other side.
 
-def test_cerebras_is_not_registered_with_the_router(monkeypatch, fake_cloud):
-    # AURA-P2-003. The file exists and is deliberately unwired; naming it
-    # must skip it, not half-build it.
-    assert "cerebras" not in PROVIDER_KEYS
-    assert BrainRouter._skip_reason("cerebras") == "unknown provider"
+def test_every_registered_key_builds_a_real_provider(monkeypatch):
+    # The "never half-wired" half. A name in PROVIDER_KEYS that
+    # `_instantiate_provider` cannot build is reported as "unknown
+    # provider" to the operator who configured it - indistinguishable
+    # from a typo, which is how cerebras stayed broken for two phases.
+    config = config_with()
+
+    for name, variable in PROVIDER_KEYS.items():
+
+        monkeypatch.setenv(variable, f"dummy-{name}")
+
+        provider = BrainRouter._instantiate_provider(name, config["llm"])
+
+        assert provider is not None, f"{name} is in PROVIDER_KEYS but cannot be built"
+        assert getattr(provider, "provider_name", "") == name
+
+        monkeypatch.delenv(variable, raising=False)
+
+
+def test_every_registered_provider_can_be_a_fallback(monkeypatch, fake_cloud):
+    # Buildable is not the same as reachable through the chain builder:
+    # that was exactly the ollama defect (AURA-P1-009), where the provider
+    # existed and `_instantiate_provider` had no branch for it.
+    for name, variable in PROVIDER_KEYS.items():
+
+        if name == "gemini":
+            continue
+
+        monkeypatch.setenv(variable, f"dummy-{name}")
+
+        router = router_with(
+            monkeypatch, "gemini",
+            provider="gemini", fallback_providers=[name],
+        )
+
+        assert router.active_chain() == f"gemini->{name}"
+
+
+def test_a_key_alone_still_conjures_no_provider(monkeypatch, fake_cloud):
+    # AURA-P2-004's actual invariant, which outlived the DeepSeek example:
+    # an API key in the environment is not evidence that Aura supports the
+    # provider, and a name it does not implement must be skipped rather
+    # than guessed at.
+    monkeypatch.setenv("MYSTERYAI_API_KEY", "dummy")
+
+    assert "mysteryai" not in PROVIDER_KEYS
+    assert BrainRouter._skip_reason("mysteryai") == "unknown provider"
+    assert BrainRouter._instantiate_provider("mysteryai", config_with()["llm"]) is None
 
     router = router_with(
         monkeypatch, "gemini",
-        provider="gemini", fallback_providers=["cerebras"],
+        provider="gemini", fallback_providers=["mysteryai"],
     )
 
     assert router.active_chain() == "gemini"
 
 
-def test_cerebras_records_why_it_is_unwired():
-    # Deleting it was rejected; leaving it looking merely forgotten is
-    # what produced the audit item.
-    from pathlib import Path
+def test_a_registered_provider_without_its_key_is_skipped_not_half_built(monkeypatch):
+    # The other direction: registration must not make a provider build
+    # itself out of nothing. Every one of them checks its key first and
+    # explains the absence by naming the variable.
+    config = config_with()
 
-    source = Path("brain/providers/cerebras.py").read_text(encoding="utf-8")
+    for name, variable in PROVIDER_KEYS.items():
 
-    assert "NOT REGISTERED" in source
-    assert "split_prompt" in source
+        monkeypatch.delenv(variable, raising=False)
+
+        assert BrainRouter._instantiate_provider(name, config["llm"]) is None
+        assert BrainRouter._skip_reason(name) == f"{variable} is not set"
 
 
-def test_no_deepseek_provider_is_implied_by_the_key(monkeypatch, fake_cloud):
-    # AURA-P2-004. DEEPSEEK_API_KEY exists in a real .env; no code reads
-    # it, and a key must never conjure a provider.
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "dummy")
+def test_cerebras_cannot_regain_the_defect_that_unwired_it(monkeypatch):
+    # AURA-P2-003 was not "cerebras is missing", it was "cerebras sends
+    # the whole prompt as one user message", so Aura's instructions -
+    # including the device-action boundary - arrived as conversation. The
+    # file was left unregistered until that was fixed.
+    #
+    # It is fixed structurally, not by a corrected copy of the same code:
+    # `generate` now lives on the shared base class, which splits the
+    # prompt for every provider built from it. Asserting the method is not
+    # overridden is what keeps the fix from being undone by the next
+    # copy-paste.
+    from brain.providers.cerebras import CerebrasProvider
+    from brain.providers.http_chat import HttpChatProvider
 
-    assert "deepseek" not in PROVIDER_KEYS
-    assert BrainRouter._skip_reason("deepseek") == "unknown provider"
-
-    router = router_with(
-        monkeypatch, "gemini",
-        provider="gemini", fallback_providers=["deepseek"],
-    )
-
-    assert router.active_chain() == "gemini"
+    assert PROVIDER_KEYS["cerebras"] == "CEREBRAS_API_KEY"
+    assert CerebrasProvider.generate is HttpChatProvider.generate
 
 
 def test_groq_and_mistral_remain_supported_providers():

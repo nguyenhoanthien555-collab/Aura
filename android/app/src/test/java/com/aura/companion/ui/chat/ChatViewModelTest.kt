@@ -1,16 +1,20 @@
 package com.aura.companion.ui.chat
 
+import androidx.lifecycle.viewModelScope
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.settings.FakeSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.Dispatcher
@@ -58,6 +62,15 @@ class ChatViewModelTest {
     private var chatRoute: () -> MockResponse = { chatOk("Hello from REST.") }
     private var streamRoute: () -> MockResponse = { MockResponse().setResponseCode(404) }
 
+    /**
+     * Every ViewModel a test built, so teardown can stop it.
+     *
+     * On a phone this is the `ViewModelStore`'s job. Here nothing owns them,
+     * and several of these tests deliberately leave work running - a stream
+     * that never terminates is the point of one of them. See [tearDown].
+     */
+    private val viewModels = mutableListOf<ChatViewModel>()
+
     @Before
     fun setUp() {
 
@@ -87,10 +100,68 @@ class ChatViewModelTest {
         server.start()
     }
 
+    /**
+     * Stop the ViewModels, then the server, then the dispatcher.
+     *
+     * WHY THIS IS NOT JUST TWO LINES
+     * ------------------------------
+     * It was, and it made the whole Android suite flaky: roughly one run in
+     * three failed somewhere in this class with
+     * `IllegalStateException: Dispatchers.Main is used concurrently with
+     * setting it`, sometimes from `resetMain` here and sometimes from
+     * `setMain` in the *next* test's [setUp].
+     *
+     * `Dispatchers.setMain`/`resetMain` guard against being written while
+     * something is reading `Dispatchers.Main`, and `viewModelScope` reads it
+     * on every dispatch. Nothing here ever stopped the ViewModels, so a test
+     * that left a coroutine in flight - the never-terminating stream, or the
+     * health probe `init` fires - handed a live reader to the write below.
+     * Whether it blew up depended on thread timing, which is why adding
+     * unrelated test classes to the fork changed which test failed.
+     *
+     * The order is deliberate:
+     *
+     *  1. Cancel and *join* each scope. Cancellation is a request; joining
+     *     is what makes "no reader is left" a fact rather than a hope.
+     *     [AuraStreamClient][com.aura.companion.data.remote.AuraStreamClient]
+     *     closes its socket in `awaitClose`, so this unwinds promptly.
+     *  2. Then shut the server down. The other way round, `shutdown()` waits
+     *     up to five seconds for an open WebSocket's queue to go idle and
+     *     then throws.
+     *  3. Then release `Dispatchers.Main`.
+     *
+     * The `isInitialized` guard is for the case where [setUp] itself threw:
+     * without it the real failure is buried under a `lateinit` error from
+     * teardown.
+     */
     @After
     fun tearDown() {
-        server.shutdown()
+
+        stopViewModels()
+
+        if (::server.isInitialized) server.shutdown()
+
         Dispatchers.resetMain()
+    }
+
+    /** Cancel every ViewModel's scope and wait for it to actually finish. */
+    private fun stopViewModels() = runBlocking {
+
+        viewModels.forEach { viewModel ->
+
+            val job = viewModel.viewModelScope.coroutineContext[Job] ?: return@forEach
+
+            // Real time: what is being waited on is a socket unwinding, not
+            // a virtual clock. A timeout here is a genuine leak, not a slow
+            // machine, so it fails loudly rather than leaving the next test
+            // to inherit the coroutine.
+            withTimeoutOrNull(TIMEOUT_MS) { job.cancelAndJoin() }
+                ?: throw AssertionError(
+                    "a ViewModel's coroutines did not stop within ${TIMEOUT_MS}ms"
+                )
+        }
+
+        viewModels.clear()
     }
 
     // ------------------------------------------------------------------
@@ -514,7 +585,10 @@ class ChatViewModelTest {
 
         val settings = FakeSettings(serverUrl = serverUrl, authToken = "test-token")
 
+        // Registered so [tearDown] can stop it. Every test builds its
+        // ViewModel through here, which is what makes that guarantee hold.
         return ChatViewModel(AuraRepository(settings), settings)
+            .also { viewModels += it }
     }
 
     private fun send(viewModel: ChatViewModel, text: String): ChatViewModel {

@@ -77,15 +77,39 @@ data class AppConfigDto(
     val version: String = "",
 )
 
+/**
+ * The LLM block.
+ *
+ * WHY THERE ARE ELEVEN MODEL FIELDS
+ * ---------------------------------
+ * `model` is Gemini's. Every other provider reads its own key, because
+ * the names are not interchangeable - `gemini-3.6-flash` means nothing to
+ * Anthropic - and switching provider must not silently take the previous
+ * provider's model name with it. `brain/router.py` decides which key it
+ * reads; the phone does not guess, it uses the `model_setting` each
+ * provider reports in [ProviderDto].
+ *
+ * These are declared for completeness (the About and Diagnostics screens
+ * read them), but no screen indexes this class by provider name. That
+ * mapping lives on the server, in one place.
+ */
 @Serializable
 data class LlmConfigDto(
     val provider: String = "",
+    /** Gemini's model. `llm.model` - not a generic "current model". */
     val model: String = "",
     @SerialName("fallback_providers") val fallbackProviders: List<String> = emptyList(),
+    /** OpenRouter's model, and the chain's shared fallback name. */
     @SerialName("fallback_model") val fallbackModel: String = "",
     @SerialName("groq_model") val groqModel: String = "",
     @SerialName("mistral_model") val mistralModel: String = "",
     @SerialName("ollama_model") val ollamaModel: String = "",
+    @SerialName("openai_model") val openaiModel: String = "",
+    @SerialName("anthropic_model") val anthropicModel: String = "",
+    @SerialName("cerebras_model") val cerebrasModel: String = "",
+    @SerialName("xai_model") val xaiModel: String = "",
+    @SerialName("deepseek_model") val deepseekModel: String = "",
+    @SerialName("qwen_model") val qwenModel: String = "",
     val temperature: Double = 0.7,
     @SerialName("max_output_tokens") val maxOutputTokens: Int = 768,
     /** Absent from `DEFAULT_CONFIG`; the router's own fallback is 45s. */
@@ -272,7 +296,54 @@ data class ProviderDto(
     @SerialName("key_source") val keySource: String = "",
     @SerialName("is_primary") val isPrimary: Boolean = false,
     @SerialName("is_fallback") val isFallback: Boolean = false,
-)
+
+    /**
+     * The model this provider would actually be built with, read through
+     * the setting the router reads - so the picker shows the effective
+     * value, not a class default the phone guessed at.
+     */
+    val model: String = "",
+    /**
+     * The settings path holding [model], e.g. `llm.anthropic_model`.
+     *
+     * This is why the model picker works for every provider without the
+     * app carrying a copy of the provider→setting table. Empty on a server
+     * older than the field, and on `mock`, which has no model; callers
+     * fall back to `llm.model` through `modelSettingOr`.
+     */
+    @SerialName("model_setting") val modelSetting: String = "",
+    /**
+     * The endpoint this provider posts to *by default*.
+     *
+     * Never the effective value. A base-URL override can carry a token in
+     * its query string on some gateways, and this renders on a phone, so
+     * the server reports the default plus [apiBaseOverridden] instead.
+     */
+    @SerialName("api_base") val apiBase: String = "",
+    /** True when [baseUrlEnv] is set on the host, so the real endpoint differs. */
+    @SerialName("api_base_overridden") val apiBaseOverridden: Boolean = false,
+    /** The variable that overrides [apiBase], e.g. `OPENAI_BASE_URL`. */
+    @SerialName("base_url_env") val baseUrlEnv: String = "",
+    /**
+     * The variable the key is read from, e.g. `GEMINI_API_KEY`.
+     *
+     * A variable *name*, never its value - the router already names it
+     * when it explains a skipped provider. It is what lets the key screen
+     * say where a host-provided key came from.
+     */
+    @SerialName("api_key_env") val apiKeyEnv: String = "",
+) {
+
+    /**
+     * Where a model chosen for this provider must be written.
+     *
+     * Falls back to `llm.model` so a server that predates `model_setting`
+     * behaves exactly as it did before this field existed, rather than
+     * having its model picker do nothing.
+     */
+    fun modelSettingOr(fallback: String = "llm.model"): String =
+        modelSetting.ifBlank { fallback }
+}
 
 @Serializable
 data class ProviderHealthDto(

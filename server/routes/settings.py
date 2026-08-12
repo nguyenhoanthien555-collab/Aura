@@ -22,6 +22,7 @@ written for a person holding a phone, and they contain no exception text
 (see `server/errors.py` for why that matters).
 """
 
+import os
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -184,6 +185,23 @@ async def reset_settings(
 #                 text), so every chat-capable provider supports it
 #   vision        the provider is wired into vision/cloud_processor.py
 #
+# Three fields exist for the API-keys and model screens:
+#
+#   api_base      the endpoint this provider posts to by default. The
+#                 *default*, never the effective value: a base URL override
+#                 can carry a token in its query string on some gateways,
+#                 and this response is rendered on a phone. Whether an
+#                 override is in effect is reported as a boolean below.
+#   api_key_env   the variable the key is read from. Safe to publish - the
+#                 router already names it when explaining a skipped
+#                 provider - and it is what lets the UI say where a
+#                 host-provided key came from.
+#   model_setting the settings path holding this provider's model, so the
+#                 model picker does not need a copy of this mapping. Must
+#                 agree with `brain.router`: for the shared-client
+#                 providers that is `HTTP_CHAT_PROVIDERS[name][2]`, and
+#                 `tests/test_provider_resolution.py` asserts it does.
+#
 # `configured` is added per request from the credential store.
 PROVIDER_CAPABILITIES = {
     "gemini": {
@@ -191,37 +209,126 @@ PROVIDER_CAPABILITIES = {
         "chat": True, "streaming": True, "tools": True, "vision": True,
         "keyless": False,
         "models": ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
+        "api_base": "https://generativelanguage.googleapis.com",
+        "api_key_env": "GEMINI_API_KEY",
+        "model_setting": "llm.model",
+    },
+    "openai": {
+        "label": "OpenAI",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["gpt-5.1", "gpt-5.1-mini", "gpt-4.1"],
+        "api_base": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "model_setting": "llm.openai_model",
+    },
+    "anthropic": {
+        "label": "Anthropic Claude",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5"],
+        "api_base": "https://api.anthropic.com/v1",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "model_setting": "llm.anthropic_model",
     },
     "groq": {
         "label": "Groq",
         "chat": True, "streaming": False, "tools": True, "vision": False,
         "keyless": False,
         "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+        "api_base": "https://api.groq.com/openai/v1",
+        "api_key_env": "GROQ_API_KEY",
+        "model_setting": "llm.groq_model",
     },
-    "mistral": {
-        "label": "Mistral",
+    "cerebras": {
+        "label": "Cerebras",
         "chat": True, "streaming": True, "tools": True, "vision": False,
         "keyless": False,
-        "models": ["open-mistral-7b", "mistral-small-latest"],
+        "models": ["llama-3.3-70b", "llama3.1-8b"],
+        "api_base": "https://api.cerebras.ai/v1",
+        "api_key_env": "CEREBRAS_API_KEY",
+        "model_setting": "llm.cerebras_model",
     },
     "openrouter": {
         "label": "OpenRouter",
         "chat": True, "streaming": False, "tools": True, "vision": False,
         "keyless": False,
         "models": ["openrouter/free"],
+        "api_base": "https://openrouter.ai/api/v1",
+        "api_key_env": "OPENROUTER_API_KEY",
+        # OpenRouter reads `fallback_model` first, because that is the
+        # setting that has always named its model. See `brain/router.py`.
+        "model_setting": "llm.fallback_model",
+    },
+    "mistral": {
+        "label": "Mistral",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["open-mistral-7b", "mistral-small-latest"],
+        "api_base": "https://api.mistral.ai/v1",
+        "api_key_env": "MISTRAL_API_KEY",
+        "model_setting": "llm.mistral_model",
+    },
+    "xai": {
+        "label": "xAI Grok",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["grok-4", "grok-4-fast"],
+        "api_base": "https://api.x.ai/v1",
+        "api_key_env": "XAI_API_KEY",
+        "model_setting": "llm.xai_model",
+    },
+    "deepseek": {
+        "label": "DeepSeek",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "api_base": "https://api.deepseek.com/v1",
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "model_setting": "llm.deepseek_model",
+    },
+    "qwen": {
+        "label": "Qwen (DashScope)",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["qwen-plus", "qwen-max", "qwen-turbo"],
+        "api_base": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "api_key_env": "QWEN_API_KEY",
+        "model_setting": "llm.qwen_model",
     },
     "ollama": {
         "label": "Ollama (local)",
         "chat": True, "streaming": True, "tools": True, "vision": False,
         "keyless": True,
         "models": [],
+        "api_base": "http://localhost:11434",
+        "api_key_env": "",
+        "model_setting": "llm.ollama_model",
     },
     "mock": {
         "label": "Mock (offline)",
         "chat": True, "streaming": True, "tools": False, "vision": False,
         "keyless": True,
         "models": [],
+        "api_base": "",
+        "api_key_env": "",
+        "model_setting": "",
     },
+}
+
+# The variable that overrides `api_base` for each provider, reported as a
+# boolean so the UI can say "using a custom endpoint" without the value
+# leaving the server.
+PROVIDER_BASE_URL_ENV = {
+    "openai": "OPENAI_BASE_URL",
+    "anthropic": "ANTHROPIC_BASE_URL",
+    "cerebras": "CEREBRAS_BASE_URL",
+    "groq": "GROQ_BASE_URL",
+    "mistral": "MISTRAL_BASE_URL",
+    "xai": "XAI_BASE_URL",
+    "deepseek": "DEEPSEEK_BASE_URL",
+    "qwen": "QWEN_BASE_URL",
+    "ollama": "OLLAMA_HOST",
 }
 
 
@@ -250,9 +357,22 @@ async def list_providers(token: str = Depends(verify_token)):
 
     for name, capability in PROVIDER_CAPABILITIES.items():
 
+        base_env = PROVIDER_BASE_URL_ENV.get(name, "")
+
+        # The model this provider would actually be built with, read
+        # through the same settings the router reads, so the picker shows
+        # the effective value rather than the class default.
+        setting = capability.get("model_setting") or ""
+        model = llm.get(setting.split(".", 1)[1], "") if setting else ""
+
         providers.append({
             "name": name,
             **capability,
+            "model": model,
+            "base_url_env": base_env,
+            # A boolean, not the URL: an override can carry a token in its
+            # query string on some gateways.
+            "api_base_overridden": bool(base_env and os.getenv(base_env)),
             "configured": bool(capability["keyless"]) or store.has(name),
             "key_masked": store.masked(name),
             "key_source": store.source_of(name),

@@ -125,26 +125,36 @@ on top of it, none of which replaced any of it:
   routes let the Android app read effective config, change allow-listed
   settings, inspect providers and store a provider API key encrypted. A
   key is only ever read back masked. See `docs/SECURITY.md`.
+- ✅ **Cloud providers** (`brain/providers/http_chat.py`) - OpenAI,
+  Anthropic, Cerebras, xAI, DeepSeek and Qwen on one shared urllib client,
+  which adds no dependency and owns the system/user prompt split so a
+  provider cannot skip it. Registered in `brain/router.py`, so each can be
+  the primary or a fallback. None has been run against its live API from
+  this deployment — see Known Limitations.
 - ✅ **Android companion** (`android/`) - Compose chat with WebSocket
   streaming and REST fallback, accessibility screen observation, a
-  10-section settings hub. 132 JVM unit tests. See `docs/ANDROID.md`.
+  10-section settings hub. 225 JVM unit tests. See `docs/ANDROID.md`.
 
 ## Test Status
 
 The suite runs. Measured with `.venv/Scripts/python.exe -m pytest -q`
-during the Phase 9 sweep:
+during the Phase 11 sweep:
 
 ```
-1550 passed, 1 deselected
+1752 passed, 1 skipped, 1 deselected
 ```
 
 The Android app has its own suite, run separately because it needs a JDK
 and the Android SDK rather than the Python environment:
 
 ```
-cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug
-132 tests, 0 failures — lint: 0 errors, 44 warnings
+cd android && ./gradlew :app:testDebugUnitTest
+225 tests across 15 classes, 0 failures, 0 errors
 ```
+
+`:app:lintDebug` was last measured during the Phase 9 sweep at **0
+errors, 44 warnings**. It has not been re-run since the Phase 11 Hub
+redesign, so treat that figure as historical rather than current.
 
 The deselected test is `tests/test_gemini_integration.py`, gated by
 `-m "not integration"` in `pytest.ini` and opt-in via
@@ -152,7 +162,7 @@ The deselected test is `tests/test_gemini_integration.py`, gated by
 so the hermetic suite passes with no API keys at all — which is what CI
 runs.
 
-1550 collected comes from 1297 `def test_` functions across 39 files; the
+1754 collected comes from 1421 `def test_` functions across 42 files; the
 difference is parametrization. Per-file counts are not reproduced here
 because they go stale on every commit — get them from pytest, not from
 this file.
@@ -231,8 +241,9 @@ From the original roadmap, still pending:
 
 ### Section 11: Testing
 - **Status:** Executed. `.venv/Scripts/python.exe -m pytest -q` reports
-  **1550 passed, 1 deselected** (the deselected one is the opt-in
-  integration test, gated by `-m "not integration"` in `pytest.ini`).
+  **1752 passed, 1 skipped, 1 deselected** (the deselected one is the
+  opt-in integration test, gated by `-m "not integration"` in
+  `pytest.ini`).
 - **CI:** `.github/workflows/tests.yml` runs the same hermetic suite on
   every push and pull request. No secrets: the suite must pass with no
   API keys at all. It does **not** run the Android suite — that needs an
@@ -275,8 +286,8 @@ Python files by subsystem (counted from the working tree, excluding
 
 | Package | Files |
 |---|---|
-| `tests/` | 40 (39 `test_*` plus `conftest.py`) |
-| `brain/` | 32 (including `providers/`) |
+| `tests/` | 43 (42 `test_*` plus `conftest.py`) |
+| `brain/` | 39 (including `providers/`) |
 | `voice/` | 21 (including `stt/`, `tts/`, their providers) |
 | `server/` | 16 (HTTP + WebSocket API, including `routes/`) |
 | `memory/` | 14 (transcript, pipeline, user model, retrieval) |
@@ -341,20 +352,24 @@ one was empty. `voice/tts/` is the live implementation.
    So an "unprompted" message is delivered up to 15 minutes late, and
    turning phone notifications off mostly stops the engine being asked at
    all. There is no FCM and no server-initiated delivery.
-9. **Build artifacts are tracked again** - `android/app/build/` and
-   `android/.gradle/` are in `.gitignore`, but ~2100 files under them are
-   still in the index from commits `4ba906e`/`1fe3368`, because
-   `.gitignore` does not apply to already-tracked files. Every Android
-   build therefore dirties hundreds of files and buries source changes in
-   a diff. Fix with `git rm -r --cached android/app/build android/.gradle`
-   in a commit of its own.
+9. **Six providers are wired but unverified** - OpenAI, Anthropic,
+   Cerebras, xAI, DeepSeek and Qwen are registered and buildable, and
+   `tests/test_cloud_providers.py` pins the request each one sends, the
+   reply it accepts and how it classifies a failure. But there is no key
+   for any of them in this deployment, so not one has exchanged a real
+   request with its vendor. Their default model names in `core/config.py`
+   are free text precisely because a name can move; the settings screen's
+   **Test** button is what confirms a provider after a key is added.
 
 Two entries in the previous revision of this list - "local only, no
 remote access" and "no authentication, designed for single user on local
 machine" - were obsolete: `server/` exposes an authenticated HTTP and
 WebSocket API and the bearer token is mandatory at startup
 (AURA-P1-008). A third, "test execution pending", is superseded by the
-Test Status section above.
+Test Status section above. A fourth, "build artifacts are tracked
+again", was closed by commit `35589a0`: it removed 2139 files under
+`android/app/build/` and `android/.gradle/` from the index, and
+`git ls-files` now returns nothing under either path.
 
 ## Next Steps
 
@@ -373,4 +388,4 @@ Three things, in the order they are worth doing:
 3. **Android instrumentation tests.** `SettingsStore` (Keystore),
    `ScreenObservationService` (accessibility) and `NotificationWorker`
    (WorkManager) have no tests, because all three need a device or
-   Robolectric. The 132 JVM tests cover the layers below them.
+   Robolectric. The 225 JVM tests cover the layers below them.

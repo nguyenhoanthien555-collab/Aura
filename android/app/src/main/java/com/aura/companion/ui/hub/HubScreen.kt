@@ -1,15 +1,34 @@
 package com.aura.companion.ui.hub
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -41,22 +61,50 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aura.companion.ui.components.NoticeCard
 import com.aura.companion.ui.components.NavigationRow
+import com.aura.companion.ui.components.RowDivider
 import com.aura.companion.ui.components.SettingsSection
-import com.aura.companion.ui.components.StatusDot
 import com.aura.companion.ui.components.StatusTone
+import com.aura.companion.ui.components.contentColour
+import com.aura.companion.ui.theme.AuraMotion
+import com.aura.companion.ui.theme.auraBackgroundBrush
+import com.aura.companion.ui.theme.auraGlass
+import com.aura.companion.ui.theme.auraGlassEdge
+import com.aura.companion.ui.theme.auraHeroBrush
+import com.aura.companion.ui.theme.auraTileBrush
+import com.aura.companion.ui.theme.rememberReducedMotion
 
 /**
  * The Control Hub landing screen.
  *
- * One status card that answers "is Aura up, on which provider, and am I
- * the one it is talking to", then a plain list of sections. The section
- * list is deliberately not the settings themselves - STEP 3 said don't
- * put every setting on the home screen - and chat stays a tap away rather
- * than buried under a hamburger.
+ * WHAT THE LAYOUT IS FOR
+ * ----------------------
+ * Three bands, in the order the questions get asked: is Aura up and who is
+ * answering ([HeroCard]); what is it currently allowed to do ([StatusTile]s);
+ * and then, only then, thirteen sections to change any of it. The thirteen
+ * used to be one flat list, which made "Vision" and "Connection" look like
+ * decisions of equal weight and left the whole screen reading as a
+ * preferences pane. They are four named groups now.
+ *
+ * Chat sits between the glance and the settings, because it is what the app
+ * is *for* - not the last row under Diagnostics.
+ *
+ * WHAT THE ANIMATION IS FOR
+ * -------------------------
+ * Colour crossfades on state changes, the banner expands rather than
+ * appearing, and exactly one thing repeats: the ring around the status dot,
+ * and only while a request is genuinely in flight. A companion app that
+ * breathes forever is a companion app that keeps the frame pipeline awake
+ * all evening. Everything here is also gated on
+ * [rememberReducedMotion] - if the platform's animation scale is 0, states
+ * change instantly rather than slowly.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +116,12 @@ fun HubScreen(
 ) {
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    val reduced = rememberReducedMotion()
+
+    val headline = hubHeadline(state)
+
+    val banner = hubBanner(state)
 
     Scaffold(
         topBar = {
@@ -83,11 +137,17 @@ fun HubScreen(
                         Icon(
                             Icons.Filled.Refresh,
                             contentDescription = "Refresh",
-                            tint = if (state.loading) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            tint = animateColorAsState(
+                                targetValue = if (state.loading) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                animationSpec = tween(
+                                    AuraMotion.scaled(AuraMotion.Quick, reduced)
+                                ),
+                                label = "refreshTint",
+                            ).value,
                         )
                     }
                 },
@@ -99,280 +159,499 @@ fun HubScreen(
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .background(auraBackgroundBrush()),
         ) {
 
-            StatusCard(state = state)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(
+                    start = 20.dp, end = 20.dp, top = 4.dp, bottom = 40.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
 
-            state.notice?.let { notice ->
-                NoticeCard(
-                    text = notice.text,
-                    tone = when (notice.kind) {
-                        Notice.Kind.Info -> StatusTone.Neutral
-                        Notice.Kind.Warning -> StatusTone.Warning
-                        Notice.Kind.Error -> StatusTone.Bad
-                    },
-                )
-            }
+                item(key = "hero") {
+                    HeroCard(
+                        headline = headline,
+                        version = state.server.config.app.version
+                            .ifBlank { state.server.version },
+                        reduced = reduced,
+                    )
+                }
 
-            SettingsSection(title = "Control Hub") {
+                item(key = "banner") {
+                    AnimatedVisibility(
+                        visible = banner != null,
+                        enter = expandVertically(
+                            tween(AuraMotion.scaled(AuraMotion.Standard, reduced))
+                        ) + fadeIn(tween(AuraMotion.scaled(AuraMotion.Standard, reduced))),
+                        exit = shrinkVertically(
+                            tween(AuraMotion.scaled(AuraMotion.Quick, reduced))
+                        ) + fadeOut(tween(AuraMotion.scaled(AuraMotion.Quick, reduced))),
+                    ) {
+                        // Held across the exit animation so the text does not
+                        // vanish a frame before the card it sits in.
+                        banner?.let { NoticeCard(text = it.text, tone = it.tone) }
+                    }
+                }
 
-                NavigationRow(
-                    title = "Aura",
-                    subtitle = "Connection, provider, version",
-                    icon = Icons.Filled.Face,
-                    onClick = { onOpenSection(HubRoutes.AURA) },
-                )
+                state.notice?.let { notice ->
+                    item(key = "notice") {
+                        NoticeCard(
+                            text = notice.text,
+                            tone = when (notice.kind) {
+                                Notice.Kind.Info -> StatusTone.Neutral
+                                Notice.Kind.Warning -> StatusTone.Warning
+                                Notice.Kind.Error -> StatusTone.Bad
+                            },
+                        )
+                    }
+                }
 
-                NavigationRow(
-                    title = "AI & Models",
-                    subtitle = "Provider, model, API keys",
-                    icon = Icons.Filled.Psychology,
-                    onClick = { onOpenSection(HubRoutes.MODELS) },
-                )
+                item(key = "tiles") {
+                    TileGrid(
+                        tiles = hubTiles(state),
+                        reduced = reduced,
+                        onOpen = onOpenSection,
+                    )
+                }
 
-                NavigationRow(
-                    title = "Awareness",
-                    subtitle = "Screen observation",
-                    icon = Icons.Filled.Visibility,
-                    onClick = { onOpenSection(HubRoutes.AWARENESS) },
-                )
+                item(key = "chat") {
+                    ChatCard(onClick = onOpenChat)
+                }
 
-                NavigationRow(
-                    title = "Memory",
-                    subtitle = "Recall, profile, history",
-                    icon = Icons.Filled.Memory,
-                    onClick = { onOpenSection(HubRoutes.MEMORY) },
-                )
-
-                NavigationRow(
-                    title = "Proactive",
-                    subtitle = "Unprompted messages",
-                    icon = Icons.Filled.Bolt,
-                    onClick = { onOpenSection(HubRoutes.PROACTIVE) },
-                )
-
-                NavigationRow(
-                    title = "Vision",
-                    subtitle = "Image understanding",
-                    icon = Icons.Filled.RemoveRedEye,
-                    onClick = { onOpenSection(HubRoutes.VISION) },
-                )
-
-                NavigationRow(
-                    title = "Voice",
-                    subtitle = "Text to speech, speech to text",
-                    icon = Icons.AutoMirrored.Filled.VolumeUp,
-                    onClick = { onOpenSection(HubRoutes.VOICE) },
-                )
-
-                NavigationRow(
-                    title = "Notifications",
-                    subtitle = "Companion messages",
-                    icon = Icons.Filled.Notifications,
-                    onClick = { onOpenSection(HubRoutes.NOTIFICATIONS) },
-                )
-
-                NavigationRow(
-                    title = "Agent & Tools",
-                    subtitle = "What Aura may do, and what needs approval",
-                    icon = Icons.Filled.Build,
-                    onClick = { onOpenSection(HubRoutes.TOOLS) },
-                )
-
-                NavigationRow(
-                    title = "Privacy",
-                    subtitle = "What leaves this phone, and API keys",
-                    icon = Icons.Filled.Shield,
-                    onClick = { onOpenSection(HubRoutes.PRIVACY) },
-                )
-
-                NavigationRow(
-                    title = "Diagnostics",
-                    subtitle = "What is reachable, and why not",
-                    icon = Icons.Filled.MonitorHeart,
-                    onClick = { onOpenSection(HubRoutes.DIAGNOSTICS) },
-                )
-
-                NavigationRow(
-                    title = "General",
-                    subtitle = "Appearance, advanced",
-                    icon = Icons.Filled.Tune,
-                    onClick = { onOpenSection(HubRoutes.GENERAL) },
-                )
-
-                NavigationRow(
-                    title = "Connection",
-                    subtitle = "Server URL, token",
-                    icon = Icons.Filled.WifiTethering,
-                    onClick = { onOpenSection(HubRoutes.CONNECTION) },
-                )
-            }
-
-            SettingsSection(title = "Chat") {
-
-                NavigationRow(
-                    title = "Open chat",
-                    subtitle = "Conversation, messages",
-                    icon = Icons.Filled.ChatBubbleOutline,
-                    onClick = onOpenChat,
-                )
+                items(HUB_GROUPS, key = { it.title }) { group ->
+                    SettingsSection(title = group.title, subtitle = group.subtitle) {
+                        group.entries.forEachIndexed { index, entry ->
+                            NavigationRow(
+                                title = entry.title,
+                                subtitle = entry.subtitle,
+                                icon = entry.icon,
+                                onClick = { onOpenSection(entry.route) },
+                            )
+                            if (index < group.entries.lastIndex) RowDivider()
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+// ----------------------------------------------------------------------
+// The hero
+// ----------------------------------------------------------------------
+
 /**
- * "Is Aura reachable and answering from the provider I chose?"
- *
- * The three values that answer that in one glance: connection state,
- * provider state, and - the one the whole fallback feature exists for -
- * whether the active provider is a substitute.
+ * "Is Aura up, and who is answering me?"
  *
  * WHY THIS READS `reach` AND NOT `loaded`
  * ---------------------------------------
  * It used to say "Disconnected" whenever `GET /api/settings` failed, which
  * on a deployment predating the Control Hub API meant the headline
- * contradicted the chat tab working in the background. Reachability comes
- * from `/api/health` now; a missing settings API is a second line, not a
- * different verdict.
+ * contradicted the chat tab working in the background. The verdict comes
+ * from [hubHeadline] now, which anchors on the health rung; a missing
+ * settings API is a second line, not a different verdict.
  */
 @Composable
-private fun StatusCard(state: HubUiState) {
+private fun HeroCard(
+    headline: HubHeadline,
+    version: String,
+    reduced: Boolean,
+) {
+    val shape = RoundedCornerShape(28.dp)
 
-    val server = state.server
-
-    val connected = state.connected
-
-    val provider = server.providers.firstOrNull { it.name == server.health.active }
-        ?: server.providers.firstOrNull { it.name == server.health.requested }
-
-    val label = provider?.label ?: server.health.active.ifBlank { "—" }
-
-    // What the server told us about itself, whichever route answered.
-    // `/api/health` reports a version even when `/api/settings` is absent,
-    // which is exactly the case this card has to render honestly.
-    val version = server.config.app.version.ifBlank { server.version }
-
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
+            .background(brush = auraHeroBrush(), shape = shape)
+            .auraGlassEdge(shape = shape),
     ) {
+        Row(
+            modifier = Modifier.padding(22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
 
-        SurfaceCard {
+            Column(modifier = Modifier.weight(1f)) {
 
-            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Aura",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.height(6.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = headline.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
 
-                        Text(
-                            text = when {
-                                connected && server.health.inFallback ->
-                                    "Running on a fallback"
-                                connected -> "Connected"
-                                state.loading -> "Connecting…"
-                                // Something answered on that address, but
-                                // not as Aura with this token.
-                                server.reach == ServerReach.Connected ->
-                                    "Server reachable"
-                                else -> "Disconnected"
-                            },
-                            style = MaterialTheme.typography.titleLarge,
-                        )
+                Spacer(Modifier.height(6.dp))
 
-                        Spacer(Modifier.height(4.dp))
-
-                        Text(
-                            text = when {
-                                // Reachable, authenticated, but this build
-                                // of the app knows endpoints that server
-                                // does not. Say which half works.
-                                connected && server.settingsProblem != null ->
-                                    "Chat works. Settings unavailable."
-                                connected -> "$label is answering"
-                                state.error != null -> state.error
-                                else -> "Enter your server address to connect"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    StatusDot(
-                        tone = when {
-                            connected &&
-                                !server.health.inFallback &&
-                                server.settingsProblem == null -> StatusTone.Good
-                            connected -> StatusTone.Warning
-                            state.loading -> StatusTone.Neutral
-                            else -> StatusTone.Bad
-                        },
-                        size = 14.dp,
-                    )
-                }
+                Text(
+                    text = headline.detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 if (version.isNotBlank()) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Aura $version",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            .copy(alpha = 0.7f),
                     )
                 }
             }
-        }
 
-        if (!state.device.isConfigured) {
-            Spacer(Modifier.height(10.dp))
-            NoticeCard(
-                text = "No server connected. Set your server address and token " +
-                    "in Connection first.",
-                tone = StatusTone.Warning,
-            )
-        } else if (connected && server.settingsProblem != null) {
-            // Not an error card: nothing is broken from the user's side and
-            // there is nothing for them to fix on the phone. It explains
-            // why the sections below are read-only.
-            Spacer(Modifier.height(10.dp))
-            NoticeCard(
-                text = server.settingsProblem +
-                    " The sections below are read-only until the server is " +
-                    "updated. Chat is unaffected.",
-                tone = StatusTone.Warning,
-            )
-        } else if (!connected && !state.loading) {
-            Spacer(Modifier.height(10.dp))
-            NoticeCard(
-                text = state.error
-                    ?: "Could not reach Aura. Check the server address, or try again.",
-                tone = StatusTone.Bad,
-            )
+            Spacer(Modifier.width(16.dp))
+
+            StatusRing(tone = headline.tone, busy = headline.busy, reduced = reduced)
         }
     }
 }
 
 /**
+ * The status indicator: a dot, and a halo that only moves when it means
+ * something.
+ *
+ * The halo scales and fades on an infinite transition, which is the one
+ * animation in this app that costs a frame per frame. It is created only
+ * while [busy] is true, so a settled hub composes no repeating animation at
+ * all and the screen goes quiet - which is the difference between a subtle
+ * status indicator and a battery drain.
+ */
+@Composable
+private fun StatusRing(tone: StatusTone, busy: Boolean, reduced: Boolean) {
+
+    val colour = animateColorAsState(
+        targetValue = tone.contentColour(),
+        animationSpec = tween(AuraMotion.scaled(AuraMotion.Standard, reduced)),
+        label = "statusTone",
+    ).value
+
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+
+        if (AuraMotion.mayLoop(reduced = reduced, busy = busy)) {
+
+            val pulse = rememberInfiniteTransition(label = "statusPulse")
+
+            val scale = pulse.animateFloat(
+                initialValue = 0.55f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(AuraMotion.Slow * 2),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "statusPulseScale",
+            ).value
+
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .scale(scale)
+                    .alpha(0.28f)
+                    .background(colour, CircleShape),
+            )
+        } else {
+            // A still halo, so the dot does not appear to shrink when a
+            // refresh finishes.
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .alpha(0.16f)
+                    .background(colour, CircleShape),
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(14.dp)
+                .background(colour, CircleShape),
+        )
+    }
+}
+
+// ----------------------------------------------------------------------
+// The glance
+// ----------------------------------------------------------------------
+
+/** Two rows of two, because four tiles across a phone is four illegible tiles. */
+@Composable
+private fun TileGrid(
+    tiles: List<HubTile>,
+    reduced: Boolean,
+    onOpen: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+        tiles.chunked(2).forEach { pair ->
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+
+                pair.forEach { tile ->
+                    StatusTile(
+                        tile = tile,
+                        reduced = reduced,
+                        onClick = { onOpen(tile.route) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                // An odd number of tiles must not stretch the last one to
+                // double width; the layout is a grid, not a flow.
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * One compact status tile.
+ *
+ * Tappable, and it opens the section that owns the value it displays -
+ * because the point of showing "Awareness · Watching" on the front page is
+ * that the user can do something about it in one more tap.
+ */
+@Composable
+private fun StatusTile(
+    tile: HubTile,
+    reduced: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(18.dp)
+
+    val colour = animateColorAsState(
+        targetValue = tile.tone.contentColour(),
+        animationSpec = tween(AuraMotion.scaled(AuraMotion.Standard, reduced)),
+        label = "tileTone",
+    ).value
+
+    Box(
+        modifier = modifier
+            .background(brush = auraTileBrush(), shape = shape)
+            .auraGlassEdge(shape = shape)
+            .clickable(onClick = onClick),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                Icon(
+                    imageVector = tile.kind.icon(),
+                    contentDescription = null,
+                    tint = colour,
+                    modifier = Modifier.size(16.dp),
+                )
+
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    text = tile.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = tile.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = colour,
+            )
+        }
+    }
+}
+
+private fun HubTileKind.icon(): ImageVector = when (this) {
+    HubTileKind.Provider -> Icons.Filled.Psychology
+    HubTileKind.Memory -> Icons.Filled.Memory
+    HubTileKind.Awareness -> Icons.Filled.Visibility
+    HubTileKind.Proactive -> Icons.Filled.Bolt
+}
+
+/** Chat, given the weight it deserves: the reason the app exists. */
+@Composable
+private fun ChatCard(onClick: () -> Unit) {
+
+    val shape = RoundedCornerShape(20.dp)
+
+    Surface(
+        shape = shape,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .auraGlassEdge(shape = shape)
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+
+            Icon(
+                Icons.Filled.ChatBubbleOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Talk to Aura",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Conversation, streaming replies",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------
+// The sections
+// ----------------------------------------------------------------------
+
+/** One navigable hub section. */
+private data class HubEntry(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val route: String,
+)
+
+private data class HubGroup(
+    val title: String,
+    val subtitle: String?,
+    val entries: List<HubEntry>,
+)
+
+/**
+ * The thirteen sections, grouped by what they are about.
+ *
+ * Grouping rather than reordering: every route that existed still exists and
+ * still means the same thing, so nothing anybody had learned moved. What
+ * changed is that a flat thirteen no longer implies that the switch letting
+ * Aura read the screen and the field holding a server URL are the same kind
+ * of decision.
+ *
+ * Declared as data rather than as thirteen calls so the list has one shape,
+ * one divider rule, and stable keys for [LazyColumn].
+ */
+private val HUB_GROUPS = listOf(
+    HubGroup(
+        title = "Intelligence",
+        subtitle = "How Aura thinks and what it remembers",
+        entries = listOf(
+            HubEntry(
+                "AI & Models", "Provider, model, API keys",
+                Icons.Filled.Psychology, HubRoutes.MODELS,
+            ),
+            HubEntry(
+                "Memory", "Recall, profile, history",
+                Icons.Filled.Memory, HubRoutes.MEMORY,
+            ),
+            HubEntry(
+                "Vision", "Image understanding",
+                Icons.Filled.RemoveRedEye, HubRoutes.VISION,
+            ),
+            HubEntry(
+                "Voice", "Text to speech, speech to text",
+                Icons.AutoMirrored.Filled.VolumeUp, HubRoutes.VOICE,
+            ),
+        ),
+    ),
+    HubGroup(
+        title = "Presence",
+        subtitle = "What Aura may see, and when it may speak first",
+        entries = listOf(
+            HubEntry(
+                "Awareness", "Screen observation",
+                Icons.Filled.Visibility, HubRoutes.AWARENESS,
+            ),
+            HubEntry(
+                "Proactive", "Unprompted messages",
+                Icons.Filled.Bolt, HubRoutes.PROACTIVE,
+            ),
+            HubEntry(
+                "Notifications", "Companion messages",
+                Icons.Filled.Notifications, HubRoutes.NOTIFICATIONS,
+            ),
+        ),
+    ),
+    HubGroup(
+        title = "Control",
+        subtitle = "What Aura is allowed to do, and what it reports",
+        entries = listOf(
+            HubEntry(
+                "Agent & Tools", "What Aura may do, and what needs approval",
+                Icons.Filled.Build, HubRoutes.TOOLS,
+            ),
+            HubEntry(
+                "Privacy", "What leaves this phone, and API keys",
+                Icons.Filled.Shield, HubRoutes.PRIVACY,
+            ),
+            HubEntry(
+                "Diagnostics", "What is reachable, and why not",
+                Icons.Filled.MonitorHeart, HubRoutes.DIAGNOSTICS,
+            ),
+        ),
+    ),
+    HubGroup(
+        title = "Server & app",
+        subtitle = null,
+        entries = listOf(
+            HubEntry(
+                "Aura", "Connection, provider, version",
+                Icons.Filled.Face, HubRoutes.AURA,
+            ),
+            HubEntry(
+                "Connection", "Server URL, token",
+                Icons.Filled.WifiTethering, HubRoutes.CONNECTION,
+            ),
+            HubEntry(
+                "General", "Appearance, advanced",
+                Icons.Filled.Tune, HubRoutes.GENERAL,
+            ),
+        ),
+    ),
+)
+
+// ----------------------------------------------------------------------
+// Shared surfaces
+// ----------------------------------------------------------------------
+
+/**
  * The hub's card surface.
  *
- * Reused by every hub screen through [HubSection] - same radius, same
- * tonal step, same feel.
+ * Reused by every hub screen through [HubSection] - same radius, same tonal
+ * step, same hairline edge. The edge is what makes the translucency read as
+ * glass rather than as a washed-out rectangle; see
+ * `ui/theme/AuraSurfaces.kt`.
  */
 @Composable
 fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+
+    val shape = RoundedCornerShape(20.dp)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(20.dp),
-            ),
+            .auraGlass(shape = shape),
     ) {
         content()
     }
@@ -429,14 +708,20 @@ fun HubSection(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Column(
-            modifier = modifier
+        Box(
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .background(auraBackgroundBrush()),
         ) {
-            content()
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                content()
+            }
         }
     }
 }

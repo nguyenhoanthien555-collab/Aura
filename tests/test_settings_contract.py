@@ -909,3 +909,223 @@ class TestPerProviderStates:
 
         assert KEY not in repr(entry)
         assert set(entry) == {"configured", "healthy", "state", "in_chain"}
+
+
+# ----------------------------------------------------------------------
+# The provider registry the phone renders (Phase 11)
+# ----------------------------------------------------------------------
+
+class TestProviderRegistryContract:
+    """
+    `GET /api/providers` is the API-keys screen.
+
+    Phase 11 added six providers, and the screen is generated from this
+    response - so a provider Aura can build but does not describe is a
+    provider the user cannot configure, and a provider described but not
+    buildable is a row whose Test button always fails. Both directions are
+    asserted here rather than trusted to review.
+    """
+
+    def test_every_buildable_provider_is_described(self):
+        from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS
+        from server.routes.settings import PROVIDER_CAPABILITIES
+
+        for name in (*PROVIDER_KEYS, *KEYLESS_PROVIDERS):
+            assert name in PROVIDER_CAPABILITIES, f"{name} has no capabilities"
+
+    def test_every_described_provider_can_be_built(self):
+        from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS
+        from server.routes.settings import PROVIDER_CAPABILITIES
+
+        known = {"mock", *PROVIDER_KEYS, *KEYLESS_PROVIDERS}
+
+        for name in PROVIDER_CAPABILITIES:
+            assert name in known, f"{name} is described but not registered"
+
+    def test_the_model_setting_matches_what_the_router_reads(self):
+        # The picker PATCHes `model_setting`. If it named a different path
+        # than the router reads, the model would appear to change and the
+        # request would carry the old one.
+        from brain.router import HTTP_CHAT_PROVIDERS
+        from server.routes.settings import PROVIDER_CAPABILITIES
+
+        for name, (_, _, model_key) in HTTP_CHAT_PROVIDERS.items():
+            assert (
+                PROVIDER_CAPABILITIES[name]["model_setting"] == f"llm.{model_key}"
+            )
+
+    def test_every_model_setting_is_writable(self):
+        # A path outside the allow-list is a control the phone renders and
+        # the server then refuses.
+        from server.routes.settings import PROVIDER_CAPABILITIES
+
+        for name, caps in PROVIDER_CAPABILITIES.items():
+            path = caps["model_setting"]
+
+            if path:
+                assert path in ALLOWED, f"{name} points the picker at {path}"
+
+    def test_the_key_variable_matches_the_router(self):
+        from brain.router import PROVIDER_KEYS
+        from server.routes.settings import PROVIDER_CAPABILITIES
+
+        for name, variable in PROVIDER_KEYS.items():
+            assert PROVIDER_CAPABILITIES[name]["api_key_env"] == variable
+
+    def test_the_response_carries_what_the_keys_screen_needs(self, api):
+        body = api.get("/api/providers", headers=AUTH).json()
+
+        by_name = {entry["name"]: entry for entry in body["providers"]}
+
+        # The spec's per-provider fields: display name, id, base URL,
+        # masked key, key source, configured state, capabilities, models,
+        # primary/fallback standing.
+        for name, entry in by_name.items():
+            assert set(entry) >= {
+                "name", "label", "api_base", "api_key_env", "model",
+                "model_setting", "chat", "streaming", "tools", "vision",
+                "models", "configured", "key_masked", "key_source",
+                "is_primary", "is_fallback", "api_base_overridden",
+            }, name
+
+        # And all six new providers are actually there, not just claimed
+        # in a document.
+        for name in ("openai", "anthropic", "cerebras", "xai", "deepseek", "qwen"):
+            assert name in by_name
+
+    def test_a_custom_endpoint_is_reported_without_its_value(self, api, monkeypatch):
+        # A gateway URL can carry a token in its query string, so the fact
+        # of an override is published and the value never is.
+        monkeypatch.setenv(
+            "OPENAI_BASE_URL", "https://gateway.internal/v1?token=do-not-publish"
+        )
+
+        response = api.get("/api/providers", headers=AUTH)
+
+        assert response.status_code == 200
+        assert "do-not-publish" not in response.text
+
+        entry = next(
+            item for item in response.json()["providers"]
+            if item["name"] == "openai"
+        )
+
+        assert entry["api_base_overridden"] is True
+        assert entry["api_base"] == "https://api.openai.com/v1"
+
+    def test_no_override_reports_false(self, api, monkeypatch):
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+
+        entry = next(
+            item
+            for item in api.get("/api/providers", headers=AUTH).json()["providers"]
+            if item["name"] == "openai"
+        )
+
+        assert entry["api_base_overridden"] is False
+
+    def test_the_model_shown_is_the_one_that_would_be_sent(self, api):
+        # Written through the API and read back from the provider list, so
+        # the two agree by construction rather than by coincidence.
+        api.patch(
+            "/api/settings", headers=AUTH,
+            json={"settings": {"llm": {"anthropic_model": "claude-opus-5"}}},
+        )
+
+        entry = next(
+            item
+            for item in api.get("/api/providers", headers=AUTH).json()["providers"]
+            if item["name"] == "anthropic"
+        )
+
+        assert entry["model"] == "claude-opus-5"
+
+
+class TestProviderTestRoute:
+    """
+    `POST /api/providers/test` has to actually build the provider.
+
+    It did not. `_instantiate_provider` was an instance method and this
+    route called it unbound, so `self` took the provider name and Python
+    raised TypeError before any provider was constructed - which the route
+    caught and reported as "not configured". Every press of the Test
+    button answered "not configured", for every provider, whether or not
+    its key was present. Nothing failed loudly, because "not configured"
+    is a plausible answer on a deployment with no keys.
+    """
+
+    def test_a_provider_that_needs_no_key_reports_ok(self, api):
+        # The mock provider is the only one that can be probed here: no
+        # key, no network, and a real `generate`.
+        body = api.post(
+            "/api/providers/test", headers=AUTH, json={"provider": "mock"},
+        ).json()
+
+        assert body["provider"] == "mock"
+        assert body["ok"] is True, body
+        assert "latency_ms" in body
+
+    def test_a_missing_key_names_the_variable_not_a_type_error(self, api, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        body = api.post(
+            "/api/providers/test", headers=AUTH, json={"provider": "openai"},
+        ).json()
+
+        assert body["ok"] is False
+        # The actionable answer, which is what the TypeError was hiding.
+        assert body["error"] == "OPENAI_API_KEY is not set"
+
+    def test_an_unimplemented_provider_is_refused(self, api):
+        body = api.post(
+            "/api/providers/test", headers=AUTH,
+            json={"provider": "notaprovider"},
+        ).json()
+
+        assert body["ok"] is False
+        assert body["error"] == "unknown provider"
+
+    def test_a_refused_key_is_reported_as_a_key_problem(self, api, monkeypatch):
+        # Distinguished from "unreachable": the fix is completely
+        # different, and this string is what the phone shows.
+        from brain.providers.errors import ProviderAuthError
+        from brain.providers.openai import OpenAIProvider
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key")
+        monkeypatch.setattr(
+            OpenAIProvider, "generate",
+            lambda self, prompt: (_ for _ in ()).throw(
+                ProviderAuthError("OpenAI rejected the API key")
+            ),
+        )
+
+        response = api.post(
+            "/api/providers/test", headers=AUTH, json={"provider": "openai"},
+        )
+
+        assert response.json()["ok"] is False
+        assert response.json()["error"] == "invalid api key"
+        assert "sk-not-a-real-key" not in response.text
+
+    def test_an_exhausted_account_is_not_reported_as_unreachable(self, api, monkeypatch):
+        from brain.providers.errors import ProviderRateLimitError
+        from brain.providers.openai import OpenAIProvider
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key")
+        monkeypatch.setattr(
+            OpenAIProvider, "generate",
+            lambda self, prompt: (_ for _ in ()).throw(
+                ProviderRateLimitError("429", is_account_limit=True)
+            ),
+        )
+
+        body = api.post(
+            "/api/providers/test", headers=AUTH, json={"provider": "openai"},
+        ).json()
+
+        assert body["error"] == "quota exhausted"
+
+    def test_the_probe_needs_the_token(self, api):
+        assert api.post(
+            "/api/providers/test", json={"provider": "mock"},
+        ).status_code in (401, 403)

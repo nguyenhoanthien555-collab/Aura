@@ -38,6 +38,7 @@ import com.aura.companion.ui.components.SliderRow
 import com.aura.companion.ui.components.StatusTone
 import com.aura.companion.ui.components.TextEntryDialog
 import com.aura.companion.ui.components.ToggleRow
+import com.aura.companion.ui.components.providerFacts
 import kotlin.math.roundToInt
 
 /**
@@ -70,7 +71,12 @@ fun ModelsSection(
 
     val llm = server.config.llm
 
-    val primary = server.providers.firstOrNull { it.name == llm.provider }
+    // The primary provider, and where its model is stored - both derived
+    // once on the state so this screen and the dialogs below cannot
+    // disagree about which `llm.*_model` a choice belongs in.
+    val primary = state.primaryProvider
+
+    val modelSetting = state.modelSetting
 
     HubSection(
         title = "AI & Models",
@@ -110,10 +116,10 @@ fun ModelsSection(
 
             SelectRow(
                 title = "Model",
-                value = llm.model.ifBlank { "Provider default" },
+                value = state.activeModel.ifBlank { "Provider default" },
                 subtitle = primary?.let { "for ${it.label}" },
                 icon = Icons.Filled.Cloud,
-                lockedReason = state.lockedReason("llm.model"),
+                lockedReason = state.lockedReason(modelSetting),
                 onClick = { picking = Picker.Model },
             )
 
@@ -212,6 +218,10 @@ fun ModelsSection(
                 ProviderCard(
                     label = provider.label.ifBlank { provider.name },
                     capabilities = provider.capabilityLabels(),
+                    facts = providerFacts(
+                        provider,
+                        server.health.providers[provider.name],
+                    ),
                     configured = provider.configured,
                     keyless = provider.keyless,
                     keyMasked = provider.keyMasked,
@@ -250,25 +260,25 @@ fun ModelsSection(
 
         Picker.Model -> {
 
-            val known = primary?.models.orEmpty()
+            val known = state.modelChoices
 
             if (known.isEmpty()) {
                 TextEntryDialog(
                     title = "Model",
-                    initial = llm.model,
+                    initial = state.activeModel,
                     label = "Model name",
                     help = "Aura does not carry a model list for " +
                         "${primary?.label ?: "this provider"}. Enter the model " +
                         "name exactly as the provider spells it.",
-                    onCommit = viewModel::setModel,
+                    onCommit = { viewModel.setModel(it, modelSetting) },
                     onDismiss = { picking = null },
                 )
             } else {
                 ChoiceDialog(
                     title = "Model",
                     options = known,
-                    selected = llm.model,
-                    onPick = viewModel::setModel,
+                    selected = state.activeModel,
+                    onPick = { viewModel.setModel(it, modelSetting) },
                     onDismiss = { picking = null },
                 )
             }

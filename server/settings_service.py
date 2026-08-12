@@ -515,21 +515,40 @@ def test_provider(provider: str, model: str | None = None) -> dict:
     The response deliberately contains nothing that could be a key:
     "ok" or an error category, never the request or its body.
 
-    A provider that is not registered here (cerebras) is refused with a
-    clear reason rather than silently probed.
+    A provider name the router cannot build is refused with a clear reason
+    rather than silently probed. That set is read from the router's own
+    registry, not written out here: the previous literal list had to be
+    edited by hand every time a provider was added, and the failure mode
+    was a newly wired provider answering "unknown provider" to the Test
+    button - a bug that looks exactly like a typo by the operator.
     """
 
-    from brain.router import BrainRouter
+    from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS, BrainRouter
+    from brain.providers.errors import (
+        ProviderAuthError,
+        ProviderRateLimitError,
+        ProviderUnavailableError,
+    )
 
     name = str(provider).strip().lower()
 
-    if name not in {"mock", "gemini", "groq", "mistral", "openrouter", "ollama"}:
+    if name not in {"mock", *PROVIDER_KEYS, *KEYLESS_PROVIDERS}:
         return {"provider": name, "ok": False, "error": "unknown provider"}
 
     try:
-        candidate = BrainRouter._instantiate_provider(
-            name, load_config().get("llm") or {}
-        )
+        if name == "mock":
+            # `_create_provider` handles mock before `_instantiate_provider`
+            # is reached, so the router knows nothing about it and would
+            # answer "unknown provider" for a provider Aura demonstrably
+            # can build. Not fixed by teaching the router instead: a `mock`
+            # *fallback* would answer every outage with a canned reply and
+            # hide it.
+            from brain.providers.mock import MockProvider
+            candidate = MockProvider()
+        else:
+            candidate = BrainRouter._instantiate_provider(
+                name, load_config().get("llm") or {}
+            )
     except Exception as error:
         return {
             "provider": name,
@@ -572,12 +591,49 @@ def test_provider(provider: str, model: str | None = None) -> dict:
             "latency_ms": int(elapsed * 1000),
         }
 
+    except ProviderAuthError:
+        # Distinguished from "unreachable" because the fix is completely
+        # different and the phone shows this string. Still no detail from
+        # the provider's body - only the category.
+        return {
+            "provider": name,
+            "ok": False,
+            "error": "invalid api key",
+            "detail": "ProviderAuthError",
+            "latency_ms": int((time.time() - start) * 1000),
+        }
+
+    except ProviderRateLimitError as error:
+        return {
+            "provider": name,
+            "ok": False,
+            "error": (
+                "quota exhausted"
+                if getattr(error, "is_account_limit", False)
+                else "rate limited"
+            ),
+            "detail": "ProviderRateLimitError",
+            "latency_ms": int((time.time() - start) * 1000),
+        }
+
+    except ProviderUnavailableError:
+        return {
+            "provider": name,
+            "ok": False,
+            "error": "unreachable",
+            "detail": "ProviderUnavailableError",
+            "latency_ms": int((time.time() - start) * 1000),
+        }
+
     except Exception as error:
         elapsed = time.time() - start
         return {
             "provider": name,
             "ok": False,
-            "error": "unreachable",
+            # Deliberately not "unreachable": an unclassified failure is
+            # not evidence of a network problem, and saying so sends the
+            # operator after the wrong thing.
+            "error": "request failed",
             "detail": type(error).__name__,
             "latency_ms": int(elapsed * 1000),
         }

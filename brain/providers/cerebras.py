@@ -1,115 +1,47 @@
 """
-Cerebras cloud provider - NOT REGISTERED.
+Cerebras. Registered in Phase 11, after the defect that kept it out.
 
-Kept, not wired. `BrainRouter._instantiate_provider` has no branch for
-"cerebras" and `PROVIDER_KEYS` has no entry, so naming it in
-`fallback_providers` gets it skipped with "unknown provider" rather than
-used. That is deliberate (AURA-P2-003).
+HISTORY, BECAUSE THE ABSENCE WAS DELIBERATE
+-------------------------------------------
+This file sat here unregistered from Phase 5 to Phase 11 (AURA-P2-003).
+Naming `cerebras` in `fallback_providers` got it skipped as "unknown
+provider" rather than used, and that was the correct outcome at the time,
+because its `generate` sent the whole prompt as a single user message
+instead of splitting it. Aura's prompt is built to be split - the system
+slot carries the instructions, including the device-action boundary from
+`prompts/system.md` - and sent unsplit those instructions arrive as
+ordinary conversational text. The old docstring called that "a real defect,
+not a style difference", and it listed what had to be true before the
+provider could be wired:
 
-Registering it would mean shipping a provider nobody has ever executed.
-Two things have to be true first, and neither is today:
+    1. `generate` must call `split_prompt` like its siblings.
+    2. There must be failover tests.
 
-1. `generate` below sends the whole prompt as a single user message. Its
-   siblings (groq.py, mistral.py, openrouter.py) call `split_prompt` and
-   send a `system` message plus a `user` message. Aura's prompts are
-   built to be split - the system slot carries instructions, including
-   the device-action boundary from `prompts/system.md`. Sent unsplit, a
-   provider is materially more likely to treat those instructions as
-   conversational text. This is a real defect, not a style difference.
+Both now hold, and not by editing this file's own copy of the request
+logic: the whole client is `OpenAICompatibleProvider`, where `generate`
+splits the prompt for every provider in the package and a subclass cannot
+opt out. The second precondition is `tests/test_cloud_providers.py`, which
+pins the split, the payload, the auth header and the error classification.
 
-2. There is no CEREBRAS_API_KEY anywhere in this deployment and no test
-   covers this file, so the request shape above has never been checked
-   against the live API.
-
-To register it: fix `generate` to use `split_prompt` like the others, add
-CEREBRAS_API_KEY to PROVIDER_KEYS and a branch to `_instantiate_provider`,
-add failover tests alongside the Groq/Mistral ones in
-tests/test_cloud_failover.py, then add it to `fallback_providers`.
-
-Deleting it is also a defensible outcome; it was left in place because
-the file is complete, self-contained and costs nothing while unimported.
+The third thing the old docstring said is still true and is not a
+precondition: nobody has ever run this against the live API, because this
+deployment has no Cerebras key. Registration means Aura will build it and
+try it when configured, which is what `POST /api/providers/test` is for.
 """
 
-import json
-import os
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from brain.providers.openai_compatible import OpenAICompatibleProvider
 
-from dotenv import load_dotenv
 
-from brain.providers.base import BaseProvider
-from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+class CerebrasProvider(OpenAICompatibleProvider):
 
-DEFAULT_URL = "https://api.cerebras.ai/v1/chat/completions"
-
-def _failure(status: int, body: str, retry_after: str | None = None):
-    message = f"Cerebras HTTP {status}"
-    if status == 429:
-        try:
-            wait = float(retry_after) if retry_after else None
-        except ValueError:
-            wait = None
-
-        is_account_limit = False
-        try:
-            err_data = json.loads(body)
-            err_msg = err_data.get("error", {}).get("message", "").lower()
-        except Exception:
-            err_msg = body.lower()
-
-        if "daily" in err_msg or "rpd" in err_msg or "slow down" in err_msg or "account" in err_msg:
-            is_account_limit = True
-
-        return ProviderRateLimitError(message, retry_after=wait, is_account_limit=is_account_limit)
-    if status >= 500 or status in (408, 409):
-        return ProviderUnavailableError(message)
-    return RuntimeError(message)
-
-class CerebrasProvider(BaseProvider):
     provider_name = "cerebras"
-    supports_text = True
-    supports_vision = False
+    label = "Cerebras"
 
-    def __init__(self, model: str = "llama-3.3-70b", timeout: float = 45.0, max_tokens: int = 768):
-        load_dotenv()
-        self.api_key = os.getenv("CEREBRAS_API_KEY")
-        if not self.api_key:
-            raise ValueError("CEREBRAS_API_KEY is not configured")
-        self.model = model
-        self.timeout = timeout
-        self.max_tokens = max_tokens
-        self.url = os.getenv("CEREBRAS_BASE_URL", DEFAULT_URL)
+    api_key_env = "CEREBRAS_API_KEY"
+    base_url_env = "CEREBRAS_BASE_URL"
 
-    def generate(self, prompt: str) -> str:
-        data = self._request([{"role": "user", "content": prompt}])
-        try:
-            return data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError) as error:
-            raise ProviderUnavailableError("Cerebras returned an invalid response") from error
+    default_url = "https://api.cerebras.ai/v1/chat/completions"
 
-    def _request(self, messages: list) -> dict:
-        payload = json.dumps({
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": self.max_tokens,
-        }).encode("utf-8")
-        request = Request(
-            self.url,
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            },
-            method="POST",
-        )
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except HTTPError as error:
-            raise _failure(
-                error.code,
-                error.read().decode("utf-8", "replace"),
-                error.headers.get("Retry-After")
-            ) from error
-        except (URLError, TimeoutError) as error:
-            raise ProviderUnavailableError("Cerebras is unreachable") from error
+    # Unchanged from the unregistered version, so registering it did not
+    # quietly also change which model it asks for.
+    default_model = "llama-3.3-70b"

@@ -10,11 +10,36 @@ API keys.
 """
 
 import os
+from importlib import import_module
 
 from core.config import load_config
 from core.logger import logger
 
 from brain.ports import LLM
+
+
+def _optional_float(value) -> float | None:
+    """
+    `value` as a float, or None if it is unusable.
+
+    Only `llm.temperature` reaches this. `core/settings_store.py` range-checks
+    it on write, but config.yaml can be edited by hand, and a provider that
+    refuses to construct because the file says `temperature: warm` would be
+    reported as a missing key. None means "do not send the field", which is a
+    working request using the provider's own default.
+    """
+
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "llm.temperature must be a number, got %r - sending no temperature",
+            value,
+        )
+        return None
 
 
 # The environment variable each cloud provider needs before it can be
@@ -25,6 +50,12 @@ PROVIDER_KEYS = {
     "groq": "GROQ_API_KEY",
     "mistral": "MISTRAL_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "cerebras": "CEREBRAS_API_KEY",
+    "xai": "XAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "qwen": "QWEN_API_KEY",
 }
 
 # Ollama takes no key, only a reachable host. Listed separately so that
@@ -32,6 +63,34 @@ PROVIDER_KEYS = {
 # therefore carry cloud fallbacks) while _skip_reason knows it needs no
 # secret to explain.
 KEYLESS_PROVIDERS = ("ollama",)
+
+# The providers built on `brain/providers/http_chat.py`, which take an
+# identical constructor. Registering one is a row here and a small file,
+# and this row is the only place that names the module - so
+# `_instantiate_provider` gained one generic branch instead of six
+# near-identical ones, and the five hand-written branches below it were
+# left exactly as they were.
+#
+#   name -> (module, class, the llm.* config key holding the model)
+#
+# Every name here must also be in PROVIDER_KEYS, and every name in
+# PROVIDER_KEYS must be buildable; `tests/test_provider_resolution.py`
+# asserts both, because a half-registered provider is reported to the
+# phone as "unknown provider" and looks like a typo by the operator.
+HTTP_CHAT_PROVIDERS = {
+    "openai": ("brain.providers.openai", "OpenAIProvider", "openai_model"),
+    "anthropic": (
+        "brain.providers.anthropic", "AnthropicProvider", "anthropic_model",
+    ),
+    "cerebras": (
+        "brain.providers.cerebras", "CerebrasProvider", "cerebras_model",
+    ),
+    "xai": ("brain.providers.xai", "XAIProvider", "xai_model"),
+    "deepseek": (
+        "brain.providers.deepseek", "DeepSeekProvider", "deepseek_model",
+    ),
+    "qwen": ("brain.providers.qwen", "QwenProvider", "qwen_model"),
+}
 
 
 class BrainRouter:
@@ -236,7 +295,21 @@ class BrainRouter:
 
         return "initialization failed"
 
-    def _instantiate_provider(self, name: str, config: dict) -> LLM | None:
+    @staticmethod
+    def _instantiate_provider(name: str, config: dict) -> LLM | None:
+        """
+        One provider, built from config, or None if it cannot be.
+
+        A staticmethod because it uses no router state and because
+        `server/settings_service.test_provider` calls it unbound - as
+        `BrainRouter._instantiate_provider(name, config)` - to build the
+        provider the same way the router would. As an instance method that
+        call bound `self=name` and raised TypeError, which the caller
+        reported as "not configured": every `POST /api/providers/test`
+        answered "not configured" no matter which provider was asked for
+        or whether its key was present.
+        """
+
         if name == "ollama":
             # Needs no key, so there is nothing to check first: it is
             # built, and a wrong host surfaces when a request is made.
@@ -279,6 +352,26 @@ class BrainRouter:
                 model=config.get("fallback_model") or config.get("openrouter_model") or "openrouter/free",
                 timeout=float(config.get("timeout", 45.0)),
                 max_tokens=int(config.get("max_output_tokens", 768)),
+            )
+
+        spec = HTTP_CHAT_PROVIDERS.get(name)
+
+        if spec is not None:
+            module_path, class_name, model_key = spec
+
+            if not os.getenv(PROVIDER_KEYS[name]):
+                return None
+
+            provider_class = getattr(import_module(module_path), class_name)
+
+            # An empty model means "use the class default", which is where
+            # the per-provider default lives. Passing "" rather than the
+            # default from here keeps one source of truth for it.
+            return provider_class(
+                model=config.get(model_key) or "",
+                timeout=float(config.get("timeout", 45.0)),
+                max_tokens=int(config.get("max_output_tokens", 768)),
+                temperature=_optional_float(config.get("temperature")),
             )
 
         return None
