@@ -46,9 +46,56 @@ sealed interface AuraError {
         override val userMessage = "Aura server is waking up. Try again in a moment."
     }
 
-    /** Reachable, but refused the token. */
+    /** Reachable, but refused the token. HTTP 401. */
     data object Unauthorized : AuraError {
         override val userMessage = "Aura rejected the access token. Check it in Settings."
+    }
+
+    /**
+     * The token was recognised and this request was still refused. HTTP 403.
+     *
+     * Split from [Unauthorized] because the two lead to opposite actions: a
+     * 401 means "the token is wrong, replace it", a 403 means "the token is
+     * right and does not carry this permission", and telling someone to
+     * re-enter a working token is how a working configuration gets broken.
+     * Aura's own routes answer 401 (`verify_token`), so a 403 comes from
+     * something in front of them - a proxy, or a platform access rule.
+     */
+    data object Forbidden : AuraError {
+        override val userMessage =
+            "Aura accepted the token but refused this request."
+    }
+
+    /**
+     * Too many requests, too quickly. HTTP 429.
+     *
+     * Its own case rather than a [ServerFailure] code, because nothing is
+     * broken and nothing needs configuring: the only correct response is to
+     * wait. Reported as a server failure it looked like a fault, and the hub
+     * then blamed the *feature* for being absent.
+     */
+    data object RateLimited : AuraError {
+        override val userMessage = "Aura is receiving too many requests. Try again shortly."
+    }
+
+    /**
+     * The request succeeded and this app could not read the answer.
+     *
+     * A 200 whose body will not deserialize - a truncated response, a proxy's
+     * HTML error page served with a success code, or a server document whose
+     * shape this build predates. Emphatically **not** [NotSupported]: the
+     * route exists and answered. Conflating the two is what made the hub
+     * claim "this server does not expose settings" about a server that had
+     * just returned its settings, so the distinction is the whole point of
+     * this case existing.
+     *
+     * The detail is a category, never the parse exception: a serialization
+     * message quotes the offending JSON, which can contain configuration.
+     */
+    data class Incompatible(val detail: String = "") : AuraError {
+        override val userMessage =
+            "Aura's reply was not in a form this app can read. " +
+                "The app or the server may need updating."
     }
 
     /** The feature is switched off server-side. */

@@ -138,8 +138,13 @@ class ChatViewModel(
                             // A failing probe is not worth an error banner on
                             // its own; the connection line already says it.
                             // Only an auth failure gets promoted, because it
-                            // needs the user to go and fix something.
-                            error = if (result.error is AuraError.Unauthorized) {
+                            // needs the user to go and fix something - and a
+                            // 403 needs that as much as a 401 does, even
+                            // though what needs fixing is not the same.
+                            error = if (
+                                result.error is AuraError.Unauthorized ||
+                                result.error is AuraError.Forbidden
+                            ) {
                                 result.error
                             } else {
                                 it.error

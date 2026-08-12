@@ -241,3 +241,52 @@ Affected files: `server/runtime.py`, `ui/hub/DiagnosticsSection.kt`
 
 Do not change unless: provider construction becomes eager and total, so
 that a failure is impossible rather than merely caught.
+
+## 2026-08-12 — The settings verdict is a typed error, not a boolean
+
+Decision: `ServerState.settingsError` holds an `AuraError?`, and
+`ui/hub/SettingsAccess.kt` is the one place it becomes words - a
+13-member enum carrying `label` / `reason` / `headline` / `tone` /
+`retryable`. Every consumer reads `HubUiState.settingsAccess`.
+"This Aura server does not expose settings" belongs to `NotExposed`
+alone, which is 404/405 and nothing else.
+
+Reason: the verdict was `loaded: Boolean` plus a rendered
+`settingsProblem: String?`, and six sites re-derived their own sentence
+from the boolean. Once `/api/health` returned 200, every settings failure
+- 401, 403, 422, 429, 500, a cold-start 502, a timeout, an unparseable
+body - reported a missing endpoint. That is reachable on a free-tier host
+with no server bug at all, and it sends the user to update a deployment
+that is current. A rendered string cannot be re-examined by a consumer
+that disagrees with it; a typed error can.
+
+Affected files: `ui/hub/SettingsAccess.kt` (new),
+`ui/hub/HubViewModel.kt`, `ui/hub/HubOverview.kt`, `AuraSection.kt`,
+`ConnectionSection.kt`, `DiagnosticsSection.kt`, `data/AuraResult.kt`
+(`Forbidden`, `RateLimited`, `Incompatible`), `data/AuraRepository.kt`.
+
+Do not change unless: a new failure needs its own instruction, in which
+case add a member - do not widen an existing one's meaning.
+
+## 2026-08-12 — `DeviceSettings`, so the hub has a testable ViewModel
+
+Decision: `data/settings/DeviceSettings.kt` extends the read-only
+`SettingsProvider` with the five device mutators the hub uses.
+`SettingsStore` implements it; `HubViewModel` depends on the interface.
+
+Reason: the ViewModel took the concrete `SettingsStore`, which needs a
+`Context` and a Keystore-backed key, so it could not be constructed on
+the JVM - the hub had no ViewModel-level test at all, which is why the
+"does not expose settings" defect survived two phases of unit tests.
+Widening `SettingsProvider` was rejected: its KDoc states it is
+deliberately read-only so that "what can write a setting" has one answer,
+and every other consumer (the repository, the stream client, the
+accessibility service) only reads.
+
+Affected files: `data/settings/DeviceSettings.kt` (new),
+`data/settings/SettingsStore.kt`, `ui/hub/HubViewModel.kt`,
+`app/src/test/.../settings/FakeSettings.kt`,
+`app/src/test/.../ui/hub/HubViewModelTest.kt` (new).
+
+Do not change unless: a second writer of device settings appears, at
+which point the question this interface answers has two answers again.

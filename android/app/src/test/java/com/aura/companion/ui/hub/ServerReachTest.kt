@@ -1,11 +1,13 @@
 package com.aura.companion.ui.hub
 
+import com.aura.companion.data.AuraError
 import com.aura.companion.data.remote.EffectiveConfigDto
 import com.aura.companion.data.remote.ProviderHealthDto
 import com.aura.companion.data.remote.ProviderStateDto
 import com.aura.companion.data.settings.AuraSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,7 +84,7 @@ class ServerReachTest {
         val state = state(
             reach = ServerReach.Authenticated,
             loaded = false,
-            settingsProblem = "This Aura server does not have this feature yet.",
+            settingsError = AuraError.NotSupported,
         )
 
         assertTrue("a 404 from settings must not read as disconnected", state.connected)
@@ -92,7 +94,15 @@ class ServerReachTest {
     @Test
     fun `that server explains itself instead of blaming the connection`() {
 
-        val state = state(reach = ServerReach.Authenticated, loaded = false)
+        // The premise is a 404 and it is now stated as one. The fixture used
+        // to leave the error null and still assert this sentence, which is
+        // how the sentence came to be shown for every other settings failure
+        // too - see SettingsAccessTest.
+        val state = state(
+            reach = ServerReach.Authenticated,
+            loaded = false,
+            settingsError = AuraError.NotSupported,
+        )
 
         // Not "Connect to Aura to change this" - the user is connected, and
         // sending them to the connection screen would have them retype a
@@ -101,6 +111,49 @@ class ServerReachTest {
             "This Aura server does not expose settings",
             state.lockedReason("tools.enabled"),
         )
+    }
+
+    @Test
+    fun `a settings failure that is not a 404 does not claim a missing feature`() {
+
+        // The defect this phase fixed. Every one of these reached the "does
+        // not expose settings" sentence, because the reason was a boolean.
+        listOf(
+            AuraError.Unauthorized,
+            AuraError.Forbidden,
+            AuraError.RateLimited,
+            AuraError.ServerFailure(500),
+            AuraError.Waking,
+            AuraError.Timeout,
+            AuraError.Offline,
+            AuraError.Incompatible(),
+            AuraError.Unknown(),
+        ).forEach { error ->
+
+            val reason = state(
+                reach = ServerReach.Authenticated,
+                loaded = false,
+                settingsError = error,
+            ).lockedReason("tools.enabled")
+
+            assertNotNull("$error must still explain itself", reason)
+            assertFalse(
+                "$error must not read as a missing endpoint: $reason",
+                reason!!.contains("does not expose"),
+            )
+        }
+    }
+
+    @Test
+    fun `a server still answering does not claim anything yet`() {
+
+        // Health returned 200 and the settings request has not come back. The
+        // old code called this "does not expose settings" - a verdict on a
+        // request still in flight.
+        val state = state(reach = ServerReach.Authenticated, loaded = false)
+
+        assertEquals(SettingsAccess.Loading, state.settingsAccess)
+        assertFalse(state.lockedReason("tools.enabled")!!.contains("does not expose"))
     }
 
     @Test
@@ -283,7 +336,7 @@ class ServerReachTest {
     private fun state(
         reach: ServerReach,
         loaded: Boolean,
-        settingsProblem: String? = null,
+        settingsError: AuraError? = null,
         configurable: Set<String> = emptySet(),
         health: ProviderHealthDto = ProviderHealthDto(),
     ) = HubUiState(
@@ -294,7 +347,7 @@ class ServerReachTest {
         server = ServerState(
             loaded = loaded,
             reach = reach,
-            settingsProblem = settingsProblem,
+            settingsError = settingsError,
             config = EffectiveConfigDto(),
             configurable = configurable,
             health = health,

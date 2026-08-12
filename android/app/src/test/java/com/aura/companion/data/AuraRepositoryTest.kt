@@ -193,13 +193,30 @@ class AuraRepositoryTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `401 and 403 both mean the token was refused`() = runTest {
+    fun `401 and 403 are both token problems, and different ones`() = runTest {
 
         server.enqueue(MockResponse().setResponseCode(401).setBody("""{"detail":"bad token"}"""))
         assertEquals(AuraError.Unauthorized, failureOf(repository.send("hi")))
 
+        // Split from 401 because the actions differ: replace the token, versus
+        // the token is right and does not carry this permission. Both still
+        // point at the token rather than at the network.
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"detail":"forbidden"}"""))
-        assertEquals(AuraError.Unauthorized, failureOf(repository.send("hi")))
+        assertEquals(AuraError.Forbidden, failureOf(repository.send("hi")))
+
+        assertTrue(AuraError.Unauthorized.userMessage.contains("token"))
+        assertTrue(AuraError.Forbidden.userMessage.contains("token"))
+    }
+
+    @Test
+    fun `429 is a rate limit rather than a server fault`() = runTest {
+
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        val error = failureOf(repository.send("hi"))
+
+        assertEquals(AuraError.RateLimited, error)
+        assertTrue(error.userMessage.contains("Try again"))
     }
 
     @Test

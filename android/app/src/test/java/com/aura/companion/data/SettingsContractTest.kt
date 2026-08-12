@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -151,6 +152,149 @@ class SettingsContractTest {
     }
 
     // ------------------------------------------------------------------
+    // The document the deployed server actually sends
+    //
+    // Everything above is hand-written in the server's shape, which proves
+    // the field names the app expects and nothing about the ones the server
+    // sends. These three read `src/test/resources/live/*.json` - the exact
+    // bodies `server/routes/settings.py` produced, whole and unedited, via
+    // `tests/test_settings_fixture.py`. That test regenerates them and fails
+    // if the server's shape moves, so this pair catches drift from either
+    // side.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `the deployed server's own settings document parses whole`() = runTest {
+
+        server.enqueue(ok(liveBody("settings")))
+
+        val result = repository.loadSettings()
+
+        assertTrue("the live document must parse: $result", result is AuraResult.Ok)
+
+        val body = (result as AuraResult.Ok).value
+
+        // The app block, which is what the About row renders.
+        assertEquals("Aura", body.effective.app.name)
+        assertEquals("0.2.0", body.effective.app.version)
+
+        // Every provider's model field, each read from its own key. A single
+        // wrong `@SerialName` here is a model picker that silently edits the
+        // wrong provider's setting.
+        val llm = body.effective.llm
+        assertEquals("gemini", llm.provider)
+        assertEquals("gemini-3.6-flash", llm.model)
+        assertEquals("gpt-5.1", llm.openaiModel)
+        assertEquals("claude-sonnet-5", llm.anthropicModel)
+        assertEquals("llama-3.3-70b", llm.cerebrasModel)
+        assertEquals("grok-4", llm.xaiModel)
+        assertEquals("deepseek-chat", llm.deepseekModel)
+        assertEquals("qwen-plus", llm.qwenModel)
+        assertEquals("llama-3.3-70b-versatile", llm.groqModel)
+        assertEquals("mistral-small-latest", llm.mistralModel)
+        assertEquals("qwen3:8b", llm.ollamaModel)
+        assertEquals("openrouter/free", llm.fallbackModel)
+        assertEquals(listOf("groq", "mistral", "openrouter"), llm.fallbackProviders)
+        assertEquals(0.7, llm.temperature, 0.0001)
+        assertEquals(768, llm.maxOutputTokens)
+        assertEquals(120.0, llm.timeout, 0.0001)
+
+        assertEquals(10, body.effective.memory.historyLimit)
+        assertEquals(500, body.effective.memory.retrievalScope)
+        assertFalse(body.effective.memory.recall)
+
+        assertFalse(body.effective.proactive.enabled)
+        assertEquals(listOf(listOf(22, 8)), body.effective.proactive.quietHours)
+        assertEquals(4, body.effective.proactive.maxPerDay)
+
+        assertTrue(body.effective.server.screen.enabled)
+        assertEquals(8.0, body.effective.server.screen.minInterval, 0.0001)
+        assertFalse(body.effective.server.companion.enabled)
+
+        assertTrue(body.effective.tools.enabled)
+        assertEquals(listOf("safe"), body.effective.tools.autoApprove)
+
+        assertTrue(body.effective.vision.enabled)
+        assertEquals("qwen2.5vl:7b", body.effective.vision.ollamaModel)
+
+        assertEquals("auto", body.effective.voice.tts.provider)
+        assertTrue(body.effective.voice.tts.playback)
+
+        assertTrue(body.providers.persistent)
+    }
+
+    @Test
+    fun `every path the deployed server calls configurable arrives intact`() = runTest {
+
+        server.enqueue(ok(liveBody("settings")))
+
+        val configurable = (repository.loadSettings() as AuraResult.Ok).value.configurable
+
+        // The whole allow-list, not a sample: a path lost in transit renders
+        // as a control this server "does not support".
+        assertEquals(42, configurable.size)
+
+        listOf(
+            "llm.provider", "llm.model", "llm.anthropic_model", "llm.qwen_model",
+            "llm.temperature", "llm.max_output_tokens", "llm.timeout",
+            "memory.recall", "memory.history_limit",
+            "proactive.enabled", "proactive.quiet_hours",
+            "server.screen.enabled", "server.screen.min_interval",
+            "server.companion.enabled",
+            "tools.enabled", "tools.auto_approve", "tools.timeout",
+            "vision.enabled", "voice.tts.enabled", "voice.tts.volume",
+        ).forEach {
+            assertTrue("$it must be configurable", it in configurable)
+        }
+
+        // And the capability-granting ones still are not. A bearer token
+        // must not be able to widen what the tools may touch.
+        assertFalse("tools.allowed" in configurable)
+        assertFalse("tools.allowed_paths" in configurable)
+        assertFalse("tools.applications" in configurable)
+    }
+
+    @Test
+    fun `nulls in sections this app does not declare are dropped, not fatal`() = runTest {
+
+        // The live document contains `avatar.position: null` and
+        // `voice.microphone.device: null`. Neither section is declared here,
+        // so `ignoreUnknownKeys` drops them before any converter sees a null
+        // - which is the reason the live 200 parses without
+        // `coerceInputValues`, and worth pinning rather than rediscovering.
+        server.enqueue(
+            ok(
+                """
+                {"effective": {"avatar": {"position": null, "opacity": 0.95},
+                 "voice": {"microphone": {"device": null},
+                 "tts": {"provider": "edge"}}},
+                 "providers": {"persistent": true}}
+                """
+            )
+        )
+
+        val result = repository.loadSettings()
+
+        assertTrue("nulls outside the DTOs must not fail the parse", result is AuraResult.Ok)
+        assertEquals("edge", (result as AuraResult.Ok).value.effective.voice.tts.provider)
+    }
+
+    @Test
+    fun `a null where a value is declared is incompatible, not a crash`() = runTest {
+
+        // The opposite direction, and the one that would be a real version
+        // mismatch: no `coerceInputValues`, so a declared field arriving null
+        // fails the parse. It has to read as "this app could not read the
+        // answer", never as a missing endpoint.
+        server.enqueue(ok("""{"effective": {"llm": {"provider": null}}, "providers": {}}"""))
+
+        val error = (repository.loadSettings() as AuraResult.Failed).error
+
+        assertTrue("expected Incompatible, got $error", error is AuraError.Incompatible)
+        assertFalse(error is AuraError.NotSupported)
+    }
+
+    // ------------------------------------------------------------------
     // PATCH /api/settings
     // ------------------------------------------------------------------
 
@@ -252,6 +396,42 @@ class SettingsContractTest {
         assertTrue(patched.applied.isEmpty())
         assertEquals(listOf("voice.tts.provider"), patched.restartRequired)
         assertTrue(patched.needsRestart)
+    }
+
+    @Test
+    fun `a patch answers with the server's own effective document`() = runTest {
+
+        // The server clamped what was sent: 0.9 asked for, 0.7 in effect.
+        // Whoever renders this has to take the second number - a screen that
+        // keeps showing the value it sent is a screen that lies about what
+        // Aura is running.
+        server.enqueue(
+            ok(
+                """
+                {"applied": ["llm.temperature"], "restart_required": [],
+                 "persistent": true, "needs_restart": false,
+                 "effective": {"llm": {"provider": "gemini", "temperature": 0.7}}}
+                """
+            )
+        )
+
+        val result = repository.patchSettings(
+            mapOf("llm.temperature" to JsonPrimitive(0.9))
+        )
+
+        val sent = json.parseToJsonElement(server.takeRequest().body.readUtf8()) as JsonObject
+
+        assertEquals(
+            0.9,
+            sent["settings"]!!.jsonObject["llm"]!!
+                .jsonObject["temperature"]!!.jsonPrimitive.double,
+            0.0001,
+        )
+
+        val report = (result as AuraResult.Ok).value
+
+        assertEquals(listOf("llm.temperature"), report.applied)
+        assertEquals(0.7, report.effective.llm.temperature, 0.0001)
     }
 
     @Test
@@ -381,14 +561,33 @@ class SettingsContractTest {
     }
 
     @Test
-    fun `a 403 is also a token problem`() = runTest {
+    fun `a 403 is a permission problem, not a wrong token`() = runTest {
 
         server.enqueue(MockResponse().setResponseCode(403))
 
+        // Split from 401 in this phase. Both are about the token; only one of
+        // them is fixed by replacing it, and the hub renders the two
+        // differently because the actions differ.
         assertEquals(
-            AuraError.Unauthorized,
+            AuraError.Forbidden,
             (repository.loadSettings() as AuraResult.Failed).error,
         )
+    }
+
+    @Test
+    fun `a 429 is a rate limit, not a missing feature`() = runTest {
+
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        val error = (repository.loadSettings() as AuraResult.Failed).error
+
+        assertEquals(AuraError.RateLimited, error)
+
+        // It used to arrive as ServerFailure(429), which the hub then rendered
+        // as "this Aura server does not expose settings" - about a server that
+        // has the endpoint and was merely being asked too often.
+        assertTrue(error !is AuraError.NotSupported)
+        assertFalse(error.userMessage.contains("429"))
     }
 
     @Test
@@ -418,6 +617,60 @@ class SettingsContractTest {
         server.enqueue(ok("{ this is not json"))
 
         assertTrue(repository.loadSettings() is AuraResult.Failed)
+    }
+
+    @Test
+    fun `a body this app cannot read is incompatible, not absent`() = runTest {
+
+        // A 200 whose body will not deserialize: a truncated response, or a
+        // proxy's HTML error page served with a success code. The route
+        // answered, so the one thing this must not become is NotSupported -
+        // the hub renders that as "this server does not expose settings".
+        server.enqueue(ok("{ this is not json"))
+
+        val error = (repository.loadSettings() as AuraResult.Failed).error
+
+        assertTrue("expected Incompatible, got $error", error is AuraError.Incompatible)
+        assertTrue(error !is AuraError.NotSupported)
+
+        // The parse exception quotes the JSON it choked on, which can carry
+        // configuration. None of it reaches the screen.
+        assertFalse(error.userMessage.contains("this is not json"))
+        assertFalse(error.userMessage.contains("JsonDecodingException"))
+    }
+
+    @Test
+    fun `an HTML error page served as a success is incompatible`() = runTest {
+
+        // What a misconfigured proxy in front of Aura actually returns.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("<html><body>502 Bad Gateway</body></html>")
+        )
+
+        val error = (repository.loadSettings() as AuraResult.Failed).error
+
+        assertTrue("expected Incompatible, got $error", error is AuraError.Incompatible)
+        assertFalse(error.userMessage.contains("html"))
+    }
+
+    @Test
+    fun `an empty successful body never reports a success code as a failure`() = runTest {
+
+        // Retrofit hands back a null body here, which used to fall through to
+        // `else -> ServerFailure(code)` and produce the sentence "Aura
+        // returned an unexpected response (200)" - a success code named as the
+        // fault.
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val error = (repository.loadSettings() as AuraResult.Failed).error
+
+        assertTrue("expected Incompatible, got $error", error is AuraError.Incompatible)
+        assertFalse(error.userMessage.contains("200"))
+        assertFalse(error.userMessage.contains("204"))
+        assertFalse(error.userMessage.contains("unexpected response"))
     }
 
     // ------------------------------------------------------------------
@@ -459,8 +712,94 @@ class SettingsContractTest {
     }
 
     @Test
-    fun `a stored key arrives masked and only masked`() = runTest {
+    fun `the deployed server names the setting each provider's model lives in`() = runTest {
 
+        server.enqueue(ok(liveBody("providers")))
+
+        val body = (repository.loadProviders() as AuraResult.Ok).value
+
+        // The mapping the model picker writes through. Every one of these is
+        // the server's answer, not a table the phone carries: writing
+        // `llm.model` for Anthropic saves a name only Gemini ever reads.
+        val expected = mapOf(
+            "gemini" to "llm.model",
+            "openai" to "llm.openai_model",
+            "anthropic" to "llm.anthropic_model",
+            "groq" to "llm.groq_model",
+            "cerebras" to "llm.cerebras_model",
+            "openrouter" to "llm.fallback_model",
+            "mistral" to "llm.mistral_model",
+            "xai" to "llm.xai_model",
+            "deepseek" to "llm.deepseek_model",
+            "qwen" to "llm.qwen_model",
+            "ollama" to "llm.ollama_model",
+        )
+
+        expected.forEach { (name, setting) ->
+
+            val provider = body.providers.first { it.name == name }
+
+            assertEquals(name, setting, provider.modelSetting)
+
+            // And the fallback never fires for a server that reports one, so
+            // no provider but Gemini can be sent to `llm.model`.
+            assertEquals(setting, provider.modelSettingOr())
+        }
+
+        // `mock` has no model at all, and is the one case that falls through.
+        val mock = body.providers.first { it.name == "mock" }
+        assertEquals("", mock.modelSetting)
+        assertEquals("llm.model", mock.modelSettingOr())
+    }
+
+    @Test
+    fun `each provider reports the model it would be built with`() = runTest {
+
+        server.enqueue(ok(liveBody("providers")))
+
+        val body = (repository.loadProviders() as AuraResult.Ok).value
+
+        assertEquals(
+            "claude-sonnet-5",
+            body.providers.first { it.name == "anthropic" }.model,
+        )
+        assertEquals(
+            "grok-4",
+            body.providers.first { it.name == "xai" }.model,
+        )
+
+        // Not Gemini's, which is what a UI reading `llm.model` for everyone
+        // would have shown.
+        assertFalse(
+            body.providers
+                .filter { it.name != "gemini" }
+                .any { it.model == "gemini-3.6-flash" },
+        )
+    }
+
+    @Test
+    fun `the deployed providers document names variables and never their values`() = runTest {
+
+        val raw = liveBody("providers")
+
+        server.enqueue(ok(raw))
+
+        val body = (repository.loadProviders() as AuraResult.Ok).value
+
+        val openai = body.providers.first { it.name == "openai" }
+
+        assertEquals("OPENAI_API_KEY", openai.apiKeyEnv)
+        assertEquals("https://api.openai.com/v1", openai.apiBase)
+        assertFalse(openai.apiBaseOverridden)
+
+        // The variable's name is in the payload; nothing key-shaped is.
+        listOf("AIza", "gsk_", "sk-", "xai-", "csk-").forEach {
+            assertFalse("the providers document must not carry $it", raw.contains(it))
+        }
+    }
+
+    @Test
+    fun `a stored key arrives masked and only masked`() = runTest {
         server.enqueue(ok(PROVIDERS_BODY))
 
         val body = (repository.loadProviders() as AuraResult.Ok).value
@@ -693,6 +1032,40 @@ class SettingsContractTest {
         assertTrue(body.problems.first().contains("AttributeError"))
     }
 
+    @Test
+    fun `the deployed server's own health document parses whole`() = runTest {
+
+        server.enqueue(ok(liveBody("provider_health")))
+
+        val body = (repository.providerHealth() as AuraResult.Ok).value
+
+        assertEquals("/api/providers/health", server.takeRequest().path)
+
+        // A deployment with no keys: it asked for Gemini, built nothing, and
+        // says so. Every provider the build knows about is still reported, so
+        // the section can show twelve rows rather than an empty list.
+        assertEquals("gemini", body.requested)
+        assertEquals("", body.active)
+        assertFalse(body.ready)
+        assertFalse(body.inFallback)
+        assertEquals(12, body.providers.size)
+
+        val gemini = body.providers.getValue("gemini")
+        assertFalse(gemini.configured)
+        assertEquals("unconfigured", gemini.state)
+
+        // Keyless providers are configured without a key, and idle rather
+        // than unconfigured - the distinction the recovery UI renders.
+        val ollama = body.providers.getValue("ollama")
+        assertTrue(ollama.configured)
+        assertEquals("idle", ollama.state)
+
+        // The problem is a category with an exception class in it, and
+        // nothing else. Not a traceback, not a path, not a key.
+        assertEquals(1, body.problems.size)
+        assertFalse(body.problems.first().contains("/"))
+    }
+
     // ------------------------------------------------------------------
     // Authentication, on every one of these routes
     // ------------------------------------------------------------------
@@ -737,6 +1110,19 @@ class SettingsContractTest {
         .setResponseCode(200)
         .setHeader("Content-Type", "application/json")
         .setBody(body.trimIndent())
+
+    /**
+     * One of the bodies the server itself produced.
+     *
+     * A resource rather than a string constant, so it is the server's output
+     * byte for byte - a payload retyped into a Kotlin literal is a payload
+     * someone has already interpreted. `tests/test_settings_fixture.py`
+     * writes these and fails when they no longer match the routes.
+     */
+    private fun liveBody(name: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/live/$name.json")) {
+            "missing test resource /live/$name.json - run tests/test_settings_fixture.py"
+        }.use { it.readBytes().toString(Charsets.UTF_8) }
 
     private companion object {
 

@@ -1,0 +1,84 @@
+{
+  "active": "",
+  "chain": [],
+  "in_fallback": false,
+  "problems": [
+    "provider chain unavailable (ValueError)"
+  ],
+  "providers": {
+    "anthropic": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "cerebras": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "deepseek": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "gemini": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "groq": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "mistral": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "mock": {
+      "configured": true,
+      "healthy": false,
+      "in_chain": false,
+      "state": "idle"
+    },
+    "ollama": {
+      "configured": true,
+      "healthy": false,
+      "in_chain": false,
+      "state": "idle"
+    },
+    "openai": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "openrouter": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "qwen": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "xai": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    }
+  },
+  "ready": false,
+  "requested": "gemini"
+}

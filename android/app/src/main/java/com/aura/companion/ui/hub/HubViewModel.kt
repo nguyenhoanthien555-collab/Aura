@@ -10,7 +10,7 @@ import com.aura.companion.data.remote.EffectiveConfigDto
 import com.aura.companion.data.remote.ProviderDto
 import com.aura.companion.data.remote.ProviderHealthDto
 import com.aura.companion.data.settings.AuraSettings
-import com.aura.companion.data.settings.SettingsStore
+import com.aura.companion.data.settings.DeviceSettings
 import com.aura.companion.data.settings.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -107,12 +107,27 @@ data class HubUiState(
      * Deliberately the health rung, not the settings rung: the question
      * the status line answers is "is my Aura up", and it is, even when
      * this build of the app knows about endpoints that deployment does
-     * not. [ServerState.settingsProblem] carries the narrower failure.
+     * not. [settingsAccess] carries the narrower failure.
      */
     val connected: Boolean get() = server.reach.atLeast(ServerReach.Authenticated)
 
     /** True when the hub has a settings document to render and PATCH. */
     val settingsAvailable: Boolean get() = server.loaded
+
+    /**
+     * Why the settings document is or is not usable.
+     *
+     * The one place the answer is decided. Every consumer reads this rather
+     * than re-deriving a sentence from [ServerState.loaded], which is what
+     * used to make a rate limit, a cold start and a 500 all report as "this
+     * server does not expose settings".
+     */
+    val settingsAccess: SettingsAccess
+        get() = settingsAccess(
+            loaded = server.loaded,
+            connected = connected,
+            error = server.settingsError,
+        )
 
     /**
      * Whether the server accepts this setting.
@@ -127,13 +142,12 @@ data class HubUiState(
         server.configurable.isEmpty() || path in server.configurable
 
     fun lockedReason(path: String): String? = when {
-        // Ordered so the *closest* reason wins. A reachable server with no
-        // settings API is a different instruction from an unreachable one,
-        // and "check your connection" would be actively misleading. Why the
-        // token was refused, when it was, is already in `error`.
-        !server.loaded && connected ->
-            "This Aura server does not expose settings"
-        !server.loaded -> "Connect to Aura to change this"
+        // Ordered so the *closest* reason wins. A reachable server whose
+        // settings failed is a different instruction from an unreachable one,
+        // and "check your connection" would be actively misleading. Which
+        // failure it was comes from [settingsAccess], not from this `when`:
+        // exactly one of its members claims the feature is absent.
+        !server.loaded -> settingsAccess.reason.ifBlank { null }
         !supports(path) -> "This Aura server does not support this setting"
         else -> null
     }
@@ -192,12 +206,25 @@ data class ServerState(
     val loaded: Boolean = false,
     val reach: ServerReach = ServerReach.Unknown,
     /**
-     * Why the settings document is missing, when the server is otherwise
-     * up. Null when it loaded, or when the server itself is unreachable -
-     * in that case the top-level error already says so and repeating it
-     * next to every row is noise.
+     * What went wrong with `GET /api/settings`, when the server is otherwise
+     * up. Null when it loaded, or when the server itself is unreachable - in
+     * that case the top-level error already says so and repeating it next to
+     * every row is noise.
+     *
+     * The **typed** error, not a sentence: the wording is derived from it once,
+     * by [settingsAccess]. Holding only a rendered string is what let five
+     * screens each invent their own claim about why settings were missing, and
+     * all five settled on the same wrong one.
      */
-    val settingsProblem: String? = null,
+    val settingsError: AuraError? = null,
+    /**
+     * What went wrong with `GET /api/providers` or `/api/providers/health`.
+     *
+     * These used to fail silently - the provider section simply had nothing in
+     * it, with no statement of why. A section that is empty for an unstated
+     * reason reads as a broken app.
+     */
+    val providersError: AuraError? = null,
     val config: EffectiveConfigDto = EffectiveConfigDto(),
     val configurable: Set<String> = emptySet(),
     val providers: List<ProviderDto> = emptyList(),
@@ -235,7 +262,7 @@ data class Notice(val text: String, val kind: Kind) {
 }
 
 class HubViewModel(
-    private val settings: SettingsStore,
+    private val settings: DeviceSettings,
     private val repository: AuraRepository,
 ) : ViewModel() {
 
@@ -321,7 +348,7 @@ class HubViewModel(
 
                                     else -> ServerReach.Connected
                                 },
-                                settingsProblem = null,
+                                settingsError = null,
                             ),
                         )
                     }
@@ -332,7 +359,9 @@ class HubViewModel(
             if (!reachable) return@launch
 
             // 2. The settings document. Its absence is a missing feature,
-            //    not a missing server.
+            //    not a missing server - and *which* absence it is has to
+            //    survive to the UI, because "not on this server" and "the
+            //    server is rate limiting me" are different instructions.
             when (val result = repository.loadSettings()) {
 
                 is AuraResult.Ok -> _state.update {
@@ -342,7 +371,7 @@ class HubViewModel(
                         server = it.server.copy(
                             loaded = true,
                             reach = ServerReach.SettingsAvailable,
-                            settingsProblem = null,
+                            settingsError = null,
                             config = result.value.effective,
                             configurable = result.value.configurable.toSet(),
                             keysPersistent = result.value.providers.persistent,
@@ -360,7 +389,7 @@ class HubViewModel(
                         error = null,
                         server = it.server.copy(
                             loaded = false,
-                            settingsProblem = result.error.userMessage,
+                            settingsError = result.error,
                         ),
                     )
                 }
@@ -378,38 +407,64 @@ class HubViewModel(
      * below what the earlier steps established. It only ever raises the
      * top rung, and only when the chain is genuinely serving the requested
      * provider.
+     *
+     * A failure is recorded rather than dropped. It used to be dropped - both
+     * calls were `if (result is AuraResult.Ok)` and nothing else - so a
+     * provider route that 500ed left the section empty with no statement of
+     * why, which reads as a broken app rather than an unanswered request.
      */
     fun refreshProviders() {
         viewModelScope.launch {
 
             repository.loadProviders().let { result ->
-                if (result is AuraResult.Ok) {
-                    _state.update {
+                when (result) {
+                    is AuraResult.Ok -> _state.update {
                         it.copy(
                             server = it.server.copy(
                                 providers = result.value.providers,
+                                providersError = null,
                                 keysPersistent = result.value.keyStorage.persistent,
                                 keyStorageNote = result.value.keyStorage.persistenceNote,
                             )
+                        )
+                    }
+
+                    is AuraResult.Failed -> _state.update {
+                        it.copy(
+                            server = it.server.copy(providersError = result.error)
                         )
                     }
                 }
             }
 
             repository.providerHealth().let { result ->
-                if (result is AuraResult.Ok) {
+                when (result) {
+                    is AuraResult.Ok -> {
 
-                    val health = result.value
+                        val health = result.value
 
-                    _state.update {
+                        _state.update {
+                            it.copy(
+                                server = it.server.copy(
+                                    health = health,
+                                    reach = if (health.ready && !health.inFallback) {
+                                        ServerReach.ProviderHealthy
+                                    } else {
+                                        it.server.reach
+                                    },
+                                )
+                            )
+                        }
+                    }
+
+                    // Only when the list call had not already explained
+                    // itself: one sentence about the provider routes is
+                    // enough, and the first failure is the more specific one.
+                    is AuraResult.Failed -> _state.update {
                         it.copy(
                             server = it.server.copy(
-                                health = health,
-                                reach = if (health.ready && !health.inFallback) {
-                                    ServerReach.ProviderHealthy
-                                } else {
-                                    it.server.reach
-                                },
+                                providersError = it.server.providersError
+                                    ?: result.error
                             )
                         )
                     }
@@ -732,7 +787,7 @@ class HubViewModel(
 
     companion object {
         fun factory(
-            settings: SettingsStore,
+            settings: DeviceSettings,
             repository: AuraRepository,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 

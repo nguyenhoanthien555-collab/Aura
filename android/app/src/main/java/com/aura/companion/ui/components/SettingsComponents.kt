@@ -43,6 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aura.companion.ui.theme.AuraMotion
+import com.aura.companion.ui.theme.auraGlassEdge
+import com.aura.companion.ui.theme.rememberReducedMotion
 
 /**
  * The Control Hub's building blocks.
@@ -65,6 +68,12 @@ import androidx.compose.ui.unit.dp
  * Section expansion, the toggle itself, and a fade on status changes.
  * Nothing else moves. A settings screen that animates on every scroll
  * frame is slower to read, not nicer.
+ *
+ * The durations come from [AuraMotion] and are scaled by
+ * [rememberReducedMotion], so these read as the same app as the hub's hero
+ * card and honour "Remove animations" without a setting of Aura's own.
+ * They used to be three literals - 150, 180, 120 - which is how a second
+ * design system starts.
  */
 
 // ----------------------------------------------------------------------
@@ -120,15 +129,25 @@ fun SectionHeader(
     }
 }
 
-/** The rounded surface every group of rows sits on. */
+/**
+ * The rounded surface every group of rows sits on.
+ *
+ * Carries the hub's own hairline edge ([auraGlassEdge]) rather than an
+ * elevation shadow: the front page's tiles are already glass, and a settings
+ * card that was a flat tonal block read as a different app one tap in.
+ */
 @Composable
 fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(20.dp)
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .auraGlassEdge(shape),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     ) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) { content() }
@@ -339,7 +358,9 @@ private fun SettingRowFrame(
 ) {
     val alpha by animateFloatAsState(
         targetValue = if (dimmed) 0.55f else 1f,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = tween(
+            durationMillis = AuraMotion.scaled(AuraMotion.Quick, rememberReducedMotion()),
+        ),
         label = "rowAlpha",
     )
 
@@ -461,9 +482,13 @@ fun NoticeCard(
     tone: StatusTone = StatusTone.Neutral,
     icon: ImageVector? = null,
 ) {
+    val shape = RoundedCornerShape(14.dp)
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .auraGlassEdge(shape),
+        shape = shape,
         color = tone.contentColour().copy(alpha = 0.10f),
     ) {
         Row(
@@ -496,10 +521,18 @@ fun AnimatedNotice(
     tone: StatusTone = StatusTone.Neutral,
     icon: ImageVector? = null,
 ) {
+    val reduced = rememberReducedMotion()
+
+    // Arriving is the half worth seeing - it is new information. Leaving is
+    // quicker, because a notice the user has finished with should get out of
+    // the way rather than be seen out.
+    val arrive = AuraMotion.scaled(AuraMotion.Standard, reduced)
+    val leave = AuraMotion.scaled(AuraMotion.Quick, reduced)
+
     AnimatedVisibility(
         visible = !text.isNullOrBlank(),
-        enter = fadeIn(tween(180)) + expandVertically(tween(180)),
-        exit = fadeOut(tween(120)) + shrinkVertically(tween(120)),
+        enter = fadeIn(tween(arrive)) + expandVertically(tween(arrive)),
+        exit = fadeOut(tween(leave)) + shrinkVertically(tween(leave)),
     ) {
         Column {
             NoticeCard(
@@ -529,6 +562,11 @@ fun ExpandableSection(
     subtitle: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val reduced = rememberReducedMotion()
+
+    val arrive = AuraMotion.scaled(AuraMotion.Standard, reduced)
+    val leave = AuraMotion.scaled(AuraMotion.Quick, reduced)
+
     Column(modifier = modifier.fillMaxWidth()) {
 
         Row(
@@ -569,8 +607,8 @@ fun ExpandableSection(
 
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(180)) + expandVertically(tween(180)),
-            exit = fadeOut(tween(120)) + shrinkVertically(tween(120)),
+            enter = fadeIn(tween(arrive)) + expandVertically(tween(arrive)),
+            exit = fadeOut(tween(leave)) + shrinkVertically(tween(leave)),
         ) {
             SettingsCard { content() }
         }

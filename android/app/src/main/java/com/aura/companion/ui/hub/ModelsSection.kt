@@ -197,11 +197,16 @@ fun ModelsSection(
         if (server.providers.isEmpty()) {
             SettingsCard {
                 Text(
-                    text = if (server.loaded) {
-                        "No providers reported."
-                    } else {
-                        "Connect to Aura to manage providers."
-                    },
+                    // An empty list, a failed request and an unreachable
+                    // server are three different sentences. Saying "no
+                    // providers reported" for a request that came back 500
+                    // reports the server's silence as its answer.
+                    text = server.providersError?.userMessage
+                        ?: if (server.loaded) {
+                            "No providers reported."
+                        } else {
+                            "Connect to Aura to manage providers."
+                        },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),

@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -295,15 +296,31 @@ class AuraRepository(
                 return@withContext AuraResult.Ok(body)
             }
 
+            // A 2xx with nothing in it. Retrofit hands back a null body for a
+            // 204, and for a success whose content-length was zero - and the
+            // old `else` branch turned that into "unexpected response (200)",
+            // a sentence naming a success code as the failure. The route
+            // answered; what it answered with is unusable.
+            if (response.isSuccessful) {
+                return@withContext AuraResult.Failed(
+                    AuraError.Incompatible("empty body")
+                )
+            }
+
             AuraResult.Failed(
                 when (response.code()) {
-                    401, 403 -> AuraError.Unauthorized
+                    401 -> AuraError.Unauthorized
+                    // Recognised, and still refused. A different instruction
+                    // from "your token is wrong" - see AuraError.Forbidden.
+                    403 -> AuraError.Forbidden
                     // The server validated the request and said no, in
                     // words written for this screen. See AuraError.Rejected.
                     422 -> rejection(response)
                     // The route is absent, not the server. A deployment
                     // older than this app answers chat and 404s the hub.
                     404, 405 -> AuraError.NotSupported
+                    // Nothing is broken and nothing needs configuring.
+                    429 -> AuraError.RateLimited
                     503 -> unavailableReason(response)
                     // A gateway that has no Aura behind it yet. On the
                     // free tiers this project targets, that is a container
@@ -324,6 +341,15 @@ class AuraRepository(
             // logged with its message: an IOException can name the host
             // and port it failed to reach.
             AuraResult.Failed(AuraError.Offline)
+
+        } catch (e: SerializationException) {
+            // The converter threw: the server answered, and this build cannot
+            // read what it said. Caught *before* the generic clause because a
+            // SerializationException is a RuntimeException, so it used to land
+            // in `Unknown` - "something went wrong reaching Aura" - about a
+            // server that had been reached perfectly. Its message is dropped
+            // rather than passed on: it quotes the JSON it choked on.
+            AuraResult.Failed(AuraError.Incompatible("unreadable body"))
 
         } catch (e: Exception) {
             AuraResult.Failed(AuraError.Unknown())

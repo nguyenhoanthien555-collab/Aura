@@ -12,8 +12,22 @@ Temporal Context + User Model + Proactive System) is complete, PHASE 9
 (Android Control Hub, modern UI, provider/API-key management, feature
 controls) is complete, and PHASE 10 (Android <-> server settings
 contract) is complete. The "local Windows device agent" that earlier
-notes deferred is still deferred - it was not part of the Phase 8, 9, 10
-or 11 spec.
+notes deferred is still deferred - it was not part of the Phase 8, 9, 10,
+11 or 12 spec.
+
+PHASE 12 (Android settings integration audit) is complete but
+**uncommitted** - requirement 22 of the mandate says report the diff and
+wait for approval. 19 code/test files modified, +868/-120 (plus these
+four `.claude/*.md` state files), and six untracked paths (`ui/hub/SettingsAccess.kt`, `data/settings/DeviceSettings.kt`,
+`ui/hub/HubViewModelTest.kt`, `ui/hub/SettingsAccessTest.kt`,
+`android/app/src/test/resources/`, `tests/test_settings_fixture.py`).
+Both suites green: backend **1756 passed, 1 skipped, 1 deselected**;
+Android **273 passed across 17 classes, 0 failures, 0 errors**. Debug APK
+rebuilt from clean: 19,323,605 bytes, 2026-08-12 13:27:08 +0700. No
+backend behaviour changed, no dependency added, no test weakened (three
+assertions were strengthened). Still NOT verified: no device attached, so
+the APK was never installed or run; no live provider API called; the
+Render host was not re-probed from the phone; `:app:lintDebug` not re-run.
 
 PHASE 11 is complete and committed as `95ab4f1 Harden settings,
 providers, Render startup, and Android UI` (44 files, 5798 insertions,
@@ -31,13 +45,53 @@ already done by `35589a0`. NOT verified: no device was attached, so the
 APK was never installed or run; no live provider API was called; Render
 was not redeployed; `:app:lintDebug` was not re-run after the redesign.
 
-**Phases 9, 10 and 11 ARE committed.** HEAD is `95ab4f1 Harden settings,
-providers, Render startup, and Android UI` on `feature/aura-identity`,
-pushed, with a clean tree. What remains outstanding is the user's
-*redeploy*: the deployed Render revision predates the settings routes,
-which is why `/api/settings`, `/api/providers` and
-`/api/providers/health` return 404 there, and it also predates the
-SQLAlchemy pin the service needs to boot on Python 3.14 at all.
+**Phases 9, 10, 11 ARE committed.** HEAD is `07e3cda Record Phase 11
+completion in project state` on `feature/aura-identity`, pushed. Phase 12
+sits on top of it, unstaged. The *redeploy* that earlier notes listed as
+outstanding **has happened**: the user verified against the live Render
+host that authenticated `GET /api/health`, `GET /api/settings`,
+`GET /api/providers` and `GET /api/providers/health` all return 200, and
+that `/api/settings` returns a valid
+`effective`/`overrides`/`providers`/`configurable` payload. The "404
+there" note above was true for the older revision and is no longer the
+live contract - which is precisely what made Phase 12 necessary, because
+the phone still said "This Aura server does not expose settings".
+
+## Phase 12 architecture (standing)
+- **The settings verdict is a typed error, not a boolean.**
+  `ServerState.settingsError: AuraError?` carries *why* the settings read
+  failed, and `settingsAccess(loaded, connected, error)`
+  (`ui/hub/SettingsAccess.kt`) is the only place that turns it into words.
+  A boolean plus free text is what produced the bug: six sites
+  independently re-derived "this server does not expose settings" from
+  `loaded == false`, so an auth failure, a cold start, a 500 and a
+  malformed body all rendered as 404. Every screen now reads
+  `SettingsAccess` (13 members, each with `label`/`reason`/`headline`/
+  `tone`/`retryable`/`usable`) instead of re-deciding.
+- **A body that will not parse is an incompatibility, never a 404.**
+  `AuraRepository.call()` maps 401/403/422/404-405/429/503/502-504 each to
+  its own `AuraError`, an empty 2xx body to `Incompatible("empty body")`,
+  and catches `SerializationException` *before* the generic clause -
+  dropping its message, which quotes the offending JSON.
+- **The contract is tested against the server's own bytes.**
+  `android/app/src/test/resources/` holds the current server build's route
+  output captured through `tests/test_settings_api.py`'s FastAPI
+  `TestClient` (not a network capture), and `SettingsContractTest` parses
+  it. `tests/test_settings_fixture.py` keeps the capture honest on the
+  backend side.
+- **Provider -> model setting is server-authoritative.**
+  `PROVIDER_CAPABILITIES[name]["model_setting"]` ->
+  `ProviderDto.modelSetting` -> `modelSettingOr("llm.model")`. The phone
+  never guesses which key a provider's model lives under, so choosing a
+  model for Anthropic cannot write Gemini's `llm.model`.
+- **`DeviceSettings` is the phone-local seam.** `HubViewModel` depends on
+  that interface rather than the concrete encrypted store, which is what
+  makes the hub testable on the plain JVM (no Robolectric in this project)
+  and what keeps device toggles provably off the wire.
+- **Anything asserted must be pure Kotlin.** Unit tests are plain JVM;
+  `androidx.compose.ui.test.junit4` is `androidTestImplementation` only.
+  That is why the verdict, the overview mapping, the provider summary and
+  the motion tokens live in Compose-free files.
 
 ## Phase 10 architecture (standing)
 - **Connectivity is a ladder, not a boolean.** `ServerReach`

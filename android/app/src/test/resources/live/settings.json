@@ -1,0 +1,225 @@
+{
+  "configurable": [
+    "llm.anthropic_model",
+    "llm.cerebras_model",
+    "llm.deepseek_model",
+    "llm.fallback_model",
+    "llm.fallback_providers",
+    "llm.groq_model",
+    "llm.max_output_tokens",
+    "llm.mistral_model",
+    "llm.model",
+    "llm.ollama_model",
+    "llm.openai_model",
+    "llm.provider",
+    "llm.qwen_model",
+    "llm.temperature",
+    "llm.timeout",
+    "llm.xai_model",
+    "memory.history_limit",
+    "memory.pipeline",
+    "memory.profile",
+    "memory.recall",
+    "memory.retrieval_scope",
+    "proactive.cooldown_seconds",
+    "proactive.duplicate_window_seconds",
+    "proactive.enabled",
+    "proactive.max_per_day",
+    "proactive.quiet_hours",
+    "proactive.similarity_threshold",
+    "server.companion.enabled",
+    "server.screen.enabled",
+    "server.screen.min_interval",
+    "tools.auto_approve",
+    "tools.enabled",
+    "tools.timeout",
+    "vision.cloud_model",
+    "vision.enabled",
+    "vision.ollama_model",
+    "voice.stt.enabled",
+    "voice.tts.enabled",
+    "voice.tts.playback",
+    "voice.tts.provider",
+    "voice.tts.voice",
+    "voice.tts.volume"
+  ],
+  "effective": {
+    "app": {
+      "name": "Aura",
+      "version": "0.2.0"
+    },
+    "avatar": {
+      "enabled": false,
+      "opacity": 0.95,
+      "position": null,
+      "scale": 1.0,
+      "size": 160,
+      "sprites_dir": ""
+    },
+    "llm": {
+      "anthropic_model": "claude-sonnet-5",
+      "cerebras_model": "llama-3.3-70b",
+      "deepseek_model": "deepseek-chat",
+      "fallback_model": "openrouter/free",
+      "fallback_provider": "",
+      "fallback_providers": [
+        "groq",
+        "mistral",
+        "openrouter"
+      ],
+      "groq_model": "llama-3.3-70b-versatile",
+      "max_output_tokens": 768,
+      "mistral_model": "mistral-small-latest",
+      "model": "gemini-3.6-flash",
+      "ollama_model": "qwen3:8b",
+      "openai_model": "gpt-5.1",
+      "provider": "gemini",
+      "qwen_model": "qwen-plus",
+      "temperature": 0.7,
+      "timeout": 120,
+      "xai_model": "grok-4"
+    },
+    "logging": {
+      "level": "INFO"
+    },
+    "memory": {
+      "companion": true,
+      "history_limit": 10,
+      "max_companion": 10,
+      "max_facts": 5,
+      "max_highlights": 3,
+      "max_recalled": 2,
+      "pipeline": true,
+      "profile": true,
+      "recall": false,
+      "retrieval_scope": 500,
+      "seed_profile": true
+    },
+    "personality": {
+      "consistency": {
+        "after_messages": 6,
+        "anchor": "",
+        "contradiction_after": 20,
+        "enabled": true
+      },
+      "style": {
+        "avoid_repeats": 3,
+        "enabled": true,
+        "hint": "",
+        "strip_filler": true
+      }
+    },
+    "plugins": {
+      "config": {},
+      "directory": "",
+      "enabled": []
+    },
+    "proactive": {
+      "category_cooldowns": {
+        "appreciation": 86400,
+        "greeting": 21600,
+        "task": 14400,
+        "wellbeing": 43200
+      },
+      "cooldown_seconds": 7200,
+      "duplicate_window_seconds": 21600,
+      "enabled": false,
+      "max_per_day": 4,
+      "quiet_hours": [
+        [
+          22,
+          8
+        ]
+      ],
+      "similarity_threshold": 0.6
+    },
+    "server": {
+      "companion": {
+        "cooldown_seconds": 300,
+        "enabled": false,
+        "max_per_hour": 6,
+        "quiet_hours": [],
+        "relevance_threshold": 0.7,
+        "suppress_after_chat_seconds": 120
+      },
+      "screen": {
+        "enabled": true,
+        "min_change_ratio": 0.25,
+        "min_interval": 8.0
+      },
+      "session_ttl_seconds": 3600
+    },
+    "temporal": {
+      "timezone": ""
+    },
+    "tools": {
+      "allowed": [
+        "current_time"
+      ],
+      "allowed_paths": [],
+      "applications": {},
+      "auto_approve": [
+        "safe"
+      ],
+      "enabled": true,
+      "timeout": 30.0
+    },
+    "vision": {
+      "capture_screen": false,
+      "cloud_model": "gemini-3.6-flash",
+      "debug_frame": "",
+      "enabled": true,
+      "fallback_model": "openrouter/free",
+      "host": "",
+      "jpeg_quality": 75,
+      "max_pixels": 1500000,
+      "min_interval": 2.0,
+      "monitor": 1,
+      "ollama_model": "qwen2.5vl:7b",
+      "timeout": 120.0
+    },
+    "voice": {
+      "microphone": {
+        "channels": 1,
+        "device": null,
+        "sample_rate": 16000
+      },
+      "stt": {
+        "enabled": false,
+        "language": "",
+        "model": "base",
+        "provider": "mock",
+        "record_seconds": 5.0,
+        "wake_word": ""
+      },
+      "tts": {
+        "enabled": false,
+        "pitch": "+10Hz",
+        "playback": true,
+        "playback_timeout": 300.0,
+        "provider": "auto",
+        "rate": "+5%",
+        "timeout": 60.0,
+        "voice": "",
+        "volume": 100
+      }
+    }
+  },
+  "overrides": {},
+  "providers": {
+    "available": {
+      "anthropic": "",
+      "cerebras": "",
+      "deepseek": "",
+      "gemini": "",
+      "groq": "",
+      "mistral": "",
+      "openai": "",
+      "openrouter": "",
+      "qwen": "",
+      "xai": ""
+    },
+    "persistence_note": "",
+    "persistent": true
+  }
+}

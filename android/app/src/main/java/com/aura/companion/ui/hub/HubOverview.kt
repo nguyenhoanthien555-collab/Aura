@@ -65,13 +65,13 @@ fun hubHeadline(state: HubUiState): HubHeadline {
             tone = StatusTone.Warning,
         )
 
-        // Reachable and authenticated, but this build of the app knows
-        // endpoints that deployment does not. Say which half works, because
-        // both halves are true and only one of them is a problem.
-        state.connected && server.settingsProblem != null -> HubHeadline(
+        // Reachable and authenticated, and the settings document did not
+        // arrive. Say which half works and *why* the other did not, because
+        // both halves are true and the reason decides what to do next.
+        state.connected && server.settingsError != null -> HubHeadline(
             title = "Connected",
-            detail = "Chat works. Settings unavailable on this server.",
-            tone = StatusTone.Warning,
+            detail = state.settingsAccess.headline,
+            tone = state.settingsAccess.tone,
         )
 
         state.connected -> HubHeadline(
@@ -273,14 +273,13 @@ fun hubBanner(state: HubUiState): HubBanner? {
             tone = StatusTone.Warning,
         )
 
-        // Not an error: nothing is broken on the user's side and there is
-        // nothing for them to fix on the phone. It explains why the sections
-        // below are read-only.
-        state.connected && server.settingsProblem != null -> HubBanner(
-            text = server.settingsProblem +
-                " The sections below are read-only until the server is " +
-                "updated. Chat is unaffected.",
-            tone = StatusTone.Warning,
+        // Not an error in itself: whether anything is broken depends on which
+        // failure it was, so the wording and the tone both come from
+        // [SettingsAccess] rather than being fixed here. It explains why the
+        // sections below are read-only.
+        state.connected && server.settingsError != null -> HubBanner(
+            text = settingsBanner(state.settingsAccess).orEmpty(),
+            tone = state.settingsAccess.tone,
         )
 
         !state.connected && !state.loading -> HubBanner(

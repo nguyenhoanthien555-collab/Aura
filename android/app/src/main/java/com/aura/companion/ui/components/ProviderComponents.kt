@@ -44,6 +44,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.aura.companion.ui.theme.AuraMotion
+import com.aura.companion.ui.theme.auraGlassEdge
+import com.aura.companion.ui.theme.rememberReducedMotion
 
 /**
  * Provider, model and API-key UI.
@@ -102,9 +105,15 @@ fun ProviderCard(
     onToggleFallback: (() -> Unit)? = null,
     onManageKey: (() -> Unit)? = null,
 ) {
+    val reducedMotion = rememberReducedMotion()
+
+    val shape = RoundedCornerShape(20.dp)
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .auraGlassEdge(shape),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -166,8 +175,12 @@ fun ProviderCard(
 
             AnimatedVisibility(
                 visible = testResult != null,
-                enter = fadeIn(tween(160)),
-                exit = fadeOut(tween(120)),
+                enter = fadeIn(
+                    tween(AuraMotion.scaled(AuraMotion.Standard, reducedMotion))
+                ),
+                exit = fadeOut(
+                    tween(AuraMotion.scaled(AuraMotion.Quick, reducedMotion))
+                ),
             ) {
                 Column {
                     Spacer(Modifier.height(12.dp))

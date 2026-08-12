@@ -72,9 +72,18 @@ when Phase 9 began). Phase 9 backend: 1535. Phase 10 backend: 1628.
       missing, and reports served from a config snapshot taken at process
       start. Details in `progress.md`; the standing architecture is in
       `project-state.md`.
-- [ ] Phase 11 - Render startup recovery, provider coverage, Hub
-      redesign. IN PROGRESS. Task list and status in the Phase 11
-      section below.
+- [x] Phase 11 - Render startup recovery, provider coverage, Hub
+      redesign. COMPLETE, committed as `95ab4f1` and recorded in
+      `07e3cda`.
+- [x] Phase 12 - Android Settings integration audit. COMPLETE and
+      **UNCOMMITTED** (held for approval). Backend 1756 passed / 1
+      skipped / 1 deselected; Android 273 passed across 17 classes; debug
+      APK rebuilt from clean. Root cause was the client, not the server:
+      the settings verdict was a boolean plus free text, so every
+      settings failure after a 200 from `/api/health` rendered as "this
+      Aura server does not expose settings". Now a typed
+      `settingsError: AuraError?` and one `SettingsAccess` enum. Detail
+      in `progress.md`; the decision is in `decisions.md`.
 
 **Correction to the three entries above:** they said "nothing from
 Phase 9 or Phase 10 is committed" and named `35589a0` as HEAD. Both are
@@ -186,6 +195,56 @@ After the Render fix: **1642 passed, 1 skipped, 1 deselected**.
       NOT done: no device was attached, so the APK was never installed or
       run; no live provider API was called; Render was not redeployed;
       `:app:lintDebug` was not re-run after the redesign.
+
+## Phase 12 (COMPLETE, uncommitted) - Android Settings integration
+
+Requirements 1-22 of the audit mandate. Every acceptance criterion A-N
+met except that N (do not commit) is the state this stops in.
+
+- [x] **12.1 Audit.** Traced Retrofit -> auth interceptor -> `AuraResult`
+      -> repository -> `ControlDto` -> `HubViewModel` -> `HubOverview` /
+      `ProviderSummary` -> the eleven sections -> error mapping. Six
+      sites were re-deriving "does not expose settings" from
+      `ServerState.loaded`. Cleared by evidence, each checked rather than
+      assumed: the bearer token is attached, the base URL is normalised,
+      `/api/settings` uses the *same* authenticated Retrofit client as
+      `/api/health` (requirement 8), the DTOs parse the live payload, and
+      no control is fake.
+- [x] **12.2 Typed verdict.** `ui/hub/SettingsAccess.kt` (new) +
+      `ServerState.settingsError` / `providersError`. Full status mapping
+      in `progress.md`.
+- [x] **12.3 Mapping repairs.** Empty 2xx body -> `Incompatible`, not
+      `ServerFailure(200)`. `SerializationException` -> `Incompatible`,
+      caught before the generic clause, message dropped. Provider-route
+      failures recorded instead of swallowed. 403 split from 401.
+- [x] **12.4 Contract, from the server's own bytes.**
+      `android/app/src/test/resources/live/*.json` +
+      `tests/test_settings_fixture.py`. Captured through the FastAPI
+      `TestClient`, not from Render - see `progress.md` before quoting
+      `configured` values from them.
+- [x] **12.5 ViewModel-level regression tests.** `DeviceSettings.kt`
+      (new) made `HubViewModel` constructible on the JVM without widening
+      the read-only `SettingsProvider`; `HubViewModelTest` (18) drives
+      four routes on loopback.
+- [x] **12.6 Read-only audit (requirement 13).** All 32 literal settings
+      paths used under `ui/` are among the server's 42 `configurable`
+      paths. Every control that writes a server setting passes through
+      `lockedReason`; `AuraSection` and `DiagnosticsSection` write nothing
+      and state their reason from `settingsAccess`; `ConnectionSection` is
+      device-local. `tools.allowed`, `tools.allowed_paths` and
+      `tools.applications` are absent from the server's allow-list by
+      design and render locked - a bearer token must not widen what the
+      tools may reach.
+- [x] **12.7 UI pass on the Phase 11 tokens.** `auraGlassEdge` on the
+      three card types; `AuraMotion.scaled` + `rememberReducedMotion` in
+      place of five literal durations. No new design system, no GSAP, no
+      WebView, no dependency.
+- [x] **12.8 Suites, APK, diff.** Backend 1756 / 1 skipped / 1
+      deselected. Android 273 across 17 classes. APK 19,323,605 bytes,
+      2026-08-12 13:27:08 +0700, built after a real `clean`.
+      `git diff --check` clean; 19 modified files, 6 untracked paths.
+- [ ] **12.9 Commit and push.** BLOCKED BY DESIGN: requirement 22 says
+      report the diff and wait for approval.
 
 ## Standing constraints
 

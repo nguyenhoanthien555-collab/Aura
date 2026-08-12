@@ -71,14 +71,17 @@ fun AuraSection(
 
             // Present only when it is the answer to a question the user
             // would otherwise ask: the server is up, so why is everything
-            // below read-only?
-            if (state.connected && server.settingsProblem != null) {
+            // below read-only? The row names the actual failure - a rate
+            // limit and a missing endpoint are not the same news.
+            if (state.connected && server.settingsError != null) {
+
+                val access = state.settingsAccess
 
                 StatusRow(
                     title = "Settings API",
-                    value = "Unavailable",
-                    subtitle = server.settingsProblem,
-                    tone = StatusTone.Warning,
+                    value = access.label,
+                    subtitle = access.reason,
+                    tone = access.tone,
                     icon = Icons.Filled.Info,
                 )
 

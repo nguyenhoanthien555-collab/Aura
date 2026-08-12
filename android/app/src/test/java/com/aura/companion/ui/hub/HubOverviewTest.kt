@@ -1,5 +1,6 @@
 package com.aura.companion.ui.hub
 
+import com.aura.companion.data.AuraError
 import com.aura.companion.data.remote.AppConfigDto
 import com.aura.companion.data.remote.EffectiveConfigDto
 import com.aura.companion.data.remote.LlmConfigDto
@@ -43,7 +44,7 @@ class HubOverviewTest {
             state(
                 reach = ServerReach.Authenticated,
                 loaded = false,
-                settingsProblem = "This Aura server does not have this feature yet.",
+                settingsError = AuraError.NotSupported,
             )
         )
 
@@ -53,6 +54,41 @@ class HubOverviewTest {
         // Amber, not red: half of Aura is working and nothing on the phone
         // is broken.
         assertEquals(StatusTone.Warning, headline.tone)
+    }
+
+    @Test
+    fun `a settings failure that is not a 404 gets its own second line`() {
+
+        // The defect: every one of these produced the sentence above, which
+        // told the user their server was missing an endpoint it has.
+        val details = listOf(
+            AuraError.RateLimited,
+            AuraError.ServerFailure(500),
+            AuraError.Waking,
+            AuraError.Timeout,
+            AuraError.Incompatible(),
+            AuraError.Unauthorized,
+            AuraError.Forbidden,
+        ).map { error ->
+
+            val headline = hubHeadline(
+                state(
+                    reach = ServerReach.Authenticated,
+                    loaded = false,
+                    settingsError = error,
+                )
+            )
+
+            assertEquals("Connected", headline.title)
+            assertTrue(
+                "$error must not read as a missing endpoint: ${headline.detail}",
+                !headline.detail.contains("Settings unavailable on this server"),
+            )
+            headline.detail
+        }
+
+        // And each is distinguishable, not one sentence reused.
+        assertEquals(details.size, details.distinct().size)
     }
 
     @Test
@@ -340,7 +376,7 @@ class HubOverviewTest {
         val banner = hubBanner(
             state(
                 ServerReach.Authenticated, loaded = false,
-                settingsProblem = "This Aura server does not expose settings.",
+                settingsError = AuraError.NotSupported,
             )
         )
 
@@ -348,6 +384,28 @@ class HubOverviewTest {
         assertEquals(StatusTone.Warning, banner!!.tone)
         assertTrue(banner.text.contains("read-only"))
         assertTrue(banner.text.contains("Chat is unaffected"))
+
+        // The advice only applies to a server that is genuinely behind.
+        assertTrue(banner.text.contains("until the server is updated"))
+    }
+
+    @Test
+    fun `a transient settings failure is not advice to update the server`() {
+
+        val banner = hubBanner(
+            state(
+                ServerReach.Authenticated, loaded = false,
+                settingsError = AuraError.RateLimited,
+            )
+        )
+
+        assertNotNull(banner)
+        assertTrue(banner!!.text.contains("read-only"))
+        assertTrue(banner.text.contains("Chat is unaffected"))
+
+        // Neither of the two claims the old banner made about every failure.
+        assertTrue(!banner.text.contains("until the server is updated"))
+        assertTrue(banner.text.contains("Pull down to try again"))
     }
 
     @Test
@@ -366,7 +424,7 @@ class HubOverviewTest {
         loaded: Boolean,
         loading: Boolean = false,
         configured: Boolean = true,
-        settingsProblem: String? = null,
+        settingsError: AuraError? = null,
         providers: List<ProviderDto> = emptyList(),
         health: ProviderHealthDto = ProviderHealthDto(),
         screenOnServer: Boolean = false,
@@ -382,7 +440,7 @@ class HubOverviewTest {
         server = ServerState(
             loaded = loaded,
             reach = reach,
-            settingsProblem = settingsProblem,
+            settingsError = settingsError,
             config = EffectiveConfigDto(
                 app = AppConfigDto(version = "0.2.0"),
                 llm = llm,

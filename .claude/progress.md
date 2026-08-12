@@ -1134,6 +1134,127 @@ exist at all, and at `95ab4f1` for the SQLAlchemy pin that lets the
 service boot on Python 3.14. Until then Aura reads "Connected /
 Settings unavailable", which is now the truth rather than a bug.
 
+## Phase 12 - Android Settings integration audit (COMPLETE, UNCOMMITTED)
+
+The premise this phase started from was that the live server is fine.
+Authenticated `GET /api/health`, `/api/settings`, `/api/providers` and
+`/api/providers/health` all answer 200 on the current deployment, so the
+Phase 11 reading - "the deployment predates the routes" - was true then
+and is not the current contract. The phone was still saying **"This Aura
+server does not expose settings"**. It was the client.
+
+**Root cause.** The settings verdict was a boolean (`ServerState.loaded`)
+plus a free-text `settingsProblem: String?`, and six separate sites
+re-derived their own sentence from the boolean alone. Once `/api/health`
+had returned 200, *every* later settings failure - a refused token, a
+403, a 422, a rate limit, a 500, a cold-start 502, a read timeout, a body
+this build cannot parse - rendered as the one sentence about a missing
+endpoint. On a free-tier host that is reachable with no server bug at
+all: health succeeds, the very next request meets a cold-start gateway
+error, and the app tells the user to update a server that is current.
+
+**Fix.** The verdict is typed and decided once.
+`ServerState.settingsError: AuraError?` replaces the string, and the new
+`ui/hub/SettingsAccess.kt` maps it to a 13-member `SettingsAccess` enum
+carrying `label` / `reason` / `headline` / `tone` / `retryable`.
+`HubUiState.settingsAccess` is the single source; `lockedReason`,
+`hubHeadline`, `hubBanner`, `AuraSection`, `ConnectionSection` and
+`DiagnosticsSection` all read it instead of composing a sentence.
+"Does not expose settings" is now reachable from `NotExposed` alone,
+which is 404/405 and nothing else. Three supporting mismappings went
+with it: a 2xx with an empty body became `ServerFailure(200)` -> "an
+unexpected response (200)", now `Incompatible("empty body")`; a
+`SerializationException` is a `RuntimeException` and fell into
+`AuraError.Unknown`, now caught before the generic clause as
+`Incompatible("unreadable body")` with its message dropped, because a
+parse message quotes the JSON it choked on; and both provider routes
+were `if (result is AuraResult.Ok)` with no else, so a 500 left the
+section blank with no statement of why - now `providersError`.
+
+Status mapping as shipped: 200+valid -> Available; 404/405 -> NotExposed;
+401 -> AuthRequired; 403 -> Forbidden; 422 -> Refused (with the server's
+own message, from `detail.message` only - FastAPI's pydantic list is
+discarded); 429 -> RateLimited; 500/503-from-Aura -> ServerError;
+502/503/504 bare -> Waking; timeout/no route -> Network; unparseable ->
+Incompatible; anything unattributed -> Unexplained.
+
+**Proof, from the server's own bytes.** The audit's first hypothesis - a
+null in the live payload defeating a `Json` without `coerceInputValues` -
+was disproved by dumping the real document: the only nulls are
+`effective.avatar.position` and `effective.voice.microphone.device`, both
+in sections the DTOs do not declare, so `ignoreUnknownKeys` drops them
+and the live 200 parses cleanly (13 `effective` sections, 42
+`configurable` paths, `overrides: {}`). Those bodies are checked in as
+`android/app/src/test/resources/live/{settings,providers,provider_health}.json`
+and `SettingsContractTest` parses them with the app's own DTOs - the
+strongest contract test available, a payload nobody retyped.
+**Provenance, stated plainly:** they are the current server build's route
+output captured through `tests/test_settings_api.py`'s FastAPI
+`TestClient`, not a network capture of the Render host, so every cloud
+provider reads `configured: false` and the chain reports `provider chain
+unavailable (ValueError)`. `tests/test_settings_fixture.py` (4 tests)
+keeps them honest from the Python side, comparing *shape* both ways plus
+the exact `configurable` list and the exact provider->`model_setting`
+map, and asserting nothing key-shaped is in them. Regenerate with
+`AURA_WRITE_ANDROID_FIXTURES=1`.
+
+**`DeviceSettings`, and why it is not a widening.** `HubViewModel` took a
+concrete `SettingsStore`, which needs a `Context` and a Keystore-backed
+key, so it could not be constructed on the JVM and the hub had no
+ViewModel-level test at all. `SettingsProvider`'s KDoc deliberately says
+it is read-only, so the mutators were not added there; the new
+`data/settings/DeviceSettings.kt` extends it with the five device
+mutators the hub genuinely needs, `SettingsStore` implements it, and
+`FakeSettings` supplies them through one backing `MutableStateFlow` so a
+collector cannot be told a different story from a direct reader.
+
+**Tests.** Android **273 passed across 17 classes** (from 225/15).
+`HubViewModelTest` (18) is new and drives the whole path - `/api/health`,
+`/api/settings`, `/api/providers`, `/api/providers/health`, `PATCH` -
+against MockWebServer on loopback, asserting on `HubUiState`: the six
+failure codes each keeping their own identity, a 404 being the only one
+allowed to name a missing route, a truncated body reading as a version
+mismatch and never leaking the parser's message, a save showing the
+server's clamped 0.9 rather than the 1.4 that was sent, a 422 quoting
+the server's own sentence and changing nothing, restart-required and
+non-persistent saves, a reload proving the GET agrees, the model picker
+writing `llm.anthropic_model` rather than Gemini's `llm.model`, a
+provider 500 recorded while settings stay Available, a path missing from
+`configurable` locking with its own reason, the capability paths
+(`tools.allowed`, `tools.allowed_paths`, `tools.applications`) locked
+because the server never lists them, and a device toggle sending no
+PATCH. `SettingsAccessTest` (12) pins the wording. `SettingsContractTest`
+grew from 33 to 42. Backend **1756 passed, 1 skipped, 1 deselected**.
+
+**Tests strengthened, not weakened.** Three pre-existing assertions of
+`403 -> Unauthorized` were rewritten to `Forbidden` - the mandate's own
+401/403 split, and both messages still name the token. `ServerReachTest`'s
+"that server explains itself" fixture passed `settingsProblem = null`
+while asserting the 404 wording, which the typed field cannot express;
+it now passes `settingsError = AuraError.NotSupported`.
+
+**UI pass, on the existing tokens.** No new design system, no GSAP, no
+WebView, no dependency. `SettingsCard`, `NoticeCard` and `ProviderCard`
+now carry the hub's own `auraGlassEdge` hairline, so a settings card
+reads as the same material as the front page's tiles instead of a flat
+tonal block; and the three literal durations left in
+`SettingsComponents.kt` (150/180/120) and two in `ProviderComponents.kt`
+(160/120) are now `AuraMotion.scaled(Quick|Standard,
+rememberReducedMotion())`, which also makes them honour "Remove
+animations" - they did not before.
+
+**Build.** `.\gradlew.bat clean assembleDebug` ->
+`android/app/build/outputs/apk/debug/app-debug.apk`, **19,323,605 bytes,
+2026-08-12 13:27:08 +0700**, with `:app:packageDebug` and
+`:app:assembleDebug` executed after a real `clean`. `git diff --check`
+clean.
+
+**Not done.** No device was attached, so the APK was measured and never
+installed. No live provider was called and Render was not redeployed, so
+the fix is proven against loopback and the server's own captured bytes
+rather than against the deployment. Android lint was not re-run. Nothing
+is committed - held for approval per the mandate.
+
 ## Blockers
 
 - The Bash permission classifier was intermittently unavailable during

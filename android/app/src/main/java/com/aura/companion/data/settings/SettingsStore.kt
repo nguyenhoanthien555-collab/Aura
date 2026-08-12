@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Nothing here is ever logged. `toString` is overridden away from the
  * default for exactly that reason.
  */
-class SettingsStore(context: Context) : SettingsProvider {
+class SettingsStore(context: Context) : DeviceSettings {
 
     private val prefs: SharedPreferences = create(context)
 
@@ -85,17 +85,17 @@ class SettingsStore(context: Context) : SettingsProvider {
         _settings.value = read()
     }
 
-    fun setScreenObservation(enabled: Boolean) {
+    override fun setScreenObservation(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SCREEN, enabled).apply()
         _settings.value = read()
     }
 
-    fun setNotifications(enabled: Boolean) {
+    override fun setNotifications(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NOTIFICATIONS, enabled).apply()
         _settings.value = read()
     }
 
-    fun setUploadScreenshots(enabled: Boolean) {
+    override fun setUploadScreenshots(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_UPLOAD, enabled).apply()
         _settings.value = read()
     }
@@ -109,12 +109,12 @@ class SettingsStore(context: Context) : SettingsProvider {
      * also why they live here rather than in the server's settings overlay:
      * there is nothing for `PATCH /api/settings` to do with them.
      */
-    fun setThemeMode(mode: ThemeMode) {
+    override fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME, mode.stored).apply()
         _settings.value = read()
     }
 
-    fun setDynamicColour(enabled: Boolean) {
+    override fun setDynamicColour(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DYNAMIC, enabled).apply()
         _settings.value = read()
     }

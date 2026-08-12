@@ -222,7 +222,14 @@ class AuraStreamClient(
      */
     private fun errorFor(t: Throwable, response: Response?): AuraError = when {
 
-        response?.code == 401 || response?.code == 403 -> AuraError.Unauthorized
+        response?.code == 401 -> AuraError.Unauthorized
+
+        // Recognised and refused. Split from 401 for the same reason the REST
+        // path splits it: one says replace the token, the other says the token
+        // is fine and this request is not allowed.
+        response?.code == 403 -> AuraError.Forbidden
+
+        response?.code == 429 -> AuraError.RateLimited
 
         // The same reasoning as the REST path: a gateway error from a free
         // tier is a container starting, not a fault to report.

@@ -130,23 +130,23 @@ fun DiagnosticsSection(
                 value = when {
                     state.settingsAvailable -> "Available"
                     !reach.atLeast(ServerReach.Authenticated) -> "Not reached"
-                    else -> "Unavailable"
+                    else -> state.settingsAccess.label
                 },
                 subtitle = when {
                     state.settingsAvailable ->
                         "This server can be configured from the phone"
                     !reach.atLeast(ServerReach.Authenticated) ->
                         "Checked after the token"
-                    else -> server.settingsProblem
-                        ?: "The server did not return its settings"
+                    else -> state.settingsAccess.reason
                 },
                 icon = Icons.Filled.Settings,
                 tone = when {
                     state.settingsAvailable -> StatusTone.Good
                     !reach.atLeast(ServerReach.Authenticated) -> StatusTone.Neutral
-                    // A missing settings API is a limitation, not a fault:
-                    // everything else about the server may be fine.
-                    else -> StatusTone.Warning
+                    // A missing endpoint is a limitation, a refused token is a
+                    // fault, and a rate limit is neither. The colour follows
+                    // the actual state rather than assuming the mildest one.
+                    else -> state.settingsAccess.tone
                 },
             )
 
@@ -163,9 +163,17 @@ fun DiagnosticsSection(
                 subtitle = server.health.chain
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(" → ")
+                    // An empty chain has two causes and they are not the same
+                    // news: a server that reported none, or a request that
+                    // never came back. The provider routes used to fail in
+                    // silence, which left this row saying the first while the
+                    // second had happened.
+                    ?: server.providersError?.userMessage
                     ?: "This server did not report its provider chain",
                 icon = Icons.Filled.Bolt,
                 tone = when {
+                    server.health.chain.isEmpty() && server.providersError != null ->
+                        StatusTone.Warning
                     server.health.chain.isEmpty() -> StatusTone.Neutral
                     server.health.inFallback -> StatusTone.Warning
                     server.health.ready -> StatusTone.Good
@@ -174,17 +182,16 @@ fun DiagnosticsSection(
             )
         }
 
-        if (state.connected && !state.settingsAvailable) {
-            Spacer(Modifier.height(12.dp))
-            NoticeCard(
-                text = "This Aura is running and answering chat, but its build " +
-                    "does not have the settings API this app uses. Update the " +
-                    "deployment to configure it from the phone. Nothing is " +
-                    "wrong with the connection or the token.",
-                tone = StatusTone.Warning,
-                icon = Icons.Filled.Info,
-            )
-        }
+        settingsNotice(state.settingsAccess)
+            ?.takeIf { state.connected }
+            ?.let { notice ->
+                Spacer(Modifier.height(12.dp))
+                NoticeCard(
+                    text = notice,
+                    tone = state.settingsAccess.tone,
+                    icon = Icons.Filled.Info,
+                )
+            }
 
         // ------------------------------------------------------------------
         // The server, as it describes itself.

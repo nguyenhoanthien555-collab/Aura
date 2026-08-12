@@ -256,8 +256,10 @@ class AuraStreamClientTest {
 
         // The upgrade never happened, so this arrives as an ordinary HTTP
         // status - which is how a bad `?token=` is told from a dead network.
+        // 403 rather than 401: the socket path uses the same vocabulary as the
+        // REST path, where the two say different things about the token.
         assertEquals(
-            AuraError.Unauthorized,
+            AuraError.Forbidden,
             (collect(client).last() as StreamEvent.Failed).error,
         )
     }

@@ -21,6 +21,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * requests to prove the interceptor re-reads it - the behaviour that makes
  * a token edited in Settings take effect on the next message rather than
  * the next app launch.
+ *
+ * The [DeviceSettings] mutators are here for the hub's ViewModel, which owns
+ * the settings screen and therefore writes as well as reads. They go through
+ * the same flow, so a test can assert that a toggle the user flipped is what
+ * the next request sees.
  */
 class FakeSettings(
     serverUrl: String = "",
@@ -29,7 +34,7 @@ class FakeSettings(
     screenObservationEnabled: Boolean = false,
     notificationsEnabled: Boolean = true,
     uploadScreenshots: Boolean = false,
-) : SettingsProvider {
+) : DeviceSettings {
 
     private val _settings = MutableStateFlow(
         AuraSettings(
@@ -49,4 +54,24 @@ class FakeSettings(
         set(value) {
             _settings.value = value
         }
+
+    override fun setScreenObservation(enabled: Boolean) {
+        current = current.copy(screenObservationEnabled = enabled)
+    }
+
+    override fun setNotifications(enabled: Boolean) {
+        current = current.copy(notificationsEnabled = enabled)
+    }
+
+    override fun setUploadScreenshots(enabled: Boolean) {
+        current = current.copy(uploadScreenshots = enabled)
+    }
+
+    override fun setThemeMode(mode: ThemeMode) {
+        current = current.copy(themeMode = mode)
+    }
+
+    override fun setDynamicColour(enabled: Boolean) {
+        current = current.copy(dynamicColour = enabled)
+    }
 }
