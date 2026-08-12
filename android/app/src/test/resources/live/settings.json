@@ -76,6 +76,7 @@
       "provider": "gemini",
       "qwen_model": "qwen-plus",
       "temperature": 0.7,
+      "thinking_level": "low",
       "timeout": 120,
       "xai_model": "grok-4"
     },

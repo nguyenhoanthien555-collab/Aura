@@ -1,6 +1,7 @@
 package com.aura.companion.screen
 
 import android.accessibilityservice.AccessibilityService
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aura.companion.AuraApplication
@@ -23,9 +24,14 @@ import kotlinx.coroutines.launch
  *     turning it off stops the flow immediately rather than at the next
  *     restart.
  *
- *  2. It sends *text*, not pixels. The accessibility tree is what the
- *     companion actually reasons over, and a screenshot costs orders of
- *     magnitude more bandwidth for information the text already carries.
+ *  2. It sends text first, and pixels only if asked. The accessibility
+ *     tree is what the companion reasons over and it costs orders of
+ *     magnitude less bandwidth, so it goes on every accepted observation
+ *     while a screenshot goes only when `uploadScreenshots` is on. The
+ *     order matters on the server: `RemoteScreenSource` holds one
+ *     observation and the last write wins, and only the one carrying a
+ *     frame produces a vision description - so the image is sent *after*
+ *     the text, never before it.
  *
  *  3. It sends rarely. Android fires window-content events continuously -
  *     every cursor blink in a text field is one - so the throttle and the
@@ -36,6 +42,7 @@ class ScreenObservationService : AccessibilityService() {
 
     private lateinit var settings: SettingsStore
     private lateinit var repository: AuraRepository
+    private lateinit var screenshots: ScreenshotUploader
 
     private val job = SupervisorJob()
     private val scope = CoroutineScope(job)
@@ -50,6 +57,12 @@ class ScreenObservationService : AccessibilityService() {
         val container = (application as AuraApplication).container
         settings = container.settings
         repository = container.repository
+        screenshots = ScreenshotUploader(
+            capture = AccessibilityScreenshotCapture(this),
+            repository = repository,
+            settings = settings,
+            cacheDir = cacheDir,
+        )
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -105,6 +118,18 @@ class ScreenObservationService : AccessibilityService() {
             // The result is deliberately dropped. The server decides
             // whether to say anything, and it says it through the
             // notification channel - not through a return value here.
+
+            // Pixels second, and only if the user asked for them. Every
+            // gate lives in the uploader; the outcome is reported because
+            // a screenshot that never arrives is otherwise indistinguishable
+            // from one the user switched off.
+            when (val outcome = screenshots.upload(application, packageName)) {
+                is ScreenshotOutcome.Failed -> Log.w(
+                    TAG,
+                    "Screenshot not delivered: ${outcome.reason}",
+                )
+                else -> Unit
+            }
         }
     }
 
@@ -158,6 +183,7 @@ class ScreenObservationService : AccessibilityService() {
     }
 
     private companion object {
+        const val TAG = "AuraScreenObserver"
         const val MAX_DEPTH = 12
         const val MAX_PARTS = 300
         const val MAX_PART_LENGTH = 500

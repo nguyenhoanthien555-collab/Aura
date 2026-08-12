@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from core.logger import logger
 from server.auth import verify_token
@@ -283,7 +284,15 @@ async def upload_screenshot(
     )
 
     try:
-        result = runtime.observe_screen(observation)
+        # Off the event loop, because with a frame attached this call is no
+        # longer cheap: `observe_screen` hands the frame to the vision
+        # manager, and the cloud processor describes it with a synchronous
+        # model request. On the loop that froze every other route for the
+        # length of a VLM call - the same defect `/api/chat` had. It only
+        # became reachable when a phone started actually uploading pixels;
+        # `/api/screen` carries no frame, so `describe()` returns immediately
+        # there and it stays on the loop.
+        result = await run_in_threadpool(runtime.observe_screen, observation)
 
     except Exception as error:
         logger.error(

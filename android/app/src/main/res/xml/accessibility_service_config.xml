@@ -11,12 +11,19 @@
     Note the absence of `canPerformGestures` and `canRequestFilterKeyEvents`.
     Aura reads; it does not act on your behalf and it does not see
     keystrokes.
+
+    `canTakeScreenshot` is what makes `AccessibilityService.takeScreenshot`
+    legal - without it the framework throws rather than answering. It is
+    still reading, and it is still off by default: the `uploadScreenshots`
+    switch decides whether a screenshot is ever taken, and screen text has
+    to be on for that switch to do anything at all.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/accessibility_description"
     android:notificationTimeout="1000"
     android:settingsActivity="com.aura.companion.MainActivity" />

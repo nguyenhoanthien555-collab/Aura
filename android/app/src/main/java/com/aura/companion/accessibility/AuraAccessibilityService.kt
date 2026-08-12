@@ -9,6 +9,9 @@ import com.aura.companion.AuraApplication
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
 import com.aura.companion.data.settings.SettingsStore
+import com.aura.companion.screen.AccessibilityScreenshotCapture
+import com.aura.companion.screen.ScreenshotOutcome
+import com.aura.companion.screen.ScreenshotUploader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +28,7 @@ class AuraAccessibilityService : AccessibilityService() {
 
     private lateinit var settings: SettingsStore
     private lateinit var repository: AuraRepository
+    private lateinit var screenshots: ScreenshotUploader
     private val safetyGuard = SafetyGuard()
     private val executor by lazy { AuraActionExecutor(this) }
 
@@ -38,6 +42,12 @@ class AuraAccessibilityService : AccessibilityService() {
         val container = (application as AuraApplication).container
         settings = container.settings
         repository = container.repository
+        screenshots = ScreenshotUploader(
+            capture = AccessibilityScreenshotCapture(this),
+            repository = repository,
+            settings = settings,
+            cacheDir = cacheDir,
+        )
         instance.set(this)
         Log.d("AuraAgentService", "Aura Accessibility Service Connected")
     }
@@ -158,11 +168,31 @@ class AuraAccessibilityService : AccessibilityService() {
                     }.getOrDefault(activePackage)
                 )
 
+                // Vision, for this step, before the tick that describes it.
+                //
+                // `screenshot_available` is the outcome of *this* upload and
+                // nothing weaker. It used to be the literal `false`, which
+                // was at least honest; a literal `true` would have been the
+                // worse bug, because the field is a claim about what the
+                // server is holding, not about what this build can do. Every
+                // gate - the two privacy switches, the Android version, the
+                // interval - lives in the uploader, so a false here means one
+                // of them said no and the model is right not to expect
+                // pixels.
+                val screenshot = screenshots.upload(
+                    application = appInfo.label ?: activePackage,
+                    packageName = activePackage,
+                )
+
+                if (screenshot is ScreenshotOutcome.Failed) {
+                    Log.w("AuraAgent", "Screenshot not delivered: ${screenshot.reason}")
+                }
+
                 val snapshot = AccessibilitySnapshot(
                     device = deviceState,
                     app = appInfo,
                     accessibilityTree = tree,
-                    screenshotAvailable = false,
+                    screenshotAvailable = screenshot is ScreenshotOutcome.Sent,
                     userRequest = currentRequest,
                     lastActionError = lastActionError
                 )

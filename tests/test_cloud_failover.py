@@ -1,5 +1,6 @@
 """Cloud failover and screenshot-vision behavior without real credentials."""
 
+import asyncio
 import io
 
 import pytest
@@ -158,6 +159,65 @@ def test_upload_screenshot_route_success(monkeypatch):
     assert data["status"] == "accepted"
     assert data["accepted"] is True
     assert data["decision"]["should_notify"] is True
+
+    app.dependency_overrides.clear()
+
+
+def test_upload_screenshot_does_not_run_on_the_event_loop(monkeypatch):
+    """
+    A screenshot must not block the one ASGI loop while a VLM reads it.
+
+    `observe_screen` is synchronous, and on this route the observation
+    carries a `Frame` - so it reaches `CloudVisionProcessor.describe`,
+    which makes a real model request. Awaited inline in an `async def`
+    route that holds the loop for the whole call, serving nothing else
+    meanwhile: not `/api/health`, not the next agent tick, not the text
+    observation the phone sends alongside.
+
+    This was unreachable until Android started uploading pixels -
+    `describe()` returns immediately with no frame - which is why the
+    same fix `/api/chat` got did not cover it.
+
+    Asserted from inside the call rather than by timing two requests:
+    `get_running_loop` succeeds only on a thread that is running the
+    loop, so this fails precisely when the route stops offloading.
+    """
+
+    from fastapi.testclient import TestClient
+    from server.main import app
+    from server.auth import verify_token
+
+    app.dependency_overrides[verify_token] = lambda: "dummy-token"
+
+    landed_on_the_loop: list[bool] = []
+
+    class MockRuntime:
+        screen_enabled = True
+
+        class vision:
+            class processor:
+                last_error = None
+
+        def observe_screen(self, observation):
+            try:
+                asyncio.get_running_loop()
+                landed_on_the_loop.append(True)
+            except RuntimeError:
+                landed_on_the_loop.append(False)
+            return {"accepted": True, "decision": None}
+
+    monkeypatch.setattr("server.routes.screen.get_runtime", lambda: MockRuntime())
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/screen/upload",
+        data={"session_id": "test-session", "device_id": "test-device"},
+        files={"screenshot": ("screenshot.png", _png(64, 64), "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert landed_on_the_loop == [False]
 
     app.dependency_overrides.clear()
 

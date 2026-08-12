@@ -1,10 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    What the agent service is allowed to do.
+
+    Unlike the observation service this one acts: `canPerformGestures` is
+    what makes a tap possible, and `flagRetrieveInteractiveWindows` is what
+    lets it see dialogs layered over the app.
+
+    `canTakeScreenshot` is required before `AccessibilityService.takeScreenshot`
+    will answer instead of throwing. It does not decide whether a screenshot
+    is taken - the `uploadScreenshots` switch does, and it is off unless the
+    user turns it on with screen text already on.
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeViewFocused|typeViewScrolled"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
+    android:canTakeScreenshot="true"
     android:description="@string/accessibility_agent_description"
     android:notificationTimeout="500"
     android:settingsActivity="com.aura.companion.MainActivity" />

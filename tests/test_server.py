@@ -11,6 +11,7 @@ so a failure here is a failure in the server layer, not in the machine
 the tests happen to run on.
 """
 
+import asyncio
 import os
 import time
 
@@ -24,7 +25,7 @@ from memory.manager import MemoryManager
 from memory.models import Base
 from server import config as server_config
 from server.main import app
-from server.runtime import init_runtime, shutdown_runtime
+from server.runtime import init_runtime, shutdown_runtime, get_runtime
 from server.session import session_manager, SessionManager
 
 
@@ -197,6 +198,45 @@ def test_chat_returns_a_reply(client):
     assert data["message_id"]
     assert data["metadata"]["provider"] == "mock"
     assert data["metadata"]["elapsed_seconds"] >= 0
+
+
+def test_chat_does_not_run_on_the_event_loop(client, monkeypatch):
+    """
+    A turn must not block the one ASGI loop while it waits for a model.
+
+    Every step of `runtime.chat` is synchronous and one of them is a
+    network call bounded only by `llm.timeout`. Awaited inline in an
+    `async def` route it holds the loop for that whole time, so nothing
+    else is served meanwhile - not `/api/health`, not
+    `/api/notifications`, and not the phone's next agent tick.
+
+    Asserted from inside the call rather than by timing two requests:
+    `get_running_loop` succeeds only on a thread that is running the
+    loop, so this fails precisely when the route stops offloading and
+    for no other reason.
+    """
+
+    runtime = get_runtime()
+    original = runtime.chat
+    landed_on_the_loop: list[bool] = []
+
+    def recording_chat(*args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+            landed_on_the_loop.append(True)
+        except RuntimeError:
+            landed_on_the_loop.append(False)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(runtime, "chat", recording_chat)
+
+    response = client.post(
+        "/api/chat",
+        json={"session_id": "test-session-offload", "message": "Hello"},
+    )
+
+    assert response.status_code == 200
+    assert landed_on_the_loop == [False]
 
 
 def test_chat_keeps_the_same_session_across_turns(client):

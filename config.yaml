@@ -28,6 +28,19 @@ llm:
   timeout: 120
   max_output_tokens: 768
 
+  # How much hidden reasoning a thinking model may do before it writes
+  # the answer. Gemini 3 bills those thoughts against
+  # `max_output_tokens` above, so with this unset an ordinary question
+  # spent ~700 of the 768 tokens thinking and delivered a reply that
+  # stopped mid-sentence - with no error, no warning and no failover,
+  # because a truncated string is still a string. "low" keeps
+  # `max_output_tokens` meaning what this file has always assumed: the
+  # length of the reply.
+  #
+  # "low" | "high" | "" (send nothing, let the model decide). If you
+  # raise this to "high", raise `max_output_tokens` with it.
+  thinking_level: low
+
 memory:
   history_limit: 10
 

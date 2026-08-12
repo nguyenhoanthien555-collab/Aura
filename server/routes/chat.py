@@ -4,6 +4,7 @@ Chat endpoints (non-streaming).
 import time
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
+from starlette.concurrency import run_in_threadpool
 from server.runtime import get_runtime
 from server.session import session_manager
 from server.auth import verify_token
@@ -37,7 +38,18 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
     try:
         # Call the existing Aura chat pipeline
         # This goes through: ChatEngine -> ConversationManager -> LLM -> Memory
-        response = runtime.chat(
+        #
+        # Off the event loop, because every step of that pipeline is
+        # synchronous and one of them is a network call to a model that may
+        # take the whole `llm.timeout`. Awaiting it inline in an `async def`
+        # route blocks the single ASGI loop for that entire time, so while
+        # any turn is in flight nothing else is served - not `/api/health`,
+        # not `/api/notifications`, and not the next agent tick from the
+        # phone, which is the request most likely to arrive during a turn.
+        # `ws_chat.py` already runs its own path through
+        # `iterate_in_threadpool` for the same reason.
+        response = await run_in_threadpool(
+            runtime.chat,
             request.message,
             session_id=session.session_id,
             source="text",

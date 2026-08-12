@@ -8,8 +8,15 @@ from dotenv import load_dotenv
 from google import genai
 
 from core.config import load_config
+from core.logger import logger
 from brain.providers.base import BaseProvider
 from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+
+
+# The finish reasons that mean "this reply is not the whole reply".
+# Read from the response rather than inferred from its length, because a
+# short answer and a truncated one are otherwise indistinguishable.
+_TRUNCATED = "MAX_TOKENS"
 
 
 class GeminiProvider(BaseProvider):
@@ -34,6 +41,40 @@ class GeminiProvider(BaseProvider):
         self.max_output_tokens = int(config["llm"].get("max_output_tokens", 768))
         self.temperature = float(config["llm"].get("temperature", 0.7))
 
+        # Gemini 3 thinks before it answers, and those thoughts are billed
+        # against `max_output_tokens`. Left unset, the model decides how
+        # much to think and the answer gets whatever is left - which on
+        # Aura's 768-token budget was measured at 59-78 tokens for an
+        # ordinary question, arriving mid-sentence. See the config key.
+        self.thinking_level = str(
+            config["llm"].get("thinking_level") or ""
+        ).strip().lower()
+
+    def _request_config(self, budget: bool = True) -> dict:
+        """
+        The generation config, so both paths ask for the same thinking.
+
+        `budget` is False for streaming, which has never sent
+        `max_output_tokens` and does not start now: a streamed reply is
+        already on the user's screen when the budget runs out, so a cap
+        there would truncate in front of them. The thinking level applies
+        to both, because unbounded reasoning delays the first token of a
+        stream exactly as it eats the budget of a whole reply.
+        """
+
+        config: dict = {}
+
+        if budget:
+            config["max_output_tokens"] = self.max_output_tokens
+            config["temperature"] = self.temperature
+
+        if self.thinking_level:
+            config["thinking_config"] = {
+                "thinking_level": self.thinking_level,
+            }
+
+        return config
+
     def generate(self, prompt: str) -> str:
         from brain.providers.base import split_prompt
         system_instruction, user_content = split_prompt(prompt)
@@ -43,8 +84,7 @@ class GeminiProvider(BaseProvider):
                 model=self.model,
                 contents=user_content,
                 config={
-                    "max_output_tokens": self.max_output_tokens,
-                    "temperature": self.temperature,
+                    **self._request_config(),
                     "system_instruction": system_instruction or None,
                 },
             )
@@ -54,7 +94,58 @@ class GeminiProvider(BaseProvider):
         # Gemini returns None when a response is blocked or empty.
         # Providers must honour the `-> str` contract, so normalise here
         # rather than letting None leak into the pipeline and the database.
-        return response.text or ""
+        text = response.text or ""
+
+        self._check_truncation(response, text)
+
+        return text
+
+    def _check_truncation(self, response, text: str) -> None:
+        """
+        Say out loud when the budget ran out before the answer did.
+
+        `response.text` carries no sign of this: a reply cut off after
+        four words and a reply that finished in four words are the same
+        string. So the model can spend the whole output budget thinking,
+        return nothing, and the pipeline stores an empty assistant turn
+        as a successful one - no exception, no log, no failover, and a
+        conversation that reads as though Aura got worse.
+
+        An empty truncated reply is raised as unavailable, because that is
+        what it is: this provider produced no answer, and the fallback
+        chain is entitled to try the next one. A partial reply is kept -
+        some of the answer beats none - and logged as the warning it is.
+        """
+
+        reason = ""
+
+        for candidate in getattr(response, "candidates", None) or []:
+            finish = getattr(candidate, "finish_reason", None)
+            reason = str(getattr(finish, "name", finish) or "")
+            break
+
+        if reason != _TRUNCATED:
+            return
+
+        usage = getattr(response, "usage_metadata", None)
+        thoughts = getattr(usage, "thoughts_token_count", None) or 0
+
+        if not text.strip():
+            raise ProviderUnavailableError(
+                f"Gemini returned no answer: the {self.max_output_tokens}"
+                f"-token output budget was spent before any reply was "
+                f"written ({thoughts} of it on reasoning). Raise "
+                f"llm.max_output_tokens or lower llm.thinking_level."
+            )
+
+        logger.warning(
+            "Gemini reply truncated at llm.max_output_tokens=%s "
+            "(%s tokens went to reasoning). The user is reading an "
+            "unfinished sentence; raise the budget or lower "
+            "llm.thinking_level.",
+            self.max_output_tokens,
+            thoughts,
+        )
 
     @staticmethod
     def _raise_cloud_error(error):
@@ -87,6 +178,7 @@ class GeminiProvider(BaseProvider):
             model=self.model,
             contents=user_content,
             config={
+                **self._request_config(budget=False),
                 "system_instruction": system_instruction or None,
             }
         )

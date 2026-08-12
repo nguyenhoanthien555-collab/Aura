@@ -7,6 +7,22 @@ Aura AI assistant.
 Build and stabilize Aura as a local/cloud-capable AI assistant.
 
 ## Status
+The **Vision production-wiring fix** is complete and **uncommitted** (the
+user said do not commit, do not push). It sits on top of two other
+uncommitted work items in the same tree - the Gemini thinking-budget
+change (`brain/providers/gemini.py`, `config.yaml`, `core/config.py`,
+`server/routes/chat.py`, `tests/test_server.py`,
+`tests/test_gemini_thinking_budget.py`, `live/settings.json`) and these
+`.claude/*.md` files. Its own files are: 4 new
+(`screen/ScreenshotCapture.kt`, `screen/ScreenshotUploader.kt`,
+`screen/ScreenshotUploaderTest.kt`, `screen/ScreenshotWiringTest.kt`) and
+6 modified (`AuraAccessibilityService.kt`,
+`ScreenObservationService.kt`, both accessibility service XMLs,
+`server/routes/screen.py`, `tests/test_cloud_failover.py`). Both suites
+green: backend **1766 passed, 1 skipped, 1 deselected**; Android **292
+passed across 19 classes, 0 failures, 0 errors, 0 skipped**. No device was
+attached, so nothing was captured or uploaded from real hardware.
+
 Phases 0-7 of the repair mandate are complete, PHASE 8 (Memory 2.0 +
 Temporal Context + User Model + Proactive System) is complete, PHASE 9
 (Android Control Hub, modern UI, provider/API-key management, feature
@@ -243,6 +259,100 @@ Pinned by `tests/test_device_boundary.py` and re-pinned by
 
 ## Architecture Rule
 Preserve the existing architecture unless a change is clearly necessary.
+
+## Pre-test sweep findings (standing, post-Phase-12)
+**A blocking call in an `async def` route freezes the whole server.**
+`POST /api/chat` awaited `runtime.chat()` inline, and every step of that
+pipeline is synchronous - including a model call bounded only by
+`llm.timeout: 120`. FastAPI runs `async def` handlers on the one event
+loop, so a turn in flight served nothing else: not `/api/health`, not
+`/api/notifications`, and not the phone's next agent tick. Now
+`await run_in_threadpool(runtime.chat, ...)`; `ws_chat.py` had always done
+the equivalent through `iterate_in_threadpool`, which is what made this an
+oversight rather than a decision. Pinned by
+`tests/test_server.py::test_chat_does_not_run_on_the_event_loop`, which
+asserts from inside the call that no loop is running on that thread.
+Accepted consequence: concurrent `/api/chat` calls now genuinely overlap.
+Single-tenant by design, and `memory/sqlite.py`'s `db_lock` serialises the
+database.
+
+**Vision is wired end-to-end as of the Vision production-wiring fix
+(uncommitted).** `server.screen.enabled: true` builds the remote source,
+the cloud processor and both routes; on the phone
+`screen/ScreenshotCapture.kt` wraps `AccessibilityService.takeScreenshot`
+(API 30+) behind a `ScreenshotCapture` interface, and
+`screen/ScreenshotUploader.kt` is the single gate both accessibility
+services call. `ScreenObservationService` uploads pixels *after* its text
+POST, and `AuraAccessibilityService` derives
+`screenshotAvailable = outcome is ScreenshotOutcome.Sent` instead of the
+old hardcoded `false`. Both service XMLs now declare
+`android:canTakeScreenshot="true"`, which the framework requires.
+
+Order is a server constraint, not a preference: `RemoteScreenSource` is a
+single last-write-wins slot, and `POST /api/screen/upload` submits a
+frame-only observation - text first then pixels, or the frame is replaced
+by a frameless one and `CloudVisionProcessor.describe()` returns `""`.
+
+Gates, in order, all inside `ScreenshotUploader`:
+`screenObservationEnabled` → `uploadScreenshots` → `isConfigured` →
+`capture.isSupported` (API < 30 cannot capture at all) → an 8 s interval
+stamped on every *attempt*, matched to `server.screen.min_interval` so no
+frame is sent faster than the server will look at one. Phone-side
+downscale mirrors `vision.max_pixels = 1_500_000`. Failures are returned
+as `ScreenshotOutcome.Failed` and logged by both callers, never swallowed.
+
+Still not verified on hardware: no device was attached, so nothing was
+captured or uploaded from a real phone. API 26-29 genuinely cannot capture
+and report unavailable. `screenshot_available` is still consumed nowhere
+in Python. `VisionManager`'s 8 s throttle means an uploaded frame is
+usually described on the *next* turn, not the one that sent it.
+
+**`llm.timeout` is not honoured by the primary provider.** groq, mistral,
+openrouter and every `HttpChatProvider` receive it; `GeminiProvider`
+constructs `genai.Client(api_key=...)` with no `http_options`, so a stalled
+Gemini request has whatever bound the SDK defaults to and there is no
+server-side deadline on `/api/chat`. Not changed - the SDK's own default
+was not verified from here.
+
+**`is_account_limit` is treated as global, not per-account.** A 429 whose
+body says "daily", "rpd", "account" or "slow down" stops failover for the
+whole chain (`FallbackProvider`, `ACCOUNT_LIMIT`), so Groq at position 2
+exhausting its free-tier daily quota prevents mistral and openrouter - two
+unrelated accounts - from ever being tried. Gemini's own quota does *not*
+set the flag, so the primary still fails over. Deliberate and pinned
+(`tests/test_cloud_failover.py:370` asserts "Please slow down." is an
+account limit), so changing it is a product decision, not a bug fix.
+
+**Streaming exists only when failover does not.** `stream_of` looks for a
+`stream` attribute; `FallbackProvider` has none, so whenever two or more
+providers initialise, every "stream" is one chunk from `generate()`. With
+only Gemini's key present the primary is returned bare and true streaming
+happens. So the same build streams or does not depending on which API keys
+exist - and on the non-streaming path `max_output_tokens` applies, which is
+why the thinking-budget fix covers both.
+
+## Thinking budget (standing, post-Phase-12)
+**`llm.max_output_tokens` is the length of the reply, and a thinking
+model has to be told that.** Gemini 3 bills hidden reasoning against the
+same budget, so with `thinking_level` unset the shipped 768 tokens went
+~700 to thoughts and ~60 to the answer, and every reply arrived cut off.
+`llm.thinking_level` (default `low`) is what keeps that number meaning
+what the rest of the config assumes. Raising it to `high` requires
+raising `max_output_tokens` with it.
+
+**A truncated reply is a failure and must look like one.**
+`GeminiProvider._check_truncation` reads `finish_reason` rather than
+guessing from length: MAX_TOKENS with text logs a warning naming the
+budget, MAX_TOKENS with no text raises `ProviderUnavailableError` so
+`FallbackProvider` gets its turn. `response.text or ""` alone made an
+empty completion indistinguishable from a successful one - it was saved
+to the transcript, published to the UI, and never failed over. Only
+MAX_TOKENS is treated this way; a blocked STOP still normalises to `""`,
+or a safety block would be re-asked of the next provider.
+
+**Phase 12 IS committed** as `5ca791b Complete Phase 12 Android settings
+integration`. The "uncommitted, held for approval" note below was true
+when written.
 
 ## Coding Rules
 - Reuse existing systems.

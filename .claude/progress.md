@@ -1260,3 +1260,209 @@ is committed - held for approval per the mandate.
 - The Bash permission classifier was intermittently unavailable during
   Phase 0 and again during Phase 3, which delayed test runs. Not a code
   problem.
+
+## Post-Phase-12 - "Aura got dumber after the model change" (uncommitted)
+
+Traced the production chat path only: `POST /api/chat` ->
+`ServerRuntime.chat` -> `ChatEngine` -> `ConversationManager.chat` ->
+`PromptBuilder.build` -> `split_prompt` -> `BrainRouter` ->
+`GeminiProvider.generate`, plus `_resolve_tools` and the Android agent
+loop in `AuraAccessibilityService`. Cleared by inspection, not assumed:
+the section headers `PromptBuilder` emits all match `split_prompt`'s
+regex and land in the right slot (11208 chars of system instruction,
+265 of user content on a real turn); memory recall is bounded and enters
+as `MEMORY` in the user slot where it cannot outrank the current
+message; the tool catalogue and results are two sections on purpose;
+`_resolve_tools` bounds itself three ways and always ends on a
+tool-free round; machine turns are correctly isolated from style,
+memory and the bus.
+
+**Root cause: `llm.max_output_tokens: 768` was sized for a non-thinking
+model, and nothing told `gemini-3.6-flash` not to think.** Gemini 3
+bills hidden reasoning against the output budget. Measured against the
+live API on prompts built by the real `PromptBuilder`:
+
+- "compare sqlite and postgres..." -> MAX_TOKENS, 686 thought tokens,
+  78 answer tokens, reply cut mid-sentence.
+- "walk me through debugging a memory leak..." -> MAX_TOKENS, 705
+  thought, 59 answer.
+- a 15-node agent tick -> 738 thought + 22 answer = 760 of 768. One
+  token from the cliff, which is why a real accessibility tree crossed
+  it: the truncated JSON failed `AgentActionParser`, `last_action_error`
+  fed it back, and the step budget ran out as "Task timed out: maximum
+  number of steps reached". The agent loop itself is not at fault - it
+  was retrying an unparseable reply, exactly as designed.
+
+**And the pipeline could not see any of it.** `response.text or ""`
+discards `finish_reason`, so a reply cut off after four words and one
+that finished in four words were the same string, and a completion with
+no visible text at all was returned as a success: saved to the
+transcript, published as `ResponseEvent`, and never offered to
+`FallbackProvider`.
+
+Fixed, three files:
+
+- `brain/providers/gemini.py`: `_request_config()` (shared by `generate`
+  and `stream`) sends `thinking_config` from the new setting;
+  `_check_truncation()` reads `finish_reason` and either warns (partial
+  text kept - half an answer beats none) or raises
+  `ProviderUnavailableError` (no text - a real outage, and the chain is
+  entitled to try the next provider). `stream` gets the thinking level
+  but still no `max_output_tokens`, deliberately: a streamed reply is
+  already on screen when a budget would run out.
+- `core/config.py` + `config.yaml`: `llm.thinking_level`, default
+  `"low"`. `""` sends nothing, so a provider without the knob is
+  unaffected.
+
+`tests/test_gemini_thinking_budget.py` (8 tests, no network): the level
+reaches the request, `""` sends no `thinking_config` at all, streaming
+sends the level and no budget, a truncated reply is kept and logged with
+the numbers, an empty truncated reply raises, a blocked `STOP` still
+normalises to `""`, a response with no candidates is not an error, and
+the *shipped* config bounds the thinking (or the fix could be absent
+from the tree and the suite still pass).
+
+Verified live after the fix: the same two questions return 1617 and 2503
+characters ending in complete sentences; a 60-node agent tick (11731
+chars) returns clean JSON; the intent probe still answers one word.
+Backend **1764 passed, 1 skipped, 1 deselected**. Android **273 passed
+across 17 classes, 0 failures**.
+`android/app/src/test/resources/live/settings.json` regenerated through
+`AURA_WRITE_ANDROID_FIXTURES=1` for the one new field.
+
+Not done: not committed. `llm.thinking_level` is absent from
+`core/settings_store.py`'s allow-list, so the phone cannot change it.
+
+## Post-Phase-12 - pre-test repository bug sweep (uncommitted)
+
+One audit pass over the runtime-critical paths, asked for before the next
+real-device test so the test would not be spent on a software bug.
+
+**One confirmed bug, fixed.** `POST /api/chat` - the route the Android app
+uses for both normal chat and every agent tick - was `async def` and called
+the synchronous `runtime.chat()` inline, holding the single ASGI event loop
+for the whole model call. Now `await run_in_threadpool(runtime.chat, ...)`.
+`server/routes/ws_chat.py` already offloaded its own path through
+`iterate_in_threadpool`, which is what identifies this as an oversight.
+`tests/test_server.py::test_chat_does_not_run_on_the_event_loop` asserts
+from inside the call that `asyncio.get_running_loop()` raises; verified to
+fail with the offload removed and pass with it.
+
+**Four findings reported rather than changed**, recorded in
+`.claude/project-state.md` under "Pre-test sweep findings": Android
+screenshot upload has no caller (so Vision is server-complete and
+device-unwired, degrading to an absent VISION section rather than a false
+claim); `llm.timeout` is ignored by `GeminiProvider`; a mid-chain
+`is_account_limit` aborts the remaining, unrelated providers and is pinned
+by an existing test; and `stream_of` finds no `stream` on
+`FallbackProvider`, so streaming silently becomes a single chunk whenever a
+chain initialises.
+
+**Cleared by inspection**, in case the same suspicion returns: the
+`_resolve_tools` bound (three ways, always ending on a tool-free round);
+`AgentActionParser` (brace-matched extraction, fence stripping, unknown
+actions returned as correctable failures, `MAX_PARSE_FAILURES = 3` reset by
+any readable reply); `executeActionWithRecovery` (bounded at 2 attempts,
+nodes re-resolved from a fresh root so the recycled `nodeMap` is not a
+use-after-free); `verifyOpenApp`'s identity check; `tools/timeout.py`;
+`db_lock`; memory recall bounded at 12 lines with per-source failure
+isolation; and the empty-`except Exception` sweep (7 sites, all
+event-publish, socket-close or SSE-line-skip).
+
+Backend after the fix: **1765 passed, 1 skipped, 1 deselected**. No Android
+source changed, so no Gradle run. `git diff --check` clean. Two fixture
+files that showed modified on line endings only were restored with
+`git checkout --`.
+
+Not done: not committed, not pushed.
+
+### Vision production wiring (1766 passed, 1 skipped, 1 deselected; Android 292 across 19 classes)
+
+The first of the four reported findings, now fixed: the server-side Vision
+pipeline was complete and no Android production code ever called it.
+
+**Root cause: an absent caller.** `AuraRepository.uploadScreenshot()`,
+`POST /api/screen/upload`, `RemoteScreenSource`, `VisionManager` and
+`CloudVisionProcessor` all worked. Nothing on the phone invoked them, and
+`AccessibilitySnapshot.screenshotAvailable` was the literal `false`. The
+whole suite passed throughout, because "no caller exists" is not a wrong
+result - which is why the regression pinned here is structural.
+
+**Mechanism.** `AccessibilityService.takeScreenshot(displayId, Executor,
+TakeScreenshotCallback)`, API 30, verified against
+`platforms/android-35/data/api-versions.xml` - and not MediaProjection,
+which would have been the second screenshot mechanism the brief rules out.
+Both Aura services already *are* accessibility services with the grant.
+`CAPABILITY_CAN_TAKE_SCREENSHOT` is also API 30, and the framework refuses
+the call unless the service XML declares it, so
+`android:canTakeScreenshot="true"` was added to
+`accessibility_service_config.xml` and `aura_accessibility_service.xml`.
+
+**New `screen/ScreenshotCapture.kt`.** The `ScreenshotCapture` interface is
+the seam a JVM test can reach; `AccessibilityScreenshotCapture` is the half
+it cannot. `Bitmap.wrapHardwareBuffer` returns a HARDWARE bitmap a software
+canvas refuses to draw, so it is copied to `ARGB_8888` and the
+`HardwareBuffer` closed; downscale mirrors `vision.max_pixels =
+1_500_000` so no pixels are sent that the server would discard; JPEG q80.
+`suspendCancellableCoroutine` for the framework callback,
+`Dispatchers.Default` for the encode. A `SecurityException` from a
+service that is not currently bound is reported, not thrown.
+
+**New `screen/ScreenshotUploader.kt`.** The single place both services ask
+"should a screenshot be sent". `screenObservationEnabled` first, because
+the Privacy screen promises "Screen text is off, so nothing is sent at
+all"; then `uploadScreenshots`, `isConfigured`, `isSupported`, then an 8 s
+interval. The interval is `server.screen.min_interval` - the server would
+not look at a faster frame - and it is stamped on every *attempt*, so a
+down server does not cost a full-screen encode per accessibility event.
+Outcomes are `Sent` / `Skipped(reason)` / `Failed(reason, error?)`; the
+temp file is deleted in a `finally`.
+
+**Ordering is a server constraint.** `RemoteScreenSource` is one
+last-write-wins slot and `/api/screen/upload` submits a *frame-only*
+observation, so pixels must go after the text POST. Reversed, the frame is
+replaced by a frameless observation and `describe()` returns `""` - the
+exact silent-nothing this fix exists to end.
+
+**`screenshotAvailable` is this tick's upload outcome**, `outcome is
+Sent` and nothing weaker. A skip and a failure both read as no screenshot.
+That was chosen over "this build can capture" because the field is a claim
+about what the server is holding.
+
+**One server change.** `upload_screenshot` awaited synchronous
+`runtime.observe_screen` inline in an `async def`; with a frame attached
+that reaches a real VLM request on the single event loop - the same defect
+`/api/chat` had, and unreachable until a phone actually uploaded pixels.
+Now `await run_in_threadpool(...)`. `/api/screen` carries no frame and
+stays on the loop. No other Vision file touched.
+
+**Tests.** `ScreenshotUploaderTest` (16, MockWebServer on loopback,
+`TemporaryFolder` cache, injected clock): the multipart POST reaches
+`/api/screen/upload` with all five form parts, the bearer token and
+`image/jpeg`; the captured bytes are in the body; the cache is left empty;
+each of the four gates skips *without capturing*; the interval holds and
+then releases; a failed attempt still costs it; null/empty capture is
+`Failed` with no `AuraError` and zero requests; a 503 `screen_disabled`
+carries `AuraError.Unavailable`; 415 is reported not retried; an
+unreachable server leaves nothing on disk. `ScreenshotWiringTest` (4) pins
+the property that was false - both services *declare* a
+`ScreenshotUploader` - plus the availability rule and the wire field.
+Backend: one test asserting from inside `observe_screen` that no loop is
+running on that thread.
+
+**Two things learned the hard way.** `Json.Default` has
+`encodeDefaults = false`, so `screenshotAvailable = false` is an *omitted*
+key, not an explicit `false` - the test now pins absence-means-false as
+the contract instead of asserting what I assumed. And inserting the new
+backend test silently ate the four assertions of
+`test_upload_screenshot_route_success`, leaving it passing with none;
+caught in the final diff read and restored, so that file's diff is now
+60 insertions, 0 deletions.
+
+Not done: not committed, not pushed. No device attached, so nothing ran on
+hardware. API 26-29 cannot capture. Two services each carry their own 8 s
+clock, so a fast app switch across both can produce two uploads inside one
+server interval - the server keeps the last. `screenshot_available` is
+still read nowhere in Python. `VisionManager`'s own 8 s throttle means an
+uploaded frame is usually described on the next turn, not the one that
+sent it.

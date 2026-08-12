@@ -67,6 +67,20 @@ DEFAULT_CONFIG = {
 
         "temperature": 0.7,
         "max_output_tokens": 768,
+
+        # How much hidden reasoning a thinking model may do before it
+        # starts writing the answer. Gemini 3 charges those thoughts
+        # against `max_output_tokens`, so on the default budget an
+        # ordinary question spent ~700 tokens thinking and ~60 answering,
+        # and the reply arrived cut off mid-sentence with no error
+        # anywhere. "low" restores the meaning this file has always
+        # assumed: `max_output_tokens` is the length of the *reply*.
+        #
+        # Values: "low" | "high" | "" (send nothing - the model's own
+        # default). Raising it to "high" is a legitimate choice, but
+        # raise `max_output_tokens` with it or the answer is truncated
+        # again. Read only by providers whose API has such a knob.
+        "thinking_level": "low",
     },
 
     "memory": {
