@@ -1,5 +1,4 @@
 package com.aura.companion.accessibility
-
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -7,35 +6,27 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-
 class AccessibilityAgentTest {
-
     @Test
     fun testSafetyGuardOpenApp() {
         val guard = SafetyGuard()
-
         // Settings app should be blocked
         val actionSettings = AgentAction(action = "open_app", packageName = "com.android.settings")
         assertFalse(guard.checkAction(actionSettings, null))
-
         // Normal app should be allowed
         val actionDiscord = AgentAction(action = "open_app", packageName = "com.discord")
         assertTrue(guard.checkAction(actionDiscord, null))
     }
-
     @Test
     fun testSafetyGuardKeywords() {
         val guard = SafetyGuard()
-
         // Text input with dangerous words should be blocked
         val actionReset = AgentAction(action = "input_text", text = "factory reset my phone")
         assertFalse(guard.checkAction(actionReset, null))
-
         // Normal text input should be allowed
         val actionHello = AgentAction(action = "input_text", text = "hello there")
         assertTrue(guard.checkAction(actionHello, null))
     }
-
     @Test
     fun testActionExecutorValidation() {
         val action = AgentAction(
@@ -51,7 +42,6 @@ class AccessibilityAgentTest {
         assertEquals("down", action.direction)
         assertEquals("com.example", action.packageName)
     }
-
     @Test
     fun testAccessibilityNodeModel() {
         val node = AccessibilityNode(
@@ -75,18 +65,15 @@ class AccessibilityAgentTest {
         assertTrue(node.enabled)
         assertEquals(listOf(10, 20, 100, 200), node.bounds)
     }
-
     @Test
     fun testVietnameseUtf8Tasks() {
         // UTF-8 strings should be represented exactly as they are without encoding issues.
         val request1 = "mở youtube"
         val request2 = "tìm video minecraft"
         val request3 = "mở cài đặt"
-
         assertEquals("mở youtube", request1)
         assertEquals("tìm video minecraft", request2)
         assertEquals("mở cài đặt", request3)
-
         // Verify snapshot serialization fields
         val snapshot = AccessibilitySnapshot(
             device = DeviceState(1080, 2400),
@@ -98,7 +85,6 @@ class AccessibilityAgentTest {
         assertEquals("mở youtube", snapshot.userRequest)
         assertEquals("Action failed.", snapshot.lastActionError)
     }
-
     @Test
     fun testSafetyGuardStillBlocksDangerousActions() {
         val guard = SafetyGuard()
@@ -111,37 +97,31 @@ class AccessibilityAgentTest {
         val actionBuy = AgentAction(action = "click", text = "buy now")
         assertFalse(guard.checkAction(actionBuy, null))
     }
-
     // ===== GestureResult tests =====
-
     @Test
     fun testGestureResultCompletedIsSuccess() {
         val result = GestureResult.Completed
         assertTrue(result.isSuccess)
         assertEquals("COMPLETED", result.toString())
     }
-
     @Test
     fun testGestureResultCancelledIsNotSuccess() {
         val result = GestureResult.Cancelled
         assertFalse(result.isSuccess)
         assertEquals("CANCELLED", result.toString())
     }
-
     @Test
     fun testGestureResultDispatchRejectedIsNotSuccess() {
         val result = GestureResult.DispatchRejected
         assertFalse(result.isSuccess)
         assertEquals("DISPATCH_REJECTED", result.toString())
     }
-
     @Test
     fun testGestureResultTimeoutIsNotSuccess() {
         val result = GestureResult.Timeout
         assertFalse(result.isSuccess)
         assertEquals("TIMEOUT", result.toString())
     }
-
     @Test
     fun testGestureResultErrorIsNotSuccess() {
         val err = RuntimeException("test error")
@@ -151,7 +131,6 @@ class AccessibilityAgentTest {
         assertTrue(result.toString().contains("ERROR"))
         assertTrue(result.toString().contains("test error"))
     }
-
     @Test
     fun testGestureResultSealedTypeDistinguishability() {
         // Ensure all types are distinct
@@ -165,27 +144,22 @@ class AccessibilityAgentTest {
         // Each should have a unique toString
         val strings = results.map { it.toString() }.toSet()
         assertEquals(5, strings.size)
-
         // Only Completed should be success
         assertEquals(1, results.count { it.isSuccess })
     }
-
     // ===== ScreenFingerprint tests (via data class verification) =====
-
     @Test
     fun testScreenFingerprintEquality() {
         val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
         val fp2 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
         assertEquals(fp1, fp2)
     }
-
     @Test
     fun testScreenFingerprintPackageChange() {
         val fp1 = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
         val fp2 = AuraAccessibilityService.ScreenFingerprint("com.google.android.youtube", 15, 67890)
         assertNotEquals(fp1.packageName, fp2.packageName)
     }
-
     @Test
     fun testScreenFingerprintNodeCountChange() {
         val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
@@ -193,7 +167,6 @@ class AccessibilityAgentTest {
         assertEquals(fp1.packageName, fp2.packageName)
         assertNotEquals(fp1.nodeCount, fp2.nodeCount)
     }
-
     @Test
     fun testScreenFingerprintContentHashChange() {
         val fp1 = AuraAccessibilityService.ScreenFingerprint("com.example", 10, 12345)
@@ -202,7 +175,6 @@ class AccessibilityAgentTest {
         assertEquals(fp1.nodeCount, fp2.nodeCount)
         assertNotEquals(fp1.contentHash, fp2.contentHash)
     }
-
     @Test
     fun testScreenFingerprintNoChange() {
         // Same package, same nodes, same content hash = no UI change
@@ -211,9 +183,7 @@ class AccessibilityAgentTest {
         assertEquals(fp1, fp2)
         // This simulates the false-positive case: rootInActiveWindow exists but nothing changed
     }
-
     // ===== Action verification logic tests (pure data, no Android framework) =====
-
     @Test
     fun testVerificationDetectsFalsePositive() {
         // This is the exact scenario from the bug: Aura claims "Action verified"
@@ -223,7 +193,6 @@ class AccessibilityAgentTest {
         // With the new system, identical fingerprints mean NO verification
         assertEquals(pre, post)
     }
-
     @Test
     fun testVerificationDetectsRealPackageChange() {
         val pre = AuraAccessibilityService.ScreenFingerprint("com.aura.companion", 10, 12345)
@@ -232,7 +201,6 @@ class AccessibilityAgentTest {
         assertNotEquals(pre.nodeCount, post.nodeCount)
         assertNotEquals(pre.contentHash, post.contentHash)
     }
-
     @Test
     fun testVerificationDetectsContentChangeWithinSameApp() {
         // Click within same app changes content but not package
@@ -242,9 +210,7 @@ class AccessibilityAgentTest {
         assertNotEquals(pre.nodeCount, post.nodeCount)
         assertNotEquals(pre.contentHash, post.contentHash)
     }
-
     // ===== ExecutionResult sealed class tests =====
-
     @Test
     fun testExecutionResultTypes() {
         // Verify all result types exist and are distinct
@@ -252,7 +218,6 @@ class AccessibilityAgentTest {
         val unverified: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Unverified
         val failed: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Failed
         val blocked: AuraAccessibilityService.ExecutionResult = AuraAccessibilityService.ExecutionResult.Blocked
-
         assertNotEquals(verified, unverified)
         assertNotEquals(verified, failed)
         assertNotEquals(verified, blocked)
@@ -260,9 +225,7 @@ class AccessibilityAgentTest {
         assertNotEquals(unverified, blocked)
         assertNotEquals(failed, blocked)
     }
-
     // ===== Node resolution data tests =====
-
     @Test
     fun testAccessibilityNodeDefaults() {
         val node = AccessibilityNode(
@@ -284,7 +247,6 @@ class AccessibilityAgentTest {
         assertFalse(node.checked)
         assertFalse(node.focused)
     }
-
     @Test
     fun testAgentActionCompleteMessage() {
         val action = AgentAction(
@@ -295,7 +257,6 @@ class AccessibilityAgentTest {
         assertNull(action.nodeId)
         assertEquals("Successfully opened YouTube", action.message)
     }
-
     @Test
     fun testSnapshotWithAllFields() {
         val tree = mapOf(
@@ -323,5 +284,23 @@ class AccessibilityAgentTest {
         assertEquals("open youtube", snapshot.userRequest)
         assertEquals("Previous click failed.", snapshot.lastActionError)
         assertNotNull(snapshot.accessibilityTree["node_1"])
+    }
+    @Test
+    fun testShouldAutoCompleteForSingleActionTasks() {
+        val openApp = AgentAction(action = "open_app", packageName = "com.google.android.youtube")
+        val home = AgentAction(action = "home")
+        // Single-intent tasks must auto-complete
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("mở YouTube", openApp))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("mở Chrome", openApp))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("về màn hình chính", home))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("home", home))
+        // Multi-step tasks must NOT auto-complete on open_app/home
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("open YouTube and search Minecraft", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("mở YouTube và tìm Minecraft", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("mở YouTube rồi gõ Minecraft", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("về màn hình chính rồi mở YouTube", home))
+        // Non-deterministic actions must NOT auto-complete
+        val click = AgentAction(action = "click", nodeId = "btn_1")
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("mở YouTube", click))
     }
 }

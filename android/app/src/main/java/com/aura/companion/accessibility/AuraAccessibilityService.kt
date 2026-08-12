@@ -268,8 +268,15 @@ class AuraAccessibilityService : AccessibilityService() {
                                 when (executeActionWithRecovery(action, tree)) {
                                     is ExecutionResult.Verified -> {
                                         failedActionsCount.remove(actionKey)
+                                        if (shouldAutoComplete(currentRequest, action)) {
+                                            finalMessage = action.message ?: completionMessageForAction(action)
+                                            Log.d("AuraAgent", "Single-action task completed: $finalMessage")
+                                            settled = true
+                                            break
+                                        }
                                         delay(500) // Short stabilization after verified success
                                     }
+
                                     is ExecutionResult.Unverified -> {
                                         // The action executed without error, but we could not confirm UI change.
                                         // Treat as conditional success — let the LLM see the next screen state.
@@ -288,7 +295,7 @@ class AuraAccessibilityService : AccessibilityService() {
                                     }
                                     is ExecutionResult.Failed -> {
                                         failedActionsCount[actionKey] = (failedActionsCount[actionKey] ?: 0) + 1
-                                        lastActionError = "Action ${action.action} on ${action.nodeId} failed. Target not clickable or not found."
+                                        lastActionError = failureReason(action)
                                     }
                                 }
                             }
@@ -491,6 +498,45 @@ class AuraAccessibilityService : AccessibilityService() {
         const val MAX_PARSE_FAILURES = 3
 
         /**
+         * Why an action failed, written for the model.
+         *
+         * Goes out as `last_action_error`, which is the only channel the
+         * model has to correct itself, so it has to say something the
+         * model can act on. The single generic sentence this replaced -
+         * "Target not clickable or not found" - was false for `open_app`
+         * in two ways at once: there is no target node to be unclickable
+         * (`node_id` is null, so the message read "on null"), and it
+         * named neither the package that was tried nor the reason it did
+         * not launch. A model told that cannot do anything but guess
+         * again, which is how a single wrong package name consumed every
+         * remaining step.
+         *
+         * Every other action does reference a node from the tree the
+         * model was just shown, so for those the original sentence is
+         * accurate and is kept verbatim.
+         */
+        fun failureReason(action: AgentAction): String {
+
+            if (action.action != "open_app") {
+                return "Action ${action.action} on ${action.nodeId} failed. " +
+                    "Target not clickable or not found."
+            }
+
+            val target = action.packageName?.trim().orEmpty()
+
+            if (target.isEmpty()) {
+                return "open_app needs a \"package\" field holding an Android " +
+                    "package name and none was sent. Send the package name, " +
+                    "for example \"com.google.android.youtube\"."
+            }
+
+            return "\"$target\" could not be launched: no installed app has " +
+                "that package name. Send the app's exact Android package " +
+                "name - the app's visible label is not a package name - or " +
+                "reach the app another way, such as \"home\" and then a tap."
+        }
+
+        /**
          * Did `open_app` actually put [target] in the foreground?
          *
          * When the target is known this is an identity check and nothing
@@ -546,7 +592,34 @@ class AuraAccessibilityService : AccessibilityService() {
             return arrived
         }
 
+        fun shouldAutoComplete(request: String, action: AgentAction): Boolean {
+            val act = action.action
+            if (act != "open_app" && act != "home" && act != "open_notifications" && act != "open_quick_settings") {
+                return false
+            }
+
+            val reqLower = request.lowercase().trim()
+            val multiStepKeywords = listOf(
+                " và ", " rồi ", " sau đó ", " tiếp ",
+                " and ", " then ", " after ", " to ",
+                ",", ";"
+            )
+
+            return multiStepKeywords.none { keyword -> reqLower.contains(keyword) }
+        }
+
+        fun completionMessageForAction(action: AgentAction): String {
+            return when (action.action) {
+                "open_app" -> "App ${action.packageName ?: ""} launched successfully!"
+                "home" -> "Navigated to home screen."
+                "open_notifications" -> "Opened notifications."
+                "open_quick_settings" -> "Opened quick settings."
+                else -> "Task completed successfully!"
+            }
+        }
+
         fun isEnabled(): Boolean = instance.get() != null
+
 
         fun startAgentTask(request: String, onComplete: (String) -> Unit): Boolean {
             val service = instance.get()
