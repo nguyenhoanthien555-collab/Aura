@@ -392,9 +392,17 @@ class PromptBuilder:
         prompt.extend([
             AGENT_RULES,
             f'You are operating in Android Agentic Jarvis mode.\n'
-            f'The user has requested: "{user_req}".\n'
-            f'Based on the current device state and accessibility tree, decide the next action.\n'
-            f'If the task is complete, or you cannot proceed further, output a "complete" action:\n'
+            f'The user has requested: "{user_req}".\n\n'
+            f'TASK EXECUTION RULES:\n'
+            f'1. Parse commands into the requested action and target. "search Google" means search for query "Google", NOT the literal text "search Google".\n'
+            f'2. For "open <app> and search <query>": Open the app -> Focus/click search field -> Enter ONLY <query> -> Submit search -> STOP when search results are visible.\n'
+            f'3. Entering text is NOT the same as submitting a search. Ensure search is submitted.\n'
+            f'4. A search task is COMPLETE when the requested query has been submitted and the search results page is visible.\n'
+            f'5. NEVER click a search result, video, song, channel, link, or suggestion unless the user explicitly requested you to open it.\n'
+            f'6. Do not perform additional actions after the requested goal has been achieved.\n'
+            f'7. Never reinterpret the user\'s command into a broader task.\n\n'
+            f'Decide the next action based on the current device state and accessibility tree.\n'
+            f'If the requested task is complete or you cannot proceed further, output a "complete" action:\n'
             f'{{\n'
             f'  "action": "complete",\n'
             f'  "message": "<friendly response in Gen-Z style completing the request>"\n'
@@ -409,6 +417,7 @@ class PromptBuilder:
             f'}}\n'
             f'Only output the raw JSON block without any conversational text.'
         ])
+
 
         prompt.extend(
             self._build_user(user_message)
