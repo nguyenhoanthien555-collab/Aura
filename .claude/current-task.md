@@ -170,17 +170,22 @@ After the Render fix: **1642 passed, 1 skipped, 1 deselected**.
       `model_setting`, `api_key_env`) landed with it, and
       `ProviderComponents.kt` / `ModelsSection.kt` show the six new
       providers.
-- [ ] **11.5 Full suites, APK, state, commit.** Suites are green as of
+- [x] **11.5 Full suites, APK, state, commit.** Suites are green as of
       this entry - backend **1752 passed, 1 skipped, 1 deselected**,
       Android **225 passed**. The debug APK is built and fresh -
       `android/app/build/outputs/apk/debug/app-debug.apk`, 19,548,367
       bytes, with `:app:packageDebug` and `:app:assembleDebug` both
       executed rather than UP-TO-DATE - and the
       `docs/IMPLEMENTATION_STATUS.md` test counts are corrected. The
-      `android/app/build` + `android/.gradle` untracking listed here is
-      NOT needed: `35589a0` already removed all 2139 files and
-      `git ls-files` returns zero under both paths. Remaining: commit
-      and push.
+      `android/app/build` + `android/.gradle` untracking earlier notes
+      listed here was NOT needed: `35589a0` already removed all 2139
+      files and `git ls-files` returns zero under both paths. Committed
+      as `95ab4f1 Harden settings, providers, Render startup, and Android
+      UI` (44 files, 5798 insertions, 470 deletions) and pushed to
+      `origin/feature/aura-identity`; tree clean, branch in sync.
+      NOT done: no device was attached, so the APK was never installed or
+      run; no live provider API was called; Render was not redeployed;
+      `:app:lintDebug` was not re-run after the redesign.
 
 ## Standing constraints
 

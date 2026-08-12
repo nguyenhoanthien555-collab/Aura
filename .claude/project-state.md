@@ -15,21 +15,25 @@ contract) is complete. The "local Windows device agent" that earlier
 notes deferred is still deferred - it was not part of the Phase 8, 9, 10
 or 11 spec.
 
-PHASE 11 is nearly done. Both suites are green: backend **1752 passed,
-1 skipped, 1 deselected**; Android **225 passed across 15 classes, 0
-failures, 0 errors** (the Phase 10 note here read "175 across 11
-classes", which was true when written and is now four test classes
-behind). Delivered: the Render startup crash fixed and verified on a
-real 3.14.6 interpreter, provider coverage reaching all ten providers
-the spec names, and the Android Hub redesign. The debug APK is built
+PHASE 11 is complete and committed as `95ab4f1 Harden settings,
+providers, Render startup, and Android UI` (44 files, 5798 insertions,
+470 deletions), pushed to `origin/feature/aura-identity` with a clean
+tree. Both suites are green: backend **1752 passed, 1 skipped, 1
+deselected**; Android **225 passed across 15 classes, 0 failures, 0
+errors** (the Phase 10 note here read "175 across 11 classes", which was
+true when written and is now four test classes behind). Delivered: the
+Render startup crash fixed and verified on a real 3.14.6 interpreter,
+provider coverage reaching all ten providers the spec names, the Android
+Hub redesign, and the debug APK
 (`android/app/build/outputs/apk/debug/app-debug.apk`, 19,548,367 bytes).
-The build-artifact untracking that earlier notes list as remaining was
-already done by `35589a0`. Remaining: the commit.
+The build-artifact untracking that earlier notes listed as remaining was
+already done by `35589a0`. NOT verified: no device was attached, so the
+APK was never installed or run; no live provider API was called; Render
+was not redeployed; `:app:lintDebug` was not re-run after the redesign.
 
-**Phase 9 and Phase 10 ARE committed.** HEAD is `b5ec777 Fix settings
-connectivity and provider management` on `feature/aura-identity` with a
-clean tree. The earlier note here claiming otherwise, and naming
-`35589a0` as HEAD, was stale. What remains outstanding is the user's
+**Phases 9, 10 and 11 ARE committed.** HEAD is `95ab4f1 Harden settings,
+providers, Render startup, and Android UI` on `feature/aura-identity`,
+pushed, with a clean tree. What remains outstanding is the user's
 *redeploy*: the deployed Render revision predates the settings routes,
 which is why `/api/settings`, `/api/providers` and
 `/api/providers/health` return 404 there, and it also predates the

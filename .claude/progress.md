@@ -1093,12 +1093,24 @@ repository actually lived.
 
 ## Current
 
-Phase 11: 11.1 (Render startup), 11.3 (provider coverage) and 11.4
-(Android Hub redesign) are done; 11.5 (APK, untracking, commit) is what
-is left. Both suites are green as of this entry - backend **1752 passed,
-1 skipped, 1 deselected**, Android **225 passed across 15 classes, 0
-failures, 0 errors**. Uncommitted - Phase 11 commits at 11.5, per the
-mandate's §21.
+Phase 11 is complete: 11.1 (Render startup), 11.3 (provider coverage),
+11.4 (Android Hub redesign) and 11.5 (suites, APK, state, commit). Both
+suites are green as of this entry - backend **1752 passed, 1 skipped, 1
+deselected**, Android **225 passed across 15 classes, 0 failures, 0
+errors**. Committed per the mandate's §21 as `95ab4f1 Harden settings,
+providers, Render startup, and Android UI` - 44 files, 5798 insertions,
+470 deletions - and pushed to `origin/feature/aura-identity`; tree clean,
+branch in sync. The debug APK is
+`android/app/build/outputs/apk/debug/app-debug.apk`, 19,548,367 bytes,
+with `:app:packageDebug` and `:app:assembleDebug` both executed rather
+than UP-TO-DATE.
+
+11.5 also closed a planned commit that turned out to be unnecessary. The
+`android/app/build` + `android/.gradle` untracking three documents still
+prescribed had already been done by `35589a0` itself (2139 files removed,
+61183 deletions, no insertions), so `git ls-files` returns nothing under
+either path at HEAD; the prescriptions were corrected rather than
+re-executed.
 
 11.4's real result was not the visuals. The app's most visible sentence
 lived inside a `@Composable`, and this module has no JVM Compose harness
@@ -1112,12 +1124,14 @@ rather than a paragraph.
 
 Android lint was **not** re-run after the redesign. The last measured
 figure is Phase 9's `0 errors, 44 warnings`, and it should not be quoted
-as current.
+as current. Nor was anything validated live: no device was attached, so
+the APK was built and measured but never installed or run; no live
+provider API was called; Render was not redeployed.
 
 **The user's next action is still a redeploy.** Render must track
 `feature/aura-identity` at `b5ec777` or later for the settings routes to
-exist at all, and at the Phase 11 commit for the SQLAlchemy pin that lets
-the service boot on Python 3.14. Until then Aura reads "Connected /
+exist at all, and at `95ab4f1` for the SQLAlchemy pin that lets the
+service boot on Python 3.14. Until then Aura reads "Connected /
 Settings unavailable", which is now the truth rather than a bug.
 
 ## Blockers
