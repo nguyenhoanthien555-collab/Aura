@@ -22,10 +22,11 @@ class MemoryManager:
 
         self.session = session
 
-    def save(self, role: str, content: str) -> None:
+    def save(self, role: str, content: str, session_id: str = "default") -> None:
         message = Message(
             role=role,
             content=content,
+            session_id=session_id,
         )
 
         # Held across add+commit, not around each one: a half-applied
@@ -34,19 +35,24 @@ class MemoryManager:
             self.session.add(message)
             self.session.commit()
 
-    def get_recent(self, limit: int = 10) -> list[Message]:
+    def get_recent(self, limit: int = 10, session_id: str = "default") -> list[Message]:
         """
-        Most recent messages, NEWEST FIRST.
+        Most recent messages for a session, NEWEST FIRST.
         """
         with db_lock:
             return (
                 self.session.query(Message)
+                .filter(Message.session_id == session_id)
                 .order_by(Message.id.desc())
                 .limit(limit)
                 .all()
             )
 
-    def clear(self) -> None:
+    def clear(self, session_id: str | None = None) -> None:
         with db_lock:
-            self.session.query(Message).delete()
+            query = self.session.query(Message)
+            if session_id is not None:
+                query = query.filter(Message.session_id == session_id)
+            query.delete(synchronize_session=False)
             self.session.commit()
+

@@ -58,11 +58,12 @@ class ConversationStore(Protocol):
         Converting to pipeline order is the caller's job.
     """
 
-    def save(self, role: str, content: str) -> None:
+    def save(self, role: str, content: str, session_id: str = "default") -> None:
         ...
 
-    def get_recent(self, limit: int = 10) -> Sequence[MessageRecord]:
+    def get_recent(self, limit: int = 10, session_id: str = "default") -> Sequence[MessageRecord]:
         ...
+
 
 
 @runtime_checkable

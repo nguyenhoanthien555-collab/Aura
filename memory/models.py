@@ -43,11 +43,14 @@ class Message(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    session_id: Mapped[str] = mapped_column(String(128), default="default", index=True)
+
     role: Mapped[str] = mapped_column(String(20))
 
     content: Mapped[str] = mapped_column(Text())
 
     timestamp: Mapped[str] = mapped_column(default=timestamp_now)
+
 
 
 class UserFact(Base):

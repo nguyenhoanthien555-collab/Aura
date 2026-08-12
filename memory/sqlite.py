@@ -91,11 +91,21 @@ def init_database():
     Phase 8 tables belong to the pipeline, and are created where the
     pipeline is built.
     """
+    from sqlalchemy import text
 
     Base.metadata.create_all(
         engine,
         tables=[Message.__table__, UserFact.__table__],
     )
+
+    with engine.connect() as conn:
+        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(messages)"))]
+        if "session_id" not in columns:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN session_id VARCHAR(128) DEFAULT 'default'"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_messages_session_id ON messages (session_id)"))
+            conn.commit()
+
+
 
 
 def init_pipeline_tables(bind=None):

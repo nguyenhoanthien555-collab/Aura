@@ -398,9 +398,10 @@ class StubEngine:
         self.reply = reply
         self.calls = []
 
-    def chat(self, message, source="text", context=None):
+    def chat(self, message, source="text", context=None, **kwargs):
         self.calls.append((message, context))
         return Response(text=self.reply)
+
 
 
 class StubServices:

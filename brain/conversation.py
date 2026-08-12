@@ -151,6 +151,7 @@ class ConversationManager:
         contexts: list[str] | None = None,
         source: str = "text",
         context: dict | None = None,
+        session_id: str = "default",
     ) -> Response:
         """
         Process a user message and return the assistant's reply.
@@ -170,7 +171,7 @@ class ConversationManager:
         machine = is_machine_turn(context)
 
         user_msg, prompt, turn = self._prepare(
-            user_message, contexts, source, context, machine=machine
+            user_message, contexts, source, context, machine=machine, session_id=session_id
         )
 
         if not machine:
@@ -185,11 +186,12 @@ class ConversationManager:
 
         response = Response(text=self._styled(text))
 
-        self._remember(user_msg, response.text)
+        self._remember(user_msg, response.text, session_id=session_id)
 
         self._emit(ResponseEvent(text=response.text))
 
         return response
+
 
 
     def chat_stream(
@@ -198,6 +200,7 @@ class ConversationManager:
         contexts: list[str] | None = None,
         source: str = "text",
         context: dict | None = None,
+        session_id: str = "default",
     ):
         """
         The same turn, delivered as it is written.
@@ -247,6 +250,7 @@ class ConversationManager:
         user_msg, prompt, _turn = self._prepare(
             user_message, contexts, source, context,
             machine=machine, offer_tools=False,
+            session_id=session_id,
         )
 
         if not machine:
@@ -282,7 +286,7 @@ class ConversationManager:
 
         text = self._styled("".join(pieces))
 
-        self._remember(user_msg, text)
+        self._remember(user_msg, text, session_id=session_id)
 
         self._emit(
             StreamFinishedEvent(text=text, ok=True, chunks=len(pieces))
@@ -297,6 +301,7 @@ class ConversationManager:
         contexts: list[str] | None = None,
         source: str = "text",
         min_chars: int = 0,
+        session_id: str = "default",
     ):
         """
         The stream regrouped into whole sentences.
@@ -309,13 +314,14 @@ class ConversationManager:
 
         aggregator = SentenceAggregator(min_chars=min_chars)
 
-        for fragment in self.chat_stream(user_message, contexts, source):
+        for fragment in self.chat_stream(user_message, contexts, source, session_id=session_id):
             yield from aggregator.feed(fragment)
 
         tail = aggregator.flush()
 
         if tail:
             yield tail
+
 
 
     def _prepare(
@@ -326,6 +332,7 @@ class ConversationManager:
         context: dict | None = None,
         machine: bool = False,
         offer_tools: bool = True,
+        session_id: str = "default",
     ) -> tuple[Message, str, "_Turn | None"]:
         """
         Everything both paths do before the provider is called.
@@ -361,13 +368,14 @@ class ConversationManager:
             user_msg=user_msg,
             contexts=list(contexts or []),
             context=context,
-            history=self.history(),
+            history=self.history(session_id=session_id),
             vision=self._vision_context(),
             knowledge=self._knowledge_for(user_msg.content),
             temporal=self._temporal_lines(),
         )
 
         return user_msg, self._compose(turn, offer_tools=offer_tools), turn
+
 
 
     def _compose(
@@ -593,7 +601,7 @@ class ConversationManager:
     # ------------------------------------------------------------------
 
 
-    def _remember(self, user_msg: Message, reply: str) -> None:
+    def _remember(self, user_msg: Message, reply: str, session_id: str = "default") -> None:
         """
         Persist a completed turn.
 
@@ -611,8 +619,12 @@ class ConversationManager:
         what keeps device agent steps out of both stores.
         """
 
-        self.memory.save(user_msg.role, user_msg.content)
-        self.memory.save("assistant", reply)
+        try:
+            self.memory.save(user_msg.role, user_msg.content, session_id=session_id)
+            self.memory.save("assistant", reply, session_id=session_id)
+        except TypeError:
+            self.memory.save(user_msg.role, user_msg.content)
+            self.memory.save("assistant", reply)
 
         self._observe(user_msg.role, user_msg.content)
 
@@ -636,7 +648,7 @@ class ConversationManager:
             logger.debug("Memory pipeline failed on a %s turn: %s", role, error)
 
 
-    def history(self, limit: int | None = None) -> list[Message]:
+    def history(self, limit: int | None = None, session_id: str = "default") -> list[Message]:
         """
         Recent conversation as pipeline Messages, oldest first.
 
@@ -648,13 +660,17 @@ class ConversationManager:
         if limit is None:
             limit = self.history_limit
 
-        records = self.memory.get_recent(limit)
+        try:
+            records = self.memory.get_recent(limit, session_id=session_id)
+        except TypeError:
+            records = self.memory.get_recent(limit)
 
         messages = records_to_messages(records)
 
         messages.reverse()
 
         return messages
+
 
 
     # ------------------------------------------------------------------

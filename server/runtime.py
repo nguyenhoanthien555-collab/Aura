@@ -336,7 +336,12 @@ class ServerRuntime:
         # and CompanionMemory by tenant, not just passing session_id down;
         # `tests/test_server.py` pins the current shared behaviour so the
         # change cannot happen silently.
-        response = self.services.engine.chat(message, source=source, context=context)
+        response = self.services.engine.chat(
+            message,
+            source=source,
+            context=context,
+            session_id=session_id,
+        )
 
         if is_intent_probe(context):
             # Normalised here rather than on the device, so the rule that
@@ -365,8 +370,10 @@ class ServerRuntime:
             message,
             contexts=None,
             source=source,
-            context=context
+            context=context,
+            session_id=session_id,
         )
+
 
     def consider_proactive(self) -> dict | None:
         """

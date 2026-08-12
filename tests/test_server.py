@@ -294,24 +294,28 @@ def test_sessions_do_not_share_activity_counters(client):
     assert client.get("/api/sessions/iso-b").json()["message_count"] == 2
 
 
-def test_sessions_share_one_memory_store(client, isolated_memory):
+def test_sessions_have_isolated_memory_stores(client, isolated_memory):
     """
-    Single tenant, deliberately (AURA-P1-005).
+    Session scoping enforced (Phase 2).
 
-    `session_id` scopes the metadata endpoint above and nothing else: two
-    sessions write into one transcript. This is the documented deployment
-    - one person, one Aura, with the auth token as the identity boundary -
-    and it is pinned here so that partitioning memory later cannot happen
-    by accident and go unnoticed.
+    `session_id` partitions memory so that requests in session A do not leak
+    into session B history.
     """
 
     client.post("/api/chat", json={"session_id": "tenant-a", "message": "from a"})
     client.post("/api/chat", json={"session_id": "tenant-b", "message": "from b"})
 
-    stored = [record.content for record in isolated_memory.get_recent(limit=50)]
+    stored_a = [record.content for record in isolated_memory.get_recent(limit=50, session_id="tenant-a")]
 
-    assert "from a" in stored
-    assert "from b" in stored
+    stored_b = [record.content for record in isolated_memory.get_recent(limit=50, session_id="tenant-b")]
+
+    assert "from a" in stored_a
+    assert "from b" not in stored_a
+
+    assert "from b" in stored_b
+    assert "from a" not in stored_b
+
+
 
 
 # ----------------------------------------------------------------------
