@@ -221,15 +221,11 @@ def test_the_system_half_goes_in_the_system_message(monkeypatch, provider_class)
 
     messages = capture.sent["messages"]
 
-    # Two messages, in order, with the instructions in the system slot.
-    # AURA-P2-003 was a single user message containing both halves.
-    assert [entry["role"] for entry in messages] == ["system", "user"]
+    # System instructions in the system slot, and history/user turns as native message roles.
+    assert messages[0]["role"] == "system"
     assert SYSTEM_HALF in messages[0]["content"]
-    assert USER_HALF in messages[1]["content"]
-    assert SYSTEM_HALF not in messages[1]["content"]
-    # The transcript is content, not instruction, so it stays on the user
-    # side - the same rule `split_prompt` applies for every provider.
-    assert "===== HISTORY =====" in messages[1]["content"]
+    assert USER_HALF in messages[-1]["content"]
+    assert SYSTEM_HALF not in messages[-1]["content"]
 
 
 @pytest.mark.parametrize("provider_class", ALL_NEW, ids=lambda c: c.provider_name)

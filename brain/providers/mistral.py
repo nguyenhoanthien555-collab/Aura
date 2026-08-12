@@ -51,12 +51,13 @@ class MistralProvider(BaseProvider):
         self.url = os.getenv("MISTRAL_BASE_URL", DEFAULT_URL)
 
     def generate(self, prompt: str) -> str:
-        from brain.providers.base import split_prompt
-        system_instruction, user_content = split_prompt(prompt)
+        from brain.providers.base import split_prompt_to_messages
+        system_instruction, canonical_messages = split_prompt_to_messages(prompt)
         messages = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": user_content})
+        for msg in canonical_messages:
+            messages.append({"role": msg.role, "content": msg.content})
 
         data = self._request(messages)
         try:
@@ -92,12 +93,14 @@ class MistralProvider(BaseProvider):
             raise ProviderUnavailableError("Mistral is unreachable") from error
 
     def stream(self, prompt: str):
-        from brain.providers.base import split_prompt
-        system_instruction, user_content = split_prompt(prompt)
+        from brain.providers.base import split_prompt_to_messages
+        system_instruction, canonical_messages = split_prompt_to_messages(prompt)
         messages = []
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": user_content})
+        for msg in canonical_messages:
+            messages.append({"role": msg.role, "content": msg.content})
+
 
         payload = json.dumps({
             "model": self.model,

@@ -409,17 +409,12 @@ class HttpChatProvider(BaseProvider):
     # ------------------------------------------------------------------
 
     def generate(self, prompt: str) -> str:
-        """
-        A reply, with the prompt split into its instruction and content.
+        from brain.providers.base import split_prompt_to_messages
 
-        `split_prompt` is called here rather than in each subclass on
-        purpose - see the module docstring. A subclass decides what to do
-        with the two halves and cannot decide not to have them.
-        """
+        system_instruction, messages = split_prompt_to_messages(prompt)
 
-        system_instruction, user_content = split_prompt(prompt)
+        data = self._send(self._payload(system_instruction, messages))
 
-        data = self._send(self._payload(system_instruction, user_content))
 
         try:
             return self._extract(data)

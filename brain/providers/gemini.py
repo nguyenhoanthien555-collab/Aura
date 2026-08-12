@@ -76,18 +76,24 @@ class GeminiProvider(BaseProvider):
         return config
 
     def generate(self, prompt: str) -> str:
-        from brain.providers.base import split_prompt
-        system_instruction, user_content = split_prompt(prompt)
+        from brain.providers.base import split_prompt_to_messages
+        system_instruction, canonical_messages = split_prompt_to_messages(prompt)
+
+        contents = []
+        for msg in canonical_messages:
+            role = "user" if msg.role == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": msg.content}]})
 
         try:
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=user_content,
+                contents=contents,
                 config={
                     **self._request_config(),
                     "system_instruction": system_instruction or None,
                 },
             )
+
         except Exception as error:
             self._raise_cloud_error(error)
 
@@ -158,25 +164,17 @@ class GeminiProvider(BaseProvider):
         raise error
 
     def stream(self, prompt: str):
-        """
-        The same reply, yielded as it is generated.
+        from brain.providers.base import split_prompt_to_messages
+        system_instruction, canonical_messages = split_prompt_to_messages(prompt)
 
-        Optional capability, found by `brain.streaming.can_stream` rather
-        than declared on the LLM protocol - a provider that only has
-        `generate` must remain a valid LLM, and widening that protocol
-        would break every one that does.
-
-        Empty pieces are skipped. Gemini emits them around safety
-        annotations and at the end of a stream, and a consumer counting
-        chunks should not see them as fragments of a reply.
-        """
-
-        from brain.providers.base import split_prompt
-        system_instruction, user_content = split_prompt(prompt)
+        contents = []
+        for msg in canonical_messages:
+            role = "user" if msg.role == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": msg.content}]})
 
         stream = self.client.models.generate_content_stream(
             model=self.model,
-            contents=user_content,
+            contents=contents,
             config={
                 **self._request_config(budget=False),
                 "system_instruction": system_instruction or None,
@@ -189,3 +187,4 @@ class GeminiProvider(BaseProvider):
 
             if text:
                 yield text
+

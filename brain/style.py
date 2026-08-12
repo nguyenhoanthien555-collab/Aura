@@ -193,22 +193,21 @@ class AuraStyle:
 
     def _variety_line(self) -> str:
         """
-        Recent openers, so the next reply does not reuse one.
+        Instruction to vary the opening phrase across turns.
 
-        Naming them is what makes this work: "vary your phrasing" is
-        advice a model nods at and ignores, while "you already opened
-        with these" is a constraint it can actually check itself against.
+        Avoids echoing literal opener strings to prevent token-priming
+        feedback loops in smaller models, while instructing the model to
+        start with a fresh opening.
         """
 
         if not self._openers:
             return ""
 
-        quoted = ", ".join(f'"{opener}"' for opener in self._openers)
-
         return (
-            f"Recent replies already opened with {quoted}. Start this one "
-            "some other way, and do not fall back on a stock phrase."
+            "Vary your opening phrase from previous turns. Start this reply "
+            "with a fresh, natural opening and do not fall back on stock or repeated phrases."
         )
+
 
     # ------------------------------------------------------------------
     # Out of the model

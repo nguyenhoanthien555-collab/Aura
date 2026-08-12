@@ -73,7 +73,7 @@ class AnthropicProvider(HttpChatProvider):
             "Content-Type": "application/json",
         }
 
-    def _payload(self, system_instruction: str, user_content: str) -> dict:
+    def _payload(self, system_instruction: str, user_content) -> dict:
         """
         The instruction half in `system`, the content half in `messages`.
 
@@ -86,10 +86,17 @@ class AnthropicProvider(HttpChatProvider):
         `system` is omitted when empty rather than sent as "".
         """
 
+        messages = []
+        if isinstance(user_content, list):
+            for msg in user_content:
+                messages.append({"role": msg.role, "content": msg.content})
+        else:
+            messages.append({"role": "user", "content": str(user_content)})
+
         payload = {
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "messages": [{"role": "user", "content": user_content}],
+            "messages": messages,
         }
 
         if system_instruction:
@@ -99,6 +106,7 @@ class AnthropicProvider(HttpChatProvider):
             payload["temperature"] = min(self.temperature, self.MAX_TEMPERATURE)
 
         return payload
+
 
     def _extract(self, data: dict) -> str:
         """

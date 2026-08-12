@@ -53,9 +53,9 @@ class OpenAICompatibleProvider(HttpChatProvider):
 
     droppable = ("temperature", "max_tokens", "max_completion_tokens")
 
-    def _payload(self, system_instruction: str, user_content: str) -> dict:
+    def _payload(self, system_instruction: str, user_content) -> dict:
         """
-        The two prompt halves as a system message and a user message.
+        The system message, followed by canonical user and assistant messages.
 
         The system message is omitted entirely when there is nothing to put
         in it. An empty system message is not free: some models treat it as
@@ -67,7 +67,11 @@ class OpenAICompatibleProvider(HttpChatProvider):
         if system_instruction:
             messages.append({"role": "system", "content": system_instruction})
 
-        messages.append({"role": "user", "content": user_content})
+        if isinstance(user_content, list):
+            for msg in user_content:
+                messages.append({"role": msg.role, "content": msg.content})
+        else:
+            messages.append({"role": "user", "content": str(user_content)})
 
         payload = {
             "model": self.model,
@@ -79,6 +83,7 @@ class OpenAICompatibleProvider(HttpChatProvider):
             payload["temperature"] = self.temperature
 
         return payload
+
 
     def _extract(self, data: dict) -> str:
         """
@@ -110,25 +115,14 @@ class OpenAICompatibleProvider(HttpChatProvider):
         return super()._retry_payload(payload, parameter)
 
     def stream(self, prompt: str) -> Iterator[str]:
-        """
-        The same reply, yielded as it is written.
+        from brain.providers.base import split_prompt_to_messages
 
-        An optional capability found by `brain.streaming.can_stream`, not
-        part of the LLM protocol - see `brain/streaming.py`. Because this
-        lives on the shared class, every provider built from it streams,
-        and `PROVIDER_CAPABILITIES` in `server/routes/settings.py` may
-        honestly say so.
-
-        A chunk that carries no text - the opening `{"role": "assistant"}`
-        delta, a keep-alive comment, a usage summary - is skipped rather
-        than yielded as an empty fragment.
-        """
-
-        system_instruction, user_content = split_prompt(prompt)
+        system_instruction, messages = split_prompt_to_messages(prompt)
 
         payload = dict(
-            self._payload(system_instruction, user_content), stream=True
+            self._payload(system_instruction, messages), stream=True
         )
+
 
         with self._open(payload) as response:
 
