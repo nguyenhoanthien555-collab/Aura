@@ -5,8 +5,18 @@ Main entry point for the server mode.
 """
 import os
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables from the project-root .env before anything
+# initializes the runtime/provider chain.
+#
+# This is especially important for `python -m server.main`, because this
+# entry point otherwise reaches BrainRouter before GEMINI_API_KEY is loaded
+# into os.environ.
+load_dotenv()
 
 from server.config import cors_policy, enforce_auth_policy, settings
 from server.runtime import init_runtime, is_initialized, shutdown_runtime

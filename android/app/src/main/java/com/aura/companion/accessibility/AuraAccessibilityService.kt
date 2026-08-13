@@ -280,12 +280,13 @@ class AuraAccessibilityService : AccessibilityService() {
                                         completedActions.add(formatActionHistory(action))
                                         lastActionError = null
 
-                                        if (shouldAutoComplete(currentRequest, action) || isSearchTaskComplete(currentRequest, action, completedActions)) {
+                                        if (shouldAutoComplete(currentRequest, action) || isSearchTaskComplete(currentRequest, action, completedActions) || isSelectionTaskComplete(currentRequest, action, completedActions)) {
                                             finalMessage = action.message ?: completionMessageForAction(action)
                                             Log.d("AuraAgent", "Task completed: $finalMessage")
                                             settled = true
                                             break
                                         }
+
                                         delay(150) // Reduced stabilization after verified success
                                     }
 
@@ -646,27 +647,40 @@ class AuraAccessibilityService : AccessibilityService() {
             if (!isSearchReq) return false
 
             val requestsSelection = listOf(
-                "play", "select", "pick", "open first", "first song", "first result",
-                "phát", "chơi", "chọn", "nghe", "mở bài"
+                "play", "select", "pick", "open first", "first song", "first result", "first video",
+                "phát", "chơi", "chọn", "nghe", "mở bài", "bài hát đầu tiên", "kết quả đầu tiên"
             ).any { reqLower.contains(it) }
 
             if (requestsSelection) {
                 return false
             }
 
-            val isInputOrSubmit = action.action == "input_text" || action.action == "submit"
-            val hasInputOrSubmitHistory = completedActions.any { it.startsWith("input_text") || it.startsWith("submit") }
+            val isSubmitted = action.action == "submit" || (action.action == "input_text" && completedActions.any { it.contains("[VERIFIED]") && it.startsWith("input_text") })
+            val hasSubmittedHistory = completedActions.any { it.contains("[VERIFIED]") && (it.startsWith("submit") || it.startsWith("input_text")) }
 
-            return isInputOrSubmit || hasInputOrSubmitHistory
+            return isSubmitted || hasSubmittedHistory
         }
 
+        fun isSelectionTaskComplete(request: String, action: AgentAction, completedActions: List<String>): Boolean {
+            val reqLower = request.lowercase().trim()
+            val requestsSelection = listOf(
+                "play", "select", "pick", "open first", "first song", "first result", "first video",
+                "phát", "chơi", "chọn", "nghe", "mở bài", "bài hát đầu tiên", "kết quả đầu tiên"
+            ).any { reqLower.contains(it) }
+
+            if (!requestsSelection) return false
+
+            val hasSubmittedSearch = completedActions.any { it.contains("[VERIFIED]") && (it.startsWith("submit") || it.startsWith("input_text")) }
+            val isClick = action.action == "click"
+
+            return isClick && hasSubmittedSearch
+        }
 
         fun isRepeatedVerifiedAction(
             action: AgentAction,
             lastVerifiedAction: AgentAction?,
             currentPackage: String
         ): Boolean {
-
             if (lastVerifiedAction == null) return false
             if (action.action != lastVerifiedAction.action) return false
 
@@ -679,9 +693,15 @@ class AuraAccessibilityService : AccessibilityService() {
                 "click", "long_click", "clear_text" -> {
                     action.nodeId != null && action.nodeId == lastVerifiedAction.nodeId
                 }
+                "input_text" -> {
+                    val text1 = AuraActionExecutor.sanitizeSearchQuery(action.text)
+                    val text2 = AuraActionExecutor.sanitizeSearchQuery(lastVerifiedAction.text)
+                    text1.isNotEmpty() && text1 == text2
+                }
                 else -> false
             }
         }
+
 
         fun isEnabled(): Boolean = instance.get() != null
 

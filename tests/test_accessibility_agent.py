@@ -130,3 +130,23 @@ def test_last_action_error_formatting():
     assert "===== LAST ACTION ERROR =====" in prompt
     assert "Action click on node_12 failed. Target not clickable." in prompt
 
+
+def test_search_rules_in_prompt():
+    builder = PromptBuilder()
+    context = {
+        "device": {"width": 1080, "height": 2400},
+        "app": {"package": "com.google.android.youtube", "activity": "MainActivity"},
+        "accessibility_tree": {"package": "com.google.android.youtube", "nodes": []},
+        "user_request": "open YouTube and search for lofi music and pick the first song (not an ad)"
+    }
+    prompt = builder.build(
+        history=[],
+        user_message=Message(role="user", content="tick"),
+        context=context
+    )
+    assert 'SEARCH & RESULT SELECTION RULES:' in prompt
+    assert '1. "search <query>", "search for <query>", and "tìm <query>" mean search for <query>.' in prompt
+    assert '8. NEVER select an advertisement or sponsored result when user requests a non-ad result' in prompt
+    assert '10. Once the requested result has been opened/played/selected successfully, STOP' in prompt
+
+

@@ -11,6 +11,31 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        What `open_app` needs to exist at all.
+
+        Since Android 11 (API 30) a package query is filtered to apps the
+        manifest declares an interest in, and `getLaunchIntentForPackage`
+        is a query: it resolves the target's MAIN/LAUNCHER activity.
+        Without this block it returns null for every third-party app -
+        including one whose package name is exactly right and which is
+        installed - so `AuraActionExecutor`'s `open_app` branch returned
+        false on every attempt and the agent loop spent all ten steps
+        failing to launch an app that was sitting there the whole time.
+
+        Declared as the MAIN/LAUNCHER intent rather than
+        QUERY_ALL_PACKAGES. It is exactly the question `open_app` asks -
+        "which apps can be launched" - it needs no policy declaration on
+        Play, and it does not grant visibility of apps that have no
+        launcher entry.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".AuraApplication"
         android:allowBackup="false"

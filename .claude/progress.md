@@ -1466,3 +1466,115 @@ server interval - the server keeps the last. `screenshot_available` is
 still read nowhere in Python. `VisionManager`'s own 8 s throttle means an
 uploaded frame is usually described on the next turn, not the one that
 sent it.
+
+## open_app was structurally impossible (uncommitted)
+
+`mở YouTube` → `Task timed out: maximum number of steps reached.`, with
+all ten steps returning `POST /api/chat 200`. The 200s were real: every
+tick reached the model and parsed a valid action. The failure was on the
+phone, one line further on.
+
+`getLaunchIntentForPackage` resolves the target's MAIN/LAUNCHER activity,
+which makes it a *package query*, and since API 30 queries are filtered to
+what the manifest declares. This manifest declared nothing, `targetSdk` is
+35, so the call returned `null` for an app that was installed with the
+package name spelled correctly. `open_app` returned `false` on both
+recovery attempts; ten steps, and `startActivity` was never reached.
+
+**The provider was a red herring.** Gemini 429, Groq 403, Mistral
+selected - all concurrent, none causal. Gemini would have failed the same
+way. Worth remembering next time the logs are loud: `/api/chat 200` says
+the model call worked and nothing about whether the device did.
+
+**Verified rather than assumed the load-bearing fact.** I suspected an
+`AccessibilityService` might be exempt from visibility filtering, which
+would have made the whole diagnosis wrong. The Android docs say it is not
+exempt, and separately that starting another app's activity is allowed
+*regardless* of visibility - which is precisely why `startActivity` was
+never the problem and only the query was.
+
+**Two changes.** A `<queries>` MAIN/LAUNCHER block, chosen over
+`QUERY_ALL_PACKAGES` because it is exactly the question `open_app` asks
+and needs no Play policy declaration. And `failureReason`, because the old
+`last_action_error` read "Action open_app on null failed. Target not
+clickable or not found." - false twice over for an action with no target
+node, and naming neither the package tried nor why it failed. A model
+given that can only guess again, which is the other way ten steps
+disappear.
+
+**The test caught a flaw in itself, twice.** First it matched
+`QUERY_ALL_PACKAGES` inside my own explanatory manifest comment - fixed by
+stripping XML comments, which also stops a commented-out `<queries>` block
+from satisfying the positive assertion. Then, checking that it failed
+before the fix, Gradle reported `BUILD SUCCESSFUL` with the `<queries>`
+block deleted: the manifest is read at runtime, so it was not a declared
+task input and the test had gone stale. `app/build.gradle.kts` now
+declares it. Both were only found by trying to make the test fail rather
+than trusting it to pass.
+
+297 Android tests / 20 classes, 0 failures (was 292 / 19). 44 backend
+agent tests pass; no Python changed.
+
+Not done: not committed, not pushed. A launch has not been observed on
+hardware - the structural cause is fixed and proven, the device
+confirmation is still owed. `failureReason` improves the model's chance of
+self-correcting a wrong package name but does not guarantee it: the agent
+prompt still ships no installed-app list, so the first guess is always
+world knowledge.
+
+## Persona contract wired into the prompt pipeline (uncommitted)
+
+The personality-overhaul brief's highest-leverage piece - `brain/persona.py`,
+a fully written 978-line pronoun-register / context-mode / dials /
+addressing-preference engine - was dead code. `PERSONA` was imported by
+`prompt_builder.py` but never emitted, and no module referenced the persona
+layer, so pronoun coherence, mode-appropriate intensity and explicit
+addressing preferences were left to whichever model happened to be active.
+Wired it in following the exact `style`/`identity` pattern:
+
+- `PromptBuilder._build_persona` + `persona` param; the section sits
+  directly under PERSONALITY, so it is in the system slot for every provider
+  (`split_prompt` and `split_prompt_to_messages` both gained the header -
+  required, or the Anthropic/OpenAI-compatible adapters would have received
+  the contract as user content instead of instructions).
+- `ConversationManager.persona` collaborator; `_compose` passes
+  `render_of(self.persona, persona_of(self.persona, history, user_msg))` -
+  the same defensive-reader shape as `anchor_of`/`hint_of`.
+- `ChatEngine.persona`, defaulting to `build_persona(personality.persona)`,
+  and a `personality.persona` section in `DEFAULT_CONFIG` (enabled,
+  `pronoun_style` pin, optional humour/brainrot ceilings read as caps in
+  every mode).
+- The agent `complete` message now uses `AGENT_VOICE` - the one place
+  personality is allowed inside the agent prompt.
+- The `REVISION` marker's comment fixed: `brain/persona_guard.py` never
+  existed, and validation is deliberately deferred (brief Section 22), so
+  nothing emits it.
+
+The design guarantee: the register is derived from the transcript, so a
+fallback provider handed the same history resolves to the same pronoun
+style and mode - nothing to copy over, nothing to forget to copy. One
+instance serves every session because `resolve` is a pure function of the
+turn, not stored state. No model/provider-specific branches anywhere - the
+whole point of the brief.
+
+33 new tests in `tests/test_persona.py` (reading register/mode, resolution
+precedence, preferences, render, config, system-slot placement, and a
+Gemini->Groq->Mistral fallback capturing the same contract verbatim). Full
+Python suite: **1811 passed, 1 skipped, 1 deselected, 0 failed** (was 1809
+before this work; 2 pre-existing settings-fixture failures fixed by
+regenerating the fixture).
+
+Fixture work: `live/settings.json` regenerated with the persona block to
+keep `test_fixtures_match_the_routes` honest. The regeneration also
+rewrote `providers.json`/`provider_health.json` with *this machine's* env
+state (GEMINI key present, masked) - reverted, because the test compares
+shape not values and committing a masked key fragment would be noise.
+Android `SettingsContractTest` (42 tests) re-run against the new fixture: 0
+failures. The DTOs drop `personality` via `ignoreUnknownKeys` (documented
+in ControlDto.kt), so no Kotlin change was needed.
+
+Not done, per the mandate: no persona guard / second generation pass, no
+changes to providers, fallback chain, memory, tools, Android execution,
+`prompts/personality.md`, `brain/style.py` or `brain/consistency.py`. The
+unverifiable-by-unit-test question remains: whether models actually follow
+the register line needs a real model and a real conversation.

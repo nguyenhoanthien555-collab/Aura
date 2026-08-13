@@ -7,6 +7,17 @@ Aura AI assistant.
 Build and stabilize Aura as a local/cloud-capable AI assistant.
 
 ## Status
+The **persona contract wiring** is the newest uncommitted work: the fully
+autonomous personality-overhaul brief's core engine (`brain/persona.py` -
+pronoun registers, context modes, dials, addressing preferences) was dead
+code and is now wired through `PromptBuilder` -> `ConversationManager` ->
+`ChatEngine` -> config, emitted as a per-turn PERSONA section in the
+system slot of every provider. Provider fallback preserves it by
+construction (same transcript, same resolution; no model branches). Backend
+**1811 passed, 1 skipped, 1 deselected**; Android `SettingsContractTest`
+42/42 against the regenerated settings fixture (no Kotlin change needed -
+the DTOs drop `personality`). See current-task.md for details.
+
 The **Vision production-wiring fix** is complete and **uncommitted** (the
 user said do not commit, do not push). It sits on top of two other
 uncommitted work items in the same tree - the Gemini thinking-budget

@@ -1,5 +1,123 @@
 # Current Task
 
+## Persona contract wired into the prompt pipeline (DONE, uncommitted)
+
+The personality-overhaul brief's highest-leverage piece was dead code:
+`brain/persona.py` (978 lines - pronoun registers, context modes, dials,
+addressing preferences, `AuraPersona`/`NullPersona`/`build_persona`,
+defensive `persona_of`/`render_of`) was referenced by no module, and
+`PERSONA` was imported by `prompt_builder.py` but never emitted. Now
+wired the same way `style` and `identity` are:
+
+- `PromptBuilder._build_persona` + `persona` param; the section is
+  emitted directly under PERSONALITY - the per-turn refinement of the
+  personality description, in the system slot for every provider.
+- `ConversationManager.persona` collaborator; `_compose` derives it per
+  turn via `render_of(self.persona, persona_of(self.persona, history,
+  user_msg))`. Register continuity survives provider fallback because
+  the transcript does - a fallback model resolves the same style.
+- `ChatEngine.persona` defaults to `build_persona(personality.persona)`;
+  `DEFAULT_CONFIG` gained the section (enabled, `pronoun_style` pin,
+  optional humour/brainrot ceilings read as caps in every mode).
+- `split_prompt` and `split_prompt_to_messages` gained the PERSONA
+  header - required, or the Anthropic/OpenAI-compatible adapters would
+  have received the contract as user content instead of instructions.
+- Agent `complete` message now uses `AGENT_VOICE` (the one allowed
+  personality injection into the agent prompt).
+- `REVISION` marker comment corrected: `brain/persona_guard.py` never
+  existed; a revision pass is deliberately not built (brief Section 22).
+
+Not done, per the mandate: no model/provider-specific persona branches
+(the whole point), no persona guard / second generation pass, no changes
+to providers, fallback chain, memory, tools, Android execution logic,
+`prompts/personality.md`, `brain/style.py` or `brain/consistency.py`.
+
+Tests: 33 new in `tests/test_persona.py`. Full Python suite **1811
+passed, 1 skipped, 1 deselected, 0 failed**. `live/settings.json`
+fixture regenerated with the persona block (env-specific key churn
+reverted); Android `SettingsContractTest` 42/42 against it - the DTOs
+drop `personality` via `ignoreUnknownKeys`, so no Kotlin change. Rest of
+the Android suite untouched by this work (297 green in the open_app
+session).
+
+Remaining: nothing device-side. The unverifiable-by-unit-test question
+is whether models actually follow the register line - that needs a real
+model and a real conversation.
+
+## open_app could never launch anything (DONE, uncommitted)
+
+"mở YouTube" reached `Task timed out: maximum number of steps reached.`
+on the physical phone, with every one of the ten steps returning
+`POST /api/chat 200`.
+
+**Root cause: Android package-visibility filtering, not the model.**
+`AuraActionExecutor`'s `open_app` branch calls
+`packageManager.getLaunchIntentForPackage(pkg)`, which resolves the
+target's MAIN/LAUNCHER activity - a *package query*. Since API 30 queries
+are filtered to what the manifest declares an interest in, and this
+manifest declared nothing while `targetSdk` is 35. So the call returned
+`null` for every third-party app, including a correctly named installed
+one. `open_app` returned `false` on both `executeActionWithRecovery`
+attempts, the loop wrote `last_action_error`, the model retried, and ten
+steps went by without `startActivity` ever being reached.
+
+Confirmed against developer.android.com/training/package-visibility:
+an `AccessibilityService` is **not** among the automatic-visibility
+exemptions, and starting another app's activity is explicitly allowed
+*regardless of visibility* - so `startActivity` was fine and only the
+query was blocked.
+
+**Provider-independent.** The Gemini 429 / Groq 403 / Mistral failover in
+the Render logs was concurrent, not causal. Gemini would have failed
+identically. `/api/chat 200` only reports that the model call succeeded;
+the failure was entirely device-side, after a valid parse.
+
+**Ruled out by inspection, in the order asked:** malformed Mistral output
+(not required - defect is provider-independent); action-schema mismatch
+and tool/argument-name mismatch (`AgentAction.packageName` is
+`@SerialName("package")`, exactly matching the AGENT RULES template);
+parser rejection (`AgentActionParser` is deliberately tolerant -
+`isLenient`, `coerceInputValues`, fence stripping, brace matching);
+non-model iterations (only the `failedActionsCount >= 2` skip, which is a
+consequence of the failure, not its cause).
+
+**Fixed:** a `<queries>` MAIN/LAUNCHER intent in `AndroidManifest.xml`.
+Chosen over `QUERY_ALL_PACKAGES` because it is exactly the question
+`open_app` asks, needs no Play policy declaration, and does not expose
+apps with no launcher entry.
+
+**Also fixed:** `AuraAccessibilityService.failureReason` replaced the one
+generic `last_action_error` sentence. `"Action open_app on null failed.
+Target not clickable or not found."` was false twice over - `open_app`
+has no target node - and named neither the package tried nor why it did
+not launch, leaving the model nothing to correct. That is the remaining
+way a genuinely wrong package name burns ten steps. Non-`open_app`
+actions keep the original sentence verbatim, because those really do
+reference a node from the tree the model was just shown.
+
+**Regression test:** `OpenAppLaunchabilityTest` (5 tests). Verified to
+fail before the fix - `AssertionError` at the `<queries>` assertion with
+the block removed - not merely to pass after it.
+
+**Build change that the test needed to be real:** `app/build.gradle.kts`
+declares `src/main/AndroidManifest.xml` as an input to `Test` tasks. The
+test reads the manifest at runtime, which Gradle cannot see, so deleting
+the `<queries>` block and re-running reported `BUILD SUCCESSFUL` from
+cache. A regression test that silently does not run when the file it
+guards is edited is worse than none, because the green build is read as
+evidence.
+
+**Not done, per the mandate:** provider chain untouched, `maxSteps`
+untouched, no retries added, action schema preserved, recovery design
+preserved.
+
+**Tests:** 297 Android / 20 classes, 0 failures (was 292 / 19).
+44 backend agent tests pass; no Python file changed.
+
+**Device verification still owed:** `open_app` has been proven to fail
+for a structural reason and the structural cause is fixed, but a launch
+has not yet been observed on hardware. Install and say "mở YouTube".
+
 ## Vision production wiring (DONE, uncommitted)
 
 The one confirmed bug from the pre-test sweep, fixed: the server-side

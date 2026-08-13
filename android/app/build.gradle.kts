@@ -70,6 +70,27 @@ android {
     }
 }
 
+/*
+ * The manifest is an input to the unit tests, not just to the APK.
+ *
+ * OpenAppLaunchabilityTest asserts a property of AndroidManifest.xml -
+ * that it declares the MAIN/LAUNCHER <queries> block `open_app` needs to
+ * resolve a launch intent on Android 11+. It reads the file at runtime,
+ * which Gradle cannot see, so without this the test task stays
+ * up-to-date when the manifest changes and the assertion is skipped
+ * rather than run. That was observed: deleting the <queries> block and
+ * re-running reported BUILD SUCCESSFUL from cache.
+ *
+ * A regression test that silently does not run when the file it guards
+ * is edited is worse than no test, because the green build is read as
+ * evidence.
+ */
+tasks.withType<Test>().configureEach {
+    inputs.file(layout.projectDirectory.file("src/main/AndroidManifest.xml"))
+        .withPropertyName("androidManifest")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

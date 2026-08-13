@@ -60,4 +60,33 @@ class SafetyGuard {
 
         return true
     }
+
+    fun isAdNode(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) return false
+        val text = node.text?.toString()?.lowercase().orEmpty()
+        val desc = node.contentDescription?.toString()?.lowercase().orEmpty()
+        val adKeywords = setOf("ad", "ads", "sponsored", "promoted", "quảng cáo", "được tài trợ", "tài trợ")
+
+        if (adKeywords.any { text == it || desc == it || text.startsWith("ad ") || desc.startsWith("ad ") }) {
+            return true
+        }
+
+        var current = node.parent
+        var depth = 0
+        while (current != null && depth < 3) {
+            val pText = current.text?.toString()?.lowercase().orEmpty()
+            val pDesc = current.contentDescription?.toString()?.lowercase().orEmpty()
+            if (adKeywords.any { pText == it || pDesc == it || pText.startsWith("ad ") || pDesc.startsWith("ad ") }) {
+                current.recycle()
+                return true
+            }
+            val next = current.parent
+            current.recycle()
+            current = next
+            depth++
+        }
+
+        return false
+    }
 }
+

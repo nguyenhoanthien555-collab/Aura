@@ -353,9 +353,10 @@ class AccessibilityAgentTest {
         val submitAction = AgentAction(action = "submit")
         val clickAction = AgentAction(action = "click", nodeId = "search_button")
 
-        // Search task completes on input_text or submit
-        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", inputAction, emptyList()))
+        // Search task completes on verified input_text or submit
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", inputAction, listOf("input_text(search_edit_text, \"Minecraft\") [VERIFIED]")))
         assertTrue(AuraAccessibilityService.isSearchTaskComplete("open Chrome and search Google", submitAction, emptyList()))
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("mở YouTube và tìm Minecraft", submitAction, emptyList()))
 
         // Non-search requests do not auto-complete on search check
         assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube", inputAction, emptyList()))
@@ -364,6 +365,32 @@ class AccessibilityAgentTest {
         assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", clickAction, emptyList()))
         assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", clickAction, listOf("input_text(search_edit_text, \"Minecraft\") [VERIFIED]")))
     }
+
+    @Test
+    fun testSanitizeSearchQuery() {
+        assertEquals("Google", AuraActionExecutor.sanitizeSearchQuery("search Google"))
+        assertEquals("Google", AuraActionExecutor.sanitizeSearchQuery("search for Google"))
+        assertEquals("Minecraft", AuraActionExecutor.sanitizeSearchQuery("tìm Minecraft"))
+        assertEquals("lofi music", AuraActionExecutor.sanitizeSearchQuery("tìm lofi music"))
+    }
+
+    @Test
+    fun testSearchAndPickTaskCompletion() {
+        val inputAction = AgentAction(action = "input_text", nodeId = "search_field", text = "lofi music")
+        val resultClick = AgentAction(action = "click", nodeId = "first_organic_result")
+
+        val searchAndPickReq = "open YouTube and search for lofi music and pick the first result"
+        val vietnamesePickReq = "mở YouTube, tìm lofi music và chọn bài hát đầu tiên không phải quảng cáo"
+
+        // Search submission does NOT complete a search + pick task
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete(searchAndPickReq, inputAction, listOf("input_text(search_field, \"lofi music\") [VERIFIED]")))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete(vietnamesePickReq, inputAction, listOf("input_text(search_field, \"lofi music\") [VERIFIED]")))
+
+        // Result selection completes search + pick task immediately
+        assertTrue(AuraAccessibilityService.isSelectionTaskComplete(searchAndPickReq, resultClick, listOf("input_text(search_field, \"lofi music\") [VERIFIED]")))
+        assertTrue(AuraAccessibilityService.isSelectionTaskComplete(vietnamesePickReq, resultClick, listOf("input_text(search_field, \"lofi music\") [VERIFIED]")))
+    }
 }
+
 
 

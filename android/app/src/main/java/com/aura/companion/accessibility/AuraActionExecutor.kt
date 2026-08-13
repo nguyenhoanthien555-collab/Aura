@@ -204,7 +204,8 @@ class AuraActionExecutor(
             }
             "input_text" -> {
                 val node = resolvedNode ?: return false
-                val text = action.text ?: return false
+                val rawText = action.text ?: return false
+                val text = sanitizeSearchQuery(rawText)
                 val arguments = Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
                 }
@@ -218,6 +219,7 @@ class AuraActionExecutor(
                 }
                 setSuccess
             }
+
             "submit" -> {
                 val node = resolvedNode ?: service.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                 val ok = tryPerformImeSubmit(node, service)
@@ -467,5 +469,22 @@ class AuraActionExecutor(
 
         return false
     }
+
+    companion object {
+        fun sanitizeSearchQuery(rawText: String?): String {
+            if (rawText.isNullOrBlank()) return ""
+            var text = rawText.trim()
+            val lower = text.lowercase()
+            val prefixes = listOf("search for ", "search ", "tìm kiếm ", "tìm ")
+            for (prefix in prefixes) {
+                if (lower.startsWith(prefix) && text.length > prefix.length) {
+                    text = text.substring(prefix.length).trim()
+                    break
+                }
+            }
+            return text
+        }
+    }
 }
+
 
