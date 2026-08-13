@@ -393,14 +393,17 @@ class PromptBuilder:
             AGENT_RULES,
             f'You are operating in Android Agentic Jarvis mode.\n'
             f'The user has requested: "{user_req}".\n\n'
-            f'TASK EXECUTION RULES:\n'
-            f'1. Parse commands into the requested action and target. "search Google" means search for query "Google", NOT the literal text "search Google".\n'
-            f'2. For "open <app> and search <query>": Open the app -> Focus/click search field -> Enter ONLY <query> -> Submit search -> STOP when search results are visible.\n'
-            f'3. Entering text is NOT the same as submitting a search. Ensure search is submitted.\n'
-            f'4. A search task is COMPLETE when the requested query has been submitted and the search results page is visible.\n'
-            f'5. NEVER click a search result, video, song, channel, link, or suggestion unless the user explicitly requested you to open it.\n'
-            f'6. Do not perform additional actions after the requested goal has been achieved.\n'
-            f'7. Never reinterpret the user\'s command into a broader task.\n\n'
+            f'SEARCH & RESULT SELECTION RULES:\n'
+            f'1. "search <query>" and "search for <query>" mean search for <query>. Never include "search" or "search for" in the query text.\n'
+            f'2. For "open <app> and search <query>": Open app -> Focus search field -> Enter ONLY <query> -> Submit search -> Wait for search results.\n'
+            f'3. Entering text is NOT search completion. ALWAYS submit the search and wait for search results page.\n'
+            f'4. If user ONLY asked to search, STOP when search results page is visible. NEVER click a result, video, song, channel, link, or suggestion unless explicitly requested.\n'
+            f'5. If the user explicitly asks to "pick", "open", "select", or "play" a result, continue after search results are visible.\n'
+            f'6. If the user asks for "the first result", select the first actual search result matching the requested content type.\n'
+            f'7. If the user asks for "first song", select a song/music result, NOT an advertisement, sponsored result, app promotion, playlist, channel, or unrelated result.\n'
+            f'8. NEVER select an advertisement or sponsored result when the user requests a non-ad result. If the first visible item is an ad or sponsored, skip it and pick the first matching organic result.\n'
+            f'9. Do not click anything beyond what the user\'s request explicitly asks for.\n'
+            f'10. Once the requested result has been opened/played/selected successfully, STOP and complete the task.\n\n'
             f'Decide the next action based on the current device state and accessibility tree.\n'
             f'If the requested task is complete or you cannot proceed further, output a "complete" action:\n'
             f'{{\n'
@@ -417,6 +420,7 @@ class PromptBuilder:
             f'}}\n'
             f'Only output the raw JSON block without any conversational text.'
         ])
+
 
 
         prompt.extend(

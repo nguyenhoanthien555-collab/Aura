@@ -645,11 +645,21 @@ class AuraAccessibilityService : AccessibilityService() {
             val isSearchReq = reqLower.contains("search") || reqLower.contains("tìm")
             if (!isSearchReq) return false
 
+            val requestsSelection = listOf(
+                "play", "select", "pick", "open first", "first song", "first result",
+                "phát", "chơi", "chọn", "nghe", "mở bài"
+            ).any { reqLower.contains(it) }
+
+            if (requestsSelection) {
+                return false
+            }
+
             val isInputOrSubmit = action.action == "input_text" || action.action == "submit"
             val hasInputOrSubmitHistory = completedActions.any { it.startsWith("input_text") || it.startsWith("submit") }
 
             return isInputOrSubmit || hasInputOrSubmitHistory
         }
+
 
         fun isRepeatedVerifiedAction(
             action: AgentAction,
