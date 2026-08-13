@@ -388,6 +388,23 @@ class AuraAccessibilityService : AccessibilityService() {
                 return ExecutionResult.Blocked
             }
 
+            // Launching an app that is ALREADY the foreground package is a
+            // visible duplicate launch. The agent loop also re-issues
+            // open_app on the next step whenever verification is slow, so
+            // without this a launch that took a moment to draw would be
+            // re-requested while it was still coming up. Succeed without
+            // calling startActivity again: the foreground check IS the
+            // verification here, there is nothing to wait for.
+            if (action.action == "open_app") {
+                val target = action.packageName?.trim().orEmpty()
+                if (target.isNotEmpty() && preFingerprint?.packageName == target) {
+                    freshNodeMap.values.forEach { it.recycle() }
+                    execRoot?.recycle()
+                    Log.d("AuraAgent", "open_app verification VERIFIED: expected=$target (already foreground, no relaunch)")
+                    return ExecutionResult.Verified
+                }
+            }
+
             // Execute the action with the resolved node
             val success = executor.executeWithNode(action, resolvedNode, resolvedNodeMeta, freshNodeMap)
 
@@ -396,22 +413,8 @@ class AuraAccessibilityService : AccessibilityService() {
             execRoot?.recycle()
 
             if (success) {
-                // --- Verify action: capture post-action state ---
-                delay(250) // Wait for UI to settle
-
-                val postRoot = rootInActiveWindow
-                val postFingerprint = if (postRoot != null) {
-                    val fp = ScreenFingerprint.capture(postRoot)
-                    postRoot.recycle()
-                    fp
-                } else {
-                    null
-                }
-
-                Log.d("AuraAgent", "Post-action state: package=${postFingerprint?.packageName} nodes=${postFingerprint?.nodeCount} hash=${postFingerprint?.contentHash}")
-
-                // Determine verification result
-                val verified = verifyStateChange(action, preFingerprint, postFingerprint)
+                // --- Verify action ---
+                val verified = verifyActionOutcome(action, preFingerprint)
                 Log.d("AuraAgent", "Action verification result=${if (verified) "VERIFIED" else "UNVERIFIED"} for ${action.action} on ${action.nodeId}")
 
                 return if (verified) ExecutionResult.Verified else ExecutionResult.Unverified
@@ -424,6 +427,59 @@ class AuraAccessibilityService : AccessibilityService() {
 
         }
         return ExecutionResult.Failed
+    }
+
+    /**
+     * Verify that [action] actually changed the UI, with the settle
+     * semantics the action needs.
+     *
+     * open_app is verified *eventually*: `startActivity` returns the moment
+     * the launch is accepted, while the accessibility window can keep
+     * reporting the previous app until the target activity draws - YouTube
+     * took ~900ms in the field, longer than the generic 250ms settle. A
+     * single immediate snapshot read "expected YouTube, got Aura", returned
+     * UNVERIFIED, and the loop re-issued the same open_app on the next step
+     * (a duplicate launch for an app that was already coming up). So
+     * open_app polls the foreground package until it IS the target, within
+     * a bounded budget; see `waitForForegroundPackage`.
+     *
+     * Every other action keeps the original single settle delay + one
+     * snapshot comparison, unchanged.
+     */
+    private suspend fun verifyActionOutcome(
+        action: AgentAction,
+        pre: ScreenFingerprint?,
+    ): Boolean {
+        if (action.action == "open_app") {
+            val target = action.packageName?.trim().orEmpty()
+            if (target.isNotEmpty()) {
+                return waitForForegroundPackage(target) {
+                    val root = rootInActiveWindow
+                    val pkg = root?.packageName?.toString()
+                    root?.recycle()
+                    pkg
+                }
+            }
+            // No target named: fall through to the generic settle + change
+            // check, which accepts any package change (verifyOpenApp's
+            // no-target branch).
+        }
+
+        // --- Generic path: wait for UI to settle, then one snapshot ---
+        delay(250)
+
+        val postRoot = rootInActiveWindow
+        val postFingerprint = if (postRoot != null) {
+            val fp = ScreenFingerprint.capture(postRoot)
+            postRoot.recycle()
+            fp
+        } else {
+            null
+        }
+
+        Log.d("AuraAgent", "Post-action state: package=${postFingerprint?.packageName} nodes=${postFingerprint?.nodeCount} hash=${postFingerprint?.contentHash}")
+
+        return verifyStateChange(action, pre, postFingerprint)
     }
 
     /**
@@ -546,6 +602,90 @@ class AuraAccessibilityService : AccessibilityService() {
                 "that package name. Send the app's exact Android package " +
                 "name - the app's visible label is not a package name - or " +
                 "reach the app another way, such as \"home\" and then a tap."
+        }
+
+        /**
+         * How long open_app may take to become the foreground package
+         * after `startActivity` returns, before verification gives up.
+         *
+         * Chosen from observed behaviour, not a guess: the target activity
+         * draws after the launch is accepted (YouTube measured ~900ms in
+         * the field), and a cold start can take longer. 2500ms is well
+         * past a normal draw while staying well inside one agent step's
+         * budget, and it is bounded - verification never waits forever.
+         */
+        const val OPEN_APP_SETTLE_TIMEOUT_MS = 2500L
+
+        /**
+         * How often the foreground package is re-sampled while waiting.
+         * 150ms keeps the wait responsive and the log readable (a full
+         * timeout is ~16 lines) without hammering the accessibility
+         * service.
+         */
+        const val OPEN_APP_SETTLE_INTERVAL_MS = 150L
+
+        /**
+         * Bounded polling until the active window reports [target].
+         *
+         * Returns success only when the target package is actually the
+         * foreground/accessibility package - never merely because
+         * `startActivity` did not throw. A transient "still the previous
+         * app" sample is waited through rather than reported as failure,
+         * so the agent loop is not sent back to re-issue the same launch.
+         *
+         * The clock and the sleep are injected (defaulting to the real
+         * clock and `delay`) so a JVM unit test can drive the timing
+         * deterministically; the service supplies the package source.
+         * Sits in the companion for the same reason `verifyOpenApp` does -
+         * the enclosing class is an AccessibilityService and cannot be
+         * constructed in a unit test.
+         */
+        suspend fun waitForForegroundPackage(
+            target: String,
+            timeoutMs: Long = OPEN_APP_SETTLE_TIMEOUT_MS,
+            intervalMs: Long = OPEN_APP_SETTLE_INTERVAL_MS,
+            now: () -> Long = System::currentTimeMillis,
+            sleep: suspend (Long) -> Unit = { delay(it) },
+            currentPackage: () -> String?,
+        ): Boolean {
+            if (target.isBlank()) return false
+
+            val start = now()
+            var attempt = 0
+            var lastPackage: String? = null
+
+            while (now() - start < timeoutMs) {
+                attempt++
+                lastPackage = currentPackage()
+                val elapsed = now() - start
+                val current = lastPackage.orEmpty()
+
+                if (current == target) {
+                    Log.d(
+                        "AuraAgent",
+                        "open_app foreground verification VERIFIED: expected=$target " +
+                            "current=$current elapsed=${elapsed}ms"
+                    )
+                    return true
+                }
+
+                Log.d(
+                    "AuraAgent",
+                    "open_app verification poll: expected=$target " +
+                        "current=${current.ifEmpty { "<none>" }} " +
+                        "attempt=$attempt elapsed=${elapsed}ms"
+                )
+
+                sleep(intervalMs)
+            }
+
+            Log.w(
+                "AuraAgent",
+                "open_app foreground verification TIMEOUT: expected=$target " +
+                    "current=${lastPackage.orEmpty().ifEmpty { "<none>" }} " +
+                    "elapsed=${now() - start}ms"
+            )
+            return false
         }
 
         /**
