@@ -10,6 +10,7 @@ from brain.personality import Personality
 from brain.context_loader import ContextLoader
 
 from brain.agent_mode import is_agent_tick, is_intent_probe
+from brain.persona import AGENT_VOICE
 
 from brain.prompt_sections import (
     ACCESSIBILITY_TREE,
@@ -21,6 +22,7 @@ from brain.prompt_sections import (
 
     SYSTEM,
     PERSONALITY,
+    PERSONA,
     CONTEXT,
     TIME,
     MEMORY,
@@ -73,6 +75,33 @@ class PromptBuilder:
             text,
         ]
 
+
+    def _build_persona(self, persona: str | None = None):
+        """
+        Who Aura is being on this turn, as a finished paragraph.
+
+        Arrives rendered from the persona layer, exactly as `style` and
+        `identity` do, so the builder never imports it and a caller with
+        no persona pays nothing. The paragraph is the per-turn part of
+        the contract: the pronoun register this conversation settled on,
+        the mode this message calls for, and the dials - the parts of
+        `prompts/personality.md` that change from turn to turn.
+
+        Sits directly under PERSONALITY, because it is that description
+        refined to this turn, and it is in the system slot so every
+        provider - including a fallback reached mid-conversation - is
+        handed the same person.
+        """
+
+        text = (persona or "").strip()
+
+        if not text:
+            return []
+
+        return [
+            PERSONA,
+            text,
+        ]
 
     def _build_contexts(self, contexts):
 
@@ -394,25 +423,25 @@ class PromptBuilder:
             f'You are operating in Android Agentic Jarvis mode.\n'
             f'The user has requested: "{user_req}".\n\n'
             f'SEARCH & RESULT SELECTION RULES:\n'
-            f'1. "search <query>" and "search for <query>" mean search for <query>. Never include "search" or "search for" in the query text.\n'
+            f'1. "search <query>", "search for <query>", and "tìm <query>" mean search for <query>. Never include "search", "search for", or "tìm" in the query text itself.\n'
             f'2. For "open <app> and search <query>": Open app -> Focus search field -> Enter ONLY <query> -> Submit search -> Wait for search results.\n'
             f'3. Entering text is NOT search completion. ALWAYS submit the search and wait for search results page.\n'
             f'4. If user ONLY asked to search, STOP when search results page is visible. NEVER click a result, video, song, channel, link, or suggestion unless explicitly requested.\n'
-            f'5. If the user explicitly asks to "pick", "open", "select", or "play" a result, continue after search results are visible.\n'
-            f'6. If the user asks for "the first result", select the first actual search result matching the requested content type.\n'
-            f'7. If the user asks for "first song", select a song/music result, NOT an advertisement, sponsored result, app promotion, playlist, channel, or unrelated result.\n'
-            f'8. NEVER select an advertisement or sponsored result when the user requests a non-ad result. If the first visible item is an ad or sponsored, skip it and pick the first matching organic result.\n'
+            f'5. If the user explicitly asks to "pick", "open", "select", or "play" a result ("chọn", "phát", "chơi"), continue after search results are visible.\n'
+            f'6. "first result" / "bài hát đầu tiên" means the first actual organic result matching the requested content type.\n'
+            f'7. "first song" means select a song/music result, NOT an advertisement, sponsored result, app promotion, playlist, channel, or unrelated result.\n'
+            f'8. NEVER select an advertisement or sponsored result when user requests a non-ad result ("not an ad", "không phải quảng cáo"). If the first visible item has "Ad", "Sponsored", "Quảng cáo", or "Được tài trợ", skip it and pick the first matching organic result.\n'
             f'9. Do not click anything beyond what the user\'s request explicitly asks for.\n'
-            f'10. Once the requested result has been opened/played/selected successfully, STOP and complete the task.\n\n'
+            f'10. Once the requested result has been opened/played/selected successfully, STOP and complete the task immediately.\n\n'
             f'Decide the next action based on the current device state and accessibility tree.\n'
             f'If the requested task is complete or you cannot proceed further, output a "complete" action:\n'
             f'{{\n'
             f'  "action": "complete",\n'
-            f'  "message": "<friendly response in Gen-Z style completing the request>"\n'
+            f'  "message": "<a short completion message {AGENT_VOICE}>"\n'
             f'}}\n'
             f'Otherwise, output exactly one action from the supported set in JSON format:\n'
             f'{{\n'
-            f'  "action": "click" | "long_click" | "input_text" | "clear_text" | "scroll" | "scroll_screen" | "back" | "home" | "open_notifications" | "open_quick_settings" | "open_app" | "focus",\n'
+            f'  "action": "click" | "long_click" | "input_text" | "clear_text" | "scroll" | "scroll_screen" | "back" | "home" | "open_notifications" | "open_quick_settings" | "open_app" | "focus" | "submit",\n'
             f'  "node_id": "<node_id>",\n'
             f'  "text": "<text to input>",\n'
             f'  "direction": "up" | "down" | "left" | "right",\n'
@@ -420,6 +449,7 @@ class PromptBuilder:
             f'}}\n'
             f'Only output the raw JSON block without any conversational text.'
         ])
+
 
 
 
@@ -483,13 +513,14 @@ class PromptBuilder:
         tools: str | None = None,
         tool_results: list[str] | None = None,
         temporal: list[str] | None = None,
+        persona: str | None = None,
     ):
         """
         Render the full prompt.
 
         Section order is fixed:
-            SYSTEM, PERSONALITY, TOOLS, CONTEXT, TIME, MEMORY, VISION,
-            HISTORY, TOOL RESULTS, IDENTITY, STYLE, USER
+            SYSTEM, PERSONALITY, PERSONA, TOOLS, CONTEXT, TIME, MEMORY,
+            VISION, HISTORY, TOOL RESULTS, IDENTITY, STYLE, USER
 
         IDENTITY and STYLE sit between the history and the user's message
         on purpose: they are short restatements, put where recency makes
@@ -535,6 +566,11 @@ class PromptBuilder:
 
         prompt.extend(
             self._build_personality()
+        )
+
+
+        prompt.extend(
+            self._build_persona(persona)
         )
 
 

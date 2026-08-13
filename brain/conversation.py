@@ -50,6 +50,7 @@ from brain.ports import (
     VisionProvider,
 )
 from brain.consistency import IdentityAnchor, anchor_of
+from brain.persona import persona_of, render_of
 from brain.prompt_builder import PromptBuilder
 from brain.response import Response
 from brain.streaming import SentenceAggregator, stream_of
@@ -116,6 +117,7 @@ class ConversationManager:
         knowledge: KnowledgeProvider | None = None,
         style: ResponseStyler | None = None,
         identity: IdentityAnchor | None = None,
+        persona=None,
         tools: ToolRunner | None = None,
         clock=None,
         pipeline=None,
@@ -130,6 +132,7 @@ class ConversationManager:
         self.knowledge = knowledge
         self.style = style
         self.identity = identity
+        self.persona = persona
         self.tools = tools
 
         # Both optional, both defaulting to None so that every existing
@@ -399,6 +402,10 @@ class ConversationManager:
             vision=turn.vision,
             knowledge=turn.knowledge,
             identity=anchor_of(self.identity, len(turn.history)),
+            persona=render_of(
+                self.persona,
+                persona_of(self.persona, turn.history, turn.user_msg),
+            ),
             style=hint_of(self.style),
             context=turn.context,
             tools=self._catalogue() if offer_tools else None,

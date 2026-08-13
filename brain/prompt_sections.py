@@ -6,6 +6,13 @@ SYSTEM = "===== SYSTEM ====="
 
 PERSONALITY = "===== PERSONALITY ====="
 
+# Who Aura is being *on this turn*: the register the conversation settled
+# on, the context mode this message calls for, and the style dials. One
+# artifact, identical for every provider - see brain/persona.py for why
+# there is deliberately no per-model variant of it.
+PERSONA = "===== PERSONA ====="
+
+
 CONTEXT = "===== CONTEXT ====="
 
 # When "now" is. Two lines, above MEMORY because a recalled event dated
@@ -28,6 +35,15 @@ USER = "===== CURRENT USER MESSAGE ====="
 IDENTITY = "===== WHO YOU ARE ====="
 
 STYLE = "===== RESPONSE STYLE ====="
+
+# Reserved for a possible future revision pass - a second generation
+# asked to fix a style violation without losing the answer. No guard
+# emits it today: validation is deliberately deferred (see the brief's
+# Section 22), and a section nothing writes costs nothing but this
+# marker. If a guard is ever built, the rewrite instruction that lost
+# the answer is worse than the reply it was meant to fix, so a revision
+# must say what to keep as well as what to change.
+REVISION = "===== REVISION ====="
 
 # Tool sections, and they are two sections for a reason. The catalogue is
 # an instruction - what may be asked for, and how to ask - so it belongs

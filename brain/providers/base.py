@@ -44,6 +44,7 @@ def split_prompt(prompt: str) -> tuple[str, str]:
     system_headers = {
         "===== SYSTEM =====",
         "===== PERSONALITY =====",
+        "===== PERSONA =====",
         "===== WHO YOU ARE =====",
         "===== RESPONSE STYLE =====",
         "===== AGENT RULES =====",
@@ -94,6 +95,7 @@ def split_prompt_to_messages(prompt: str):
     system_headers = {
         "===== SYSTEM =====",
         "===== PERSONALITY =====",
+        "===== PERSONA =====",
         "===== WHO YOU ARE =====",
         "===== RESPONSE STYLE =====",
         "===== AGENT RULES =====",

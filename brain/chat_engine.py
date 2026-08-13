@@ -21,6 +21,7 @@ through to the conversation, which hands requests to it.
 
 from brain.consistency import IdentityAnchor, build_anchor
 from brain.conversation import ConversationManager
+from brain.persona import build_persona
 from brain.ports import (
     ConversationStore,
     EventPublisher,
@@ -49,6 +50,7 @@ class ChatEngine:
         knowledge: KnowledgeProvider | None = None,
         style: ResponseStyler | None = None,
         identity: IdentityAnchor | None = None,
+        persona=None,
         tools: ToolRunner | None = None,
         clock=None,
         pipeline=None,
@@ -84,6 +86,9 @@ class ChatEngine:
         if identity is None:
             identity = build_anchor(self._consistency_config())
 
+        if persona is None:
+            persona = build_persona(self._persona_config())
+
         self.conversation = ConversationManager(
             memory=memory,
             builder=builder,
@@ -94,6 +99,7 @@ class ChatEngine:
             knowledge=knowledge,
             style=style,
             identity=identity,
+            persona=persona,
             tools=tools,
             clock=clock,
             pipeline=pipeline,
@@ -138,6 +144,12 @@ class ChatEngine:
         """The `personality.consistency` section, or an empty one."""
 
         return cls._personality_section("consistency")
+
+    @classmethod
+    def _persona_config(cls) -> dict:
+        """The `personality.persona` section, or an empty one."""
+
+        return cls._personality_section("persona")
 
     def chat(
         self,

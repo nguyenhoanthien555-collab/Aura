@@ -219,6 +219,28 @@ DEFAULT_CONFIG = {
             # not flavour.
             "anchor": "",
         },
+
+        # The per-turn persona contract: which pronoun register this
+        # conversation is in, which context mode this message calls for,
+        # and how far the humour/brainrot dials are turned. Derived from
+        # the conversation by brain/persona.py, never stored, so a
+        # provider fallback is handed the same person the primary would
+        # have been.
+        "persona": {
+            "enabled": True,
+
+            # Pin one pronoun pair instead of deriving it from the
+            # conversation. Empty derives it - the shipped behaviour.
+            # Valid: "tui_bro", "cau_to", "minh_ban", "sparse".
+            "pronoun_style": "",
+
+            # Optional ceilings on the humour/brainrot dials, 0.0-1.0.
+            # Each mode sets its own dials; a value here caps the dial
+            # in every mode. Omit both for no cap. A "brainrot: 0.0"
+            # means brainrot off everywhere, including EXCITED mode.
+            # "humor": "",
+            # "brainrot": "",
+        },
     },
 
     "voice": {

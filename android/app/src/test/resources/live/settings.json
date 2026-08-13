@@ -103,6 +103,10 @@
         "contradiction_after": 20,
         "enabled": true
       },
+      "persona": {
+        "enabled": true,
+        "pronoun_style": ""
+      },
       "style": {
         "avoid_repeats": 3,
         "enabled": true,
