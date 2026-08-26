@@ -91,11 +91,13 @@ fun NotificationsSection(
                 subtitle = "Keep a messenger-style bubble over other apps (Phase 3)",
                 icon = Icons.Filled.NotificationsActive, // TODO: ChatBubble icon
                 checked = canDrawOverlays,
-                onCheckedChange = { _ ->
-                    if (!canDrawOverlays) {
+                onCheckedChange = { isChecked ->
+                    if (isChecked && !canDrawOverlays) {
                         onOpenOverlaySettings()
+                    } else if (isChecked) {
+                        context.startService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
                     } else {
-                        // TODO: Stop FloatingChatService
+                        context.stopService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
                     }
                 },
             )

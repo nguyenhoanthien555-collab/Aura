@@ -17,11 +17,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -102,16 +105,36 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
             
             setContent {
                 AuraTheme {
-                    FloatingBubbleUI(
-                        onDrag = { dx, dy ->
-                            params.x += dx.toInt()
-                            params.y += dy.toInt()
-                            windowManager.updateViewLayout(this, params)
-                        },
-                        onClick = {
-                            // TODO: Open Mini Chat or launch App
-                        }
-                    )
+                    var isExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
+
+                    if (isExpanded) {
+                        // Update window params for Mini Chat
+                        params.width = WindowManager.LayoutParams.MATCH_PARENT
+                        params.height = 1000 // Fixed height for mini chat, or calculate DP
+                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                        windowManager.updateViewLayout(this, params)
+                        
+                        MiniChatUI(
+                            onClose = { 
+                                isExpanded = false 
+                                params.width = WindowManager.LayoutParams.WRAP_CONTENT
+                                params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                                windowManager.updateViewLayout(this, params)
+                            }
+                        )
+                    } else {
+                        FloatingBubbleUI(
+                            onDrag = { dx, dy ->
+                                params.x += dx.toInt()
+                                params.y += dy.toInt()
+                                windowManager.updateViewLayout(this, params)
+                            },
+                            onClick = {
+                                isExpanded = true
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -148,6 +171,30 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+}
+
+@Composable
+fun MiniChatUI(onClose: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .padding(16.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        androidx.compose.foundation.layout.Column {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+            ) {
+                androidx.compose.material3.Text("Aura Mini", style = MaterialTheme.typography.titleMedium)
+                androidx.compose.material3.IconButton(onClick = onClose) {
+                    Icon(androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Close")
+                }
+            }
+            androidx.compose.material3.Text("Mini chat coming soon in Phase 4!", color = Color.Gray)
+        }
+    }
 }
 
 @Composable
