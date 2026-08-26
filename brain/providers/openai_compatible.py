@@ -199,12 +199,14 @@ class OpenAICompatibleProvider(HttpChatProvider):
                         wire_messages.append({
                             "role": "tool",
                             "tool_call_id": match_id or "call_0",
+                            "name": env.get("tool", "unknown"),
                             "content": json.dumps(env, ensure_ascii=False),
                         })
                 else:
                     wire_messages.append({
                         "role": "tool",
                         "tool_call_id": m.get("tool_call_id") or "call_0",
+                        "name": m.get("name", "unknown") if hasattr(m, "get") else "unknown",
                         "content": content_str,
                     })
             elif role == "assistant" and m.get("tool_calls"):
