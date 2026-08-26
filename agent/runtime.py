@@ -432,16 +432,22 @@ class AgentRuntime:
         for request in turn.tool_calls:
             call_id = new_tool_call_id()
             assigned.append((call_id, request))
-            raw_calls.append({
-                "id": f"{call_id}|{request.call_id}",
-                "type": "function",
-                "function": {
-                    "name": request.name,
-                    "arguments": json.dumps(
-                        request.arguments, ensure_ascii=False
-                    ),
-                },
-            })
+            
+            if request.raw:
+                call_obj = request.raw.copy()
+                call_obj["id"] = f"{call_id}|{request.call_id}"
+                raw_calls.append(call_obj)
+            else:
+                raw_calls.append({
+                    "id": f"{call_id}|{request.call_id}",
+                    "type": "function",
+                    "function": {
+                        "name": request.name,
+                        "arguments": json.dumps(
+                            request.arguments, ensure_ascii=False
+                        ),
+                    },
+                })
 
         run.tool_call_count += len(assigned)
         # Deliberately NO reset of consecutive_failures here: it is what

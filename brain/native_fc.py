@@ -32,6 +32,7 @@ class ToolCallRequest:
     call_id: str
     name: str
     arguments: dict = field(default_factory=dict)
+    raw: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,9 @@ def parse_tool_call(raw_call: dict) -> ToolCallRequest | None:
     else:
         arguments = {}
 
-    return ToolCallRequest(call_id=call_id, name=name, arguments=arguments)
+    return ToolCallRequest(
+        call_id=call_id, name=name, arguments=arguments, raw=raw_call
+    )
 
 
 def extract_turn(message: dict) -> ModelTurn:

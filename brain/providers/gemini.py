@@ -214,11 +214,26 @@ class GeminiProvider(BaseProvider):
         for m in messages:
             role = m.get("role")
             if role == "tool":
-                wire_messages.append({
-                    "role": "tool",
-                    "tool_call_id": m.get("tool_call_id") or "call_0",
-                    "content": str(m.get("content", "")),
-                })
+                import json
+                content_str = str(m.get("content", ""))
+                try:
+                    content_obj = json.loads(content_str)
+                except Exception:
+                    content_obj = None
+
+                if isinstance(content_obj, list):
+                    for env in content_obj:
+                        wire_messages.append({
+                            "role": "function",
+                            "name": env.get("tool", "unknown"),
+                            "content": json.dumps(env, ensure_ascii=False),
+                        })
+                else:
+                    wire_messages.append({
+                        "role": "function",
+                        "name": m.get("name", "unknown") if hasattr(m, "get") else "unknown",
+                        "content": content_str,
+                    })
             elif role == "assistant" and m.get("tool_calls"):
                 wire_messages.append({
                     "role": "assistant",
@@ -244,6 +259,9 @@ class GeminiProvider(BaseProvider):
             "User-Agent": "Aura/1.0",
             "Connection": "close",
         }
+        
+        print("GEMINI PAYLOAD:")
+        print(json.dumps(payload, indent=2))
 
         req = urllib.request.Request(
             url,
@@ -256,6 +274,9 @@ class GeminiProvider(BaseProvider):
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 return extract_turn(data["choices"][0]["message"])
+        except urllib.error.HTTPError as e:
+            print("GEMINI HTTP ERROR BODY:", e.read().decode("utf-8"))
+            self._raise_cloud_error(e)
         except Exception as error:
             self._raise_cloud_error(error)
 
