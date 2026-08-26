@@ -25,7 +25,7 @@ written for a person holding a phone, and they contain no exception text
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from core.credentials import (
@@ -94,9 +94,13 @@ async def get_settings(token: str = Depends(verify_token)):
 
 
 @router.patch("/settings")
-async def patch_settings(body: SettingsPatch, token: str = Depends(verify_token)):
+async def update_settings(
+    body: SettingsPatch,
+    background_tasks: BackgroundTasks,
+    token: str = Depends(verify_token)
+):
     """
-    Change settings. All-or-nothing, and honest about what took effect.
+    Update configuration overrides.
 
     A 422 means nothing changed and the message names the offending
     setting. A 200 reports `applied` (live now) separately from
@@ -123,12 +127,33 @@ async def patch_settings(body: SettingsPatch, token: str = Depends(verify_token)
 
     report["effective"] = runtime.settings_service.effective()
 
+    # Automatically restart the Python process in-place if any change requires it.
+    # This prevents the user from having to manually restart the service on platforms
+    # like Render, which would wipe the ephemeral disk and lose the settings just saved.
+    if report.get("needs_restart"):
+        import os
+        import sys
+        import asyncio
+
+        async def _do_restart():
+            await asyncio.sleep(1.0)
+            logger.info("Performing in-place restart to apply settings...")
+            try:
+                # sys.argv[0] is the script path (e.g., uvicorn), so this runs `python /path/to/uvicorn ...`
+                os.execv(sys.executable, ["python"] + sys.argv)
+            except Exception as e:
+                logger.error("Failed to execv: %s", e)
+
+        background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
+
     return report
 
 
 @router.post("/settings/reset")
 async def reset_settings(
-    body: Optional[Dict[str, Any]] = None, token: str = Depends(verify_token)
+    background_tasks: BackgroundTasks,
+    body: Optional[Dict[str, Any]] = None, 
+    token: str = Depends(verify_token)
 ):
     """
     Drop overrides and fall back to config.yaml.
@@ -165,10 +190,26 @@ async def reset_settings(
         # back to what config.yaml says rather than staying on the model
         # the user just reverted.
         runtime.settings_service._reapply_llm()
+        
+    needs_restart = bool(removed)
+    if needs_restart:
+        import os
+        import sys
+        import asyncio
+
+        async def _do_restart():
+            await asyncio.sleep(1.0)
+            logger.info("Performing in-place restart to apply settings reset...")
+            try:
+                os.execv(sys.executable, ["python"] + sys.argv)
+            except Exception as e:
+                logger.error("Failed to execv: %s", e)
+
+        background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
 
     return {
         "reset": removed,
-        "needs_restart": bool(removed),
+        "needs_restart": needs_restart,
         "message": "Settings reverted to the server configuration",
     }
 
