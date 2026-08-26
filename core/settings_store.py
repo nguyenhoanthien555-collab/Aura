@@ -43,12 +43,13 @@ from threading import RLock
 
 from core.config import deep_merge
 from core.logger import logger
+from core.paths import DATA_DIR
 from core.temporal import canonical_timezone_name, resolve_timezone
 
 
 # Read as a module global at construction time, so a test can redirect it
 # (see `tests/conftest.py`) without every caller having to pass a path.
-SETTINGS_PATH = Path("data") / "settings.json"
+SETTINGS_PATH = DATA_DIR / "settings.json"
 
 
 class SettingsError(ValueError):

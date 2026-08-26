@@ -266,6 +266,24 @@ class ChatViewModel(
     // Sending
     // ------------------------------------------------------------------
 
+    fun react(messageId: String, emoji: String) {
+        // Optimistically update the UI
+        _state.update { current ->
+            val updatedMessages = current.messages.map { msg ->
+                if (msg.id == messageId) {
+                    val newReactions = msg.reactions.toMutableMap()
+                    newReactions["user"] = emoji // For now, simple user reaction override
+                    msg.copy(reactions = newReactions)
+                } else {
+                    msg
+                }
+            }
+            current.copy(messages = updatedMessages)
+        }
+        
+        // TODO: Call backend to persist reaction
+    }
+
     fun send() {
 
         val text = _state.value.draft.trim()
@@ -314,7 +332,7 @@ class ChatViewModel(
             // turn and used by whichever transport answers.
             val context = conversationContext()
 
-            val streamed = streamReply(text, slowNotice, context)
+            val streamed = streamReply(text, slowNotice, outgoing.id, context)
 
             // Falling back rather than reporting a failure: a proxy that
             // will not carry a WebSocket is a deployment property, not
@@ -443,6 +461,7 @@ class ChatViewModel(
     private suspend fun streamReply(
         message: String,
         slowNotice: Job,
+        outgoingId: String,
         context: JsonObject = JsonObject(emptyMap()),
     ): Boolean {
 
@@ -458,6 +477,20 @@ class ChatViewModel(
 
                 is StreamEvent.Started -> {
                     slowNotice.cancel()
+                }
+
+                is StreamEvent.Reaction -> {
+                    _state.update { current ->
+                        current.copy(
+                            messages = current.messages.map {
+                                if (it.id == outgoingId) {
+                                    val newReactions = it.reactions.toMutableMap()
+                                    newReactions["aura"] = event.emoji
+                                    it.copy(reactions = newReactions)
+                                } else it
+                            }
+                        )
+                    }
                 }
 
                 is StreamEvent.Chunk -> {

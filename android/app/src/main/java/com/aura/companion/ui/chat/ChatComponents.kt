@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -37,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -73,11 +75,13 @@ import androidx.compose.ui.platform.LocalContext
 fun MessageBubble(
     message: ChatMessage,
     onRetry: () -> Unit,
+    onReact: (String) -> Unit,
 ) {
 
     val fromUser = message.author == ChatMessage.Author.USER
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -97,8 +101,7 @@ fun MessageBubble(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onLongPress = {
-                                clipboardManager.setText(buildAnnotatedString { append(message.text) })
-                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                showMenu = true
                             }
                         )
                     },
@@ -114,6 +117,36 @@ fun MessageBubble(
                     },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
+                
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    // Reaction Bar
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        listOf("❤️", "👍", "😂", "😲", "😢", "🙏").forEach { emoji ->
+                            Text(
+                                text = emoji,
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.clickable {
+                                    showMenu = false
+                                    onReact(emoji)
+                                }
+                            )
+                        }
+                    }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Copy text") },
+                        onClick = {
+                            showMenu = false
+                            clipboardManager.setText(buildAnnotatedString { append(message.text) })
+                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
             }
             
             if (message.reactions.isNotEmpty()) {

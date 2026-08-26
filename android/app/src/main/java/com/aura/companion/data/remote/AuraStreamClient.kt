@@ -205,6 +205,12 @@ class AuraStreamClient(
                 firstChunkSeconds = num("first_chunk_seconds"),
             )
 
+            "reaction" -> StreamEvent.Reaction(
+                sessionId = str("session_id").orEmpty(),
+                messageId = str("message_id").orEmpty(),
+                emoji = str("emoji").orEmpty()
+            )
+
             // The server names the reason: invalid_json, empty_message,
             // message_too_long, stream_failed, internal_error. They are
             // mapped rather than shown, because they are protocol
@@ -279,6 +285,12 @@ sealed interface StreamEvent {
     data class Chunk(
         val text: String,
         val index: Int,
+    ) : StreamEvent
+
+    data class Reaction(
+        val sessionId: String,
+        val messageId: String,
+        val emoji: String,
     ) : StreamEvent
 
     /**

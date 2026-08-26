@@ -57,6 +57,7 @@ from pathlib import Path
 from threading import RLock
 
 from core.logger import logger
+from core.paths import DATA_DIR
 
 
 # The environment variable each provider reads. Deliberately imported
@@ -71,7 +72,7 @@ from brain.router import PROVIDER_KEYS
 #
 # Read as a module global at construction time, so a test can redirect it
 # (see `tests/conftest.py`) without every caller having to pass a path.
-CREDENTIAL_PATH = Path("data") / "credentials.enc"
+CREDENTIAL_PATH = DATA_DIR / "credentials.enc"
 
 # Read in this order. `AURA_SECRET_KEY` is the dedicated one and is what
 # an operator should set. The auth token is the fallback because it is

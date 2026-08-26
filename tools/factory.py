@@ -55,8 +55,10 @@ def _builtin_tools(
     tools: list[ToolProtocol] = []
 
     from tools.builtins.clock import CurrentTimeTool
+    from tools.builtins.chat import ReactToMessageTool
 
     tools.append(CurrentTimeTool())
+    tools.append(ReactToMessageTool())
 
     roots = _list_setting(config, "allowed_paths")
 

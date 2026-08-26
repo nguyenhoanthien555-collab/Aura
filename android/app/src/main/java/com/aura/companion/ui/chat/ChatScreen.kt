@@ -127,6 +127,7 @@ fun ChatScreen(
                             MessageBubble(
                                 message = message,
                                 onRetry = { viewModel.retry(message.id) },
+                                onReact = { emoji -> viewModel.react(message.id, emoji) }
                             )
                         }
                     }

@@ -138,6 +138,15 @@ async def chat_stream(
         })
 
         try:
+            import queue
+            reaction_queue = queue.Queue()
+            
+            def on_reaction(event):
+                if event.get("session_id") == session_id:
+                    reaction_queue.put(event.get("emoji"))
+            
+            runtime.bus.subscribe("chat.reaction", on_reaction)
+
             fragments = runtime.chat_stream(
                 message,
                 session_id=session_id,
@@ -146,6 +155,18 @@ async def chat_stream(
             )
 
             async for fragment in iterate_in_threadpool(fragments):
+                
+                while not reaction_queue.empty():
+                    try:
+                        emoji = reaction_queue.get_nowait()
+                        await websocket.send_json({
+                            "type": "reaction",
+                            "session_id": session_id,
+                            "message_id": message_id,
+                            "emoji": emoji,
+                        })
+                    except queue.Empty:
+                        break
 
                 if not fragment:
                     continue
@@ -162,6 +183,19 @@ async def chat_stream(
                 })
 
                 chunk_index += 1
+                
+            # One final drain in case the tool was the last thing to execute
+            while not reaction_queue.empty():
+                try:
+                    emoji = reaction_queue.get_nowait()
+                    await websocket.send_json({
+                        "type": "reaction",
+                        "session_id": session_id,
+                        "message_id": message_id,
+                        "emoji": emoji,
+                    })
+                except queue.Empty:
+                    break
 
             finished_at = time.time()
 
@@ -213,6 +247,8 @@ async def chat_stream(
                 frame["retry_after"] = failure.retry_after
 
             await websocket.send_json(frame)
+        finally:
+            runtime.bus.unsubscribe("chat.reaction", on_reaction)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected (session=%s)", session_id)

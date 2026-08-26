@@ -222,6 +222,7 @@ tools:
   allowed:
     - current_time
     - remember
+    - react_to_message
 
   # Which risk levels run without asking a human. SAFE only. A SENSITIVE
   # or DANGEROUS call needs a live yes from the confirmation handler, and
