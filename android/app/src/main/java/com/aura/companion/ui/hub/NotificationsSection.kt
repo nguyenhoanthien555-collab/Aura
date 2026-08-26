@@ -58,6 +58,7 @@ fun NotificationsSection(
     viewModel: HubViewModel,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -65,6 +66,7 @@ fun NotificationsSection(
     // Read fresh, not remembered: the user leaves to grant the permission
     // and returns, and a cached answer would still say denied.
     val permissions = DevicePermissions.read(context)
+    val canDrawOverlays = android.provider.Settings.canDrawOverlays(context)
 
     val companion = state.server.config.server.companion
 
@@ -83,6 +85,22 @@ fun NotificationsSection(
             title = "This device",
             subtitle = "Stored on the phone. Other devices are unaffected.",
         ) {
+
+            ToggleRow(
+                title = "Floating Chat Bubble",
+                subtitle = "Keep a messenger-style bubble over other apps (Phase 3)",
+                icon = Icons.Filled.NotificationsActive, // TODO: ChatBubble icon
+                checked = canDrawOverlays,
+                onCheckedChange = { _ ->
+                    if (!canDrawOverlays) {
+                        onOpenOverlaySettings()
+                    } else {
+                        // TODO: Stop FloatingChatService
+                    }
+                },
+            )
+
+            RowDivider()
 
             ToggleRow(
                 title = "Companion notifications",

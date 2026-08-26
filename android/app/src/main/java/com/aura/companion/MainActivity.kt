@@ -189,6 +189,7 @@ class MainActivity : ComponentActivity() {
                             viewModel = hubViewModel,
                             onRequestPermission = ::askForNotifications,
                             onOpenSystemSettings = ::openNotificationSettings,
+                            onOpenOverlaySettings = ::openOverlaySettings,
                             onBack = back,
                         )
                     }
@@ -276,6 +277,17 @@ class MainActivity : ComponentActivity() {
     private fun openAccessibilitySettings() {
         runCatching {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+    }
+
+    private fun openOverlaySettings() {
+        runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:$packageName")
+                )
+            )
         }
     }
 
