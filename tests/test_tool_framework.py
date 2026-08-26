@@ -26,6 +26,7 @@ from tools.base import (
     ToolProtocol,
     ToolRisk,
     describe_tool,
+    fail,
     ok,
 )
 from tools.executor import ToolExecutor, ToolPolicy
@@ -639,3 +640,186 @@ def test_the_default_config_ships_a_tool_timeout():
     assert DEFAULT_CONFIG["tools"]["timeout"] > 0
 
 
+
+
+# ----------------------------------------------------------------------
+# verify() - Section 11 at the tool layer
+#
+# tests/test_tools.py proves RememberTool's own postcondition. These
+# prove the *mechanism*: the executor consults a tool's verify() after a
+# successful execute() and downgrades a success the postcondition does
+# not support, because "the call returned without throwing" is exactly
+# what Section 11 forbids trusting on its own.
+# ----------------------------------------------------------------------
+
+class VerifyingTool(Tool):
+    """
+    execute() always claims success; verify() returns whatever it was
+    handed. The general shape Section 11 is about - a call that returned
+    without raising, and a postcondition that may or may not hold.
+    """
+
+    name = "verifying"
+    description = "Claims success; its postcondition is configurable"
+    risk = ToolRisk.SAFE
+
+    def __init__(self, verdict):
+        self._verdict = verdict
+        self.verify_calls: list[dict] = []
+
+    def execute(self, **arguments):
+        return ok("execute said ok", tool=self.name)
+
+    def verify(self, **arguments):
+        self.verify_calls.append(dict(arguments))
+        return self._verdict
+
+
+class FailingThenVerifyingTool(Tool):
+    """execute() fails; verify() would pass if it were ever asked."""
+
+    name = "fails_first"
+    description = "Fails in execute; records whether verify was consulted"
+    risk = ToolRisk.SAFE
+
+    def __init__(self):
+        self.verify_called = False
+
+    def execute(self, **arguments):
+        return fail("execute failed", tool=self.name)
+
+    def verify(self, **arguments):
+        self.verify_called = True
+        return ok(tool=self.name)
+
+
+class RaisingVerifyTool(Tool):
+    """execute() succeeds; verify() cannot complete."""
+
+    name = "verify_raises"
+    description = "Succeeds, then its verify blows up"
+    risk = ToolRisk.SAFE
+
+    def execute(self, **arguments):
+        return ok("done", tool=self.name)
+
+    def verify(self, **arguments):
+        raise RuntimeError("the database is gone")
+
+
+def test_a_passing_verify_keeps_the_execute_result():
+    """
+    The postcondition holds, so nothing is downgraded - and the richer
+    line execute() wrote is what survives, not the verify's, because the
+    caller wants to hear what happened, not that a check passed.
+    """
+
+    tool = VerifyingTool(ok("verify said ok", tool="verifying"))
+    result = executor_for(tool).execute("verifying")
+
+    assert result.ok
+    assert result.output == "execute said ok"
+
+
+def test_a_failing_verify_downgrades_a_claimed_success():
+    """
+    The whole point. execute() returned ok; the postcondition does not
+    hold; the caller is told it failed, in the verify's words.
+    """
+
+    tool = VerifyingTool(fail("the window never opened", tool="verifying"))
+    result = executor_for(tool).execute("verifying")
+
+    assert not result.ok
+    assert "the window never opened" in result.error
+
+
+def test_verify_is_handed_the_arguments():
+    """
+    verify() re-asks the postcondition from the same arguments execute()
+    got, exactly as the device re-checks expected-package against the
+    foreground. It cannot do that without them.
+    """
+
+    tool = VerifyingTool(ok(tool="verifying"))
+
+    executor_for(tool).execute("verifying", {"target": "chrome"})
+
+    assert tool.verify_calls == [{"target": "chrome"}]
+
+
+def test_a_tool_without_verify_is_unaffected():
+    """
+    Optional by absence. A tool that never heard of verify() is verified
+    by its own execute() and nothing more - the Protocol stays three
+    members wide.
+    """
+
+    tool = StructuralTool()
+    result = executor_for(tool).execute("structural")
+
+    assert result.ok
+    assert result.output == "ran"
+
+
+def test_verify_is_not_consulted_after_a_failure():
+    """
+    There is no success to second-guess on a call that already failed,
+    and a verify() run against a failed side effect would be checking a
+    postcondition that was never meant to hold. It must not even be
+    called.
+    """
+
+    tool = FailingThenVerifyingTool()
+    result = executor_for(tool).execute("fails_first")
+
+    assert not result.ok
+    assert tool.verify_called is False
+
+
+def test_a_verify_that_raises_fails_closed():
+    """
+    Section 11 again, one level up: a verify() that raised gives exactly
+    "it ran without throwing" - for the verify. That is not confirmation,
+    so the result is reported unverified rather than trusted.
+    """
+
+    result = executor_for(RaisingVerifyTool()).execute("verify_raises")
+
+    assert not result.ok
+    assert "verify" in result.error.lower()
+
+
+def test_a_verify_returning_none_asserts_no_postcondition():
+    """
+    None is "I have nothing to check here", not "it failed". The result
+    execute() produced stands.
+    """
+
+    tool = VerifyingTool(None)
+    result = executor_for(tool).execute("verifying")
+
+    assert result.ok
+    assert result.output == "execute said ok"
+
+
+def test_a_failing_verify_reaches_the_bus_as_a_failure():
+    """
+    A downgrade is a real failure, so it is as visible on the bus as any
+    other - a watcher must not see ToolCompletedEvent(ok=True) for a call
+    the postcondition rejected.
+    """
+
+    bus = EventBus()
+    seen: list[ToolCompletedEvent] = []
+    bus.subscribe(ToolCompletedEvent, seen.append)
+
+    tool = VerifyingTool(fail("postcondition not met", tool="verifying"))
+    ToolExecutor(
+        registry=ToolRegistry([tool]),
+        policy=ToolPolicy(enabled=True, allowed=frozenset({"verifying"})),
+        events=bus,
+    ).execute("verifying")
+
+    assert len(seen) == 1
+    assert seen[0].ok is False

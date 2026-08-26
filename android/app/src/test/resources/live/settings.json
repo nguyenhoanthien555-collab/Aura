@@ -2,6 +2,8 @@
   "configurable": [
     "llm.anthropic_model",
     "llm.cerebras_model",
+    "llm.custom_base_url",
+    "llm.custom_model",
     "llm.deepseek_model",
     "llm.fallback_model",
     "llm.fallback_providers",
@@ -13,6 +15,11 @@
     "llm.openai_model",
     "llm.provider",
     "llm.qwen_model",
+    "llm.task_models.coding",
+    "llm.task_models.fast_response",
+    "llm.task_models.long_context",
+    "llm.task_models.reasoning",
+    "llm.task_models.tool_planning",
     "llm.temperature",
     "llm.timeout",
     "llm.xai_model",
@@ -27,15 +34,25 @@
     "proactive.max_per_day",
     "proactive.quiet_hours",
     "proactive.similarity_threshold",
+    "server.companion.cooldown_seconds",
+    "server.companion.duplicate_window_seconds",
     "server.companion.enabled",
+    "server.companion.max_per_hour",
+    "server.companion.quiet_hours",
+    "server.companion.relevance_threshold",
+    "server.companion.suppress_after_chat_seconds",
     "server.screen.enabled",
     "server.screen.min_interval",
+    "temporal.timezone",
     "tools.auto_approve",
     "tools.enabled",
     "tools.timeout",
+    "vision.capture_screen",
     "vision.cloud_model",
     "vision.enabled",
+    "vision.min_interval",
     "vision.ollama_model",
+    "vision.send_screen_to_cloud",
     "voice.stt.enabled",
     "voice.tts.enabled",
     "voice.tts.playback",
@@ -59,6 +76,8 @@
     "llm": {
       "anthropic_model": "claude-sonnet-5",
       "cerebras_model": "llama-3.3-70b",
+      "custom_base_url": "",
+      "custom_model": "",
       "deepseek_model": "deepseek-chat",
       "fallback_model": "openrouter/free",
       "fallback_provider": "",
@@ -75,6 +94,13 @@
       "openai_model": "gpt-5.1",
       "provider": "gemini",
       "qwen_model": "qwen-plus",
+      "task_models": {
+        "coding": "",
+        "fast_response": "",
+        "long_context": "",
+        "reasoning": "",
+        "tool_planning": ""
+      },
       "temperature": 0.7,
       "thinking_level": "low",
       "timeout": 120,
@@ -141,6 +167,7 @@
     "server": {
       "companion": {
         "cooldown_seconds": 300,
+        "duplicate_window_seconds": 1800,
         "enabled": false,
         "max_per_hour": 6,
         "quiet_hours": [],
@@ -166,8 +193,10 @@
       "auto_approve": [
         "safe"
       ],
+      "commands": {},
       "enabled": true,
-      "timeout": 30.0
+      "timeout": 30.0,
+      "writable_paths": []
     },
     "vision": {
       "capture_screen": false,
@@ -181,6 +210,7 @@
       "min_interval": 2.0,
       "monitor": 1,
       "ollama_model": "qwen2.5vl:7b",
+      "send_screen_to_cloud": false,
       "timeout": 120.0
     },
     "voice": {
@@ -215,6 +245,7 @@
     "available": {
       "anthropic": "",
       "cerebras": "",
+      "custom": "",
       "deepseek": "",
       "gemini": "",
       "groq": "",

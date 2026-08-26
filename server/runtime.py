@@ -208,16 +208,28 @@ class ServerRuntime:
         """
 
         from companion.engine import build_companion_engine
+        from companion.policy import LEDGER_PATH
+        from proactive.ledger import SendLedger
 
         settings = ((config.get("server") or {}).get("companion")) or {}
 
         if not settings.get("enabled", False):
             return
 
+        # The two things that make the gate outlive the process. The ledger
+        # is what stops the hourly ceiling and the duplicate window from
+        # resetting to "never notified" on every restart (section 20), and
+        # its own file rather than the proactive one - one shared file would
+        # make each gate count the other's sends. `last_said_at` is the
+        # messages table answering "is the owner here", which is a fact Aura
+        # already records and used to keep a private, volatile second copy
+        # of (section 21).
         self.companion_engine = build_companion_engine(
             config,
             events=self.services.bus,
             llm=self.services.engine.conversation.llm,
+            ledger=SendLedger(LEDGER_PATH),
+            last_user_message=self.services.memory.last_said_at,
         )
 
         logger.info(
@@ -544,6 +556,50 @@ class ServerRuntime:
             # carry the key it was rejected for.
             return f"unavailable ({type(error).__name__})"
 
+    def _tools_label(self) -> str:
+        """
+        What the executor would currently run, as one string.
+
+        Registered is not the honest number: the catalogue filters through
+        `policy.allowed`, so a tool the owner has not named cannot run no
+        matter how registered it is. That filtered count is the one an
+        operator can act on.
+        """
+
+        tools = self.services.tools
+
+        if tools is None or not tools.policy.enabled:
+            return "disabled"
+
+        return f"{len(tools.available())} available"
+
+    def _plugins_label(self) -> str:
+        """
+        The plugin set, naming what failed.
+
+        A bare count hides exactly the case an operator needs: a plugin
+        enabled in config whose `initialize` raised. `PluginManager.status`
+        already knows which names are broken; this is where that knowledge
+        reaches the outside world - before this label existed, nothing in
+        production ever called it.
+        """
+
+        plugins = self.services.plugins
+
+        if plugins is None:
+            return "off"
+
+        label = plugins.summary()
+
+        broken = sorted(
+            name for name, state in plugins.status().items() if state == "broken"
+        )
+
+        if broken:
+            label += f" ({', '.join(broken)} failed to initialize)"
+
+        return label
+
     def health_status(self) -> dict:
         """Get health status for /api/health."""
         return {
@@ -568,6 +624,8 @@ class ServerRuntime:
                     )
                     else "disabled"
                 ),
+                "tools": self._tools_label(),
+                "plugins": self._plugins_label(),
             }
         }
 

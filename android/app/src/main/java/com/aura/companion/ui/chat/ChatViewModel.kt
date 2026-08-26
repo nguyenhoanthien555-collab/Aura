@@ -8,6 +8,7 @@ import com.aura.companion.accessibility.IntentRouter
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
+import com.aura.companion.data.chat.Transcript
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.settings.SettingsProvider
 import kotlinx.coroutines.Job
@@ -15,6 +16,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -36,14 +39,29 @@ import java.util.UUID
 class ChatViewModel(
     private val repository: AuraRepository,
     private val settings: SettingsProvider,
+    private val transcript: Transcript = Transcript.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        ChatUiState(isConfigured = settings.current.isConfigured)
+        ChatUiState(
+            messages = restored(),
+            isConfigured = settings.current.isConfigured,
+        )
     )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private var probe: Job? = null
+
+    /**
+     * What the store already holds, so a launch does not rewrite it.
+     *
+     * Seeded with the restored conversation. Without this the collector's
+     * first emission is whatever was just read, and every launch would
+     * serialise and re-encrypt two hundred messages to store exactly what was
+     * already there. `distinctUntilChanged` cannot see that, because the
+     * first value it sees is by definition not a repeat.
+     */
+    private var kept: List<ChatMessage> = _state.value.messages
 
     init {
         viewModelScope.launch {
@@ -51,7 +69,77 @@ class ChatViewModel(
                 _state.update { it.copy(isConfigured = current.isConfigured) }
             }
         }
+        keep()
         checkConnection()
+    }
+
+    // ------------------------------------------------------------------
+    // History (§15)
+    // ------------------------------------------------------------------
+
+    /**
+     * The conversation the last run left behind.
+     *
+     * In the initial state rather than loaded from `init`, so the first frame
+     * the screen ever draws already has it. Loading a moment later would show
+     * an empty conversation that filled in - which reads as a lost transcript
+     * for exactly as long as anyone notices.
+     *
+     * A read that fails is an empty conversation and nothing more. An
+     * exception here would be an app that will not open, and what the person
+     * holding the phone can do about a Keystore that has become unavailable
+     * is nothing.
+     */
+    private fun restored(): List<ChatMessage> = try {
+        transcript.read().messages.map { it.rendered() }
+    } catch (error: Exception) {
+        emptyList()
+    }
+
+    /**
+     * Keep the store in step with the screen.
+     *
+     * One collector rather than a save at each of the five places a message
+     * is added, because the five would become six and the sixth would be the
+     * one that forgot.
+     *
+     * TWO THINGS IT WILL NOT WRITE
+     * ----------------------------
+     * *A reply that is still arriving.* Excluding it from the projection is
+     * not only about the flag - it is what stops a save per token. A real
+     * store rewrites its whole file on commit, so mirroring the screen
+     * literally would mean a file write for every few characters Aura says.
+     * With the growing bubble excluded the projection is constant for the
+     * whole of a streamed reply, and the write happens once, when it settles.
+     *
+     * *Emptiness.* Every route to an empty screen other than
+     * [newConversation] is a failure of some kind - most sharply a read that
+     * threw, which leaves the screen empty while the file it could not read
+     * is still there. Writing that back would destroy the transcript rather
+     * than fail to load it, and §41 is explicit that existing data is not
+     * ours to destroy. So emptiness is only ever stored on purpose, by
+     * [newConversation] calling `clear`.
+     */
+    private fun keep() {
+        viewModelScope.launch {
+            state
+                .map { current -> current.messages.filterNot { it.streaming } }
+                .distinctUntilChanged()
+                .collect { messages ->
+
+                    if (messages.isEmpty() || messages == kept) return@collect
+
+                    try {
+                        transcript.write(messages.map { it.stored() })
+                        kept = messages
+                    } catch (error: Exception) {
+                        // The conversation on screen is unaffected, and `kept`
+                        // is left alone so the next change tries again. Losing
+                        // the transcript at the next launch is bad; losing this
+                        // turn to a failed write would be worse.
+                    }
+                }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -70,11 +158,26 @@ class ChatViewModel(
      * Start a fresh conversation.
      *
      * Clears the session id, so the server allocates a new one and does not
-     * carry the old context forward. The messages list is cleared too, but
-     * that is cosmetic - the session id is what actually matters.
+     * carry the old context forward, and clears the stored transcript.
+     *
+     * Clearing the messages was once cosmetic - the session id was the only
+     * thing that survived the tap. Since §15 it is the opposite: leaving the
+     * store alone would bring the old conversation back at the next launch,
+     * sitting under a session id the server has never heard of. This is also
+     * the only place emptiness is ever written, which is why `keep` refuses
+     * to write it and this says so explicitly.
      */
     fun newConversation() {
+
         repository.resetSession()
+
+        try {
+            transcript.clear()
+            kept = emptyList()
+        } catch (error: Exception) {
+            // Nothing to do but carry on with a fresh screen.
+        }
+
         _state.update { it.copy(messages = emptyList(), error = null) }
     }
 
@@ -463,11 +566,12 @@ class ChatViewModel(
         fun factory(
             repository: AuraRepository,
             settings: SettingsProvider,
+            transcript: Transcript = Transcript.None,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                ChatViewModel(repository, settings) as T
+                ChatViewModel(repository, settings, transcript) as T
         }
     }
 }

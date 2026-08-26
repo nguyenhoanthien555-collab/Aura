@@ -471,12 +471,33 @@ class AuraActionExecutor(
     }
 
     companion object {
+
+        /**
+         * The words that mean "search", in both languages, longest first.
+         *
+         * One list, three readers. This companion strips them off whatever
+         * query the model produced; `AuraAccessibilityService.shouldAutoComplete`
+         * asks whether a request contains one, because a request that does
+         * is asking for more than the navigation step just finished; and
+         * `brain.planner.SEARCH_VERBS` holds the same vocabulary on the
+         * server. `test_both_sides_strip_the_same_search_verbs` reads this
+         * declaration out of the source and pins it to the server's copy.
+         *
+         * Longest first is behaviour, not style: with "search" ahead of
+         * "search for", the query for "search for Minecraft" would come
+         * out as "for Minecraft".
+         *
+         * The trailing space belongs to the stripping use - a prefix is
+         * removed with its separator - and the containment use trims it
+         * off, so a request ending in a bare verb still counts.
+         */
+        val SEARCH_VERBS = listOf("search for ", "search ", "tìm kiếm ", "tìm ")
+
         fun sanitizeSearchQuery(rawText: String?): String {
             if (rawText.isNullOrBlank()) return ""
             var text = rawText.trim()
             val lower = text.lowercase()
-            val prefixes = listOf("search for ", "search ", "tìm kiếm ", "tìm ")
-            for (prefix in prefixes) {
+            for (prefix in SEARCH_VERBS) {
                 if (lower.startsWith(prefix) && text.length > prefix.length) {
                     text = text.substring(prefix.length).trim()
                     break

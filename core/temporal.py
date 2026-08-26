@@ -53,6 +53,34 @@ DATE_FORMAT = "%A %d %B %Y"
 TIME_FORMAT = "%H:%M"
 
 
+# The three spellings of UTC that resolve without a timezone database.
+# Named rather than written inline because `core/settings_store.py` has to
+# agree about them when it validates an owner-supplied zone, and a second
+# copy of the list there would refuse "Z" the day this one grew a fourth
+# entry.
+UTC_ALIASES = ("UTC", "GMT", "Z")
+
+
+def canonical_timezone_name(name: str | None) -> str:
+    """
+    A zone name as it should be stored and shown.
+
+    Whitespace and the UTC aliases only. IANA keys are case-sensitive to
+    `ZoneInfo`, so the lowercasing that every other name-ish setting in
+    this codebase applies would break every real zone - "asia/ho_chi_minh"
+    resolves nowhere. "utc" is folded to "UTC" because the stored name is
+    what the prompt's TIME section prints, and "(utc, UTC+00:00)" reads as
+    some zone other than the one the owner picked.
+    """
+
+    text = str(name or "").strip()
+
+    if text.upper() in UTC_ALIASES:
+        return "UTC"
+
+    return text
+
+
 def resolve_timezone(name: str | None):
     """
     A `tzinfo` for a configured IANA name, or None for system local.
@@ -82,7 +110,7 @@ def resolve_timezone(name: str | None):
     if not text:
         return None
 
-    if text.upper() in ("UTC", "GMT", "Z"):
+    if text.upper() in UTC_ALIASES:
         return dt_timezone.utc
 
     try:
@@ -431,6 +459,53 @@ class TemporalClock:
 
     def describe(self, then) -> str:
         return describe_when(then, self.now())
+
+    def use_timezone(self, name: str | None) -> bool:
+        """
+        Move this clock to another zone, in place. Returns whether it moved.
+
+        In place rather than by rebuilding, and that is the whole design.
+        `launcher/services.py` builds one clock and hands the same object
+        to the prompt, the memory pipeline, the ranked retriever, the
+        quiet-hours check and the proactive engine, so that "the time in
+        the prompt and the time on a stored memory cannot disagree". A
+        replacement clock would move whichever subsystem got it and leave
+        the rest on the old zone - the disagreement a single shared clock
+        exists to prevent. The default `_now` closure reads `self.timezone`
+        when it is *called*, so even `RankedRetriever`, which captured the
+        bound `now` method at construction, follows.
+
+        False means the name does not resolve on this machine and nothing
+        changed. That is the opposite of what the constructor does with a
+        bad name, deliberately: the constructor has nothing better to fall
+        back on, whereas a running clock has something better - the zone
+        already in effect - and silently dropping it would punish a typo
+        by moving Aura's clock. The caller reports the refusal instead
+        (`SettingsService._reapply_temporal`).
+
+        An injected `now` is left alone. It belongs to whoever injected it
+        - a test pinning the present, or a harness - and outranks the zone.
+        The label still moves, because the label is what the prompt says
+        and it is what was asked for.
+        """
+
+        wanted = canonical_timezone_name(name)
+
+        if not wanted:
+            self.timezone = None
+            self.timezone_name = ""
+            return True
+
+        resolved = resolve_timezone(wanted)
+
+        if resolved is None:
+            # resolve_timezone already logged why.
+            return False
+
+        self.timezone = resolved
+        self.timezone_name = wanted
+
+        return True
 
     def hour(self) -> int:
         """Local hour, for quiet-hour checks."""

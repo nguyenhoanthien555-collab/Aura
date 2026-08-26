@@ -46,12 +46,21 @@ memory:
 
   profile: true
 
-  # Keyword search over the older transcript. OFF ON PURPOSE, not
-  # unfinished: profile facts are cheap and always worth injecting, while
-  # searching the transcript only earns its prompt space once there is
-  # enough transcript to be worth searching. Set true to turn it on -
-  # `memory/retrieval.py` is implemented and tested. It is lexical
-  # (token overlap), not semantic; there is no embedding model here.
+  # Whether Aura looks things up from past conversations while
+  # answering. OFF ON PURPOSE, not unfinished: profile facts are cheap
+  # and always worth injecting, while searching history only earns its
+  # prompt space once there is enough of it to be worth searching. Set
+  # true to turn it on - both retrievers are implemented and tested. Both
+  # are lexical (token overlap), not semantic; there is no embedding
+  # model here.
+  #
+  # This gates two mechanisms, and until Phase 11 it reached only the
+  # first: the Sprint 5 keyword search over the transcript, and the
+  # Memory 2.0 ranked episodic search behind `pipeline` below. The phone
+  # shows this as "Use memory in replies", under privacy, so a false here
+  # now silences both. Your value is untouched - but note that it was
+  # previously not silencing the episodic half, so turning this to true
+  # is what restores what you were actually getting.
   recall: false
 
   max_facts: 5
@@ -136,9 +145,31 @@ vision:
   # dependency and sends no image anywhere.
   enabled: true
 
-  # Pixels. Needs both `mss` and `pillow` installed; without them the
-  # manager logs why and stays on window titles.
+  # Pixels. Nothing extra to install: `mss` is used when it happens to be
+  # present and `GdiScreenCapture` (ctypes, standard library) is used when
+  # it is not, so this works on a stock Windows machine.
+  #
+  # Turning this on adds a pixel processor in *front* of the window title
+  # one rather than replacing it, so if the local vision model is not
+  # running the description falls back to the title instead of going
+  # blank. It did replace it before phase 19, which meant switching this
+  # on could make Aura report less than she did with it off.
   capture_screen: false
+
+  # Whether a picture of THIS machine's screen may be sent to a cloud
+  # vision provider. Off, and it stays off until you say otherwise here.
+  #
+  # A provider key in the environment is not an answer to this question.
+  # GEMINI_API_KEY exists so Aura can generate text; it is not permission
+  # to upload a photograph of whatever is on screen right now - which may
+  # be a password manager, a private message or someone else's data. With
+  # this off the local Ollama model is the only thing that ever sees the
+  # pixels, and the fallback is a window title that never leaves the box.
+  #
+  # This governs the desktop only. A screenshot a phone uploads to the
+  # server is governed by the `server.screen` section, because pointing
+  # the Android screen feature at your server is itself the decision.
+  send_screen_to_cloud: false
 
   # Two processors read this section, and they want two different kinds
   # of model name. They get a key each:
@@ -173,14 +204,24 @@ tools:
   #   allowed  which of them may run - an empty list grants nothing,
   #            even with `enabled: true`
   #
-  # `current_time` only is not an oversight. It is SAFE, it reads a clock,
-  # and it is enough for a conversation to prove it can request a tool,
-  # receive the real result and answer from it. Anything that can change
-  # the machine - open_application, and the filesystem tools - stays
-  # unlisted until the user adds it on purpose.
+  # These two are the SAFE ones. `current_time` reads a clock;
+  # `remember` writes a fact about you into Aura's own database and
+  # sends nothing anywhere. Anything that can change the machine -
+  # open_application, and the filesystem tools - stays unlisted until
+  # you add it on purpose.
+  #
+  # `remember` is NEW, and worth a sentence because it changes what Aura
+  # does rather than only what she could do. Until it existed she could
+  # not keep a durable fact about you from a conversation at all: the
+  # machinery was there and nothing called it, so telling her your name
+  # was saved as a sentence that happened and never as your name. With
+  # it listed, she can decide to file something you told her. Delete the
+  # line and she goes back to not being able to - the tool stays
+  # registered and inert, which is a refusal rather than an error.
   enabled: true
   allowed:
     - current_time
+    - remember
 
   # Which risk levels run without asking a human. SAFE only. A SENSITIVE
   # or DANGEROUS call needs a live yes from the confirmation handler, and
@@ -192,6 +233,39 @@ tools:
   # Roots read_file and list_directory may read under. Empty means those
   # tools are not even registered.
   allowed_paths: []
+
+  # Roots the four writing tools may work under. A SEPARATE list, and the
+  # separation is deliberate rather than tidiness: listing a directory in
+  # allowed_paths says Aura may read it, and nothing more. If writing
+  # inherited those roots, adding your notes folder so she could look
+  # something up would also have given her permission to overwrite it,
+  # and you would never have been asked. So this list starts empty even
+  # if the one above does not, and a folder you want both for goes in
+  # both places.
+  #
+  # Four tools become registered once this list has anything in it, and
+  # all four are DANGEROUS, so each still needs its name in `allowed`
+  # above AND a live yes at the moment it runs:
+  #
+  #   write_file        creates a file, or replaces one - but only when
+  #                     the call says overwrite=true, so a mistyped name
+  #                     is a message rather than a lost file.
+  #
+  #   append_to_file    adds to the end of an existing file. Cannot lose
+  #                     what is already there, which is why it is its own
+  #                     tool: allow this one and leave write_file out,
+  #                     and Aura can keep a log she has no way to blank.
+  #
+  #   create_directory  makes a folder, parents included.
+  #
+  #   delete_file       removes ONE file. Never a folder, never a tree,
+  #                     and there is no undo - the confirmation prompt is
+  #                     the last stop.
+  #
+  # Paths are resolved before they are checked, so `..`, a symlink
+  # pointing out of the folder, and a Windows short name are all refused
+  # the same way.
+  writable_paths: []
 
   # Nickname -> command for open_application. A MAPPING, not a list: this
   # read `[]` and, because an empty list is as falsy as an empty mapping,
@@ -205,6 +279,155 @@ tools:
   # Adding one is not enough on its own - open_application is DANGEROUS,
   # so it also has to be named in `allowed` above.
   applications: {}
+
+  # ------------------------------------------------------------------
+  # The PC tools
+  #
+  # Nine tools that read and act on this computer. They are registered
+  # automatically wherever they can actually work - there is no config
+  # section to fill in for most of them, because there is nothing about
+  # them to configure - and not one of them is in `allowed` above, so
+  # not one of them can run until you put its name there. That is the
+  # whole switch: registered means Aura knows the tool exists, allowed
+  # means she may use it.
+  #
+  #   system_information   SENSITIVE  what this computer is: OS, CPU
+  #                                   count, memory, disk, uptime. It
+  #                                   deliberately does not report your
+  #                                   username, hostname or home path,
+  #                                   because this text goes into a
+  #                                   prompt and so leaves the machine.
+  #
+  #   list_processes       SENSITIVE  what is running, largest first.
+  #                                   Reads `tasklist`, or psutil if you
+  #                                   install it.
+  #
+  #   list_windows         SENSITIVE  which windows are open, and which
+  #                                   one you are looking at.
+  #
+  #   focus_window         DANGEROUS  brings a window to the front.
+  #
+  #   move_mouse           DANGEROUS  moves the pointer.
+  #
+  #   click_mouse          DANGEROUS  clicks where the pointer is, or at
+  #                                   a position you name.
+  #
+  #   type_text            DANGEROUS  types into whatever window has
+  #                                   focus. Which window that is at the
+  #                                   moment it types is not something
+  #                                   Aura can promise, so this one can
+  #                                   name a window it expects and
+  #                                   refuse if that is not the one
+  #                                   listening.
+  #
+  #   press_keys           DANGEROUS  presses a key or a chord, the same
+  #                                   caveat attached.
+  #
+  #   describe_screen      SENSITIVE  looks at the screen now and says
+  #                                   what is on it, on request, rather
+  #                                   than the quiet one-line version
+  #                                   that rides along with every turn.
+  #                                   Registered only while
+  #                                   `vision.enabled` is on: turning
+  #                                   vision off takes the tool away
+  #                                   with it. Becomes DANGEROUS instead
+  #                                   of SENSITIVE when
+  #                                   `vision.send_screen_to_cloud` has
+  #                                   put a hosted model in the chain,
+  #                                   because then the act is not
+  #                                   reading your screen but sending a
+  #                                   picture of it to a third party.
+  #
+  # take_screenshot is a tenth, and is listed with the writable paths
+  # rather than here, because unlike these it needs somewhere it is
+  # allowed to write the file.
+  #
+  # To turn the read-only ones on, add them to `allowed` and add
+  # `sensitive` to `auto_approve`. To keep being asked every time, add
+  # them to `allowed` and leave `auto_approve` alone.
+  #
+  # The DANGEROUS ones change your machine, so on top of being in
+  # `allowed` each needs a live yes at the moment it runs - `auto_approve`
+  # above would have to name `dangerous` for them to skip that, and in
+  # server mode there is nobody to ask, so they are refused there.
+  #
+  # Running a command is the remaining item and has its own section below,
+  # because unlike these it needs you to say what may be run.
+  # ------------------------------------------------------------------
+
+  # ------------------------------------------------------------------
+  # Commands Aura may run
+  #
+  # Empty, so `run_command` is not registered at all and nothing here can
+  # run. It is a mapping of a name you choose to the exact program and
+  # arguments that name means - never a command line, because a command
+  # line would have to be split up by guessing, and the guess is the
+  # dangerous part.
+  #
+  #   commands:
+  #     repo_status:
+  #       argv: ["git", "status", "--short"]
+  #       description: "Which files in the project have changed"
+  #       cwd: "D:/AURA"
+  #
+  #     find_text:
+  #       argv: ["git", "grep", "-n", "--", "{pattern}"]
+  #       description: "Search the project for a piece of text"
+  #       parameters:
+  #         pattern: "The text to look for"
+  #       timeout: 20
+  #
+  # Aura may ask for `find_text` and fill in `pattern`. She cannot ask
+  # for anything you have not written down, cannot add arguments you did
+  # not list, and cannot change the program that runs - `{pattern}` in
+  # the first position is refused for exactly that reason. Whatever she
+  # puts in a `{...}` slot arrives at the program as one argument with no
+  # shell anywhere in between, so a value containing `&&` or `;` is text
+  # rather than a second command.
+  #
+  # Each part:
+  #
+  #   argv         required. The program first, then each argument as its
+  #                own list item. `{name}` marks a value Aura fills in.
+  #   description  what this is for, in your words. Aura reads it to
+  #                decide whether the command answers the question.
+  #   parameters   a description per slot, for the same reason.
+  #   cwd          which directory to run in. Checked when the command
+  #                runs, and a missing directory is a refusal rather
+  #                than a quiet fallback to somewhere else.
+  #   timeout      seconds. Default 20. A command that overruns has its
+  #                whole process tree stopped, and whatever it printed
+  #                first is still reported. `0` means no limit, which is
+  #                honoured because it is your call, and warned about.
+  #
+  # `run_command` is DANGEROUS, so declaring a command is not enough on
+  # its own: `run_command` also has to be named in `allowed` above, and
+  # every call needs a live yes unless `auto_approve` names `dangerous`.
+  # In server mode there is nobody to ask, so it is refused there.
+  #
+  # Three things worth knowing before you write one:
+  #
+  #   * A `.bat` or `.cmd` file with a `{slot}` in it is REFUSED when it
+  #     runs. Batch files hand their arguments back to cmd.exe, and a
+  #     value containing a quote can start a command of its own - this
+  #     was tested on this machine, not assumed. Name the real program
+  #     instead. `npm`, `npx` and `code` are all `.CMD` shims here, so
+  #     this comes up more often than it sounds like it would.
+  #   * A command that runs cmd, PowerShell, bash or similar AND has a
+  #     slot is allowed, because you may mean it - but it gives up most
+  #     of the protection above, since those programs interpret whatever
+  #     text they are given. Aura logs a loud warning if you do it.
+  #   * A slot's value can begin with `-`, so it can look like an option
+  #     to the program. Where a program supports `--` to end its options,
+  #     put it before the slot, as `find_text` does above.
+  #
+  # Aura's own API keys are removed from the environment a command runs
+  # in, along with anything else whose name reads like a secret, so a
+  # command that prints its environment cannot print a key into the
+  # conversation.
+  # ------------------------------------------------------------------
+  commands: {}
+  # ------------------------------------------------------------------
 
 server:
   screen:

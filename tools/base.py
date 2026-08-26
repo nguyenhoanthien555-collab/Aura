@@ -110,6 +110,17 @@ class ToolProtocol(Protocol):
         describe()            preferred over describe_tool() when present
         required_parameters() consulted by gate 5 when present
         timeout               overrides the policy timeout when present
+        verify()              re-asked after a successful execute()
+
+    `verify()` is the one Section 11 adds, and it is optional for a
+    reason. It re-asks the condition the call was meant to establish -
+    `remember` reads the fact back out - and the executor downgrades a
+    success it denies. A tool whose `execute` already proves what it
+    claims needs none: `open_application` resolves the executable before
+    spawning and watches the process through a grace period, and its
+    postcondition cannot honestly be re-asked afterwards because the
+    evidence is gone. Absence means "execute already told the whole
+    truth", never "unverified".
 
     runtime_checkable, so the registry can reject a malformed tool at the
     boundary rather than failing halfway through a call. isinstance only

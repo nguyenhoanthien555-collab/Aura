@@ -37,11 +37,13 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from pathlib import Path
 from threading import RLock
 
 from core.config import deep_merge
 from core.logger import logger
+from core.temporal import canonical_timezone_name, resolve_timezone
 
 
 # Read as a module global at construction time, so a test can redirect it
@@ -156,6 +158,142 @@ def _provider_name(value, path: str) -> str:
         )
 
     return name
+
+
+def _lane_provider(value, path: str) -> str:
+    """
+    A provider for one task lane, or "" to retire the lane.
+
+    Empty is accepted where `llm.provider` refuses it, and that asymmetry
+    is the point: `llm.provider` is what Aura falls back to, so it must
+    always name something, while a lane is optional by construction.
+    Clearing one has to be expressible, or the owner could add a lane
+    through the settings API and then never remove it.
+    """
+
+    if value is None:
+        return ""
+
+    if isinstance(value, str) and not value.strip():
+        return ""
+
+    return _provider_name(value, path)
+
+
+def _clearable_text(maximum: int = 120):
+    """
+    Free text, or "" to mean "not configured".
+
+    `_non_empty_text` is right for a setting that must always name
+    something - every vendor model name does. It is wrong for one that
+    only exists while a custom endpoint does, because refusing "" would
+    leave the owner unable to undo having set it.
+    """
+
+    inner = _non_empty_text(maximum)
+
+    def validate(value, path: str) -> str:
+
+        if value is None:
+            return ""
+
+        if isinstance(value, str) and not value.strip():
+            return ""
+
+        return inner(value, path)
+
+    return validate
+
+
+def _timezone_name(value, path: str) -> str:
+    """
+    A zone this machine can actually resolve, or "" for its own clock.
+
+    Empty is accepted for the same reason `llm.custom_base_url` accepts
+    it: a zone set once has to be retirable, and "" is both what
+    `core/config.py` ships and what means "use this machine's clock".
+
+    An unresolvable name is refused rather than stored, which is the
+    opposite of what `resolve_timezone` does at startup - and the
+    asymmetry is the point. Refusing at startup would mean no Aura at all
+    over a typo, so it logs and carries on with the host clock. Refusing
+    here costs the owner one error message and leaves the value they
+    already had standing, whereas *storing* it would leave the settings
+    screen showing a zone the clock never uses: exactly the dead setting
+    `validate_path` refuses by name. Nothing is silently rewritten either
+    way, which is what section 2 asks of this file.
+
+    The message names `tzdata` because on Windows an unresolvable name is
+    usually not a typo at all - the zone is real and the database is
+    missing - and an error that only said "unknown timezone" would send
+    the owner hunting for a spelling mistake that is not there.
+    """
+
+    if value is None:
+        return ""
+
+    if not isinstance(value, str):
+        raise SettingsError(f"{path} must be text")
+
+    name = canonical_timezone_name(value)
+
+    if not name:
+        return ""
+
+    if len(name) > 60:
+        raise SettingsError(f"{path} must be at most 60 characters")
+
+    if resolve_timezone(name) is None:
+        raise SettingsError(
+            f"{path}: this machine cannot resolve the timezone {name!r}. "
+            f"IANA names need a system timezone database - on Windows, "
+            f"`pip install tzdata` provides one. UTC always works."
+        )
+
+    return name
+
+
+def _endpoint_url(value, path: str) -> str:
+    """
+    An http(s) endpoint the owner supplies, or "" to retire it.
+
+    The scheme is required rather than assumed. Prepending one here would
+    mean choosing between http and https on the owner's behalf, and
+    choosing wrong sends their API key over the wire in cleartext - so a
+    bare hostname is refused with a message saying so instead.
+
+    Nothing else about the URL is judged. A loopback address is a
+    first-class case (vLLM, llama.cpp, LM Studio and LiteLLM all live
+    there), a private host may be the only place the gateway exists, and a
+    port or a path may be anything. Validating beyond the scheme would be
+    this file deciding which of the owner's own machines are acceptable.
+    """
+
+    if value is None:
+        return ""
+
+    if not isinstance(value, str):
+        raise SettingsError(f"{path} must be text")
+
+    url = value.strip().rstrip("/")
+
+    if not url:
+        return ""
+
+    if len(url) > 400:
+        raise SettingsError(f"{path} must be at most 400 characters")
+
+    if not url.startswith(("http://", "https://")):
+        raise SettingsError(
+            f"{path} must start with http:// or https:// - the scheme is "
+            f"not assumed, because guessing it wrong would send your key "
+            f"unencrypted"
+        )
+
+    if "://" not in url or not url.split("://", 1)[1]:
+        raise SettingsError(f"{path} must include a host")
+
+    return url
 
 
 def _provider_list(value, path: str) -> list[str]:
@@ -294,6 +432,20 @@ ALLOWED: dict[str, object] = {
     "llm.xai_model": _non_empty_text(120),
     "llm.deepseek_model": _non_empty_text(120),
     "llm.qwen_model": _non_empty_text(120),
+    # The owner's own endpoint. Both are clearable, unlike every model
+    # above them: a vendor model name always names something, while a
+    # custom endpoint has to be retirable or an owner who tries one can
+    # never go back to a vendor cleanly.
+    "llm.custom_base_url": _endpoint_url,
+    "llm.custom_model": _clearable_text(120),
+    # One key per lane rather than a single nested dict, so an unknown
+    # task name is refused by name instead of being stored and ignored.
+    "llm.task_models.reasoning": _lane_provider,
+    "llm.task_models.coding": _lane_provider,
+    "llm.task_models.tool_planning": _lane_provider,
+    "llm.task_models.fast_response": _lane_provider,
+    "llm.task_models.long_context": _lane_provider,
+
     "llm.temperature": _bounded_number(0.0, 2.0),
     "llm.max_output_tokens": _bounded_integer(64, 8192),
     "llm.timeout": _bounded_number(5.0, 600.0),
@@ -328,7 +480,39 @@ ALLOWED: dict[str, object] = {
     # Vision. The cloud/ollama split from Phase 8 is preserved: two keys,
     # never one, so setting the phone-facing model cannot misconfigure the
     # local processor.
+    #
+    # `capture_screen` and `min_interval` were readable in the effective
+    # document and settable nowhere, which is the section 2 failure in its
+    # plainest form: config.yaml has honoured both since phase 8, so the
+    # owner could change them by editing a file on the server and not
+    # through the application's own settings. Nothing about either needed
+    # to be built to make them settable - they were simply missing from
+    # this table.
+    #
+    # `send_screen_to_cloud` is new in phase 19 and is the one key here
+    # that decides whether pixels leave the machine. It defaults to false
+    # and is listed so the owner can turn it on deliberately; see
+    # `launcher/services.py::_build_cloud_vision` for why a provider key
+    # in the environment is not by itself an answer to that question.
+    #
+    # `min_interval` is deliberately *not* wired to a live applier, so it
+    # reports restart_required. `_reapply_screen` already assigns
+    # `services.vision.min_interval` from `server.screen.min_interval`,
+    # and the two sections address the same live object - the desktop
+    # manager and the device-fed manager are never both running. A second
+    # writer would give this key a value the other one silently reverts,
+    # which is the failure the `voice.rate`/`voice.pitch` note above calls
+    # worse than saying "restart".
+    #
+    # `monitor`, `host`, `timeout` and `debug_frame` stay absent. Which
+    # display, which daemon, how long to wait and where to dump frames are
+    # deployment facts of the machine Aura runs on, and a phone that could
+    # retarget the vision host over the network would be pointing the
+    # owner's screen at an endpoint the owner never typed on that machine.
     "vision.enabled": _boolean,
+    "vision.capture_screen": _boolean,
+    "vision.send_screen_to_cloud": _boolean,
+    "vision.min_interval": _bounded_number(0.0, 3600.0),
     "vision.cloud_model": _non_empty_text(120),
     "vision.ollama_model": _non_empty_text(120),
 
@@ -360,12 +544,20 @@ ALLOWED: dict[str, object] = {
     # `_risk_levels` for why an empty list would not mean what it looks
     # like.
     #
-    # Deliberately NOT here: `tools.allowed`, `tools.allowed_paths` and
-    # `tools.applications`. Those three decide which tools exist and which
-    # filesystem roots and executables they may touch - granting a new
-    # capability, not configuring an existing one. A bearer token is enough
-    # to change a setting; it is not enough to hand a remote client a new
-    # verb on the host.
+    # Deliberately NOT here: `tools.allowed`, `tools.allowed_paths`,
+    # `tools.applications` and `tools.commands`. Those four decide which
+    # tools exist and which filesystem roots, executables and commands they
+    # may touch - granting a new capability, not configuring an existing
+    # one. A bearer token is enough to change a setting; it is not enough to
+    # hand a remote client a new verb on the host.
+    #
+    # `tools.commands` is the sharpest version of that rule and the reason
+    # it is worth restating rather than assuming. A settable `commands`
+    # would let anything holding the token declare `["cmd", "/c", "{x}"]`
+    # and then fill in `{x}` - which is precisely the arbitrary shell
+    # execution Section 24 forbids, arrived at through the settings API
+    # instead of through the tool. The owner declares commands by editing
+    # config on the machine that will run them.
     "tools.enabled": _boolean,
     "tools.auto_approve": _risk_levels,
     "tools.timeout": _bounded_number(1.0, 300.0),
@@ -377,7 +569,39 @@ ALLOWED: dict[str, object] = {
     # attribute on every observation, so setting it moves the next one.
     "server.screen.enabled": _boolean,
     "server.screen.min_interval": _bounded_number(1.0, 300.0),
+
+    # The companion gate: the six knobs that decide how talkative Aura is
+    # when nobody asked her anything. Only `enabled` was reachable until
+    # phase 14, which left an owner who found her chatty with one control -
+    # off - and no way to say "less".
+    #
+    # The bounds are the same shape as `proactive.*` above and for the same
+    # reason: they allow tuning, not the removal of the anti-spam gate
+    # (section 20). Five minutes is the shortest cooldown, which is what
+    # makes twelve the highest reachable hourly ceiling - a larger number
+    # would be one the cooldown never lets anybody reach, and a setting
+    # that cannot take effect is worse than one that is not offered.
+    #
+    # `suppress_after_chat_seconds` floors at 0 rather than at a positive
+    # number: an owner who wants to be interrupted mid-conversation is
+    # asking for less silence from their own assistant, and section 2 says
+    # that is theirs to decide. Every other floor here protects the owner
+    # from noise; this one would only protect them from quiet.
     "server.companion.enabled": _boolean,
+    "server.companion.relevance_threshold": _bounded_number(0.1, 1.0),
+    "server.companion.cooldown_seconds": _bounded_number(300.0, 86400.0),
+    "server.companion.max_per_hour": _bounded_integer(1, 12),
+    "server.companion.quiet_hours": _quiet_hours,
+    "server.companion.suppress_after_chat_seconds": _bounded_number(0.0, 3600.0),
+    "server.companion.duplicate_window_seconds": _bounded_number(60.0, 604800.0),
+
+    # What time Aura thinks it is. Read by `TemporalClock.from_config`,
+    # and settable because the deployment the key was written for is
+    # exactly the one that cannot edit config.yaml: a container running in
+    # UTC whose owner is not. `effective` has always reported this value
+    # to the phone; until it was here the phone could only read it, which
+    # made being confidently an hour out the only reachable state.
+    "temporal.timezone": _timezone_name,
 }
 
 
@@ -455,7 +679,34 @@ class RuntimeSettings:
         self._lock = RLock()
         self._overrides: dict = {}
 
+        # Random identity for this store instance. `core.config.load_config`
+        # caches its merge and keys the cache partly on this token plus the
+        # version counter below, so a Hub settings change is visible to the
+        # very next `load_config()` without that function re-reading
+        # config.yaml - and a swapped-in store is never mistaken for its
+        # predecessor (a plain id() could be reused after garbage
+        # collection).
+        self._cache_token = uuid.uuid4()
+
+        # Bumped on every accepted change.
+        self._version = 0
+
         self._load()
+
+    # ------------------------------------------------------------------
+
+    @property
+    def cache_token(self) -> uuid.UUID:
+        """Identity of this store instance; cache key for load_config."""
+
+        return self._cache_token
+
+    @property
+    def version(self) -> int:
+        """Bumped on every accepted change; cache key for load_config."""
+
+        with self._lock:
+            return self._version
 
     # ------------------------------------------------------------------
 
@@ -555,6 +806,11 @@ class RuntimeSettings:
                     "Settings could not be saved on the server"
                 ) from error
 
+            # Only after a successful persist: load_config keys its merge
+            # cache on this counter, so it must mean "this store's
+            # overrides are now these".
+            self._version += 1
+
         return accepted
 
     def reset(self, paths: list[str] | None = None) -> list[str]:
@@ -577,6 +833,9 @@ class RuntimeSettings:
 
             if removed:
                 self._save()
+                # Same reasoning as in `update`: the cache key must move
+                # only when the overrides actually moved.
+                self._version += 1
 
         return removed
 

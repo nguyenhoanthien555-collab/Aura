@@ -449,3 +449,89 @@ def test_no_hardcoded_date_anywhere_in_the_module():
     after = datetime.now()
 
     assert before - timedelta(seconds=5) <= reading <= after + timedelta(seconds=5)
+
+
+# ----------------------------------------------------------------------
+# Moving the zone on the clock the whole process already holds
+# ----------------------------------------------------------------------
+#
+# `launcher/services.py` builds one clock and hands the same object to
+# the prompt, the memory pipeline, the retriever, quiet hours and the
+# proactive engine, so that "the time in the prompt and the time on a
+# stored memory cannot disagree". That is only true of a zone change if
+# the change happens *in place*. Rebuilding the clock would leave five
+# subsystems holding the old one and the sixth holding the new.
+
+def test_use_timezone_moves_the_reported_zone():
+
+    clock = TemporalClock()
+
+    assert clock.use_timezone("UTC") is True
+    assert clock.timezone_name == "UTC"
+    assert clock.context().timezone_name == "UTC"
+    assert clock.context().utc_offset == "+00:00"
+
+
+def test_use_timezone_reaches_a_captured_bound_method():
+    """
+    `RankedRetriever` is constructed with `clock=self.clock.now` - the
+    bound method, captured once, at build time. Everything else holds the
+    clock object. A zone change has to arrive at both or memory ranking
+    dates a recalled line against a different day than the prompt does.
+
+    Reads the real clock deliberately, like the hardcoded-date guard at
+    the end of this file: the claim under test is that a reading taken
+    after the change is in the new zone, and a pinned `now` would answer
+    the question the test after this one asks instead.
+    """
+
+    clock = TemporalClock()
+    captured = clock.now
+
+    clock.use_timezone("UTC")
+
+    utc_wall = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    assert abs(captured() - utc_wall) < timedelta(seconds=5)
+
+
+def test_use_timezone_leaves_a_pinned_clock_pinned():
+    """
+    An injected `now` is the harness's own clock and outranks the zone.
+    Otherwise a test that pinned the time would start reading the
+    machine's the moment anything moved the zone underneath it.
+    """
+
+    clock = TemporalClock(now=lambda: at("2026-08-11T14:00:00"))
+
+    assert clock.use_timezone("UTC") is True
+    assert clock.now() == at("2026-08-11T14:00:00")
+    # The label still moves: it is what the prompt says, and the caller
+    # asked for it.
+    assert clock.context().timezone_name == "UTC"
+
+
+def test_use_timezone_refuses_an_unresolvable_zone_without_degrading():
+    """
+    A refused change must cost nothing. The constructor degrades a bad
+    name to system local because it has nothing better to fall back to;
+    here there is something better - the zone already in effect - and
+    dropping it would punish a typo by silently moving Aura's clock.
+    """
+
+    clock = TemporalClock(timezone_name="UTC")
+
+    assert clock.use_timezone("Mars/Olympus_Mons") is False
+    assert clock.timezone_name == "UTC"
+    assert clock.context().timezone_name == "UTC"
+    assert clock.context().utc_offset == "+00:00"
+
+
+def test_use_timezone_with_nothing_returns_to_the_machine_zone():
+    """Clearing it has to be expressible, or a zone set once is forever."""
+
+    clock = TemporalClock(timezone_name="UTC")
+
+    assert clock.use_timezone("") is True
+    assert clock.timezone is None
+    assert clock.timezone_name == ""

@@ -129,18 +129,30 @@ class AgentActionParserTest {
     }
 
     @Test
-    fun everyPromptedActionNameIsAccepted() {
-        // Guards the parser's KNOWN_ACTIONS against the list in the
-        // AGENT RULES prompt section drifting apart from it.
-        val prompted = listOf(
+    fun everySupportedActionNameRoundTripsThroughTheParser() {
+        // Every name in KNOWN_ACTIONS must actually survive parsing -
+        // membership in a set is not the same as being accepted, since
+        // normalisation happens first.
+        //
+        // This does NOT guard against the AGENT RULES prompt drifting,
+        // despite what it used to claim: the list below and
+        // KNOWN_ACTIONS are both Kotlin, and neither reads the prompt. It
+        // stayed green through the whole `submit` defect for exactly that
+        // reason - the prompt offered submit, the executor implemented
+        // it, and this test compared a hardcoded copy against the
+        // constant it was copied from. The real guard has to cross the
+        // language boundary and lives in Python:
+        // test_the_parser_accepts_every_action_the_prompt_offers in
+        // tests/test_agent_protocol.py.
+        val supported = listOf(
             "complete", "click", "long_click", "input_text", "clear_text",
             "scroll", "scroll_screen", "back", "home", "open_notifications",
-            "open_quick_settings", "open_app", "focus",
+            "open_quick_settings", "open_app", "focus", "submit",
         )
-        for (name in prompted) {
+        for (name in supported) {
             assertEquals(name, parsed("""{"action":"$name"}""").action)
         }
-        assertEquals(prompted.toSet(), AgentActionParser.KNOWN_ACTIONS)
+        assertEquals(supported.toSet(), AgentActionParser.KNOWN_ACTIONS)
     }
 
     // ------------------------------------------------------------------

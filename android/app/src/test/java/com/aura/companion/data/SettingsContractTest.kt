@@ -97,6 +97,19 @@ class SettingsContractTest {
         assertEquals(45.0, body.effective.tools.timeout, 0.0001)
         assertEquals(listOf("current_time"), body.effective.tools.allowed)
         assertEquals(mapOf("notepad" to "notepad.exe"), body.effective.tools.applications)
+        // This body predates `commands` and does not carry it, which is the
+        // point: an older server that never heard of `run_command` must not
+        // make the settings screen fail to parse.
+        assertTrue(body.effective.tools.commands.isEmpty())
+
+        // The two path grants arrive separately and stay separate. Asserting
+        // the values rather than the emptiness is the point: both fields
+        // default to an empty list, so a misspelled @SerialName would pass
+        // any check that only looked for empty. It also closes the same gap
+        // for `allowed_paths`, whose value this body has always carried
+        // without anything reading it back.
+        assertEquals(listOf("D:\\AURA"), body.effective.tools.allowedPaths)
+        assertEquals(listOf("D:\\notes"), body.effective.tools.writablePaths)
 
         assertEquals("edge", body.effective.voice.tts.provider)
         assertEquals("en-GB-SoniaNeural", body.effective.voice.tts.voice)
@@ -136,6 +149,11 @@ class SettingsContractTest {
 
         assertEquals("", body.effective.llm.provider)
         assertTrue(body.configurable.isEmpty())
+        // A server from before phase 18.3 sends no `writable_paths`, and the
+        // absence has to read as "nothing is writable" rather than as a
+        // parse failure or, worse, as a permission.
+        assertTrue(body.effective.tools.writablePaths.isEmpty())
+        assertTrue(body.effective.tools.allowedPaths.isEmpty())
         // Not `true` by default: claiming keys are stored durably when the
         // server never said so is the wrong way to be wrong.
         assertFalse(body.providers.persistent)
@@ -199,6 +217,21 @@ class SettingsContractTest {
         assertEquals(768, llm.maxOutputTokens)
         assertEquals(120.0, llm.timeout, 0.0001)
 
+        // Routing lanes. Blank on a stock server, and blank has to survive
+        // the trip as blank: a lane read as anything else would show the
+        // owner a preference they never expressed.
+        assertEquals("", llm.taskModels.reasoning)
+        assertEquals("", llm.taskModels.coding)
+        assertEquals("", llm.taskModels.toolPlanning)
+        assertEquals("", llm.taskModels.fastResponse)
+        assertEquals("", llm.taskModels.longContext)
+
+        // The custom endpoint arrives blank, and blank has to stay blank:
+        // a placeholder rendered into the field would be an address the
+        // owner never typed.
+        assertEquals("", llm.customBaseUrl)
+        assertEquals("", llm.customModel)
+
         assertEquals(10, body.effective.memory.historyLimit)
         assertEquals(500, body.effective.memory.retrievalScope)
         assertFalse(body.effective.memory.recall)
@@ -214,8 +247,38 @@ class SettingsContractTest {
         assertTrue(body.effective.tools.enabled)
         assertEquals(listOf("safe"), body.effective.tools.autoApprove)
 
+        // The shipped server declares no commands and does not allow
+        // `run_command`. This is the phone's copy of that guarantee: if a
+        // command ever appears in the live document it means the shipped
+        // `config.yaml` enabled arbitrary program execution without anybody
+        // deciding to, and the owner would find out from their phone.
+        assertTrue(
+            "the shipped server must declare no commands",
+            body.effective.tools.commands.isEmpty(),
+        )
+        assertFalse("run_command" in body.effective.tools.allowed)
+
+        // And no directory is writable. If one ever appears here it means
+        // the shipped `config.yaml` handed out permission to overwrite the
+        // owner's files without anybody deciding to - the same guarantee as
+        // the commands check above, for the other half of section 24.
+        assertTrue(
+            "the shipped server must declare no writable directories",
+            body.effective.tools.writablePaths.isEmpty(),
+        )
+        for (name in listOf(
+            "write_file", "append_to_file", "create_directory", "delete_file",
+        )) {
+            assertFalse(name in body.effective.tools.allowed)
+        }
+
         assertTrue(body.effective.vision.enabled)
         assertEquals("qwen2.5vl:7b", body.effective.vision.ollamaModel)
+        assertFalse(body.effective.vision.captureScreen)
+        // The shipped answer, and the one this assertion exists to keep:
+        // the deployed server does not send its screen anywhere.
+        assertFalse(body.effective.vision.sendScreenToCloud)
+        assertEquals(2.0, body.effective.vision.minInterval, 0.0)
 
         assertEquals("auto", body.effective.voice.tts.provider)
         assertTrue(body.effective.voice.tts.playback)
@@ -232,17 +295,55 @@ class SettingsContractTest {
 
         // The whole allow-list, not a sample: a path lost in transit renders
         // as a control this server "does not support".
-        assertEquals(42, configurable.size)
+        assertEquals(59, configurable.size)
 
         listOf(
             "llm.provider", "llm.model", "llm.anthropic_model", "llm.qwen_model",
             "llm.temperature", "llm.max_output_tokens", "llm.timeout",
+            // One path per routing lane. Named individually rather than
+            // merely counted: a lane the server stopped offering is an owner
+            // who can no longer retire that lane from the phone.
+            "llm.task_models.reasoning", "llm.task_models.coding",
+            "llm.task_models.tool_planning", "llm.task_models.fast_response",
+            "llm.task_models.long_context",
+            // The custom endpoint. Unlike every other provider's settings
+            // these are not optional polish: without them `custom` cannot
+            // be built at all, so a path lost here is a provider the owner
+            // can select and never configure.
+            "llm.custom_base_url", "llm.custom_model",
             "memory.recall", "memory.history_limit",
             "proactive.enabled", "proactive.quiet_hours",
             "server.screen.enabled", "server.screen.min_interval",
+            // Every knob on the companion gate, not just its switch. The
+            // gate is what decides whether Aura speaks first; an owner who
+            // finds her chatty and can only reach `enabled` has one
+            // remedy, silence, and nothing between that and the default.
             "server.companion.enabled",
+            "server.companion.relevance_threshold",
+            "server.companion.cooldown_seconds",
+            "server.companion.max_per_hour",
+            "server.companion.quiet_hours",
+            "server.companion.suppress_after_chat_seconds",
+            "server.companion.duplicate_window_seconds",
             "tools.enabled", "tools.auto_approve", "tools.timeout",
-            "vision.enabled", "voice.tts.enabled", "voice.tts.volume",
+            "vision.enabled",
+            // Both halves of screen awareness, not just the outer switch.
+            // These two were readable in `effective` and settable nowhere
+            // until phase 19: the owner could change them by editing a
+            // file on the server and not from the app that is supposed to
+            // configure it.
+            "vision.capture_screen", "vision.min_interval",
+            // The one path in this list that decides whether a picture of
+            // the owner's desktop leaves their machine. Pinned so it can
+            // never become un-settable: an owner who can turn this on and
+            // then finds no control to turn it off has lost the switch
+            // that matters most.
+            "vision.send_screen_to_cloud",
+            "voice.tts.enabled", "voice.tts.volume",
+            // The zone the server dates everything in. `effective` has
+            // always carried this value, so a path lost here is a phone
+            // that displays the wrong time and cannot correct it.
+            "temporal.timezone",
         ).forEach {
             assertTrue("$it must be configurable", it in configurable)
         }
@@ -252,6 +353,22 @@ class SettingsContractTest {
         assertFalse("tools.allowed" in configurable)
         assertFalse("tools.allowed_paths" in configurable)
         assertFalse("tools.applications" in configurable)
+
+        // `commands` most of all: a settable one would let anything holding
+        // the token declare `["cmd", "/c", "{x}"]` and then ask
+        // `run_command` to fill in `{x}`, which is arbitrary shell execution
+        // arrived at through the settings API instead of through the tool
+        // boundary. The prefix check catches a future server that starts
+        // sending them one at a time as `tools.commands.<name>`.
+        assertFalse("tools.commands" in configurable)
+        assertTrue(configurable.none { it.startsWith("tools.commands") })
+
+        // `writable_paths` for the same reason: a settable one would let
+        // anything holding the token add `C:/` and then ask `write_file` to
+        // replace whatever it liked - filesystem access reached around the
+        // tool boundary through the settings API instead of through it.
+        assertFalse("tools.writable_paths" in configurable)
+        assertTrue(configurable.none { it.startsWith("tools.writable_paths") })
     }
 
     @Test
@@ -1043,12 +1160,13 @@ class SettingsContractTest {
 
         // A deployment with no keys: it asked for Gemini, built nothing, and
         // says so. Every provider the build knows about is still reported, so
-        // the section can show twelve rows rather than an empty list.
+        // the section can show a row for each rather than an empty list.
         assertEquals("gemini", body.requested)
         assertEquals("", body.active)
         assertFalse(body.ready)
         assertFalse(body.inFallback)
-        assertEquals(12, body.providers.size)
+        assertEquals(13, body.providers.size)
+        assertEquals("unconfigured", body.providers.getValue("custom").state)
 
         val gemini = body.providers.getValue("gemini")
         assertFalse(gemini.configured)
@@ -1170,6 +1288,7 @@ class SettingsContractTest {
                   "auto_approve": ["safe", "sensitive"],
                   "timeout": 45.0,
                   "allowed_paths": ["D:\\AURA"],
+                  "writable_paths": ["D:\\notes"],
                   "applications": {"notepad": "notepad.exe"}
                 },
                 "server": {

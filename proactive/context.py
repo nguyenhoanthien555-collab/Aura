@@ -87,9 +87,23 @@ class ProactiveContext:
         """
         How long since the user said anything.
 
-        Infinity when unknown, which makes "the user has been away a
-        long time" the safe reading of a missing value - the rules that
-        consume this all use it to *hold back*, never to fire.
+        Infinity when unknown. That is the deliberate reading of a
+        missing value, but "safe" is not the whole truth and the earlier
+        wording here claimed it was: it said every rule uses this only to
+        hold back. The active-conversation guard does - a small value
+        keeps Aura quiet. But the greeting, task and appreciation rules
+        fire on a *large* value, and infinity is the largest, so a
+        missing presence reads to them as a long absence that justifies
+        speaking.
+
+        The greeting is the sharp edge. A brand-new user with no message
+        on record has `seconds_since_user == inf`, which clears
+        `GREETING_AWAY_SECONDS`, so the only thing standing between an
+        empty history and an unprompted "welcome back" is
+        `greeted_this_part` and the engine's presence source reading the
+        durable `messages` table. Neither is on this object, which is why
+        the honest version of this docstring names the firing path
+        instead of denying it exists.
         """
 
         if self.last_user_message_at is None:

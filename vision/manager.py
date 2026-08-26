@@ -55,8 +55,12 @@ class VisionManager:
 
         # Window titles by default: no pixels, no model, no optional
         # dependency. Pixel vision is a composition decision, made by
-        # launcher/services.py when config asks for it, by injecting
-        # OllamaVisionProcessor here.
+        # launcher/services.py when config asks for it, by injecting a
+        # ProcessorChain here - pixel processors first, WindowTitleProcessor
+        # last. The manager does not know which one answered, and does not
+        # need to: a processor that has nothing to say returns "", and this
+        # class treats "" the same whether it came from an unreachable
+        # vision model or from a window with no title.
         self.processor = processor or WindowTitleProcessor()
 
         self.window_reader = window_reader or default_window_reader()
@@ -97,6 +101,46 @@ class VisionManager:
 
     def is_available(self) -> bool:
         return self.enabled
+
+
+    # ------------------------------------------------------------------
+    # Reading the last observation without taking a new one
+    # ------------------------------------------------------------------
+
+    @property
+    def last_observation(self) -> VisionContext | None:
+        """
+        What is being held, without observing anything.
+
+        `get_context()` is the wrong call for a caller that wants to know
+        what was just seen rather than to see again: once its throttle
+        has expired it re-observes, and with `min_interval: 0` it
+        re-observes every time. For `tools.builtins.vision`'s verify()
+        that would mean a second capture per call, and with a hosted
+        provider in the processor chain a second upload - verification
+        paying the full price of the thing it verifies.
+        """
+
+        return self._context
+
+
+    @property
+    def seconds_since_observation(self) -> float | None:
+        """
+        How long ago the last observation was taken, or None if there has
+        not been one.
+
+        Measured from when observing *started*, because that is what
+        `refresh()` stamps - so a vision model that takes twenty seconds
+        to answer leaves an observation that reads as twenty seconds old.
+        A caller checking freshness has to allow for the model's latency;
+        what this can tell it is whether looking happened at all.
+        """
+
+        if self._last_seen is None:
+            return None
+
+        return self.clock() - self._last_seen
 
 
     # ------------------------------------------------------------------

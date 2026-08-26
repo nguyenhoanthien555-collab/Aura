@@ -56,7 +56,18 @@ PROVIDER_KEYS = {
     "xai": "XAI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "qwen": "QWEN_API_KEY",
+    "custom": "CUSTOM_API_KEY",
 }
+
+# Providers with no vendor endpoint of their own, mapped to the variable
+# that can supply one. Everything about where the request goes comes from
+# the owner, so an empty endpoint or an empty model is a missing
+# precondition rather than something to fall back on: there is no default
+# that could be right for a gateway nobody here has seen.
+#
+# The matching settings are `llm.<name>_base_url` and `llm.<name>_model`,
+# which is what the phone writes. `_skip_reason` names them.
+OWNER_DEFINED_ENDPOINTS = {"custom": "CUSTOM_BASE_URL"}
 
 # Ollama takes no key, only a reachable host. Listed separately so that
 # `provider: ollama` still resolves through the chain builder (and can
@@ -90,6 +101,7 @@ HTTP_CHAT_PROVIDERS = {
         "brain.providers.deepseek", "DeepSeekProvider", "deepseek_model",
     ),
     "qwen": ("brain.providers.qwen", "QwenProvider", "qwen_model"),
+    "custom": ("brain.providers.custom", "CustomProvider", "custom_model"),
 }
 
 
@@ -139,48 +151,49 @@ class BrainRouter:
 
         config = load_config().get("llm") or {}
 
-        primary = self._instantiate_provider(name, config)
-        if primary is None:
-            raise ValueError(f"Primary provider {name} could not be initialized (missing API key or config)")
-
         fallback_names = self._fallback_names(config)
 
-        providers = [primary]
-        provider_names = [name]
+        # The primary is built through the same guarded path as a
+        # fallback. It used to be built inline and a `None` raised
+        # immediately, which made a provider the operator merely
+        # *selected* fatal while a provider they configured as a backup
+        # was survivable - an asymmetry with no justification, and the
+        # cause of the reported "an API key entered for the wrong
+        # provider stopped Aura working". A key typed into the wrong slot
+        # now costs the use of that provider, not the assistant.
+        #
+        # It is still not silent and it still does not rewrite the
+        # setting: `llm.provider` keeps saying what the operator chose,
+        # the log says the choice is not being served, and
+        # `active_chain()` reports what actually answers.
+        primary, primary_reason = self._build(name, config)
+
+        providers: list = []
+        provider_names: list[str] = []
 
         # Why a provider was left out, so a chain that silently collapsed
         # to one provider can be diagnosed from the log rather than by
         # reading this function.
         skipped: list[str] = []
 
+        if primary is not None:
+            providers.append(primary)
+            provider_names.append(name)
+        else:
+            skipped.append(f"{name} (primary; {primary_reason})")
+
         for fb_name in fallback_names:
             if fb_name == name:
                 skipped.append(f"{fb_name} (already the primary)")
                 continue
 
-            try:
-                fb_provider = self._instantiate_provider(fb_name, config)
-            except Exception as error:
-                # A fallback is optional by definition. One that raises -
-                # a provider whose __init__ validates its key, a bad model
-                # string - must not take the process down with it, or an
-                # optional provider becomes a mandatory one and Aura will
-                # not boot at all. Reported as failed, not merely skipped:
-                # the two have different fixes.
-                skipped.append(
-                    f"{fb_name} (initialization raised {type(error).__name__})"
-                )
-                logger.debug(
-                    "Fallback %s raised during initialization", fb_name,
-                    exc_info=True,
-                )
-                continue
+            fb_provider, fb_reason = self._build(fb_name, config)
 
             if fb_provider is not None:
                 providers.append(fb_provider)
                 provider_names.append(fb_name)
             else:
-                skipped.append(f"{fb_name} ({self._skip_reason(fb_name)})")
+                skipped.append(f"{fb_name} ({fb_reason})")
 
         logger.info(
             "Provider chain requested: %s | initialized: %s",
@@ -202,9 +215,42 @@ class BrainRouter:
             # Every fallback was skipped. The chain the operator wrote
             # exists only in config.yaml, and saying so once at boot is
             # cheaper than discovering it mid-outage.
+            #
+            # `provider_names[0]`, not `name`: when the primary is the one
+            # that could not be built, the provider running without
+            # failover is the surviving fallback, and naming the dead
+            # primary here would send whoever reads it to the wrong key.
             logger.warning(
                 "No fallback provider was initialized: %s runs with no failover",
+                provider_names[0],
+            )
+
+        if not providers:
+            # Nothing can answer. This is the only remaining fatal case,
+            # and it stays fatal: degrading to "Aura is up but every
+            # message fails" would hide a total outage behind a healthy
+            # health check. The reason is named so the operator knows
+            # which credential to fix rather than being told "missing API
+            # key or config" for a provider whose key is present.
+            raise ValueError(
+                f"Primary provider {name} could not be initialized "
+                f"({primary_reason}) and no fallback provider was available"
+            )
+
+        if primary is None:
+            # ERROR, not warning: the operator's explicit choice is not
+            # the thing answering them, which is the single most confusing
+            # state this router can be in - replies keep arriving, from a
+            # different model than the settings screen names.
+            # `active_chain()` is what the UI reads; this is for whoever
+            # has the log.
+            logger.error(
+                "Primary provider %s is unavailable (%s). Aura is answering "
+                "through the fallback chain instead: %s. The llm.provider "
+                "setting has NOT been changed.",
                 name,
+                primary_reason,
+                "->".join(provider_names),
             )
 
         if len(providers) > 1:
@@ -212,7 +258,48 @@ class BrainRouter:
             chain_name = "->".join(provider_names)
             return FallbackProvider(providers, chain_name)
 
-        return primary
+        return providers[0]
+
+    @staticmethod
+    def _build(name: str, config: dict):
+        """
+        One provider, or `None` and the reason it could not be built.
+
+        Never raises. Every cloud provider validates its key in
+        `__init__`, so construction is exactly where a misconfiguration
+        surfaces - and this is the seam that keeps a misconfiguration from
+        becoming an outage. Returns `(provider, "")` on success so the
+        caller can test the provider and still have a reason to log.
+
+        The two failure shapes stay distinct because they have different
+        fixes: `None` from `_instantiate_provider` means a precondition is
+        absent (no key, unknown provider) and is explained by
+        `_skip_reason`; an exception means the provider itself refused to
+        build.
+
+        Only the exception's *type* goes into the returned reason, because
+        that reason is logged at ERROR and reaches a phone screen. The
+        traceback still goes to DEBUG with `exc_info=True` - unchanged
+        from the fallback path this generalises - so a provider whose
+        exception message quoted a key fragment would surface it there.
+        None in this package do: `http_chat.py` builds every message from
+        the provider label and the HTTP status. That is a property of the
+        providers, not of this function.
+        """
+
+        try:
+            provider = BrainRouter._instantiate_provider(name, config)
+        except Exception as error:
+            logger.debug(
+                "Provider %s raised during initialization", name,
+                exc_info=True,
+            )
+            return None, f"initialization raised {type(error).__name__}"
+
+        if provider is None:
+            return None, BrainRouter._skip_reason(name)
+
+        return provider, ""
 
     @staticmethod
     def _fallback_names(config: dict) -> list[str]:
@@ -293,6 +380,22 @@ class BrainRouter:
         if not os.getenv(required):
             return f"{required} is not set"
 
+        endpoint = OWNER_DEFINED_ENDPOINTS.get(name)
+
+        if endpoint:
+            # Config is not readable from here - this is a static method
+            # called from log paths - so the environment is all that can be
+            # checked. That is not a gap: when the settings hold an
+            # endpoint, `_instantiate_provider` succeeds and nothing asks
+            # for a reason. Both spellings are named because the owner may
+            # be holding either one.
+            if not os.getenv(endpoint):
+                return (
+                    f"{endpoint} is not set and llm.{name}_base_url is empty"
+                )
+
+            return f"llm.{name}_model is empty"
+
         return "initialization failed"
 
     @staticmethod
@@ -362,6 +465,23 @@ class BrainRouter:
             if not os.getenv(PROVIDER_KEYS[name]):
                 return None
 
+            # An owner-defined provider has two more preconditions than a
+            # vendor one, and both are settings the owner may simply not
+            # have filled in yet. Returning None routes them through
+            # `_skip_reason`, which names them - an exception from the
+            # constructor would reach the phone as "initialization raised
+            # ValueError", which names nothing.
+            endpoint = config.get(f"{name}_base_url") or ""
+
+            if name in OWNER_DEFINED_ENDPOINTS:
+                if not (endpoint.strip() or os.getenv(
+                    OWNER_DEFINED_ENDPOINTS[name]
+                )):
+                    return None
+
+                if not str(config.get(model_key) or "").strip():
+                    return None
+
             provider_class = getattr(import_module(module_path), class_name)
 
             # An empty model means "use the class default", which is where
@@ -372,6 +492,12 @@ class BrainRouter:
                 timeout=float(config.get("timeout", 45.0)),
                 max_tokens=int(config.get("max_output_tokens", 768)),
                 temperature=_optional_float(config.get("temperature")),
+                # Empty for every vendor provider, which leaves each one
+                # resolving its own `*_BASE_URL` exactly as before. Passed
+                # generically rather than only for `custom` so that a
+                # provider added later needs a registry row and nothing
+                # here.
+                base_url=endpoint,
             )
 
         return None

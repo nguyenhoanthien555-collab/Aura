@@ -39,11 +39,20 @@ websockets>=12.0
 #   sounddevice      microphone capture       voice.stt.enabled
 #   faster-whisper   local speech recognition voice.stt.provider: whisper
 #   pyttsx3          cross-platform speech    voice.tts.provider: pyttsx3
-#   mss              screen pixel capture     vision.capture_screen
-#   pillow           image encoding           vision.capture_screen
+#   mss              faster screen capture    vision.capture_screen
 #
-# Vision with screen capture requires BOTH mss and pillow. Without them
-# vision falls back to window titles only (zero dependencies).
+# Screen capture needs nothing from this list. `mss` is used when it is
+# present and `vision.capture.GdiScreenCapture` - ctypes against user32
+# and gdi32 - is used when it is not, so `vision.capture_screen: true`
+# works on a stock Windows machine. Pillow is a hard requirement above
+# rather than an extra, because the vision processors encode with it.
+#
+# The line this replaces said vision required BOTH mss and pillow and
+# that without them vision fell back to window titles. Neither half was
+# true after phase 18.4 added the GDI backend, and the fallback is now a
+# chain rather than a substitution: with `capture_screen: true` and no
+# reachable vision model the window title description is still what
+# comes out.
 #
 # Windows speech output needs nothing extra: voice.tts.provider "auto"
 # uses the SAPI voices already on the machine.

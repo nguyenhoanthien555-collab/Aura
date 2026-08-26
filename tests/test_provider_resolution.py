@@ -30,7 +30,12 @@ import logging
 
 import pytest
 
-from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS, BrainRouter
+from brain.router import (
+    KEYLESS_PROVIDERS,
+    OWNER_DEFINED_ENDPOINTS,
+    PROVIDER_KEYS,
+    BrainRouter,
+)
 from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
 from brain.providers.fallback import ACCOUNT_LIMIT, FallbackProvider, _category_of
 from brain.providers.ollama import OllamaProvider
@@ -46,6 +51,30 @@ PROVIDER_ENV = (
     *(f"{name.upper()}_BASE_URL" for name in PROVIDER_KEYS),
     "OLLAMA_HOST",
 )
+
+
+def preconditions_for(name: str) -> dict:
+    """
+    The `llm.*` settings `name` needs before it can be built at all.
+
+    Empty for a vendor, which has its own endpoint and its own default
+    model. A provider whose endpoint the owner supplies has two more
+    preconditions, and "buildable" for it means "buildable once the owner
+    has supplied them" - not "buildable out of nothing", which is the
+    opposite invariant and is pinned by
+    `test_a_registered_provider_without_its_key_is_skipped_not_half_built`.
+
+    Derived from the router's own registry, so the next such provider is
+    covered by these loops without this file being edited.
+    """
+
+    if name not in OWNER_DEFINED_ENDPOINTS:
+        return {}
+
+    return {
+        f"{name}_base_url": "https://gateway.example.test/v1",
+        f"{name}_model": "some-model",
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -416,6 +445,166 @@ def test_a_missing_primary_key_is_still_a_hard_failure(monkeypatch):
         _ = router.provider
 
 
+# ----------------------------------------------------------------------
+# A misconfigured primary costs that provider, not the assistant
+#
+# The reported failure this group exists for: an API key entered for the
+# wrong provider - a proxy's key typed into the vendor's slot, or the
+# reverse - stopped Aura working entirely, rather than costing the use of
+# one provider.
+#
+# The cause was an asymmetry, not a missing feature. `_create_provider`
+# built every *fallback* inside a try/except, with a comment explaining
+# that an optional provider must not become a mandatory one, and then
+# built the *primary* inline and raised on `None`. So the provider the
+# operator merely selected was fatal, while the provider they configured
+# as a backup was survivable. Both now go through `_build`.
+#
+# What must NOT change: a chain with nothing in it stays fatal (the test
+# above), and `llm.provider` is never rewritten. Aura degrades at runtime
+# and says so - it does not silently edit the operator's configuration.
+# ----------------------------------------------------------------------
+
+
+def test_a_dead_primary_falls_back_instead_of_killing_aura(monkeypatch):
+    # The reproduction: the operator selects a provider whose key is
+    # absent (or was typed into another provider's slot) while two
+    # healthy providers sit in the fallback chain. This raised before.
+    from brain.providers.groq import GroqProvider
+    from brain.providers.mistral import MistralProvider
+
+    monkeypatch.setenv("GROQ_API_KEY", "dummy")
+    monkeypatch.setenv("MISTRAL_API_KEY", "dummy")
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "groq reply")
+    monkeypatch.setattr(MistralProvider, "generate", lambda self, prompt: "mistral reply")
+
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq", "mistral"],
+    )
+
+    assert router.generate("hi") == "groq reply"
+    assert router.active_chain() == "groq->mistral"
+
+
+def test_the_selected_provider_setting_is_never_rewritten(monkeypatch):
+    # Degrading is a runtime decision. `provider_name` is what the
+    # operator asked for and keeps saying so, or the settings screen and
+    # the router disagree about what was configured.
+    from brain.providers.groq import GroqProvider
+
+    monkeypatch.setenv("GROQ_API_KEY", "dummy")
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "groq reply")
+
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq"],
+    )
+
+    _ = router.provider
+
+    assert router.provider_name == "anthropic"
+    assert router.active_chain() == "groq"
+
+
+def test_a_dead_primary_is_reported_at_error_level_with_its_reason(monkeypatch, caplog):
+    # Replies keep arriving, from a model the settings screen does not
+    # name. That is the most confusing state this router can produce, so
+    # it is the one thing here logged at ERROR - naming the missing
+    # variable, never its value.
+    from brain.providers.groq import GroqProvider
+
+    monkeypatch.setenv("GROQ_API_KEY", "dummy")
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "groq reply")
+
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq"],
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="Aura"):
+        _ = router.provider
+
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    assert len(errors) == 1
+    message = errors[0].getMessage()
+    assert "anthropic" in message
+    assert "ANTHROPIC_API_KEY is not set" in message
+    assert "has NOT been changed" in message
+
+
+def test_a_primary_that_raises_also_falls_back(monkeypatch):
+    # A key present but rejected at construction - the proxy case, where
+    # the credential is real but belongs to a different endpoint. Same
+    # outcome as an absent key: one provider lost, not the assistant.
+    from brain.providers.anthropic import AnthropicProvider
+    from brain.providers.groq import GroqProvider
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "key-for-a-different-endpoint")
+    monkeypatch.setenv("GROQ_API_KEY", "dummy")
+    monkeypatch.setattr(
+        AnthropicProvider, "__init__",
+        lambda self, **kwargs: (_ for _ in ()).throw(ValueError("rejected")),
+    )
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "groq reply")
+
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq"],
+    )
+
+    assert router.generate("hi") == "groq reply"
+    assert router.active_chain() == "groq"
+
+
+def test_a_total_outage_names_the_primarys_actual_reason(monkeypatch):
+    # The fatal message used to read "missing API key or config" for
+    # every cause. The reason decides which credential the operator goes
+    # and looks at, so it is now the primary's real one.
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq"],
+    )
+
+    with pytest.raises(ValueError) as failure:
+        _ = router.provider
+
+    message = str(failure.value)
+    assert "ANTHROPIC_API_KEY is not set" in message
+    assert "no fallback provider was available" in message
+
+
+def test_no_key_value_leaks_when_the_primary_is_dead(monkeypatch, caplog):
+    # The degraded path logs more than the old one did. Everything it
+    # adds must still be safe to paste into an issue, so a key is present
+    # here and asserted absent from the log.
+    #
+    # Scope, stated because it is easy to over-read: this pins what *Aura*
+    # logs. `_build` also emits the provider's own traceback at DEBUG via
+    # `exc_info=True` - unchanged from the fallback path it generalises -
+    # so a provider that put a key fragment in its exception message would
+    # surface it there. None in this package do: `http_chat.py` builds
+    # every message from the provider label and the HTTP status.
+    from brain.providers.groq import GroqProvider
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-do-not-log-this-value")
+    monkeypatch.setattr(GroqProvider, "generate", lambda self, prompt: "groq reply")
+
+    router = router_with(
+        monkeypatch, "anthropic",
+        provider="anthropic", fallback_providers=["groq"],
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="Aura"):
+        _ = router.provider
+
+    assert router.active_chain() == "groq"
+    assert "do-not-log-this-value" not in caplog.text
+    # The variable is named so the operator can act; the value is not.
+    assert "ANTHROPIC_API_KEY is not set" in caplog.text
+
+
 def test_no_key_value_is_ever_logged(monkeypatch, caplog):
     monkeypatch.setenv("GEMINI_API_KEY", "sk-do-not-log-this-value")
 
@@ -510,7 +699,9 @@ def test_every_registered_key_builds_a_real_provider(monkeypatch):
 
         monkeypatch.setenv(variable, f"dummy-{name}")
 
-        provider = BrainRouter._instantiate_provider(name, config["llm"])
+        llm = dict(config["llm"], **preconditions_for(name))
+
+        provider = BrainRouter._instantiate_provider(name, llm)
 
         assert provider is not None, f"{name} is in PROVIDER_KEYS but cannot be built"
         assert getattr(provider, "provider_name", "") == name
@@ -532,6 +723,7 @@ def test_every_registered_provider_can_be_a_fallback(monkeypatch, fake_cloud):
         router = router_with(
             monkeypatch, "gemini",
             provider="gemini", fallback_providers=[name],
+            **preconditions_for(name),
         )
 
         assert router.active_chain() == f"gemini->{name}"

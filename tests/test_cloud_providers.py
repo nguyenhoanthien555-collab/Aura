@@ -742,8 +742,21 @@ def test_every_provider_the_router_lists_can_be_imported():
 
         assert provider_class.provider_name == name
         assert issubclass(provider_class, HttpChatProvider)
-        assert provider_class.default_model
         assert provider_class.label
+
+        # A vendor knows its own endpoint and its own model, and both
+        # defaults live on the class. A provider whose endpoint the owner
+        # supplies must default *neither*: there is no model name that
+        # could be right for a gateway nobody here has seen, and a
+        # placeholder would answer 404 and read like an outage. The two
+        # go together - one without the other is a provider that guesses
+        # half of where it is going.
+        if provider_class.requires_base_url:
+            assert not provider_class.default_url
+            assert not provider_class.default_model
+        else:
+            assert provider_class.default_url
+            assert provider_class.default_model
 
 
 def test_the_openai_compatible_class_is_not_used_for_anthropic():

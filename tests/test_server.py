@@ -164,6 +164,119 @@ def test_health_reports_a_running_runtime(client):
     assert data["runtime"]["llm_provider"] == "mock"
     assert data["runtime"]["memory"] == "connected"
 
+def test_health_reports_tools_and_plugins_off(client):
+    """
+    The stock shape: tools off, plugins unconfigured.
+
+    Both keys exist even when their subsystem does not - a client renders
+    the runtime map without special-casing, so absence would read as a
+    broken document rather than a switched-off subsystem.
+    """
+
+    data = client.get("/api/health").json()
+
+    assert data["runtime"]["tools"] == "disabled"
+    assert data["runtime"]["plugins"] == "off"
+
+
+def test_health_counts_only_tools_the_owner_allowed(isolated_memory):
+    """
+    Registered is not offered.
+
+    The factory registers every builtin whose dependencies exist, but the
+    catalogue filters through `tools.allowed`. The health label reports the
+    filtered count - the number an operator can act on - not the size of
+    the registry.
+    """
+
+    from server.runtime import ServerRuntime
+
+    config = dict(TEST_CONFIG)
+
+    config["tools"] = {"enabled": True, "allowed": ["current_time"]}
+
+    runtime = ServerRuntime(config, memory=isolated_memory)
+
+    try:
+        assert runtime.health_status()["runtime"]["tools"] == "1 available"
+    finally:
+        runtime.stop()
+
+
+def test_health_names_a_plugin_that_failed_to_initialize(tmp_path, isolated_memory):
+    """
+    A plugin enabled in config whose initialize raised must be visible by
+    name, not folded into a count that merely got smaller.
+
+    This is also the test that pins `PluginManager.status` to a production
+    caller: before the health label existed, nothing outside the suite ever
+    asked which plugins were broken.
+    """
+
+    from server.runtime import ServerRuntime
+
+    (tmp_path / "echo_plug.py").write_text(
+        "from tools.base import ToolRisk\n"
+        "\n"
+        "\n"
+        "class EchoTool:\n"
+        "    name = 'echo_tool'\n"
+        "    description = 'echo'\n"
+        "    risk = ToolRisk.SAFE\n"
+        "\n"
+        "    def execute(self, **arguments):\n"
+        "        return ''\n"
+        "\n"
+        "\n"
+        "class EchoPlugin:\n"
+        "    name = 'echo'\n"
+        "    version = '1.0.0'\n"
+        "\n"
+        "    def initialize(self, context):\n"
+        "        if context.tools is not None:\n"
+        "            context.tools.register(EchoTool())\n"
+        "\n"
+        "    def shutdown(self):\n"
+        "        pass\n"
+        "\n"
+        "\n"
+        "def plugin():\n"
+        "    return EchoPlugin()\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "bad_plug.py").write_text(
+        "from plugins.base import Plugin\n"
+        "\n"
+        "\n"
+        "class BadPlugin(Plugin):\n"
+        "    name = 'bad_plug'\n"
+        "    version = '1.0.0'\n"
+        "\n"
+        "    def initialize(self, context):\n"
+        "        raise RuntimeError('initialize failed on purpose')\n",
+        encoding="utf-8",
+    )
+
+    config = dict(TEST_CONFIG)
+
+    config["tools"] = {"enabled": True, "allowed": []}
+    config["plugins"] = {
+        "enabled": ["echo", "bad_plug"],
+        "directory": str(tmp_path),
+    }
+
+    runtime = ServerRuntime(config, memory=isolated_memory)
+
+    try:
+        label = runtime.health_status()["runtime"]["plugins"]
+
+        assert label == "1/3 plugins active (bad_plug failed to initialize)"
+    finally:
+        runtime.stop()
+
+
+
 
 def test_root_accepts_render_head_health_probes(client):
     assert client.head("/").status_code == 200
@@ -689,7 +802,10 @@ def test_health_exposes_only_the_documented_keys(client):
     # The exact contract documented in docs/API.md. `screen`, `companion`
     # and `proactive` are intentional: a client needs to know whether
     # screen observation will be accepted and whether unprompted messages
-    # can arrive, before it offers either as a setting.
+    # can arrive, before it offers either as a setting. `tools` and
+    # `plugins` joined in phase 22 for the same reason: what the executor
+    # would actually run, and which plugin failed to initialize, are
+    # runtime facts an operator can act on - not visible anywhere else.
     assert set(data["runtime"]) == {
         "llm_provider",
         "memory",
@@ -699,6 +815,8 @@ def test_health_exposes_only_the_documented_keys(client):
         "screen",
         "companion",
         "proactive",
+        "tools",
+        "plugins",
     }
 
 

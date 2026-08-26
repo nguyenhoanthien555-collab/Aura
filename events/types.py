@@ -395,3 +395,75 @@ class ToolCompletedEvent(Event):
     name: str
     ok: bool
     detail: str = ""
+
+
+# ----------------------------------------------------------------------
+# Agent tasks
+#
+# What the cognitive layer is doing, for anything that wants to watch a
+# device work without reaching into the planner. Until these existed the
+# whole of phases 4-11 - state, planner, task graph, verification,
+# recovery - published nothing at all, so the one thing worth watching
+# was the one thing the bus could not see.
+#
+# `step` is a `StepKind` value and stays a plain `str` here rather than
+# the enum itself: `events/__init__.py` says nothing on either side
+# imports the other, and importing `brain.planner` into the event
+# vocabulary would make every subscriber depend on the brain. The value
+# is a fixed vocabulary written in Aura's own source, which is why these
+# events opt it into the log by name while leaving `goal` out - a goal is
+# built from the owner's own sentence.
+# ----------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TaskStepChangedEvent(Event):
+    """
+    The agent moved to a different step of its plan.
+
+    Edge triggered. A tick that recomputes the same current step
+    publishes nothing, because `plan_for` is pure and the graph is
+    rebuilt every tick - a publish per tick would emit the same step
+    forever and look exactly like the repeat loop section 10 exists to
+    prevent, arriving as noise instead of as a fault.
+
+    `index` and `total` are the position in the plan, so a subscriber can
+    show progress without holding the plan itself.
+    """
+
+    goal: str = ""
+    step: str = ""
+    index: int = 0
+    total: int = 0
+
+    log_fields = ("step",)
+
+
+@dataclass(frozen=True)
+class TaskFinishedEvent(Event):
+    """
+    Every step of the plan is settled.
+
+    Settled, not necessarily successful - a plan whose last steps were
+    skipped is finished too. `steps` is how many the plan had, not how
+    many worked.
+    """
+
+    goal: str = ""
+    steps: int = 0
+
+
+@dataclass(frozen=True)
+class TaskStuckEvent(Event):
+    """
+    Nothing left to try, and not because the work is done.
+
+    Published when the graph reports `is_stuck` and recovery could not
+    reopen anything. This is the event a proactive or notification
+    subscriber (sections 20, 21) would want, because it is the moment the
+    owner's request stopped making progress.
+    """
+
+    goal: str = ""
+    step: str = ""
+
+    log_fields = ("step",)

@@ -293,3 +293,133 @@ def test_the_written_file_keeps_non_ascii_readable(config_file):
     write(config_file, {"personality": {"name": "Aura", "note": "cà phê sữa đá"}})
 
     assert "cà phê sữa đá" in config_file.read_text(encoding="utf-8")
+
+
+# ----------------------------------------------------------------------
+# load_config caching (Phase 24)
+#
+# load_config() runs several times per chat turn (history limit,
+# personality sections) and cost ~10 ms a call in YAML parsing alone.
+# The merged result is now cached and re-merged only when something
+# could have changed. These tests pin the invalidation rules - a cache
+# that ever serves yesterday's configuration is worse than a slow one.
+# ----------------------------------------------------------------------
+
+def test_an_unchanged_state_does_not_reparse_yaml(config_file, monkeypatch):
+    """The whole point of the cache: no YAML parse when nothing moved."""
+
+    write(config_file, {})
+    load_config()
+
+    parses = []
+    real_safe_load = config_module.yaml.safe_load
+
+    def counting_safe_load(*args, **kwargs):
+        parses.append(1)
+        return real_safe_load(*args, **kwargs)
+
+    monkeypatch.setattr(config_module.yaml, "safe_load", counting_safe_load)
+
+    assert load_config() is not None
+    assert load_config() is not None
+    assert parses == []
+
+
+def test_a_rewritten_file_is_visible_to_the_next_load(config_file):
+    """Editing config.yaml must never be swallowed by the cache."""
+
+    write(config_file, {"tools": {"enabled": True}})
+
+    assert load_config()["tools"]["enabled"] is True
+
+    write(config_file, {"personality": {"name": "Renamed"}})
+
+    fresh = load_config()
+
+    assert fresh["personality"]["name"] == "Renamed"
+    assert fresh["tools"]["enabled"] is False
+
+
+def test_the_returned_dict_is_an_independent_copy(config_file):
+    """
+    Callers used to get a brand-new dict every time and may mutate what
+    they are given; a cached merge must not leak those mutations into
+    the next caller's view.
+    """
+
+    write(config_file, {})
+
+    first = load_config()
+    first["tools"]["enabled"] = True
+    first["llm"]["model"] = "mutated"
+
+    second = load_config()
+
+    assert second["tools"]["enabled"] is False
+    assert second["llm"]["model"] == DEFAULT_CONFIG["llm"]["model"]
+
+
+def test_an_overlay_change_is_seen_without_rewriting_config_yaml(
+    config_file, monkeypatch
+):
+    """
+    The Hub changes settings through the runtime overlay, not by editing
+    config.yaml - so the overlay, not the file stat alone, must drive
+    invalidation. Update and reset must both be visible immediately.
+    """
+
+    from core import settings_store as settings_module
+
+    store = settings_module.RuntimeSettings(
+        path=config_file.parent / "settings.json"
+    )
+    monkeypatch.setattr(settings_module, "_settings", store)
+
+    write(config_file, {"llm": {"provider": "ollama", "ollama_model": "base"}})
+
+    assert load_config()["llm"]["ollama_model"] == "base"
+
+    store.update({"llm.ollama_model": "tuned"})
+
+    patched = load_config()
+
+    assert patched["llm"]["ollama_model"] == "tuned"
+    assert patched["llm"]["provider"] == "ollama"  # file layer intact
+
+    store.reset()
+
+    assert load_config()["llm"]["ollama_model"] == "base"
+
+
+def test_swapping_in_a_fresh_store_invalidates_the_cache(config_file, monkeypatch):
+    """
+    The singleton is replaced wholesale (tests do it constantly). The
+    cache keys on a per-store token precisely so a new store's empty
+    overrides are not served from the previous store's cached merge -
+    even though both stores start life at version 0.
+    """
+
+    from core import settings_store as settings_module
+
+    first = settings_module.RuntimeSettings(
+        path=config_file.parent / "a.json"
+    )
+    monkeypatch.setattr(settings_module, "_settings", first)
+
+    write(config_file, {"llm": {"ollama_model": "base"}})
+    load_config()
+
+    first.update({"llm.ollama_model": "from-first"})
+    assert load_config()["llm"]["ollama_model"] == "from-first"
+
+    second = settings_module.RuntimeSettings(
+        path=config_file.parent / "b.json"
+    )
+    monkeypatch.setattr(settings_module, "_settings", second)
+
+    assert load_config()["llm"]["ollama_model"] == "base"
+
+    # And back to no overlay at all - same answer.
+    monkeypatch.setattr(settings_module, "_settings", None)
+
+    assert load_config()["llm"]["ollama_model"] == "base"

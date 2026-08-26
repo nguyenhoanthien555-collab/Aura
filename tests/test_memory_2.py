@@ -814,6 +814,87 @@ def test_pipeline_recalls_what_it_stored(pipeline):
     assert any("migration" in line for line in lines)
 
 
+# ======================================================================
+# The recall gate - `memory.recall` is the owner's, and it must bite
+# ======================================================================
+
+def test_recall_off_silences_episodic_recall(pipeline):
+    """
+    `build_memory_pipeline` reads `memory.recall` into
+    `recall_enabled`, and this is the assertion that makes storing it
+    mean something. Without it the attribute is written at build time
+    and read by nobody, which is worse than an unimplemented setting:
+    the owner sets it, the store accepts it, `effective` reports it
+    back, and Aura recalls anyway (section 2).
+    """
+
+    pipeline.observe("user", "I just finished the sqlite migration")
+
+    pipeline.recall_enabled = False
+
+    lines = pipeline.memory_lines("how did the migration go")
+
+    assert not any("migration" in line for line in lines)
+
+
+def test_recall_off_leaves_the_other_two_tiers_alone(pipeline):
+    """
+    The key is named `recall`, and in this codebase recall has always
+    meant the episodic search - `launcher/services.py` reads the same
+    key to choose `KeywordRetriever` over `NullRetriever` and touches
+    nothing else. The user model is who the owner *is* and the
+    temporary tier is what is true this minute; neither is a search
+    over history, and silencing them would make one checkbox quietly
+    mean three things.
+    """
+
+    pipeline.user_model.confirm(
+        "identity.primary_language", "Vietnamese", category=IDENTITY
+    )
+    pipeline.observe("user", "I just finished the sqlite migration")
+    pipeline.observe("user", "I'm at a cafe right now with my laptop")
+
+    pipeline.recall_enabled = False
+
+    lines = pipeline.memory_lines("language migration cafe laptop")
+
+    assert any("Vietnamese" in line for line in lines)
+    assert any("cafe" in line for line in lines)
+
+
+def test_an_explicit_argument_still_wins_over_the_attribute(pipeline):
+    """
+    The parameter predates the attribute and some callers pass it, so
+    it keeps its meaning: an explicit `recall_episodic=False` suppresses
+    recall on a pipeline whose owner left recall on. What changes is the
+    *default* - absent an argument, the owner's setting decides, rather
+    than a literal `True` in the signature deciding for them.
+    """
+
+    pipeline.observe("user", "I just finished the sqlite migration")
+
+    assert pipeline.recall_enabled is True
+
+    lines = pipeline.memory_lines(
+        "how did the migration go", recall_episodic=False
+    )
+
+    assert not any("migration" in line for line in lines)
+
+
+def test_recall_on_recalls(pipeline):
+    """The other half of the gate, so a bug that disables recall
+    outright cannot pass by satisfying the tests above."""
+
+    pipeline.observe("user", "I just finished the sqlite migration")
+
+    pipeline.recall_enabled = True
+
+    lines = pipeline.memory_lines("how did the migration go")
+
+    assert any("migration" in line for line in lines)
+
+
 def test_pipeline_orders_stable_facts_before_passing_remarks(pipeline):
     """A truncation must drop the least trustworthy lines first."""
 

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,7 @@ import com.aura.companion.ui.components.SelectRow
 import com.aura.companion.ui.components.SettingsSection
 import com.aura.companion.ui.components.StatusRow
 import com.aura.companion.ui.components.StatusTone
+import com.aura.companion.ui.components.TextEntryDialog
 import com.aura.companion.ui.components.ToggleRow
 
 /**
@@ -63,6 +65,8 @@ fun GeneralSection(
     var pickingTheme by remember { mutableStateOf(false) }
 
     var advancedOpen by remember { mutableStateOf(false) }
+
+    var editingTimezone by remember { mutableStateOf(false) }
 
     val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
@@ -126,6 +130,23 @@ fun GeneralSection(
                 pending = "tools.enabled" in state.pending,
                 lockedReason = state.lockedReason("tools.enabled"),
                 onCheckedChange = { viewModel.setFlag("tools.enabled", it) },
+            )
+
+            RowDivider()
+
+            // Phase 23: settable over PATCH since it was added, with no
+            // control anywhere. The deployment that needs this - a container
+            // running in UTC whose owner is not - is exactly the one that
+            // cannot edit config.yaml. Blank means "the host's own zone".
+            SelectRow(
+                title = "Aura's time zone",
+                value = state.server.config.temporal.timezone.ifBlank {
+                    "Host's own zone"
+                },
+                subtitle = "What \"today\" and quiet hours mean to Aura",
+                icon = Icons.Filled.Schedule,
+                lockedReason = state.lockedReason("temporal.timezone"),
+                onClick = { editingTimezone = true },
             )
         }
 
@@ -246,6 +267,19 @@ fun GeneralSection(
                 }
             },
             onDismiss = { pickingTheme = false },
+        )
+    }
+
+    if (editingTimezone) {
+        TextEntryDialog(
+            title = "Aura's time zone",
+            initial = state.server.config.temporal.timezone,
+            label = "IANA zone name",
+            help = "For example Europe/Berlin. Left empty, Aura uses the time " +
+                "zone of the machine it runs on - which, in a container, is " +
+                "usually UTC.",
+            onCommit = { viewModel.setText("temporal.timezone", it.trim()) },
+            onDismiss = { editingTimezone = false },
         )
     }
 }

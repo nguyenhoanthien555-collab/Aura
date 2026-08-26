@@ -2,6 +2,7 @@ package com.aura.companion.data.remote
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -69,6 +70,19 @@ data class EffectiveConfigDto(
     val voice: VoiceConfigDto = VoiceConfigDto(),
     val tools: ToolsConfigDto = ToolsConfigDto(),
     val server: ServerConfigDto = ServerConfigDto(),
+    /**
+     * What time Aura thinks it is. `temporal.timezone` is settable over
+     * PATCH (a container running in UTC is exactly the deployment that
+     * cannot edit config.yaml), and until this block existed the phone
+     * could read the effective value in the raw document but not render
+     * or change it.
+     */
+    val temporal: TemporalConfigDto = TemporalConfigDto(),
+)
+
+@Serializable
+data class TemporalConfigDto(
+    val timezone: String = "",
 )
 
 @Serializable
@@ -110,10 +124,43 @@ data class LlmConfigDto(
     @SerialName("xai_model") val xaiModel: String = "",
     @SerialName("deepseek_model") val deepseekModel: String = "",
     @SerialName("qwen_model") val qwenModel: String = "",
+    /**
+     * The owner's own endpoint, and the model on it.
+     *
+     * Both blank on a stock server, and blank is meaningful: `custom` is
+     * the one provider with no vendor URL, so until these are filled in
+     * the server skips it rather than guessing an address. The hub asks
+     * for them; it cannot offer a list, because there is nothing to list.
+     */
+    @SerialName("custom_base_url") val customBaseUrl: String = "",
+    @SerialName("custom_model") val customModel: String = "",
     val temperature: Double = 0.7,
     @SerialName("max_output_tokens") val maxOutputTokens: Int = 768,
     /** Absent from `DEFAULT_CONFIG`; the router's own fallback is 45s. */
     val timeout: Double = 45.0,
+    @SerialName("task_models") val taskModels: TaskModelsDto = TaskModelsDto(),
+)
+
+/**
+ * Which provider answers which kind of question.
+ *
+ * Empty means "whatever [LlmConfigDto.provider] says", which is both the
+ * default and what every install had before lanes existed. A lane is
+ * additive: it never rewrites `provider`, so reading a blank here is not a
+ * missing value, it is the owner having expressed no preference.
+ *
+ * Only the five task classes the server actually routes on are declared.
+ * `vision`, `embedding` and `fallback` exist as task classes on the server
+ * but nothing dispatches to them yet, and a control for a lane that
+ * changes nothing is worse than no control.
+ */
+@Serializable
+data class TaskModelsDto(
+    val reasoning: String = "",
+    val coding: String = "",
+    @SerialName("tool_planning") val toolPlanning: String = "",
+    @SerialName("fast_response") val fastResponse: String = "",
+    @SerialName("long_context") val longContext: String = "",
 )
 
 @Serializable
@@ -136,9 +183,33 @@ data class ProactiveConfigDto(
     @SerialName("similarity_threshold") val similarityThreshold: Double = 0.6,
 )
 
+/**
+ * What the server will admit about its own screen awareness.
+ *
+ * [captureScreen] and [minInterval] were in the effective document from
+ * the start and settable nowhere until phase 19; they are declared here
+ * because the server now lists them as configurable, and a phone that
+ * cannot read a value it is allowed to change would be showing the owner
+ * a control with no current state.
+ *
+ * [sendScreenToCloud] is the one field on this class where the default
+ * matters. `false` is not a placeholder: a server too old to send the
+ * field is a server that cannot send the desktop's pixels anywhere, so
+ * reading the absence as "off" is the truth rather than a guess - and
+ * reading it as "on" would tell the owner their screen was leaving a
+ * machine where that code does not exist.
+ *
+ * `monitor`, `host`, `timeout` and `debug_frame` are absent on purpose,
+ * matching the server's own `ALLOWED`: they are facts about the machine
+ * Aura runs on, and retargeting the vision host from a phone would aim
+ * the owner's screen at an endpoint nobody typed on that machine.
+ */
 @Serializable
 data class VisionConfigDto(
     val enabled: Boolean = false,
+    @SerialName("capture_screen") val captureScreen: Boolean = false,
+    @SerialName("send_screen_to_cloud") val sendScreenToCloud: Boolean = false,
+    @SerialName("min_interval") val minInterval: Double = 2.0,
     @SerialName("cloud_model") val cloudModel: String = "",
     @SerialName("ollama_model") val ollamaModel: String = "",
 )
@@ -173,11 +244,18 @@ data class VoiceChannelDto(
 /**
  * The tool policy, as the server is running it.
  *
- * [allowed], [allowedPaths] and [applications] are reported but are *not*
- * in the server's allow-list, so the hub renders them read-only. They decide
- * which tools exist and which filesystem roots and executables they may
- * touch - granting a capability rather than configuring one - and a bearer
- * token is deliberately not enough for that.
+ * [allowed], [allowedPaths], [applications] and [commands] are reported but
+ * are *not* in the server's allow-list, so the hub renders them read-only.
+ * They decide which tools exist and which filesystem roots, executables and
+ * programs they may run - granting a capability rather than configuring one
+ * - and a bearer token is deliberately not enough for that.
+ *
+ * [commands] most of all. It is a set of argv lists the owner has declared
+ * for `run_command` to run, so a settable one would let anything holding the
+ * token declare `["cmd", "/c", "{x}"]` and then fill in `{x}`. It is
+ * reported so the owner can see on their phone what their PC has been
+ * authorised to run, which is worth seeing precisely because it cannot be
+ * changed from there.
  */
 @Serializable
 data class ToolsConfigDto(
@@ -187,8 +265,25 @@ data class ToolsConfigDto(
     @SerialName("auto_approve") val autoApprove: List<String> = emptyList(),
     val timeout: Double = 30.0,
     @SerialName("allowed_paths") val allowedPaths: List<String> = emptyList(),
+    /**
+     * Directories `write_file`, `append_to_file`, `create_directory` and
+     * `delete_file` may change. A separate grant from [allowedPaths] on the
+     * server, and separate here too: reading a folder and being allowed to
+     * overwrite it are different permissions, and showing them as one list
+     * would tell the owner something untrue about their own machine.
+     */
+    @SerialName("writable_paths") val writablePaths: List<String> = emptyList(),
     /** Name → executable. Values are paths on the host, never secrets. */
     val applications: Map<String, String> = emptyMap(),
+    /**
+     * Name → declaration, for `run_command`. Left as raw JSON because
+     * the server accepts two shapes - a bare argv list, or a mapping with
+     * `argv`, `description`, `parameters`, `cwd` and `timeout` - and this
+     * screen only ever displays it. Parsing it into a sealed type here
+     * would be a second implementation of a schema the PC already owns,
+     * and it would fail closed on a shape a newer server added.
+     */
+    val commands: Map<String, JsonElement> = emptyMap(),
 )
 
 @Serializable
@@ -206,6 +301,24 @@ data class ScreenConfigDto(
 @Serializable
 data class CompanionConfigDto(
     val enabled: Boolean = false,
+    /**
+     * The six tuning knobs phase 14 made settable and phase 23 made
+     * visible. All defaulted, so a server older than any one of them
+     * still parses - the row renders the default rather than failing the
+     * whole settings screen.
+     *
+     * The bounds shown here are the server's own (`core/settings_store.py`):
+     * a five-minute cooldown floor, at most twelve messages an hour,
+     * similarity never below 0.1. Nothing on this screen can turn the
+     * anti-spam gate off, because nothing on the server can either.
+     */
+    @SerialName("relevance_threshold") val relevanceThreshold: Double = 0.7,
+    @SerialName("cooldown_seconds") val cooldownSeconds: Double = 300.0,
+    @SerialName("max_per_hour") val maxPerHour: Int = 6,
+    /** `[[22, 8]]` - windows that may wrap midnight. */
+    @SerialName("quiet_hours") val quietHours: List<List<Int>> = emptyList(),
+    @SerialName("suppress_after_chat_seconds") val suppressAfterChatSeconds: Double = 120.0,
+    @SerialName("duplicate_window_seconds") val duplicateWindowSeconds: Double = 1800.0,
 )
 
 // ----------------------------------------------------------------------

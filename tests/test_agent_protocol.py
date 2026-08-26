@@ -30,6 +30,7 @@ what would catch a real break of the same contract later.
 """
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,6 +38,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from core.paths import PROJECT_ROOT
 from memory.manager import MemoryManager
 from memory.models import Base
 from server import config as server_config
@@ -585,3 +587,603 @@ def test_a_malformed_action_is_still_delivered_intact(
     """
 
     assert reply_of(tick(client, model_reply, says)) == model_reply
+
+
+# ======================================================================
+# The action vocabulary, across the language boundary
+# ======================================================================
+
+KOTLIN_PARSER = (
+    PROJECT_ROOT
+    / "android/app/src/main/java/com/aura/companion/accessibility"
+    / "AgentActionParser.kt"
+)
+
+
+def offered_actions() -> set[str]:
+    """
+    Every action the AGENT RULES section tells the model it may use.
+
+    Read out of the rendered prompt rather than out of a constant, because
+    the prompt is what the model actually sees. A list that agreed with a
+    constant while disagreeing with the prompt would prove nothing.
+    """
+
+    from brain.message import Message
+    from brain.prompt_builder import PromptBuilder
+
+    prompt = PromptBuilder().build(
+        history=[],
+        user_message=Message(role="user", content="agent_tick"),
+        context={"device": {}, "accessibility_tree": {}},
+    )
+
+    line = next(
+        (
+            text for text in prompt.splitlines()
+            if text.strip().startswith('"action":') and "|" in text
+        ),
+        None,
+    )
+
+    assert line is not None, (
+        "the AGENT RULES prompt no longer contains an '\"action\": a | b' "
+        "enum line. If the format changed, update this reader - the "
+        "agreement it checks had already broken once."
+    )
+
+    return set(re.findall(r'"(\w+)"', line)) - {"action"}
+
+
+def accepted_actions() -> set[str]:
+    """
+    Every action `AgentActionParser.KNOWN_ACTIONS` will let through.
+
+    Parsed out of the Kotlin source. Crude, and the only option available:
+    the allow list is a Kotlin `Set<String>` and the prompt is a Python
+    f-string, so no single test runtime can import both. The alternative
+    is what the repository had until now - a comment on `KNOWN_ACTIONS`
+    saying it is "kept in step with the supported set listed in the AGENT
+    RULES prompt section", which is a promise nothing checked.
+    """
+
+    source = KOTLIN_PARSER.read_text(encoding="utf-8")
+
+    marker = "val KNOWN_ACTIONS"
+    assert marker in source, (
+        f"{KOTLIN_PARSER.name} no longer declares {marker}. If the allow "
+        f"list was renamed or moved, point this reader at it - do not "
+        f"delete the check, because the drift it caught was real."
+    )
+
+    body = source.split(marker, 1)[1].split(")", 1)[0]
+    names = set(re.findall(r'"(\w+)"', body))
+
+    assert names, (
+        f"parsed no action names out of {KOTLIN_PARSER.name}'s {marker}. "
+        f"Read as: {body!r}"
+    )
+
+    return names
+
+
+def test_the_parser_accepts_every_action_the_prompt_offers():
+    """
+    The drift this catches was live, and it cost the agent a step.
+
+    The prompt offered `submit`, `AuraActionExecutor` implemented it, and
+    `AuraAccessibilityService`'s completion heuristics tested for it - but
+    `KNOWN_ACTIONS` did not contain it. So a model doing exactly as it was
+    told was answered with `"submit" is not a supported action`, and that
+    rejection spends one of three parse failures before the task is
+    abandoned. Section 23's search flow ends in submit, so the mandated
+    scenario could not complete.
+
+    Asserted in this direction because it is the harmful one: an action
+    offered but not accepted punishes obedience.
+    """
+
+    missing = offered_actions() - accepted_actions()
+
+    assert not missing, (
+        f"the AGENT RULES prompt offers {sorted(missing)}, which "
+        f"AgentActionParser.KNOWN_ACTIONS rejects"
+    )
+
+
+def test_the_parser_offers_nothing_the_prompt_does_not():
+    """
+    The other direction, which is untidy rather than harmful.
+
+    An action the parser accepts but the prompt never mentions is
+    unreachable: no model will emit a name it was not given. `complete` is
+    the one deliberate exception - it is the terminal action, described in
+    its own block above the supported set rather than inside it.
+    """
+
+    extra = accepted_actions() - offered_actions() - {"complete"}
+
+    assert not extra, (
+        f"AgentActionParser.KNOWN_ACTIONS accepts {sorted(extra)}, which "
+        f"the AGENT RULES prompt never offers"
+    )
+
+
+# ======================================================================
+# The search-verb vocabulary, across the language boundary
+# ======================================================================
+
+KOTLIN_EXECUTOR = (
+    PROJECT_ROOT
+    / "android/app/src/main/java/com/aura/companion/accessibility"
+    / "AuraActionExecutor.kt"
+)
+
+
+def device_search_verbs() -> list[str]:
+    """
+    The device's search vocabulary, in order.
+
+    Read out of the Kotlin source for the same reason the action names
+    are: a Python-side copy of the list would agree with itself forever
+    while the device drifted, which is precisely how `submit` came to be
+    offered by the prompt and rejected by the parser.
+
+    It used to be a local `val prefixes` inside `sanitizeSearchQuery`,
+    which was its only reader. `shouldAutoComplete` is now a second one -
+    a request containing a search verb is not finished by a launch - so
+    the list is a companion constant and this guard reads that.
+    """
+
+    source = KOTLIN_EXECUTOR.read_text(encoding="utf-8")
+    marker = "val SEARCH_VERBS = listOf("
+
+    assert marker in source, (
+        f"{KOTLIN_EXECUTOR.name} no longer declares `{marker}`. If the "
+        "search vocabulary moved or was renamed, point this guard at its "
+        "new home rather than deleting it - the lists still have to agree."
+    )
+
+    body = source.split(marker, 1)[1].split(")", 1)[0]
+    verbs = [text.strip() for text in re.findall(r'"([^"]*)"', body)]
+
+    assert verbs, f"found `{marker}` in {KOTLIN_EXECUTOR.name} but no strings in it"
+
+    return verbs
+
+
+def test_both_sides_strip_the_same_search_verbs():
+    # The server now decides the query up front (`brain.planner.plan_for`)
+    # and the device still cleans up whatever the model produced. Two
+    # implementations of one rule in two languages is exactly the shape
+    # that broke last time, so the vocabulary is pinned rather than
+    # commented.
+    from brain.planner import SEARCH_VERBS
+
+    assert list(SEARCH_VERBS) == device_search_verbs()
+
+
+def test_the_longest_verb_is_tried_first_on_both_sides():
+    # Order is behaviour, not style. If "search" were tried before
+    # "search for", the query for "search for Minecraft" would come out as
+    # "for Minecraft" - and the side that reordered would be the only one
+    # doing it, so the equality above would fail without saying why.
+    from brain.planner import SEARCH_VERBS
+
+    for verbs in (list(SEARCH_VERBS), device_search_verbs()):
+        for earlier in range(len(verbs)):
+            for later in range(earlier + 1, len(verbs)):
+                assert not verbs[later].startswith(verbs[earlier] + " "), (
+                    f'"{verbs[later]}" is listed after "{verbs[earlier]}", '
+                    f'which is its own prefix - so "{verbs[later]} x" would '
+                    f'be read as "{verbs[earlier]}" followed by a query '
+                    f'beginning "{verbs[later][len(verbs[earlier]) + 1:]}"'
+                )
+
+
+# ======================================================================
+# Who owns "done", across the language boundary
+# ======================================================================
+
+
+def device_multi_step_keywords() -> list[str]:
+    """
+    The separators `shouldAutoComplete` reads as "more than one thing".
+
+    Read out of the Kotlin source, like the search verbs and the retry
+    ceiling, because the whole point is to catch the two sides drifting.
+    """
+
+    source = KOTLIN_SERVICE.read_text(encoding="utf-8")
+    marker = "val multiStepKeywords = listOf("
+
+    assert marker in source, (
+        f"{KOTLIN_SERVICE.name} no longer declares `{marker}`. If the "
+        "early-exit test moved or was renamed, point this guard at its "
+        "new home rather than deleting it."
+    )
+
+    body = source.split(marker, 1)[1].split(")", 1)[0]
+    keywords = re.findall(r'"([^"]*)"', body)
+
+    assert keywords, f"found `{marker}` in {KOTLIN_SERVICE.name} but no strings"
+
+    return keywords
+
+
+def device_early_exit_body() -> str:
+    """
+    The body of `shouldAutoComplete`, as text.
+
+    Needed because the test below asserts over vocabularies, and a
+    vocabulary the function declares and never reads would satisfy it
+    vacuously - which is exactly the state the device was in before phase
+    17: the search verbs existed on the device, in the query sanitiser,
+    and the early exit did not look at them.
+    """
+
+    source = KOTLIN_SERVICE.read_text(encoding="utf-8")
+    marker = "fun shouldAutoComplete("
+
+    assert marker in source, (
+        f"{KOTLIN_SERVICE.name} no longer declares `{marker}`. If the "
+        "early exit was renamed, point this guard at its new name."
+    )
+
+    body = source.split(marker, 1)[1]
+    end = body.find("\n        }")
+
+    assert end > 0, "could not find the end of `shouldAutoComplete`"
+
+    return body[:end]
+
+
+def test_the_early_exit_reads_both_kinds_of_signal():
+    """
+    Both lists are consulted, not merely declared.
+
+    The test below checks that a multi-step request contains something the
+    device recognises. That is only meaningful if the device reads it, so
+    this pins the two references. Structural rather than behavioural on
+    purpose: the behaviour is asserted in Kotlin, by
+    `AccessibilityAgentTest.testTwoVerbsWithNoConjunctionIsNotSingleStep`,
+    where the function can actually be called.
+    """
+
+    body = device_early_exit_body()
+
+    assert "multiStepKeywords" in body, (
+        "`shouldAutoComplete` no longer reads its conjunction list, so a "
+        "two-clause request would be called single-step"
+    )
+    assert "SEARCH_VERBS" in body, (
+        "`shouldAutoComplete` no longer reads the shared search "
+        "vocabulary, so \"mở YouTube tìm nhạc\" - two jobs, no conjunction "
+        "- would be reported finished after the launch"
+    )
+
+
+def multi_step_phrasings() -> list[str]:
+    """
+    Requests that ask for two things, generated from the planner's own
+    vocabulary rather than chosen by hand.
+
+    Hand-picked strings prove whatever the author already believed. These
+    are every combination of a launch verb, an app, a separator and a
+    search verb - including the empty separator, which is the case that
+    was broken: "mở YouTube tìm nhạc" names two jobs and no conjunction.
+    """
+
+    from brain.planner import LAUNCH_VERBS, SEARCH_VERBS
+
+    separators = ("", " ") + tuple(f"{c}" for c in (" and ", " rồi ", ", "))
+    requests = []
+
+    for launch in LAUNCH_VERBS:
+        for app in ("YouTube", "Chrome"):
+            for separator in separators:
+                for search in SEARCH_VERBS:
+                    requests.append(
+                        f"{launch} {app}{separator or ' '}{search} Minecraft"
+                    )
+
+    return requests
+
+
+def test_no_multi_step_request_satisfies_the_device_early_exit():
+    """
+    The device may stop early only where the server sees one step.
+
+    Two authorities decide when an agent task ends, and only one of them
+    owns the question. The server owns "is the goal met": `plan_for`
+    decomposes the request, `task_graph.build` reads it against what
+    happened, and the model ends the task by saying `complete`. The
+    device's `shouldAutoComplete` owns something narrower - whether one
+    navigation step so plainly was the whole request that another round
+    trip to hear `complete` is waste.
+
+    Being wrong in that judgement is not a wasted round trip, it is a
+    truncated task: the loop reports "App launched successfully!" for a
+    request that asked for a search. So the device's answer has to be
+    conservative wherever the planner sees work remaining.
+
+    It was not. `shouldAutoComplete` tested only for a conjunction, while
+    `plan_for` decomposes on a conjunction *or* on a launch verb and a
+    search verb appearing together - and `planner.CONJUNCTIONS` claimed
+    in a comment to be "deliberately the same set" as the device's list.
+    Every phrasing here without a conjunction was decomposed into five
+    steps by the planner and reported as finished by the device after
+    step one.
+
+    Asserted over the vocabularies rather than by re-implementing the
+    Kotlin predicate: what has to hold is that some signal the device
+    actually looks at is present in the text. The Kotlin side of the
+    behaviour is covered by `AccessibilityAgentTest`.
+    """
+
+    from brain.planner import plan_for
+
+    signals = [
+        keyword.strip()
+        for keyword in device_multi_step_keywords() + device_search_verbs()
+    ]
+
+    for request in multi_step_phrasings():
+        steps = len(plan_for(request).steps)
+
+        if steps < 2:
+            continue
+
+        assert any(signal in request.lower() for signal in signals), (
+            f"the planner decomposes {request!r} into {steps} steps, and "
+            "nothing in it is a signal `shouldAutoComplete` reads - so the "
+            "device would report the task finished after the launch"
+        )
+
+
+def device_search_completion_body() -> str:
+    """The body of `isSearchTaskComplete`, as text."""
+
+    source = KOTLIN_SERVICE.read_text(encoding="utf-8")
+    marker = "fun isSearchTaskComplete("
+
+    assert marker in source, (
+        f"{KOTLIN_SERVICE.name} no longer declares `{marker}`. If it was "
+        "renamed, point this guard at its new name."
+    )
+
+    body = source.split(marker, 1)[1]
+    end = body.find("\n        }")
+
+    assert end > 0, "could not find the end of `isSearchTaskComplete`"
+
+    return body[:end]
+
+
+def trailing_clause_phrasings() -> list[str]:
+    """
+    Search requests with a job named after the search.
+
+    Generated from the planner's own vocabulary and its own conjunctions,
+    so the corpus is not a list of the cases the author happened to think
+    of. The trailing verbs include ones the device's selection list does
+    not carry, which is the half that was invisible.
+    """
+
+    from brain.planner import LAUNCH_VERBS, SEARCH_VERBS, CONJUNCTIONS
+
+    requests = []
+
+    for launch in LAUNCH_VERBS:
+        for search in SEARCH_VERBS:
+            for conjunction in CONJUNCTIONS:
+                for trailing in ("tap the result", "click it", "open settings"):
+                    requests.append(
+                        f"{launch} YouTube and {search} Minecraft"
+                        f"{conjunction}{trailing}"
+                    )
+
+    return requests
+
+
+def test_a_job_after_the_search_is_visible_to_the_device():
+    """
+    The device may not call a search finished while work remains.
+
+    Same ownership boundary as the early exit, at a later point in the
+    task. `isSearchTaskComplete` stops the loop the moment a query is
+    submitted, and it used to decline only when the request asked for a
+    *selection* - so "search Minecraft then open settings" ended at the
+    submit and the trailing job never happened. Three of the phrasings
+    here end in a verb the selection list does not carry at all, which is
+    why the fix is positional rather than another word in a list.
+
+    Asserted over vocabularies for the reason the early-exit test is: the
+    property that has to hold is that a separator the device reads sits to
+    the right of the search verb. The behaviour is asserted in Kotlin, by
+    `AccessibilityAgentTest.testATrailingClauseKeepsTheSearchTaskOpen`.
+    """
+
+    from brain.planner import plan_for, SEARCH_VERBS
+
+    conjunctions = [k.strip() for k in device_multi_step_keywords()]
+    verbs = [v.strip() for v in device_search_verbs()]
+
+    for request in trailing_clause_phrasings():
+        low = request.lower()
+        steps = [step.kind.value for step in plan_for(request).steps]
+
+        if "await_results" not in steps or steps[-1] == "await_results":
+            continue
+
+        last_verb = max(low.rfind(verb) for verb in verbs)
+
+        assert last_verb >= 0, f"no device search verb in {request!r}"
+        assert any(
+            low.find(keyword, last_verb) > last_verb
+            for keyword in conjunctions
+        ), (
+            f"the planner reads {request!r} as {steps}, so work remains "
+            "after the search, and no separator the device reads sits "
+            "after the search verb - the loop would stop at the submit"
+        )
+
+
+def test_the_search_completion_defers_on_a_trailing_clause():
+    """
+    `isSearchTaskComplete` consults the positional check.
+
+    Without this the test above is vacuous: the conjunctions would be
+    present in the text and unread, which is the state the device was in.
+    """
+
+    body = device_search_completion_body()
+
+    assert "hasClauseAfterSearch" in body, (
+        "`isSearchTaskComplete` no longer asks whether a clause follows "
+        "the search, so a request naming a job after the search would be "
+        "reported finished at the submit"
+    )
+    assert "selectionCues" in body, (
+        "`isSearchTaskComplete` no longer declines on a selection request, "
+        "so \"search Minecraft and play the first video\" would end "
+        "before anything was played"
+    )
+
+
+def test_the_device_conjunctions_cover_the_planners():
+    """
+    Every separator the planner splits on, the device also reads.
+
+    The two lists are allowed to differ, and they do - the device keeps
+    " tiếp " and " to ", and bare "," and ";" where the planner wants a
+    following space. All of those make the device answer "more than one
+    thing" where the planner says one, which is the direction that costs
+    a round trip instead of an unfinished task.
+
+    The reverse would be the bug: a separator the planner treats as a
+    clause boundary and the device does not means the device stops at the
+    first clause. `CONJUNCTIONS` used to claim the two sets were equal;
+    this asserts the containment that actually has to hold.
+    """
+
+    from brain.planner import CONJUNCTIONS
+
+    device = [keyword.strip() for keyword in device_multi_step_keywords()]
+
+    for conjunction in CONJUNCTIONS:
+        assert any(keyword in conjunction for keyword in device), (
+            f"the planner splits a request on {conjunction!r} and no "
+            "keyword the device reads appears in it, so the device would "
+            "call a two-clause request single-step and stop after the first"
+        )
+
+
+# ======================================================================
+# The retry bound, across the language boundary
+# ======================================================================
+
+KOTLIN_SERVICE = (
+    PROJECT_ROOT
+    / "android/app/src/main/java/com/aura/companion/accessibility"
+    / "AuraAccessibilityService.kt"
+)
+
+
+def device_attempt_ceiling() -> int:
+    """
+    How many attempts `AuraAccessibilityService` will actually perform.
+
+    Read out of the Kotlin for the same reason the verbs above are. This
+    number is not advice - past it the service stops executing the action
+    at all - so it is the ceiling on anything the server decides about
+    retrying, and a Python-side copy would agree with itself forever while
+    the phone drifted.
+    """
+
+    source = KOTLIN_SERVICE.read_text(encoding="utf-8")
+    marker = "const val MAX_ACTION_ATTEMPTS"
+
+    assert marker in source, (
+        f"{KOTLIN_SERVICE.name} no longer declares `{marker}`. If the retry "
+        "ceiling moved or was renamed, point this guard at its new home "
+        "rather than deleting it - a server bound above what the device "
+        "will perform is permission the phone declines to honour."
+    )
+
+    match = re.search(re.escape(marker) + r"\s*(?::\s*Int\s*)?=\s*(\d+)", source)
+
+    assert match, f"found `{marker}` in {KOTLIN_SERVICE.name} but no number after it"
+
+    return int(match.group(1))
+
+
+def test_the_server_never_asks_for_more_attempts_than_the_device_performs():
+    # The floor `DEFAULT_RETRY_LIMIT` was chosen against. Above the ceiling
+    # the server would keep offering an action the service silently refuses,
+    # and the plan would show a step still being tried while nothing on the
+    # phone moved. At or below it, the bound is real: the server declining
+    # to ask is the whole mechanism.
+    from brain.recovery import DEFAULT_RETRY_LIMIT, RETRY_LIMITS
+
+    ceiling = device_attempt_ceiling()
+
+    assert DEFAULT_RETRY_LIMIT <= ceiling, (
+        f"DEFAULT_RETRY_LIMIT is {DEFAULT_RETRY_LIMIT} but the device stops "
+        f"executing at {ceiling}"
+    )
+
+    for kind, limit in RETRY_LIMITS.items():
+        assert limit <= ceiling, (
+            f"RETRY_LIMITS[{kind!r}] is {limit} but the device stops "
+            f"executing at {ceiling}"
+        )
+
+
+def device_failure_verdicts() -> set[str]:
+    """
+    The verdict words the device puts on a `failed_actions` line.
+
+    Read off the `formatActionFailure` call sites rather than off a Kotlin
+    constant, because the call sites are what a tick actually carries. A
+    constant listing a verdict nobody emits, or a call site passing one
+    nothing declares, would both pass a check against the constant.
+    """
+
+    source = KOTLIN_SERVICE.read_text(encoding="utf-8")
+    verdicts = set(re.findall(r'formatActionFailure\(\s*action\s*,\s*"([^"]+)"', source))
+
+    assert verdicts, (
+        f"{KOTLIN_SERVICE.name} no longer calls `formatActionFailure` with a "
+        "literal verdict. If failure reporting moved or was renamed, point "
+        "this guard at its new home rather than deleting it - the server's "
+        "reader only knows the words the device sends."
+    )
+
+    return verdicts
+
+
+def test_both_sides_agree_on_what_a_failure_verdict_says():
+    # The device's vocabulary is the contract; `_FAILED_ACTION` is a reader
+    # of it. A verdict the regex does not list is not a parse error - the
+    # line is skipped - so the failure would vanish silently, the attempt
+    # would never be counted, and the step would look untried forever.
+    from brain.agent_mode import _FAILED_ACTION
+    from brain.recovery import FAILURE_DETAIL
+
+    readable = set(re.findall(r"[A-Z]{3,}", _FAILED_ACTION.pattern))
+    emitted = device_failure_verdicts()
+
+    assert emitted <= readable, (
+        f"the device sends {sorted(emitted - readable)}, which "
+        "`_FAILED_ACTION` will not match - those lines would be dropped in "
+        "silence"
+    )
+
+    # And each one has a reason to show the model. `detail_for` falls back,
+    # so a gap here is not a crash; it is the plan telling the user "did not
+    # complete" when the device knew something more useful.
+    assert emitted <= set(FAILURE_DETAIL), (
+        f"the device sends {sorted(emitted - set(FAILURE_DETAIL))}, which "
+        "`FAILURE_DETAIL` has no wording for"
+    )

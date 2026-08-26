@@ -20,6 +20,7 @@ import com.aura.companion.data.remote.SettingsResetRequestDto
 import com.aura.companion.data.remote.SettingsResetResponseDto
 import com.aura.companion.data.remote.SettingsResponseDto
 import com.aura.companion.data.remote.StreamEvent
+import com.aura.companion.data.chat.SessionStore
 import com.aura.companion.data.settings.SettingsProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -56,18 +57,37 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class AuraRepository(
     private val settings: SettingsProvider,
+    private val session: SessionStore = SessionStore.None,
 ) {
 
     private val cached = AtomicReference<Pair<String, AuraApi>?>(null)
 
     private val streamClient = AuraStreamClient(settings)
 
-    private val _sessionId = AtomicReference<String?>(null)
+    /**
+     * The conversation the server knows about, restored if there is one.
+     *
+     * Defaults to [SessionStore.None], which remembers nothing - so a caller
+     * that passes no store behaves exactly as this class did before §15, and
+     * every existing test still describes real behaviour.
+     *
+     * Read defensively. A stored session id is a convenience for the next
+     * launch, and a Keystore that has become unavailable must not stop the
+     * app from starting a conversation now.
+     */
+    private val _sessionId = AtomicReference<String?>(
+        try {
+            session.sessionId
+        } catch (error: Exception) {
+            null
+        }
+    )
 
     val sessionId: String? get() = _sessionId.get()
 
     fun resetSession() {
         _sessionId.set(null)
+        remember(null)
     }
 
     /**
@@ -119,7 +139,7 @@ class AuraRepository(
         return result.map { dto ->
             // Adopt whatever session the server used, so a server that
             // generated one becomes the conversation this app continues.
-            _sessionId.set(dto.sessionId)
+            adopt(dto.sessionId)
 
             ChatReply(
                 sessionId = dto.sessionId,
@@ -148,8 +168,37 @@ class AuraRepository(
                 }
             }
 
+    /**
+     * The one place a session id is written.
+     *
+     * REST used to set the field directly and only streaming came through
+     * here, which was harmless while the id lived in memory alone. With a
+     * store behind it a second writer is a second thing to forget, so both
+     * paths now arrive here.
+     */
     private fun adopt(sessionId: String) {
-        if (sessionId.isNotBlank()) _sessionId.set(sessionId)
+
+        if (sessionId.isBlank()) return
+
+        _sessionId.set(sessionId)
+        remember(sessionId)
+    }
+
+    /**
+     * Persist the session id, or fail quietly.
+     *
+     * Storing it is what makes a restored transcript the same conversation
+     * the server remembers. Failing to store it costs continuity at the next
+     * launch; letting the failure out would cost the message being sent now,
+     * which the user is watching.
+     */
+    private fun remember(sessionId: String?) {
+        try {
+            session.remember(sessionId)
+        } catch (error: Exception) {
+            // Nothing loggable: the id is not secret, but a failure here is
+            // not actionable by the person holding the phone either.
+        }
     }
 
     // ------------------------------------------------------------------

@@ -1047,3 +1047,213 @@ def test_the_shipped_config_grants_exactly_one_safe_tool():
     executor = build_tools(load_config().get("tools") or {})
 
     assert executor.available() == ["current_time"]
+
+
+# ======================================================================
+# 6. remember, end to end (section 17)
+#
+# Registered is not reachable. Five gates sit between a tool existing and
+# a fact landing in the database - enabled, registered, allowed, risk
+# approved, arguments valid - and the semantic tier's whole problem was
+# that the machinery existed while nothing crossed them. So these run the
+# real conversation loop against the real executor and the real store,
+# and check the database rather than the call log.
+# ======================================================================
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from core.temporal import TemporalClock
+from memory.models import Base
+from memory.pipeline import MemoryPipeline
+from memory.user_model import Status
+from tools.builtins.memory import RememberTool
+
+
+@pytest.fixture
+def live_pipeline():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+
+    yield MemoryPipeline(
+        session=session,
+        clock=TemporalClock(now=lambda: __import__("datetime").datetime(
+            2026, 8, 24, 10, 30
+        )),
+    )
+
+    session.close()
+
+
+def remember_executor(pipeline) -> ToolExecutor:
+    """The real executor, with the policy config.yaml actually ships."""
+
+    return build_tools(
+        {"enabled": True, "allowed": ["remember"], "auto_approve": ["safe"]},
+        memory=pipeline,
+    )
+
+
+def test_a_conversation_can_put_a_fact_in_the_semantic_tier(live_pipeline):
+    """
+    The gap phase 11 part 2 exists to close, stated as a behaviour.
+
+    The user says who they are, the model asks for `remember`, and the
+    fact is in the user model afterwards - CONFIRMED, because they said
+    it. Before this, every gate here passed except the last one: there
+    was no tool to ask for, so the sentence was saved as something that
+    happened and the fact it carried was lost.
+    """
+
+    llm = ScriptedLLM(
+        call("remember", key="identity.name", value="Thien"),
+        "được rồi, tớ nhớ nha.",
+    )
+
+    reply = manager(llm, tools=remember_executor(live_pipeline)).chat(
+        "tên tớ là Thien nhé"
+    )
+
+    model = live_pipeline.user_model
+
+    assert model.value_of("identity.name") == "Thien"
+    assert model.status_of("identity.name") is Status.CONFIRMED
+
+    # And the turn still ends in a sentence, not in the tool JSON.
+    assert reply.text == "được rồi, tớ nhớ nha."
+
+
+def test_the_stored_fact_reaches_the_next_prompt(live_pipeline):
+    """
+    Storing it is only half the point - a fact nothing reads is a row.
+
+    The same pipeline that wrote it composes the memory section of a
+    later prompt, so this checks the loop closes: remembered on one turn,
+    present in the model's context on the next.
+    """
+
+    remember = RememberTool(live_pipeline)
+    remember.execute(key="identity.name", value="Thien")
+
+    lines = live_pipeline.memory_lines("what is my name")
+
+    assert any("Thien" in line for line in lines)
+
+
+def catalogue_of(prompt: str) -> str:
+    """
+    Just the TOOLS section, because the bare word will not do.
+
+    `"remember" in prompt` looks like the obvious assertion and is
+    useless: the persona and memory sections say "remember what matters
+    across conversations" and "do not pretend to remember something that
+    is not in front of you" in every prompt Aura ever builds. So the
+    naive check passes with the catalogue entirely broken, and its
+    negative fails with the catalogue correctly empty. Only the section
+    the catalogue actually writes discriminates.
+    """
+
+    if TOOLS not in prompt:
+        return ""
+
+    return prompt.split(TOOLS, 1)[1].split("=====", 1)[0]
+
+
+def test_the_model_is_told_the_tool_exists(live_pipeline):
+    """
+    A tool absent from the catalogue cannot be asked for, however well
+    registered it is - which is what `allowed` decides, and what makes
+    the config.yaml line load bearing rather than cosmetic.
+    """
+
+    llm = ScriptedLLM("nothing to do")
+
+    manager(llm, tools=remember_executor(live_pipeline)).chat("hello")
+
+    assert "remember" in catalogue_of(llm.prompts[0])
+
+
+def test_a_conversation_cannot_reach_it_when_the_owner_unlists_it(
+    live_pipeline,
+):
+    """
+    The owner's half of section 2, and the documented way to turn this
+    off: delete the line from `tools.allowed`. The tool stays registered
+    and becomes inert - a refusal, not an error - so nothing crashes and
+    nothing is stored.
+    """
+
+    executor = build_tools(
+        {"enabled": True, "allowed": [], "auto_approve": ["safe"]},
+        memory=live_pipeline,
+    )
+
+    llm = ScriptedLLM("ok")
+
+    manager(llm, tools=executor).chat("tên tớ là Thien nhé")
+
+    assert executor.registry.has("remember")
+    assert catalogue_of(llm.prompts[0]) == ""
+    assert len(live_pipeline.user_model) == 0
+
+
+def test_no_pipeline_means_the_tool_is_absent_rather_than_broken():
+    """
+    Registration is gated on the dependency, like the filesystem tools
+    are on `allowed_paths`. A `remember` registered with nothing behind
+    it would accept a fact and drop it, reporting success.
+    """
+
+    registry = build_registry({"enabled": True, "allowed": ["remember"]})
+
+    assert not registry.has("remember")
+
+
+def test_the_composition_root_hands_the_pipeline_to_the_tools():
+    """
+    The wiring, not the function.
+
+    `RememberTool` being correct is worth nothing if the one executor the
+    process actually runs tools through was built without a pipeline: the
+    tool would not register, `remember` would be absent from every real
+    catalogue, and every test above would still pass, because they all
+    build their own executor. Dropping the third argument from the
+    `_build_tools` call in `launcher/services.py` was tried, and the full
+    suite stayed green - which is how this test came to exist.
+
+    That is the same shape of bug as the one this whole phase is about:
+    machinery present, nothing reaching it, tests agreeing.
+    """
+
+    from launcher.services import build_services
+    from memory.manager import MemoryManager
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+
+    try:
+        services = build_services(
+            config={
+                # Everything optional off: this is about one argument.
+                "voice": {"tts": {"enabled": False}, "stt": {"enabled": False}},
+                "vision": {"enabled": False},
+                "avatar": {"enabled": False},
+                "plugins": {"enabled": []},
+                "tools": {"enabled": True, "allowed": ["remember"]},
+                # The pipeline is what `remember` writes through, so the
+                # tier it serves has to be switched on for it to exist.
+                "memory": {"recall": False, "profile": False, "pipeline": True},
+            },
+            memory=MemoryManager(session=session),
+        )
+
+        assert services.tools.registry.has("remember")
+
+        # And reachable, not merely registered - SAFE, auto approved, so
+        # no confirmation handler is needed in a server deployment.
+        assert "remember" in services.tools.available()
+
+    finally:
+        session.close()

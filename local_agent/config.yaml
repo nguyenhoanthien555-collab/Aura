@@ -1,0 +1,18 @@
+project:
+  root: "D:/AURA"
+
+models:
+  coder: "qwen3.5:9b"
+  reasoner: "qwen3:8b"
+
+runtime:
+  endpoint: "http://localhost:11434"
+  max_context_files: 12
+  max_file_chars: 12000
+  temperature_reasoner: 0.2
+  temperature_coder: 0.2
+
+  telemetry:
+    enabled: true
+    log_file: "D:/AURA/local_agent/runtime/thinking.log"
+    heartbeat_seconds: 5

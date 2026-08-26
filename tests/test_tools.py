@@ -674,3 +674,302 @@ def test_a_registered_but_unpermitted_tool_is_visible_and_inert():
     assert "current_time" in executor.registry.names()
     assert executor.available() == []
     assert "not allowed" in executor.check("current_time")
+
+
+# ======================================================================
+# remember - the semantic tier's missing caller (section 17)
+#
+# `MemoryPipeline.remember_user_stated` and `remember_user_correction`
+# were written, tested and then called by nothing outside the test
+# suite, so Aura could not learn a durable keyed fact from a
+# conversation no matter what the user told her. The tier existed; the
+# door into it did not.
+#
+# A tool rather than an extraction pass over every message, for two
+# reasons. The keys are namespaced (`identity.name`, not `name`), and
+# nothing short of a model can turn "I'm Thien btw" into that key, so
+# regex extraction would either invent keys or miss most facts. And
+# `memory/user_model.py` is explicit that CONFIRMED means the user
+# actually said it - a tool call the model makes deliberately, with the
+# key it chose, is that; a background scraper guessing at intent is not.
+# ======================================================================
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from core.temporal import TemporalClock
+from memory.models import Base
+from memory.pipeline import MemoryPipeline
+from memory.user_model import CATEGORIES, IDENTITY, PROJECT, Status
+from tools.builtins.memory import RememberTool
+
+
+@pytest.fixture
+def pipeline_for_tools():
+    """
+    A real pipeline on an isolated in-memory database.
+
+    Real rather than a mock: the thing under test is whether a fact
+    survives being written, and a mock that records the call would pass
+    with the write silently dropped.
+    """
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+
+    yield MemoryPipeline(
+        session=session,
+        clock=TemporalClock(now=lambda: datetime(2026, 8, 24, 10, 30)),
+    )
+
+    session.close()
+
+
+@pytest.fixture
+def remember(pipeline_for_tools):
+    return RememberTool(pipeline_for_tools)
+
+
+def test_remembering_stores_a_confirmed_fact(remember, pipeline_for_tools):
+    """
+    The point of the whole tier: it is still there afterwards.
+
+    CONFIRMED rather than INFERRED because the user said it. That
+    distinction is the user model's central rule and the tool does not
+    get to blur it - `infer()` is the door for things Aura worked out.
+    """
+
+    remember.execute(key="identity.name", value="Thien")
+
+    model = pipeline_for_tools.user_model
+
+    assert model.value_of("identity.name") == "Thien"
+    assert model.status_of("identity.name") is Status.CONFIRMED
+
+
+def test_remembering_says_what_it_stored(remember):
+    """
+    The result goes back to the model as TOOL RESULTS and then, usually,
+    into a reply to the user. "ok" would leave both guessing about which
+    fact landed, and a wrong key stored under a confident "ok" is worse
+    than a visible one.
+    """
+
+    result = remember.execute(key="project.current", value="Aura")
+
+    assert "project.current" in str(result)
+    assert "Aura" in str(result)
+
+
+def test_a_category_can_be_chosen(remember, pipeline_for_tools):
+
+    remember.execute(key="project.current", value="Aura", category=PROJECT)
+
+    assert pipeline_for_tools.user_model.get("project.current").category == PROJECT
+
+
+def test_the_default_category_is_identity(remember, pipeline_for_tools):
+
+    remember.execute(key="identity.name", value="Thien")
+
+    assert pipeline_for_tools.user_model.get("identity.name").category == IDENTITY
+
+
+def test_an_invented_category_is_refused(remember, pipeline_for_tools):
+    """
+    The constants in `memory/user_model.py` carry a comment promising
+    that a typo is an ImportError rather than a silently unqueryable
+    row. That promise holds for every caller that imports them, and this
+    is the first caller whose category arrives as free text from a
+    language model - which imports nothing and cannot get an ImportError.
+
+    So the guarantee has to be re-established here, at the boundary
+    where untrusted text becomes a database row, or `category="notes"`
+    writes a row that `all(category=...)` can never return.
+    """
+
+    result = remember.execute(
+        key="identity.name", value="Thien", category="notes"
+    )
+
+    assert not result.ok
+    assert "notes" in result.error
+    assert len(pipeline_for_tools.user_model) == 0
+
+
+def test_the_refusal_names_the_categories_that_would_work(remember):
+    """
+    A model that guessed wrong gets to retry from the error text, so the
+    error carries the vocabulary rather than only rejecting.
+    """
+
+    result = remember.execute(
+        key="identity.name", value="Thien", category="notes"
+    )
+
+    assert IDENTITY in result.error
+
+
+def test_an_empty_key_is_refused(remember, pipeline_for_tools):
+
+    result = remember.execute(key="", value="Thien")
+
+    assert not result.ok
+    assert len(pipeline_for_tools.user_model) == 0
+
+
+def test_an_empty_value_is_refused(remember, pipeline_for_tools):
+    """
+    An empty value is the failure the user model warns about in its own
+    docstring: a stored blank reads like a known fact whose answer is
+    "nothing", and `value_of` cannot distinguish it from a real one.
+    """
+
+    result = remember.execute(key="identity.name", value="   ")
+
+    assert not result.ok
+    assert len(pipeline_for_tools.user_model) == 0
+
+
+def test_remembering_again_updates_rather_than_duplicates(
+    remember, pipeline_for_tools
+):
+    """
+    The user changing their mind is ordinary, and two rows for one key
+    would put both in the prompt and let the model pick.
+    """
+
+    remember.execute(key="identity.name", value="Thien")
+    remember.execute(key="identity.name", value="Ember")
+
+    assert pipeline_for_tools.user_model.value_of("identity.name") == "Ember"
+    assert len(pipeline_for_tools.user_model) == 1
+
+
+def test_remembering_is_safe_and_therefore_needs_no_approval(remember):
+    """
+    SAFE, and the reasoning is worth stating because it is arguable.
+
+    The taxonomy in `tools/base.py` is about damage outside Aura: SAFE
+    reads a clock, SENSITIVE moves the user's data somewhere it was not,
+    DANGEROUS changes the machine. Remembering sends nothing outward,
+    touches nothing on disk but Aura's own database, and files something
+    the user just said in the same process that already had it.
+
+    The counter-argument is real: it writes, and it persists. But the
+    cost of calling it SENSITIVE is not caution, it is silence -
+    `auto_approve: [safe]` plus no human to ask in server mode means
+    every call is refused, and the tier goes back to being unreachable
+    with a permission error standing in for a design decision.
+    """
+
+    executor = executor_for(remember)
+
+    result = executor.execute(
+        "remember", {"key": "identity.name", "value": "Thien"}
+    )
+
+    assert result.ok is True
+
+
+def test_remembering_runs_on_the_calling_thread(remember, pipeline_for_tools):
+    """
+    Not a performance choice - the tool does not work otherwise.
+
+    The executor bounds a tool by running it on a daemon thread, and a
+    SQLAlchemy SQLite session belongs to the thread that opened it, so a
+    threaded `remember` raises ProgrammingError on every call. It did,
+    the first time this suite ran it through an executor rather than
+    calling `execute` directly, and it would have done the same in
+    production.
+
+    `timeout = 0` is the documented escape hatch for exactly this, and
+    this test exists so that deleting it fails here with a reason
+    attached rather than somewhere downstream with a thread id.
+    """
+
+    assert remember.timeout == 0
+
+    result = executor_for(remember).execute(
+        "remember", {"key": "identity.name", "value": "Thien"}
+    )
+
+    assert result.ok is True
+    assert pipeline_for_tools.user_model.value_of("identity.name") == "Thien"
+
+
+# ----------------------------------------------------------------------
+# remember and Section 11
+#
+# `remember_user_stated` returns the Belief it wrote, or None when it
+# wrote nothing - and `execute` discarded that return value, so the tool
+# reported "remembered X = Y" for writes that never happened. Two live
+# paths reach it, both with a key chosen by a language model:
+#
+#   key="???"   -> the slug is punctuation only and strips to empty
+#   key="名前"   -> normalise_key keeps [a-z0-9] and the slug is empty
+#
+# The second is not hypothetical on this owner's machine. Either way the
+# user was told a fact about them was saved and nothing was stored.
+# ----------------------------------------------------------------------
+
+@pytest.mark.parametrize("key", ["???", "---", "名前", "!!!"])
+def test_a_key_that_stores_nothing_is_not_reported_as_remembered(
+    remember, pipeline_for_tools, key
+):
+    """
+    Section 11: not "the call returned without throwing" but "the fact is
+    there". A model told "remembered" writes it into the reply, and the
+    user is then told something false about their own profile.
+    """
+
+    result = remember.execute(key=key, value="Thien")
+
+    assert not result.ok
+    assert len(pipeline_for_tools.user_model) == 0
+
+
+def test_the_refusal_names_the_key_it_could_not_keep(remember):
+    """
+    The reason goes back to the model as TOOL RESULTS, which is its only
+    chance to choose a key that survives. A bare "failed" would have it
+    retry the same unusable key.
+    """
+
+    result = remember.execute(key="名前", value="Thien")
+
+    assert "名前" in result.error
+
+
+def test_a_fact_that_lands_is_still_reported_as_remembered(remember):
+    """The ordinary path is untouched by the guard above."""
+
+    result = remember.execute(key="identity.name", value="Thien")
+
+    assert result.ok
+    assert "Thien" in result.output
+
+
+def test_verify_confirms_a_fact_that_reads_back(remember):
+    """
+    The postcondition of remembering is that a later recall can find it,
+    so the postcondition is a read, through the same door the prompt
+    uses.
+    """
+
+    remember.execute(key="identity.name", value="Thien")
+
+    assert remember.verify(key="identity.name", value="Thien").ok
+
+
+def test_verify_rejects_a_fact_that_is_not_readable_back(remember):
+    """
+    Nothing was ever stored under this key. verify() must say so rather
+    than pass by default - a postcondition that cannot fail is not one.
+    """
+
+    verdict = remember.verify(key="identity.name", value="Thien")
+
+    assert not verdict.ok
+    assert "identity.name" in verdict.error

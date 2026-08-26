@@ -296,6 +296,17 @@ PROVIDER_CAPABILITIES = {
         "api_key_env": "QWEN_API_KEY",
         "model_setting": "llm.qwen_model",
     },
+    "custom": {
+        "label": "Custom endpoint (OpenAI-compatible)",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        # No vendor to claim a base for, and no model list to offer. The UI
+        # has to ask for both; offering a choice would mean inventing one.
+        "models": [],
+        "api_base": "",
+        "api_key_env": "CUSTOM_API_KEY",
+        "model_setting": "llm.custom_model",
+    },
     "ollama": {
         "label": "Ollama (local)",
         "chat": True, "streaming": True, "tools": True, "vision": False,
@@ -328,6 +339,7 @@ PROVIDER_BASE_URL_ENV = {
     "xai": "XAI_BASE_URL",
     "deepseek": "DEEPSEEK_BASE_URL",
     "qwen": "QWEN_BASE_URL",
+    "custom": "CUSTOM_BASE_URL",
     "ollama": "OLLAMA_HOST",
 }
 

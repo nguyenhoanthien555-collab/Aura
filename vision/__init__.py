@@ -11,15 +11,19 @@ package.
 from vision.context import VisionContext
 from vision.capture import (
     Frame,
+    GdiScreenCapture,
     MockScreenCapture,
     MockWindowReader,
     ScreenCapture,
     ScreenshotCapture,
     WindowReader,
+    default_screen_capture,
     default_window_reader,
+    encode_png,
 )
 from vision.processor import (
     MockVisionProcessor,
+    ProcessorChain,
     VisionProcessor,
     WindowTitleProcessor,
 )
@@ -30,12 +34,16 @@ __all__ = [
     "Frame",
     "ScreenCapture",
     "ScreenshotCapture",
+    "GdiScreenCapture",
     "MockScreenCapture",
     "WindowReader",
     "MockWindowReader",
+    "default_screen_capture",
     "default_window_reader",
+    "encode_png",
     "VisionProcessor",
     "WindowTitleProcessor",
     "MockVisionProcessor",
+    "ProcessorChain",
     "VisionManager",
 ]

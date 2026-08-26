@@ -28,7 +28,17 @@ Persisted-and-live:
         instance, so mutating that instance in place is visible to the
         next `tick`.
     memory.recall
-        `MemoryPipeline.recall_enabled` is read per turn.
+        Two mechanisms, both live, and neither was before Phase 11.
+        `MemoryPipeline.recall_enabled` is read by `memory_lines` on the
+        next turn; `Services.knowledge.retriever` is swapped between
+        `KeywordRetriever` and `NullRetriever`, the same choice
+        `launcher/services.py` makes at build time, and is read per turn
+        through `_recalled`. Conditional, because a deployment with
+        `memory.pipeline` off and no knowledge provider has nothing to
+        move. Until Phase 11 this path was listed here and in LIVE_PATHS
+        while `recall_enabled` was written at build time and read by
+        nobody, and the handler reached for the pipeline through
+        `services.memory`, where it is not.
     server.screen.min_interval
         `VisionManager._is_fresh` reads `self.min_interval` on every
         observation, so setting the attribute moves the next one.
@@ -43,6 +53,11 @@ Persisted-and-live:
     voice.tts.voice, voice.tts.volume
         Passed through at each synthesis from `self.voice`/`self.volume` on
         the provider, so they can be moved on a live one.
+    temporal.timezone
+        `TemporalClock.use_timezone` re-resolves the zone on the clock
+        object itself, and `launcher/services.py` hands that one object to
+        every subsystem that reads a time, so the change arrives at all of
+        them at once. `restart_required` when this process has no clock.
 
 Applied live when the subsystem is running, restart_required when it is
 not:
@@ -57,7 +72,11 @@ Persisted, needs restart:
     vision models, voice.tts.enabled/provider/playback, voice.stt.enabled,
     server.screen.enabled, server.companion.enabled
         These gate construction in `build_services` / `_build_remote_vision`
-        / `_build_companion`. The pipeline is built once per process on
+        / `_build_companion`. `vision.enabled` gates one more thing since
+        phase 19.2: `tools/factory.py` registers `describe_screen` only
+        while vision is on, so turning vision on over PATCH persists and
+        takes effect on the next start rather than adding the tool to a
+        live executor - the same restart this section already promises. The pipeline is built once per process on
         purpose (AURA-P1-003) and rebuilding subsystems mid-flight would
         be the architectural rewrite Phase 9 is forbidden to do. The
         operator restarts once; the config is already persisted.
@@ -84,6 +103,20 @@ from core.logger import logger
 from core.settings_store import SettingsError
 
 
+# The companion gate's five tunable knobs, named once. They are both a
+# LIVE_PATHS group and the argument to one handler, and two hand-written
+# copies of the same list would eventually disagree about which of them
+# applies live.
+COMPANION_LIVE_PATHS = (
+    "server.companion.relevance_threshold",
+    "server.companion.cooldown_seconds",
+    "server.companion.max_per_hour",
+    "server.companion.quiet_hours",
+    "server.companion.suppress_after_chat_seconds",
+    "server.companion.duplicate_window_seconds",
+)
+
+
 # Live-applyable paths. A PATCH arrives flattened, so the checks are
 # exact dotted paths only.
 LIVE_PATHS = {
@@ -96,8 +129,10 @@ LIVE_PATHS = {
     "proactive.duplicate_window_seconds", "proactive.similarity_threshold",
     "memory.recall",
     "server.screen.min_interval",
+    *COMPANION_LIVE_PATHS,
     "tools.enabled", "tools.auto_approve", "tools.timeout",
     "voice.tts.voice", "voice.tts.volume",
+    "temporal.timezone",
 }
 
 
@@ -206,7 +241,6 @@ class SettingsService:
                         restart.append(path)
 
         self._reapply_proactive(accepted)
-        self._reapply_memory(accepted)
 
         # Subsystem-conditional paths. Each handler is called once, for the
         # whole group it owns, and answers whether the change reached a live
@@ -217,6 +251,13 @@ class SettingsService:
             (("tools.enabled", "tools.auto_approve", "tools.timeout"),
              self._reapply_tools),
             (("voice.tts.voice", "voice.tts.volume"), self._reapply_voice),
+            (("memory.recall",), self._reapply_memory),
+            (("temporal.timezone",), self._reapply_temporal),
+            # A lambda because this handler needs the paths themselves, not
+            # just a signal that one of them was touched: five settings
+            # share one policy object and they are written in one pass.
+            (COMPANION_LIVE_PATHS,
+             lambda: self._reapply_companion(accepted)),
         ):
             touched = [path for path in paths if path in accepted]
 
@@ -360,28 +401,193 @@ class SettingsService:
             if hasattr(settings, key):
                 setattr(settings, key, value)
 
-    def _reapply_memory(self, accepted: dict) -> None:
+    def _reapply_companion(self, accepted: dict) -> bool:
+        """
+        Mutate the companion policy's settings in place. True if it landed.
+
+        The mutation is the same shape as `_reapply_proactive`, and for the
+        same reason: `PolicySettings` is a mutable dataclass the policy
+        owns, and `allows` reads `self.settings.*` at decision time, so the
+        next screen observation sees the new number without a rebuild.
+
+        What is *not* the same is where it is called from. The proactive
+        engine is always in `services`; the companion engine is None
+        whenever the feature is off, which on a headless server is the
+        normal case. So this belongs in the conditional group and has to
+        answer whether it reached a live object - phase 11 part 1 lost the
+        `memory.recall` toggle to exactly this, a handler in the
+        unconditional group returning nothing while the assignment silently
+        never ran. `applied` is a promise.
+
+        `server.companion.enabled` is deliberately not handled here. It
+        gates construction in `_build_companion`, so there may be no policy
+        to mutate at all, and turning the feature on mid-flight would need
+        an LLM handle this method does not have. It stays a restart.
+        """
+
+        companion = {
+            key.split(".", 2)[2]: value
+            for key, value in accepted.items()
+            if key.startswith("server.companion.")
+            and key != "server.companion.enabled"
+        }
+
+        if not companion:
+            return True
+
+        policy = getattr(
+            getattr(self.runtime, "companion_engine", None),
+            "policy",
+            None,
+        )
+
+        settings = getattr(policy, "settings", None)
+
+        if settings is None:
+            return False
+
+        for key, value in companion.items():
+            if hasattr(settings, key):
+                setattr(settings, key, value)
+
+        return True
+
+    def _reapply_memory(self) -> bool:
         """
         Flip `MemoryPipeline.recall_enabled` for memory.recall.
 
         Anything deeper - episodic store, user model, temporary context -
         is constructed once and is not hot-swappable without rebuilding
         the pipeline, which Phase 9 does not do. The gate itself is.
+
+        Two things were wrong here and both were the same mistake made
+        twice - assuming a shape instead of reading one.
+
+        The pipeline was fetched through `services.memory`, but `Services`
+        keeps `pipeline` as a *sibling* of `memory`, not a child of it
+        (`launcher/services.py`: `memory` on line 31, `pipeline` on line
+        36). `services.memory` is the `MemoryManager`, which has no
+        `pipeline` attribute, so the `getattr` default made this a
+        guaranteed `None` and the assignment never ran once in
+        production.
+
+        And it returned `None` from the unconditional group, where a
+        path stays in `applied` whatever happened. So the owner turning
+        recall off got `applied: ["memory.recall"]` back on a deployment
+        with no pipeline at all. `applied` is a promise; this handler now
+        answers the question the conditional group asks, and a deployment
+        with `memory.pipeline` off is told `restart_required` instead of
+        being told yes.
+
+        The value is read from the refreshed config rather than from
+        `accepted` so this matches `_reapply_temporal` exactly - one
+        handler protocol in that loop, not two. `apply` calls
+        `refresh_config()` before any handler runs, so the snapshot is
+        the value just written.
         """
 
-        recall = accepted.get("memory.recall")
-
-        if not isinstance(recall, bool):
-            return
-
-        pipeline = getattr(
-            getattr(self.runtime.services, "memory", None),
-            "pipeline",
-            None,
+        recall = ((self.runtime.config or {}).get("memory") or {}).get(
+            "recall"
         )
 
-        if pipeline is not None:
+        if not isinstance(recall, bool):
+            return False
+
+        services = getattr(self.runtime, "services", None)
+
+        moved = False
+
+        # Memory 2.0: the ranked episodic search.
+        pipeline = getattr(services, "pipeline", None)
+
+        if pipeline is not None and hasattr(pipeline, "recall_enabled"):
             pipeline.recall_enabled = recall
+            moved = True
+
+        # Sprint 5: keyword search over the transcript. Swappable because
+        # `MemoryKnowledgeProvider.retriever` is a plain attribute read on
+        # every turn through `_recalled`, so this half needs no restart
+        # either - which is what keeps `applied` from being half true.
+        if self._swap_legacy_retriever(services, recall):
+            moved = True
+
+        return moved
+
+    def _swap_legacy_retriever(self, services, recall: bool) -> bool:
+        """
+        Point `Services.knowledge` at the retriever `memory.recall` asks
+        for, the same choice `launcher/services.py` makes at build time.
+
+        A session is required rather than optional: handed none,
+        `KeywordRetriever.__init__` calls `init_database()` and opens one
+        of its own, and a settings PATCH is not the place to open a
+        database. Without one the older half is left as it is and the
+        pipeline half decides the return - honest, because that is
+        exactly what happened.
+        """
+
+        knowledge = getattr(services, "knowledge", None)
+
+        if knowledge is None or not hasattr(knowledge, "retriever"):
+            return False
+
+        from memory.retrieval import KeywordRetriever, NullRetriever
+
+        if not recall:
+            knowledge.retriever = NullRetriever()
+            return True
+
+        session = getattr(getattr(services, "memory", None), "session", None)
+
+        if session is None:
+            return False
+
+        settings = (self.runtime.config or {}).get("memory") or {}
+
+        knowledge.retriever = KeywordRetriever(
+            session=session,
+            skip_recent=settings.get("history_limit", 20),
+        )
+
+        return True
+
+    def _reapply_temporal(self) -> bool:
+        """
+        Move the one clock this process shares to the configured zone.
+
+        In place, on `services.clock`, because that same object is what the
+        prompt's TIME section, the memory pipeline, the ranked retriever's
+        captured `now`, the quiet-hours check and the proactive engine are
+        all holding. Rebuilding it would move the one that got the new
+        object and leave the rest on the old zone.
+
+        False when there is no clock in this process, or when the clock
+        refuses the name - `use_timezone` keeps the zone already in effect
+        in that case, so the value is on disk and not in force, which is
+        what `restart_required` means. The validator already refused an
+        unresolvable name, so the second case needs a timezone database
+        that vanished between the two calls; it is handled because
+        `applied` is a promise, not because it is likely.
+
+        One consequence worth stating rather than discovering: timestamps
+        are stored naive local (`core/temporal.py`), so changing zone
+        re-dates existing memories by the offset delta - a row written at
+        14:00 in one zone reads as 14:00 in the next. That is a property
+        of naive storage and is identical whether the change lands now or
+        at the next restart, so it is not an argument for demoting this to
+        `restart_required`.
+        """
+
+        clock = getattr(
+            getattr(self.runtime, "services", None), "clock", None
+        )
+
+        if clock is None or not hasattr(clock, "use_timezone"):
+            return False
+
+        settings = (load_config().get("temporal")) or {}
+
+        return bool(clock.use_timezone(settings.get("timezone")))
 
     def _reapply_screen(self) -> bool:
         """
@@ -425,9 +631,11 @@ class SettingsService:
         same config that could disagree with the first.
 
         The tool *registry* is untouched, which is correct - the settable
-        paths are all policy fields, and the two that decide which tools
-        exist (`allowed_paths`, `applications`) are deliberately not
-        settable at all.
+        paths are all policy fields, and the three that decide which tools
+        exist (`allowed_paths`, `applications`, `commands`) are deliberately
+        not settable at all. `commands` most of all: a remotely declarable
+        argv with a fillable slot would be arbitrary execution reached
+        through the settings API rather than through the tool boundary.
         """
 
         executor = getattr(

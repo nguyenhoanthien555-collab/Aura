@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,8 +21,10 @@ import com.aura.companion.ui.components.RowDivider
 import com.aura.companion.ui.components.SelectRow
 import com.aura.companion.ui.components.SettingsSection
 import com.aura.companion.ui.components.StatusTone
+import com.aura.companion.ui.components.StepperRow
 import com.aura.companion.ui.components.TextEntryDialog
 import com.aura.companion.ui.components.ToggleRow
+import kotlin.math.roundToInt
 
 /**
  * Settings → Vision.
@@ -64,6 +68,62 @@ fun VisionSection(
                 pending = "vision.enabled" in state.pending,
                 lockedReason = state.lockedReason("vision.enabled"),
                 onCheckedChange = { viewModel.setFlag("vision.enabled", it) },
+            )
+        }
+
+        // ------------------------------------------------------------------
+        // What vision may read (phase 23)
+        //
+        // `vision.capture_screen`, `vision.min_interval` and
+        // `vision.send_screen_to_cloud` have been settable over PATCH since
+        // phase 19 with no control here. The first two change what Aura
+        // reads and how often; the third decides whether pixels leave the
+        // machine, which is why it is phrased as the permission question it
+        // is rather than as a feature toggle.
+        // ------------------------------------------------------------------
+
+        SettingsSection(
+            title = "What Aura reads",
+            subtitle = "Applies live - no restart needed",
+        ) {
+
+            ToggleRow(
+                title = "Read screen contents",
+                subtitle = "Off, Aura knows window titles only",
+                icon = Icons.Filled.DesktopWindows,
+                checked = vision.captureScreen,
+                pending = "vision.capture_screen" in state.pending,
+                lockedReason = state.lockedReason("vision.capture_screen"),
+                onCheckedChange = { viewModel.setFlag("vision.capture_screen", it) },
+            )
+
+            RowDivider()
+
+            StepperRow(
+                title = "Seconds between observations",
+                value = vision.minInterval.roundToInt(),
+                range = 1..300,
+                subtitle = "How often Aura looks again while you use the PC",
+                format = { "${it}s" },
+                lockedReason = state.lockedReason("vision.min_interval"),
+                onCommit = { viewModel.setNumber("vision.min_interval", it) },
+            )
+        }
+
+        SettingsSection(
+            title = "Privacy",
+            subtitle = "Where what Aura reads may go",
+        ) {
+
+            ToggleRow(
+                title = "Send screen images to cloud",
+                subtitle = "Off, only the local model ever sees your pixels. " +
+                    "Turning this on sends screenshots to the configured provider.",
+                icon = Icons.Filled.CloudUpload,
+                checked = vision.sendScreenToCloud,
+                pending = "vision.send_screen_to_cloud" in state.pending,
+                lockedReason = state.lockedReason("vision.send_screen_to_cloud"),
+                onCheckedChange = { viewModel.setFlag("vision.send_screen_to_cloud", it) },
             )
         }
 

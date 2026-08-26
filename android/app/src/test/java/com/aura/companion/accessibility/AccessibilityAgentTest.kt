@@ -285,6 +285,152 @@ class AccessibilityAgentTest {
         assertEquals("Previous click failed.", snapshot.lastActionError)
         assertNotNull(snapshot.accessibilityTree["node_1"])
     }
+    /**
+     * A request naming two jobs is not finished by the first one.
+     *
+     * These have no conjunction, so the old conjunction-only test called
+     * them single-step and the loop reported "App launched successfully!"
+     * for a request that asked for a search. `brain.planner.plan_for`
+     * decomposes every one of them into five steps;
+     * `test_no_multi_step_request_satisfies_the_device_early_exit` in
+     * tests/test_agent_protocol.py generates them from the planner's own
+     * vocabulary and asserts the device reads a signal in each.
+     */
+    /**
+     * A job named after the search is not finished by the search.
+     *
+     * `brain.planner.plan_for` reads every one of these as having a step
+     * beyond `await_results`. The old test asked only whether the request
+     * wanted a *selection*, so a trailing clause of any other kind was
+     * invisible and the loop stopped at the submit - three of these end in
+     * "tap"/"click"/"bấm", which the selection list does not carry at all.
+     */
+    @Test
+    fun testATrailingClauseKeepsTheSearchTaskOpen() {
+        val submit = AgentAction(action = "submit")
+
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft then open settings", submit, emptyList()))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open Chrome and search weather, then open YouTube", submit, emptyList()))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("mở YouTube và tìm nhạc rồi mở cài đặt", submit, emptyList()))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft and tap the result", submit, emptyList()))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft and click it", submit, emptyList()))
+        assertFalse(AuraAccessibilityService.isSearchTaskComplete("mở YouTube và tìm nhạc rồi bấm vào đó", submit, emptyList()))
+    }
+
+    /**
+     * The conjunction *before* the search does not count.
+     *
+     * This is the whole reason the check is positional. "open YouTube and
+     * search Minecraft" is the ordinary two-clause search request and it
+     * has always ended at the submit; a containment test for conjunctions
+     * would have taken that away and cost every search an extra round
+     * trip.
+     */
+    @Test
+    fun testAConjunctionBeforeTheSearchStillEndsAtTheSubmit() {
+        val submit = AgentAction(action = "submit")
+
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("open YouTube and search Minecraft", submit, emptyList()))
+        assertTrue(AuraAccessibilityService.isSearchTaskComplete("mở YouTube và tìm Minecraft", submit, emptyList()))
+    }
+
+    /**
+     * `hasClauseAfterSearch` on its own, including the cases that must
+     * answer no.
+     */
+    @Test
+    fun testHasClauseAfterSearchIsPositional() {
+        assertTrue(AuraAccessibilityService.hasClauseAfterSearch("search Minecraft then open settings"))
+        assertTrue(AuraAccessibilityService.hasClauseAfterSearch("tìm nhạc rồi mở cài đặt"))
+
+        // The separator is to the left of the verb.
+        assertFalse(AuraAccessibilityService.hasClauseAfterSearch("open YouTube and search Minecraft"))
+        // No search verb at all - the question does not arise.
+        assertFalse(AuraAccessibilityService.hasClauseAfterSearch("open YouTube and go home"))
+        assertFalse(AuraAccessibilityService.hasClauseAfterSearch(""))
+    }
+
+    /**
+     * The last search verb is the one that counts.
+     *
+     * With the *first* occurrence taken instead, "search for X then search
+     * for Y" would report a clause after the search and never end - the
+     * separator sits between the two verbs. Reading the rightmost verb
+     * asks about work after the last search, which is the question.
+     */
+    @Test
+    fun testTheLastSearchVerbIsTheOneMeasuredFrom() {
+        assertFalse(AuraAccessibilityService.hasClauseAfterSearch("search for X then search for Y"))
+        assertTrue(AuraAccessibilityService.hasClauseAfterSearch("search for X then search for Y then open settings"))
+    }
+
+    @Test
+    fun testTwoVerbsWithNoConjunctionIsNotSingleStep() {
+        val openApp = AgentAction(action = "open_app", packageName = "com.google.android.youtube")
+
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("mở YouTube tìm nhạc", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("open YouTube search Minecraft", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("open YouTube search for Minecraft", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("mở Chrome tìm kiếm thời tiết", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("search Minecraft on YouTube", openApp))
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("tìm Minecraft trên YouTube", openApp))
+    }
+
+    /**
+     * The search test is containment, so it fires on a word that merely
+     * contains a verb.
+     *
+     * "research" contains "search". The cost is one round trip, after
+     * which the server says `complete`; the cost of the opposite mistake
+     * is a task that stopped without finishing. Pinned rather than left
+     * as a surprise, so a later editor tightening this to a word boundary
+     * sees that the looseness was chosen.
+     */
+    @Test
+    fun testAWordContainingASearchVerbIsTreatedAsMultiStep() {
+        val openApp = AgentAction(action = "open_app", packageName = "com.example.research")
+
+        assertFalse(AuraAccessibilityService.shouldAutoComplete("open research app", openApp))
+    }
+
+    /**
+     * The optimisation still works for what it was written for.
+     *
+     * A one-job navigation request must keep ending without a round trip,
+     * or the deferral above would have cost every simple launch an extra
+     * model call.
+     */
+    @Test
+    fun testSingleJobNavigationStillStopsWithoutAsking() {
+        val openApp = AgentAction(action = "open_app", packageName = "com.google.android.youtube")
+        val home = AgentAction(action = "home")
+
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("mở YouTube", openApp))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("open Chrome", openApp))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("về màn hình chính", home))
+        assertTrue(AuraAccessibilityService.shouldAutoComplete("open notifications", AgentAction(action = "open_notifications")))
+    }
+
+    /**
+     * One list, not three.
+     *
+     * The query sanitiser, this early exit and `brain.planner.SEARCH_VERBS`
+     * all read the same vocabulary. A verb added for one reader and
+     * missing for another is how `submit` came to be offered by the prompt
+     * and rejected by the parser.
+     */
+    @Test
+    fun testTheEarlyExitReadsTheSharedSearchVocabulary() {
+        val openApp = AgentAction(action = "open_app", packageName = "com.google.android.youtube")
+
+        for (verb in AuraActionExecutor.SEARCH_VERBS) {
+            assertFalse(
+                "a request containing \"$verb\" is not finished by a launch",
+                AuraAccessibilityService.shouldAutoComplete("open YouTube ${verb.trim()} Minecraft", openApp),
+            )
+        }
+    }
+
     @Test
     fun testShouldAutoCompleteForSingleActionTasks() {
         val openApp = AgentAction(action = "open_app", packageName = "com.google.android.youtube")

@@ -25,6 +25,10 @@ from events.bus import EventBus
 from events.types import CompanionNotificationEvent
 from vision.remote import ScreenObservation
 
+# A live server, for the tests that have to prove a PATCH reached the
+# running gate rather than only the disk.
+from tests.test_settings_api import api, AUTH  # noqa: F401
+
 
 class FakeClock:
     def __init__(self, now: float = 1000.0):
@@ -807,3 +811,631 @@ class TestBuildCompanionEngine:
         )
 
         assert isinstance(engine.evaluator, LLMRelevanceEvaluator)
+
+
+# ----------------------------------------------------------------------
+# Section 20 - "Do not spam notifications."
+#
+# Phase 13 fixed this exact shape one floor up: every proactive limit was
+# derived from a RAM-only deque, so a restart handed back a clean slate.
+# The companion policy had it too, and worse - its clock is
+# `time.monotonic`, which is not even comparable across processes.
+#
+# `max_per_hour` is documented in the policy as "a hard ceiling that
+# survives a bad relevance score". An hour is longer than a process, so
+# until this it survived nothing of the kind.
+# ----------------------------------------------------------------------
+
+
+class FakeWallClock:
+    """Wall time, for the durable record only. Intervals stay monotonic."""
+
+    def __init__(self, now=None):
+        from datetime import datetime
+        self.now = now or datetime(2026, 8, 24, 14, 0, 0)
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        from datetime import timedelta
+        self.now += timedelta(seconds=seconds)
+
+
+class TestTheCompanionCeilingSurvivesARestart:
+
+    def ledger(self, tmp_path):
+        from proactive.ledger import SendLedger
+        return SendLedger(tmp_path / "companion.json")
+
+    def policy(self, ledger, clock, wall, **overrides):
+        return CompanionPolicy(
+            settings=enabled_settings(**overrides),
+            clock=clock,
+            ledger=ledger,
+            wall_clock=wall,
+        )
+
+    def test_the_hourly_ceiling_is_still_there_after_a_restart(self, tmp_path):
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        first = self.policy(ledger, clock, wall, max_per_hour=3)
+
+        for index in range(3):
+            assert first.allows(0.9, f"Thing {index}").should_notify
+            first.note_notified(f"Thing {index}")
+            clock.advance(301.0)
+            wall.advance(301.0)
+
+        # A new process, same ledger, and only two minutes have passed.
+        clock.advance(120.0)
+        wall.advance(120.0)
+        second = self.policy(ledger, clock, wall, max_per_hour=3)
+
+        decision = second.allows(0.9, "A fourth thing")
+
+        assert not decision.should_notify
+        assert "hourly limit reached (3)" in decision.reason
+
+    def test_the_cooldown_is_still_running_after_a_restart(self, tmp_path):
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        self.policy(ledger, clock, wall).note_notified("Your build failed.")
+
+        clock.advance(30.0)
+        wall.advance(30.0)
+
+        decision = self.policy(ledger, clock, wall).allows(0.9, "Something else")
+
+        assert not decision.should_notify
+        assert "cooling down" in decision.reason
+
+    def test_she_does_not_repeat_herself_after_a_restart(self, tmp_path):
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        self.policy(ledger, clock, wall).note_notified("Your build failed.")
+
+        clock.advance(400.0)
+        wall.advance(400.0)
+
+        decision = self.policy(ledger, clock, wall).allows(0.9, "your build FAILED.")
+
+        assert not decision.should_notify
+        assert "already said this" in decision.reason
+
+    def test_a_persisted_history_is_not_a_permanent_ban(self, tmp_path):
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        first = self.policy(ledger, clock, wall, max_per_hour=2)
+        first.note_notified("One")
+        first.note_notified("Two")
+
+        # Two hours later the ceiling is an hour behind, not a life sentence.
+        clock.advance(7200.0)
+        wall.advance(7200.0)
+
+        assert self.policy(
+            ledger, clock, wall, max_per_hour=2
+        ).allows(0.9, "Three").should_notify
+
+    def test_the_owner_dropping_the_limit_clears_the_file_too(self, tmp_path):
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        policy = self.policy(ledger, clock, wall, max_per_hour=1)
+        policy.note_notified("One")
+        policy.reset()
+
+        assert ledger.load() == ()
+        assert self.policy(
+            ledger, clock, wall, max_per_hour=1
+        ).allows(0.9, "Two").should_notify
+
+    def test_an_old_send_ages_out_across_the_restart_too(self, tmp_path):
+        """Every row keeps its own age, not the age of the newest one.
+
+        Both clocks advance together here, so nothing is testing the
+        translation unless the two sends are far apart: an implementation
+        that stamped every row "just now" on the way out would pass a
+        one-entry test and then, after a restart, count an hour-old send
+        against a ceiling it had already left.
+        """
+
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        first = self.policy(ledger, clock, wall, max_per_hour=2)
+        first.note_notified("An hour ago")
+
+        clock.advance(3500.0)
+        wall.advance(3500.0)
+        first.note_notified("Recently")
+
+        clock.advance(400.0)
+        wall.advance(400.0)
+
+        # The first send is now 3900s old and the second 400s. One of them
+        # is inside the hour, so a ceiling of two has room.
+        second = self.policy(ledger, clock, wall, max_per_hour=2)
+
+        assert second.allows(0.9, "A third thing").should_notify
+
+    def test_the_rules_see_nothing_from_two_days_ago(self, tmp_path):
+        """Rows too old for any rule to consult do not come back at all.
+
+        Not merely tidiness. The history is a 32-slot deque, so a file that
+        accumulated every send Aura ever made would restore dead rows into
+        slots the live ones need, and the ceiling would then be counted
+        against whatever happened to fit.
+        """
+
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        self.policy(ledger, clock, wall).note_notified("Ancient history")
+
+        clock.advance(172800.0)
+        wall.advance(172800.0)
+
+        assert self.policy(ledger, clock, wall).history() == ()
+
+    def test_a_clock_that_moved_backwards_does_not_wedge_the_gate(self, tmp_path):
+        """A send stamped in the future is discarded, not obeyed.
+
+        Wall time is not monotonic on a real machine - DST, an NTP
+        correction, an owner fixing their timezone. Trusting a negative age
+        would place the send ahead of now, every interval the rules compare
+        would come out negative, and Aura would go silent until real time
+        caught up with the bad stamp.
+        """
+
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        self.policy(ledger, clock, wall, max_per_hour=1).note_notified("Before")
+
+        clock.advance(600.0)
+        wall.advance(-3600.0)      # the owner's clock went back an hour
+
+        decision = self.policy(
+            ledger, clock, wall, max_per_hour=1
+        ).allows(0.9, "After")
+
+        assert decision.should_notify, decision.reason
+
+    def test_a_hand_edited_row_is_still_matched_as_a_duplicate(self, tmp_path):
+        """The file is plain JSON, so what comes out of it is normalised too.
+
+        `note_notified` normalises before storing, which makes this look
+        redundant from inside. It is not: the ledger is a text file with the
+        same format as the proactive one, and a row an owner pasted in or an
+        older build wrote is under nobody's control here.
+        """
+
+        from datetime import datetime
+
+        ledger = self.ledger(tmp_path)
+        wall = FakeWallClock()
+        ledger.save([(wall.now, "companion", "  Your Build   FAILED. ")])
+
+        clock = FakeClock()
+        clock.advance(400.0)       # past the cooldown, inside the window
+        wall.advance(400.0)
+
+        decision = self.policy(ledger, clock, wall).allows(0.9, "your build failed.")
+
+        assert not decision.should_notify
+        assert "already said this" in decision.reason
+
+    def test_the_cooldown_runs_from_the_newest_send(self, tmp_path):
+        """Two sends, and it is the recent one the cooldown measures from.
+
+        With one entry in the history every reading of it agrees. With two
+        an implementation that reached for the wrong end of the deque would
+        time the cooldown from something Aura said fifty minutes ago and
+        let her speak twice in a minute.
+        """
+
+        ledger = self.ledger(tmp_path)
+        clock, wall = FakeClock(), FakeWallClock()
+
+        policy = self.policy(ledger, clock, wall, max_per_hour=6)
+        policy.note_notified("Fifty minutes ago")
+
+        clock.advance(3000.0)
+        wall.advance(3000.0)
+        policy.note_notified("Just now")
+
+        clock.advance(60.0)
+        wall.advance(60.0)
+
+        decision = policy.allows(0.9, "Something else")
+
+        assert not decision.should_notify
+        assert "cooling down" in decision.reason
+
+    def test_without_a_ledger_nothing_is_written(self, tmp_path):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        policy = CompanionPolicy(
+            settings=enabled_settings(), clock=clock, wall_clock=wall,
+        )
+        policy.note_notified("One")
+
+        assert list(tmp_path.iterdir()) == []
+        assert policy.history()
+
+
+# ----------------------------------------------------------------------
+# Section 21 - Aura must not speak over a present owner.
+#
+# `_last_chat` was volatile, and `suppress_after_chat_seconds` reads a
+# missing value as "no recent chat", which the gate reads as "go ahead".
+# So a restart mid-conversation let the very next screen observation
+# interrupt someone who was plainly right there. Phase 13 fixed the same
+# defect in the greeting rule; the answer already exists in the messages
+# table, so this reuses it rather than inventing a second presence source.
+# ----------------------------------------------------------------------
+
+
+class TestTheCompanionKnowsTheOwnerIsHere:
+
+    def policy(self, clock, wall, last_user_message=None, **overrides):
+        return CompanionPolicy(
+            settings=enabled_settings(**overrides),
+            clock=clock,
+            wall_clock=wall,
+            last_user_message=last_user_message,
+        )
+
+    def test_a_restart_mid_conversation_does_not_interrupt(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        spoke_at = wall.now
+        wall.advance(20.0)
+        clock.advance(20.0)
+
+        # Nothing called note_chat on this policy - it is a fresh process.
+        decision = self.policy(
+            clock, wall, last_user_message=lambda: spoke_at,
+        ).allows(0.95, "Your build failed.")
+
+        assert not decision.should_notify
+        assert "mid-conversation" in decision.reason
+
+    def test_an_owner_who_left_an_hour_ago_is_not_present(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        spoke_at = wall.now
+        wall.advance(3600.0)
+        clock.advance(3600.0)
+
+        assert self.policy(
+            clock, wall, last_user_message=lambda: spoke_at,
+        ).allows(0.9, "Your build failed.").should_notify
+
+    def test_the_live_signal_wins_over_the_stored_one(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        stale = wall.now
+        wall.advance(3600.0)
+        clock.advance(3600.0)
+
+        policy = self.policy(clock, wall, last_user_message=lambda: stale)
+        policy.note_chat()
+
+        decision = policy.allows(0.95, "Your build failed.")
+
+        assert not decision.should_notify
+        assert "mid-conversation" in decision.reason
+
+    def test_no_source_and_no_chat_is_not_treated_as_present(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        assert self.policy(clock, wall).allows(0.9, "Your build failed.").should_notify
+
+    def test_a_source_that_answers_nothing_is_not_presence(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        assert self.policy(
+            clock, wall, last_user_message=lambda: None,
+        ).allows(0.9, "Your build failed.").should_notify
+
+    def test_a_source_that_raises_does_not_take_the_gate_with_it(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        def broken():
+            raise RuntimeError("database is gone")
+
+        assert self.policy(
+            clock, wall, last_user_message=broken,
+        ).allows(0.9, "Your build failed.").should_notify
+
+    def test_a_source_returning_nonsense_is_ignored(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        assert self.policy(
+            clock, wall, last_user_message=lambda: "yesterday",
+        ).allows(0.9, "Your build failed.").should_notify
+
+    def test_the_suppression_can_be_turned_off_by_the_owner(self):
+        clock, wall = FakeClock(), FakeWallClock()
+
+        spoke_at = wall.now
+        wall.advance(1.0)
+        clock.advance(1.0)
+
+        assert self.policy(
+            clock, wall,
+            last_user_message=lambda: spoke_at,
+            suppress_after_chat_seconds=0.0,
+        ).allows(0.9, "Your build failed.").should_notify
+
+
+# ----------------------------------------------------------------------
+# Section 2 - the owner configures Aura through the settings.
+#
+# Six companion knobs exist in config.yaml and exactly one of them,
+# `enabled`, was reachable from the app. The other five are the anti-spam
+# dial section 20 is about: how relevant, how often, how soon after
+# talking, and through which hours. An owner being notified too much could
+# turn the whole feature off and nothing in between.
+#
+# The proactive engine next door exposes six equivalents with validators
+# and a live-apply handler. This is that, for its sibling.
+# ----------------------------------------------------------------------
+
+
+COMPANION_PATHS = (
+    "server.companion.relevance_threshold",
+    "server.companion.cooldown_seconds",
+    "server.companion.max_per_hour",
+    "server.companion.quiet_hours",
+    "server.companion.suppress_after_chat_seconds",
+    "server.companion.duplicate_window_seconds",
+)
+
+
+class TestTheOwnerCanTuneTheNotificationGate:
+
+    def test_every_knob_is_in_the_settings_contract(self):
+        from core.settings_store import ALLOWED
+
+        missing = [p for p in COMPANION_PATHS if p not in ALLOWED]
+
+        assert missing == []
+
+    def test_every_knob_applies_without_a_restart(self):
+        from server.settings_service import LIVE_PATHS
+
+        missing = [p for p in COMPANION_PATHS if p not in LIVE_PATHS]
+
+        assert missing == []
+
+    def test_each_knob_names_a_real_field_on_the_settings_object(self):
+        settings = PolicySettings()
+
+        for path in COMPANION_PATHS:
+            field = path.rsplit(".", 1)[1]
+            assert hasattr(settings, field), field
+
+    def test_the_values_the_owner_sends_are_the_values_that_are_kept(self):
+        from core.settings_store import validate_path
+
+        assert validate_path("server.companion.relevance_threshold", 0.55) == 0.55
+        assert validate_path("server.companion.cooldown_seconds", 900) == 900.0
+        assert validate_path("server.companion.max_per_hour", 2) == 2
+        assert validate_path(
+            "server.companion.suppress_after_chat_seconds", 0
+        ) == 0.0
+        assert validate_path(
+            "server.companion.duplicate_window_seconds", 3600
+        ) == 3600.0
+        assert validate_path(
+            "server.companion.quiet_hours", [[23, 7]]
+        ) == [[23, 7]]
+
+    def test_the_gate_cannot_be_widened_into_a_spammer(self):
+        from core.settings_store import SettingsError, validate_path
+
+        # The cooldown floor is five minutes, which is what makes twelve an
+        # hour the highest reachable ceiling - a larger number would be one
+        # the cooldown never lets anybody hit.
+        for path, value in (
+            ("server.companion.cooldown_seconds", 5),
+            ("server.companion.max_per_hour", 0),
+            ("server.companion.max_per_hour", 13),
+            ("server.companion.relevance_threshold", 0.0),
+            ("server.companion.duplicate_window_seconds", 30),
+        ):
+            with pytest.raises(SettingsError):
+                validate_path(path, value)
+
+    def test_the_duplicate_window_is_a_setting_not_a_constant(self):
+        clock = FakeClock()
+        policy = CompanionPolicy(
+            settings=enabled_settings(duplicate_window_seconds=60.0),
+            clock=clock,
+        )
+
+        policy.note_notified("Your build failed.")
+        clock.advance(400.0)
+
+        assert policy.allows(0.9, "Your build failed.").should_notify
+
+
+# ----------------------------------------------------------------------
+# The composition root, which is where all of the above either happens or
+# quietly does not. Phase 11 part 2 lost an entire feature to a builder
+# argument nobody tested; phase 13's `session_id="default"` was the same
+# shape. These drive the real builder.
+# ----------------------------------------------------------------------
+
+
+class TestTheBuilderHandsTheGateWhatItNeeds:
+
+    def config(self, **companion):
+        fields = {"enabled": True}
+        fields.update(companion)
+        return {"server": {"companion": fields}}
+
+    def test_the_builder_accepts_a_ledger_and_uses_it(self, tmp_path):
+        from proactive.ledger import SendLedger
+
+        ledger = SendLedger(tmp_path / "companion.json")
+
+        engine = build_companion_engine(self.config(), ledger=ledger)
+
+        assert engine.policy.ledger is ledger
+
+    def test_the_builder_accepts_a_presence_source(self):
+        source = lambda: None
+
+        engine = build_companion_engine(self.config(), last_user_message=source)
+
+        assert engine.policy.last_user_message is source
+
+    def test_a_bare_builder_writes_no_file(self):
+        engine = build_companion_engine(self.config())
+
+        assert engine.policy.ledger is None
+
+    def test_the_owners_window_reaches_the_policy(self):
+        engine = build_companion_engine(
+            self.config(duplicate_window_seconds=90, max_per_hour=2),
+        )
+
+        assert engine.policy.settings.duplicate_window_seconds == 90.0
+        assert engine.policy.settings.max_per_hour == 2
+
+
+# ----------------------------------------------------------------------
+# Section 44 - the paths being in `LIVE_PATHS` is not the same fact as a
+# handler that reapplies them. Phase 11 part 1 shipped exactly that gap
+# for `memory.recall`: the path was live, no handler ran, and the PATCH
+# reply still said `applied`. So these drive a real PATCH against a real
+# runtime and read the policy object afterwards.
+# ----------------------------------------------------------------------
+
+
+class TestTuningTheGateReachesTheRunningGate:
+
+    def live_policy(self, monkeypatch):
+        """Attach a companion engine to the running runtime.
+
+        The test runtime has none: `server.companion.enabled` is false by
+        default, which on a headless server is the normal case. That is
+        precisely the condition the handler has to answer for, so the
+        second test below leaves it alone.
+        """
+
+        from server.runtime import get_runtime
+
+        engine = build_companion_engine({"server": {"companion": {"enabled": True}}})
+
+        monkeypatch.setattr(get_runtime(), "companion_engine", engine, raising=False)
+
+        return engine.policy
+
+    def patch(self, api, body):
+        response = api.patch(
+            "/api/settings", json={"settings": body}, headers=AUTH
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_a_tuned_gate_is_tuned_before_the_reply_is_sent(self, api, monkeypatch):
+        policy = self.live_policy(monkeypatch)
+
+        report = self.patch(api, {"server": {"companion": {
+            "relevance_threshold": 0.55,
+            "cooldown_seconds": 900,
+            "max_per_hour": 2,
+            "quiet_hours": [[23, 7]],
+            "suppress_after_chat_seconds": 30,
+            "duplicate_window_seconds": 3600,
+        }}})
+
+        assert policy.settings.relevance_threshold == 0.55
+        assert policy.settings.cooldown_seconds == 900.0
+        assert policy.settings.max_per_hour == 2
+        assert policy.settings.quiet_hours == [[23, 7]]
+        assert policy.settings.suppress_after_chat_seconds == 30.0
+        assert policy.settings.duplicate_window_seconds == 3600.0
+
+        for path in COMPANION_PATHS:
+            if path == "server.companion.enabled":
+                continue
+            assert path in report["applied"], path
+            assert path not in report["restart_required"], path
+
+    def test_a_new_number_changes_the_next_decision(self, api, monkeypatch):
+        """Not just the dataclass: the gate reads it at decision time."""
+
+        policy = self.live_policy(monkeypatch)
+        policy.clock = FakeClock()
+
+        policy.note_notified("Your build failed.")
+        policy.clock.advance(400.0)
+
+        assert not policy.allows(0.9, "Your build failed.").should_notify
+
+        self.patch(api, {"server": {"companion": {
+            "duplicate_window_seconds": 60,
+        }}})
+
+        assert policy.allows(0.9, "Your build failed.").should_notify
+
+    def test_with_no_gate_running_the_reply_says_restart(self, api):
+        """The honest answer when there is nothing live to change.
+
+        `applied` is what the phone renders its controls from, so a path
+        listed there that reached nothing is a switch that appears to have
+        taken effect and did not.
+        """
+
+        from server.runtime import get_runtime
+
+        assert get_runtime().companion_engine is None
+
+        report = self.patch(
+            api, {"server": {"companion": {"max_per_hour": 4}}}
+        )
+
+        assert "server.companion.max_per_hour" in report["restart_required"]
+        assert "server.companion.max_per_hour" not in report["applied"]
+        assert report["needs_restart"]
+
+
+def test_the_server_gives_the_companion_gate_a_durable_ledger():
+    """
+    The ledger the running server hands the companion policy must be a
+    real file under `data/`, and it must NOT be the proactive one.
+
+    Sharing the file would make each policy count the other's sends, which
+    silently changes both of the owner's configured numbers - four a day
+    and six an hour would become one budget neither of them asked for.
+
+    Asserts the path rather than sending anything, so this test never
+    writes to the real data directory.
+    """
+
+    import inspect
+
+    from core.paths import DATA_DIR
+    from server.runtime import ServerRuntime
+
+    source = inspect.getsource(ServerRuntime._build_companion)
+
+    assert "ledger=" in source
+    assert "last_user_message=" in source
+
+    from companion.policy import LEDGER_PATH
+    from proactive.ledger import SendLedger
+
+    assert LEDGER_PATH.parent == DATA_DIR
+    assert LEDGER_PATH != SendLedger().path

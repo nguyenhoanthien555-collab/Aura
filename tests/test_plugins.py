@@ -460,6 +460,162 @@ def test_a_factory_that_raises_is_ignored():
     assert plugins_in(fake_module(plugin=plugin)) == []
 
 
+# ----------------------------------------------------------------------
+# The composition root
+# ----------------------------------------------------------------------
+#
+# Phase 11's lesson, applied to plugins: every test above builds its own
+# manager, so dropping the `_build_plugins` call from
+# `launcher/services.py::build_services` - or passing it the wrong registry
+# - would leave this file green while no plugin ever ran in a real process.
+# These tests drive the one composition root the process actually uses.
+
+
+def _echo_plugin_file(directory: Path) -> None:
+    """A plugin on disk that registers one SAFE tool, in the shipped shape."""
+
+    (directory / "echo_plugin.py").write_text(
+        dedent(
+            """
+            from tools.base import ToolRisk
+
+
+            class EchoTool:
+                name = "echo_tool"
+                description = "Returns its argument back."
+                risk = ToolRisk.SAFE
+
+                def execute(self, **arguments):
+                    return arguments.get("text", "")
+
+
+            class EchoPlugin:
+                name = "echo"
+                version = "1.0.0"
+
+                def initialize(self, context):
+                    self._registry = None
+                    if context.tools is not None:
+                        context.tools.register(EchoTool())
+                        self._registry = context.tools
+
+                def shutdown(self):
+                    if self._registry is not None:
+                        self._registry.unregister("echo_tool")
+                        self._registry = None
+
+
+            def plugin():
+                return EchoPlugin()
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _root_config(directory: Path, allowed: list[str]) -> dict:
+    return {
+        # Everything optional off; this is about plugin wiring.
+        "voice": {"tts": {"enabled": False}, "stt": {"enabled": False}},
+        "vision": {"enabled": False},
+        "avatar": {"enabled": False},
+        "memory": {"recall": False, "profile": False, "pipeline": False},
+        "tools": {"enabled": True, "allowed": allowed},
+        "plugins": {
+            "enabled": ["echo"],
+            "directory": str(directory),
+        },
+    }
+
+
+def test_the_composition_root_initializes_plugins_and_their_tool_reaches_the_executor(
+    tmp_path,
+):
+    """
+    The wiring, not the function.
+
+    A plugin discovered, enabled and initialized by the real
+    `build_services`, whose registered tool is then offered through the one
+    executor the process runs and runnable under the owner's `tools.allowed`.
+    Any break in that chain - discovery skipped, the registry not handed
+    over, initialization never called - fails here rather than only in a
+    test-built manager.
+    """
+
+    from launcher.services import build_services
+
+    _echo_plugin_file(tmp_path)
+
+    services = build_services(config=_root_config(tmp_path, ["echo_tool"]))
+
+    try:
+        assert services.plugins is not None
+        assert services.plugins.is_enabled("echo")
+        assert not services.plugins.is_broken("echo")
+
+        # Registered into the same registry the executor serves...
+        assert services.tools.registry.has("echo_tool")
+
+        # ...and reachable through the permission gate, because the owner
+        # named it in tools.allowed.
+        assert "echo_tool" in services.tools.available()
+
+        result = services.tools.execute("echo_tool", {"text": "ping"})
+
+        assert result.ok
+        assert result.output == "ping"
+    finally:
+        if services.plugins is not None:
+            services.plugins.shutdown()
+
+
+def test_a_plugin_tool_the_owner_did_not_allow_is_registered_but_not_offered(
+    tmp_path,
+):
+    """
+    Registration is not permission.
+
+    The plugin's tool lands in the registry either way; whether the model
+    is ever offered it stays the owner's decision in `tools.allowed`. A
+    plugin may add a capability; it may not grant one.
+    """
+
+    from launcher.services import build_services
+
+    _echo_plugin_file(tmp_path)
+
+    services = build_services(config=_root_config(tmp_path, ["current_time"]))
+
+    try:
+        assert services.tools.registry.has("echo_tool")
+
+        assert "echo_tool" not in services.tools.available()
+    finally:
+        if services.plugins is not None:
+            services.plugins.shutdown()
+
+
+def test_plugins_left_disabled_the_composition_root_builds_no_manager(tmp_path):
+    """
+    The stock install.
+
+    `plugins.enabled` empty means no manager at all - `Services.plugins`
+    stays None and nothing in `plugins/` runs - which is what keeps a
+    default deployment free of third-party code.
+    """
+
+    from launcher.services import build_services
+
+    _echo_plugin_file(tmp_path)
+
+    config = _root_config(tmp_path, [])
+    config["plugins"]["enabled"] = []
+
+    services = build_services(config=config)
+
+    assert services.plugins is None
+
+
 def test_a_factory_returning_a_non_plugin_is_ignored():
     assert plugins_in(fake_module(plugin=lambda: object())) == []
 

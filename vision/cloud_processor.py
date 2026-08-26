@@ -12,8 +12,37 @@ from vision.processor import MAX_DESCRIPTION
 from vision.settings import cloud_model
 
 
+# What the picture is of, in the words the model is told. `Frame.source`
+# is set by whoever captured it: "screen" by both desktop backends,
+# "phone" by the upload route, "mock" by the test double.
+#
+# This used to be the fixed string "Android screen", which was true of
+# the only caller at the time and became a lie the moment phase 19 let a
+# desktop frame reach here - telling a vision model it is looking at a
+# phone is an invitation to describe one, and the same prompt ends with
+# "Do not invent text".
+SUBJECTS = {
+    "phone": "Android phone screen",
+    "screen": "computer screen",
+}
+
+
+def _subject(frame: Frame) -> str:
+    """The neutral word when the source is one nobody taught this map."""
+
+    return SUBJECTS.get(frame.source, "screen")
+
+
 class CloudVisionProcessor:
     """Send one reduced screenshot to cloud vision providers, never Ollama."""
+
+    # Where the pixels can end up, advertised so a caller can price the
+    # act rather than guess at it. Read with getattr and a False default
+    # at every use site, so this is a fact a processor may offer and not
+    # a member the VisionProcessor protocol demands.
+    # The one processor for which this is True, and the reason the flag
+    # exists: a picture of the owner's screen goes to a third party.
+    sends_pixels_offsite = True
 
     def __init__(self, providers: list, max_pixels: int = 1_500_000, jpeg_quality: int = 75):
         self.providers = providers
@@ -29,7 +58,10 @@ class CloudVisionProcessor:
         if frame is None or frame.is_empty():
             return ""
         image, mime = self._compact(frame)
-        prompt = "Describe this Android screen accurately in one concise sentence. Do not invent text."
+        prompt = (
+            f"Describe this {_subject(frame)} accurately in one concise "
+            f"sentence. Do not invent text."
+        )
         last_error = None
         for index, provider in enumerate(self.providers):
             try:
@@ -44,12 +76,42 @@ class CloudVisionProcessor:
         raise self.last_error
 
     def _compact(self, frame: Frame) -> tuple[bytes, str]:
-        """Decode/validate and downscale before a provider receives pixels."""
+        """
+        Decode/validate and downscale before a provider receives pixels.
+
+        Two frame shapes arrive here, and until phase 19 only one of them
+        worked. A device uploads an encoded image - PNG, JPEG, WebP -
+        which `Image.open` reads from its header. `GdiScreenCapture` and
+        `ScreenshotCapture` produce raw RGB, which has no header to find,
+        so every desktop frame came back as
+        ProviderUnavailableError("Screenshot could not be decoded").
+        Measured before the fix on a real GDI frame; the encoded path
+        was fine, which is why the phone half never showed it.
+
+        The raw branch is `OllamaVisionProcessor._to_png`'s idiom rather
+        than a second one: `Image.frombytes` with the frame's own
+        geometry, which raises when the byte count and the geometry
+        disagree and so needs no separate length check.
+
+        `verify()` stays on the encoded branch alone. It is there to
+        reject a malformed or hostile *upload* before the rest of the
+        pipeline touches it - and it invalidates the object it checked,
+        which is why that branch opens the bytes twice. Raw pixels have
+        no structure to be hostile in; `frombytes` is their check.
+        """
         try:
             from PIL import Image
-            with Image.open(io.BytesIO(frame.data)) as image:
-                image.verify()
-            with Image.open(io.BytesIO(frame.data)) as image:
+
+            if frame.image_format == "rgb":
+                decoded = Image.frombytes(
+                    "RGB", (frame.width, frame.height), frame.data
+                )
+            else:
+                with Image.open(io.BytesIO(frame.data)) as candidate:
+                    candidate.verify()
+                decoded = Image.open(io.BytesIO(frame.data))
+
+            with decoded as image:
                 image = image.convert("RGB")
                 if image.width * image.height > self.max_pixels:
                     scale = (self.max_pixels / (image.width * image.height)) ** 0.5

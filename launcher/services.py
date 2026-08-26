@@ -19,6 +19,7 @@ from core.config import load_config
 from core.logger import apply_config_level, logger
 
 from events.bus import EventBus
+from events.log import attach_event_log
 
 
 @dataclass
@@ -29,6 +30,7 @@ class Services:
     bus: EventBus
     engine: Any                      # brain.chat_engine.ChatEngine
     memory: Any                      # memory.manager.MemoryManager
+    event_log: Any = None            # events.log.EventLogger
     profile: Any = None              # memory.profile.ProfileStore
     knowledge: Any = None            # MemoryKnowledgeProvider
     companion: Any = None            # memory.companion.CompanionMemory
@@ -39,6 +41,7 @@ class Services:
     tts: Any = None                  # voice.tts.engine.TTSEngine
     stt: Any = None                  # voice.stt.engine.SpeechToTextEngine
     tools: Any = None                # tools.executor.ToolExecutor
+    cognitive: Any = None            # core.cognitive.CognitiveStore
     avatar: Any = None               # avatar.controller.AvatarController
     plugins: Any = None              # plugins.manager.PluginManager
 
@@ -91,6 +94,17 @@ def build_services(
 
     bus = bus or EventBus()
 
+    # Immediately, and before anything that publishes. Until this line the
+    # bus had no observer at all: `subscribe_all` existed with no
+    # production caller while two docstrings claimed logging used it, so a
+    # notification that never reached the phone left no trace to say
+    # whether it was published, aged out of the outbox, or drained by
+    # another device. Attached unconditionally rather than behind a flag,
+    # because it writes at DEBUG - `logging.level` is already the owner's
+    # control over whether any of it is visible, and a second switch would
+    # let the two disagree.
+    event_log = attach_event_log(bus)
+
     memory = memory if memory is not None else _build_memory()
 
     profile, knowledge, companion = _build_knowledge(config, memory)
@@ -103,19 +117,32 @@ def build_services(
 
     pipeline = _build_pipeline(config, memory, clock)
 
+    # After the clock, deliberately. The store hands that clock to every
+    # state it makes, so "when did that action happen" and "what time is
+    # it in the prompt" are the same reading rather than two.
+    cognitive = _build_cognitive(clock)
+
     vision = vision if vision is not None else _build_vision(config, bus)
 
     # Before the engine, and that ordering is load bearing: the engine is
     # handed the runner so a conversation can ask for a tool, and a runner
     # built afterwards would arrive too late to be injected.
-    tools = _build_tools(config, bus)
+    # After the pipeline as well as before the engine: `remember` writes
+    # through it, and a runner built earlier would register the tool with
+    # nothing behind it.
+    # After the vision manager, and for the same reason as the pipeline:
+    # `describe_screen` is built around the manager this process already
+    # has, and a runner built earlier would register the tool with nothing
+    # behind it - or worse, with a second manager of its own.
+    tools = _build_tools(config, bus, pipeline, vision)
 
     engine = _build_engine(
-        config, bus, vision, knowledge, memory, tools, clock, pipeline
+        config, bus, vision, knowledge, memory, tools, clock, pipeline,
+        cognitive,
     )
 
     # After the pipeline, which is where its pending work comes from.
-    proactive = _build_proactive(config, bus, pipeline, clock)
+    proactive = _build_proactive(config, bus, pipeline, clock, memory)
 
     tts = _build_tts(config, bus)
 
@@ -130,6 +157,7 @@ def build_services(
     return Services(
         config=config,
         bus=bus,
+        event_log=event_log,
         engine=engine,
         memory=memory,
         profile=profile,
@@ -142,6 +170,7 @@ def build_services(
         tts=tts,
         stt=stt,
         tools=tools,
+        cognitive=cognitive,
         avatar=avatar,
         plugins=plugins,
     )
@@ -167,6 +196,7 @@ def _build_engine(
     tools=None,
     clock=None,
     pipeline=None,
+    cognitive=None,
 ):
     """
     The chat engine, wired to the objects this composition root already
@@ -188,6 +218,10 @@ def _build_engine(
       * `pipeline` - the same memory pipeline the proactive engine reads
         its pending work from. Two pipelines would mean a reminder about
         work recorded in a database nobody is reading.
+      * `cognitive` - the one store of what the device agent has already
+        done. Built here rather than inside the engine so that a second
+        one cannot exist: two records of completed actions is how an agent
+        opens the same app twice.
     """
 
     from brain.chat_engine import ChatEngine
@@ -199,6 +233,23 @@ def _build_engine(
 
     llm = BrainRouter(provider_name=provider_name) if provider_name else None
 
+    # Lanes are opt-in and, when the owner has configured none, add
+    # nothing: a bare BrainRouter is handed over exactly as before. The
+    # wrapper is built only when there is a lane to serve, so the default
+    # install has one fewer object in the path, not one more - and no test
+    # or caller that reaches for `.provider_name` or `._provider` can tell
+    # the difference either way.
+    lanes = {
+        task: name
+        for task, name in (llm_config.get("task_models") or {}).items()
+        if isinstance(name, str) and name.strip()
+    }
+
+    if lanes and llm is not None:
+        from brain.model_router import CapabilityRouter
+
+        llm = CapabilityRouter(chat=llm, lanes=lanes)
+
     return ChatEngine(
         memory=memory,
         llm=llm,
@@ -208,7 +259,22 @@ def _build_engine(
         tools=tools,
         clock=clock,
         pipeline=pipeline,
+        cognitive=cognitive,
     )
+
+
+def _build_cognitive(clock):
+    """
+    The one store of what Aura is in the middle of.
+
+    Always built, and unconditional on purpose: there is no configuration
+    under which the agent should be allowed to forget that it already
+    opened the app. It costs an empty dict until a device ticks.
+    """
+
+    from core.cognitive import CognitiveStore
+
+    return CognitiveStore(clock=clock)
 
 
 def _build_clock(config: dict):
@@ -272,7 +338,7 @@ def _build_pipeline(config: dict, memory, clock):
     return pipeline
 
 
-def _build_proactive(config: dict, bus, pipeline, clock):
+def _build_proactive(config: dict, bus, pipeline, clock, memory):
     """
     The proactive engine.
 
@@ -286,21 +352,50 @@ def _build_proactive(config: dict, bus, pipeline, clock):
     task source there are no task reminders - which is the correct
     behaviour rather than a gap, since the alternative is guessing at
     what the user might have been doing.
+
+    The same store, read for a different category, is where appreciations
+    come from. Both sources are absent without a pipeline and both then
+    produce silence; the difference from before is that the appreciation
+    source now exists at all. It did not, so that category could never
+    fire in a real process however well its own tests passed.
     """
 
     from proactive import build_proactive_engine
+    from proactive.ledger import SendLedger
+    from proactive.memories import EpisodicMemorySource
     from proactive.tasks import EpisodicTaskSource
 
     tasks = None
+    memories = None
 
     if pipeline is not None:
         tasks = EpisodicTaskSource(pipeline.episodic, clock=clock.now)
 
+        # And the source without which one of the four categories could
+        # not fire at all. `memories` was never passed here, so
+        # `relevant_memories` was empty in every real process and the
+        # appreciation branch was dead code that three tests covered
+        # (sections 21, 44).
+        memories = EpisodicMemorySource(pipeline.episodic, clock=clock.now)
+
+    # Every limit the owner sets on proactive messaging - how many a day,
+    # how long between them, no repeats - was enforced from a deque that
+    # died with the process, so a restart handed back a clean slate and
+    # the owner's cap was quietly unenforceable (sections 2, 19 and 20).
+    # This is the only place that decides the history lives on disk; the
+    # package itself stays file-free unless told otherwise.
     return build_proactive_engine(
         config,
         events=bus,
         pending_tasks=tasks,
+        memories=memories,
         clock=clock,
+        ledger=SendLedger(),
+        # Whether the owner is actually absent, read from the messages
+        # table rather than from a field that empties on restart. Without
+        # it a restart reads as "away forever" and Aura greets somebody
+        # who was mid-conversation a minute ago (sections 8, 19, 21).
+        last_user_message=memory.last_said_at,
     )
 
 
@@ -420,18 +515,28 @@ def _build_vision(config: dict, bus):
 
     if settings.get("capture_screen", False):
 
-        from vision.capture import ScreenshotCapture
+        from vision.capture import default_screen_capture
 
         monitor = settings.get("monitor", 1)
 
-        candidate = ScreenshotCapture(monitor=monitor)
+        # mss when installed, GDI through ctypes when not. Previously this
+        # tried mss alone and logged "using window titles" - which on this
+        # machine, where mss is not installed, meant the pixel half of
+        # vision was unreachable code. The fallback needs nothing
+        # installed, so `capture_screen: true` now does what it says on a
+        # stock Windows machine.
+        candidate = default_screen_capture(monitor=monitor)
 
-        if candidate.is_available():
+        if candidate is not None:
             capture = candidate
-            logger.info("Screen capture: monitor %s via mss", monitor)
+            logger.info(
+                "Screen capture: monitor %s via %s",
+                monitor,
+                type(candidate).__name__,
+            )
         else:
             logger.info(
-                "Screen capture unavailable (mss not installed), "
+                "Screen capture unavailable on this platform, "
                 "using window titles"
             )
 
@@ -453,19 +558,28 @@ def _build_vision(config: dict, bus):
 
 def _build_vision_processor(settings: dict, config: dict):
     """
-    The pixel processor, or None to leave the manager on window titles.
+    The processor chain the manager will use, or None for titles only.
 
     Pixels are only worth a vision model if the encoder is installed.
-    Returning None here is what makes a missing Pillow degrade to the
+    Returning None here is what makes a broken Pillow degrade to the
     window title description instead of an empty observation every turn.
+    (Pillow is a hard requirement rather than an extra, so this branch
+    guards a broken install or a Windows DLL load failure, not a normal
+    one.)
 
-    The model comes from `vision.settings.ollama_model`, which is also
-    what keeps this path from being handed the server's cloud model
-    name: the two processors have separate keys (`ollama_model` and
-    `cloud_model`) rather than one shared `vision.model`. The log line
-    below is deliberately the model and the host together, so a
-    mismatch is visible at startup rather than as an empty vision
-    section later.
+    What comes back is a `ProcessorChain`, not a bare pixel processor,
+    and that is phase 19's central change. A pixel processor alone
+    *replaced* the window title description: an owner who set
+    `capture_screen: true` while their Ollama daemon was down traded a
+    working sentence for None, because `VisionManager.refresh` reads an
+    empty description as "no observation". The chain puts the title
+    processor underneath as the floor, so the worst case is the
+    description the owner had before they turned the feature on.
+
+    Order is local first, cloud second, titles last, and the order is a
+    section 30 statement as much as a cost one: the model that runs on
+    this machine gets first refusal on the owner's screen, and pixels
+    only leave the machine when the local model had nothing to say.
     """
 
     try:
@@ -476,6 +590,44 @@ def _build_vision_processor(settings: dict, config: dict):
             "(pip install pillow for screen understanding)"
         )
         return None
+
+    from vision.processor import ProcessorChain, WindowTitleProcessor
+
+    pixels = [
+        _build_ollama_vision(settings, config),
+        _build_cloud_vision(settings, config),
+    ]
+
+    pixels = [p for p in pixels if p is not None]
+
+    if not pixels:
+        return None
+
+    # The floor. Built here rather than left to the manager's default
+    # because the manager only reaches its default when `processor` is
+    # None, and from here on it never will be.
+    return ProcessorChain([*pixels, WindowTitleProcessor()])
+
+
+def _build_ollama_vision(settings: dict, config: dict):
+    """
+    The local pixel processor.
+
+    The model comes from `vision.settings.ollama_model`, which is also
+    what keeps this path from being handed the server's cloud model
+    name: the two processors have separate keys (`ollama_model` and
+    `cloud_model`) rather than one shared `vision.model`. The log line
+    below is deliberately the model and the host together, so a
+    mismatch is visible at startup rather than as an empty vision
+    section later.
+
+    Not gated on the daemon answering. A startup probe would add a
+    connect to every launch and a second failure mode to read, and it
+    would answer a question that has already changed by the time vision
+    first runs - Ollama can be started after Aura. An unreachable daemon
+    costs one refused connection per observation, and the chain behind
+    it is what makes that cost a fall-through rather than a silence.
+    """
 
     from vision.ollama_processor import (
         DEFAULT_HOST,
@@ -500,6 +652,56 @@ def _build_vision_processor(settings: dict, config: dict):
         timeout=timeout,
         debug_path=debug_path,
     )
+
+
+def _build_cloud_vision(settings: dict, config: dict):
+    """
+    Cloud vision for the *desktop*, and only if the owner said so.
+
+    Two gates, and the first one is section 30 rather than convenience.
+    `build_cloud_vision_processor` builds a provider whenever
+    `GEMINI_API_KEY` or `OPENROUTER_API_KEY` is in the environment - and
+    a key sits in this repository's own `.env`, which is how a
+    screenshot of the owner's desktop would start being uploaded to
+    Google because somebody configured *text* generation. A key is
+    permission to talk to a provider. It is not permission to send them
+    a picture of this screen, so `send_screen_to_cloud` defaults to
+    false and the owner turns it on by name.
+
+    The phone path is not gated by this and is deliberately untouched:
+    `server/runtime.py::_build_remote_vision` builds the same processor
+    for frames a device uploaded, where the owner asked for exactly that
+    by pointing the Android screen feature at their server. This key is
+    about the machine Aura is running on.
+    """
+
+    if not settings.get("send_screen_to_cloud", False):
+        return None
+
+    from vision.cloud_processor import build_cloud_vision_processor
+
+    processor = build_cloud_vision_processor(config)
+
+    if processor is None:
+        logger.warning(
+            "Vision: vision.send_screen_to_cloud is on but no cloud vision "
+            "provider is configured - set GEMINI_API_KEY or "
+            "OPENROUTER_API_KEY, or turn the setting off"
+        )
+        return None
+
+    # The one line an owner can audit for "is my screen leaving this
+    # machine". Named providers, at info level, on every startup.
+    logger.info(
+        "Vision: desktop screenshots will be sent to %s "
+        "(vision.send_screen_to_cloud is on)",
+        ", ".join(
+            getattr(p, "provider_name", type(p).__name__)
+            for p in processor.providers
+        ),
+    )
+
+    return processor
 
 
 # ----------------------------------------------------------------------
@@ -575,7 +777,7 @@ def _build_stt(config: dict, bus):
 # Tools and avatar
 # ----------------------------------------------------------------------
 
-def _build_tools(config: dict, bus):
+def _build_tools(config: dict, bus, pipeline=None, vision=None):
     """
     The one executor everything in this process runs tools through.
 
@@ -601,7 +803,12 @@ def _build_tools(config: dict, bus):
 
     from tools.factory import build_tools
 
-    return build_tools(config.get("tools") or {}, events=bus)
+    return build_tools(
+        config.get("tools") or {},
+        events=bus,
+        memory=pipeline,
+        vision=vision,
+    )
 
 
 def _build_plugins(config: dict, bus, tools):

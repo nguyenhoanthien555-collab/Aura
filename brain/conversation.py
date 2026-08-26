@@ -37,7 +37,8 @@ job, so there is exactly one owner of that state.
 from dataclasses import dataclass, field
 
 from brain.adapters import records_to_messages
-from brain.agent_mode import is_machine_turn
+from brain.agent_mode import absorb, is_machine_turn
+from brain.capabilities import TaskClass, classify_task, generate_for
 from brain.message import Message
 from brain.ports import (
     ConversationStore,
@@ -50,11 +51,15 @@ from brain.ports import (
     VisionProvider,
 )
 from brain.consistency import IdentityAnchor, anchor_of
-from brain.persona import persona_of, render_of
+from brain.persona import PersonaState, persona_of, render_of
+from brain.persona_validator import validate
+from brain.planner import plan_for
 from brain.prompt_builder import PromptBuilder
+from brain.recovery import reconcile
 from brain.response import Response
 from brain.streaming import SentenceAggregator, stream_of
 from brain.style import ResponseStyler, hint_of
+from brain.task_graph import build, render
 from brain.tool_calling import (
     TOOL_CALL_LIMIT,
     Malformed,
@@ -69,6 +74,9 @@ from events.types import (
     StreamChunkEvent,
     StreamFinishedEvent,
     StreamStartedEvent,
+    TaskFinishedEvent,
+    TaskStepChangedEvent,
+    TaskStuckEvent,
     ThinkingEvent,
     UserInputEvent,
 )
@@ -102,6 +110,17 @@ class _Turn:
     vision: VisionContextLike | None = None
     knowledge: list[str] = field(default_factory=list)
     temporal: list[str] = field(default_factory=list)
+    task: TaskClass = TaskClass.CHAT
+
+    # The register this turn is in, resolved once.
+    #
+    # Here rather than recomputed because it is now read twice - by the
+    # prompt that asks the model for it and by the validator that enforces
+    # it - and those two reading different states would mean correcting a
+    # reply towards a register nobody asked for. It is also why a machine
+    # turn needs no exemption flag: a machine turn builds no `_Turn` at
+    # all, so its persona is None and `validate` returns its JSON verbatim.
+    persona: PersonaState | None = None
 
 
 class ConversationManager:
@@ -121,6 +140,7 @@ class ConversationManager:
         tools: ToolRunner | None = None,
         clock=None,
         pipeline=None,
+        cognitive=None,
     ):
 
         self.memory = memory
@@ -146,6 +166,15 @@ class ConversationManager:
         #             ranked lines that go into MEMORY.
         self.clock = clock
         self.pipeline = pipeline
+
+        # A core.cognitive.CognitiveStore, or None for a caller that has
+        # no use for one. Deliberately a store keyed by session rather
+        # than a field holding one state: see the comment above `_Turn`
+        # for why one engine serving every session cannot keep per-turn
+        # state on itself. A dict behind a lock is the safe form of the
+        # same idea, and it is what lets an agent tick ask what the last
+        # tick already accomplished.
+        self.cognitive = cognitive
 
 
     def chat(
@@ -173,21 +202,21 @@ class ConversationManager:
 
         machine = is_machine_turn(context)
 
-        user_msg, prompt, turn = self._prepare(
+        user_msg, prompt, turn, task = self._prepare(
             user_message, contexts, source, context, machine=machine, session_id=session_id
         )
 
         if not machine:
             self._emit(ThinkingEvent())
 
-        text = self._generate(prompt)
+        text = self._generate(prompt, task)
 
         if machine:
             return Response(text=text)
 
         text = self._resolve_tools(text, turn)
 
-        response = Response(text=self._styled(text))
+        response = Response(text=self._voiced(self._styled(text), turn))
 
         self._remember(user_msg, response.text, session_id=session_id)
 
@@ -227,10 +256,13 @@ class ConversationManager:
 
         The style filter is subtractive over a whole reply, so it cannot
         run on a fragment - deciding whether an opening clause is filler
-        needs the clause to have finished. Fragments therefore stream
-        unstyled and `StreamFinishedEvent.text` carries the styled reply.
-        A UI that printed chunks should replace its buffer with that;
-        the difference is a deleted filler phrase, never a changed fact.
+        needs the clause to have finished. The persona validator is the
+        same: whether an address term is a habit or emphasis is a fact
+        about the reply, not about a chunk of it. Fragments therefore
+        stream raw and `StreamFinishedEvent.text` carries the finished
+        reply. A UI that printed chunks should replace its buffer with
+        that; the difference is a deleted filler phrase or a corrected
+        pronoun, never a changed fact.
 
         A provider failure part way through raises, exactly as `chat`
         does, and the partial reply is not saved. A half turn in history
@@ -250,7 +282,7 @@ class ConversationManager:
 
         machine = is_machine_turn(context)
 
-        user_msg, prompt, _turn = self._prepare(
+        user_msg, prompt, turn, _task = self._prepare(
             user_message, contexts, source, context,
             machine=machine, offer_tools=False,
             session_id=session_id,
@@ -287,7 +319,7 @@ class ConversationManager:
         if machine:
             return
 
-        text = self._styled("".join(pieces))
+        text = self._voiced(self._styled("".join(pieces)), turn)
 
         self._remember(user_msg, text, session_id=session_id)
 
@@ -336,7 +368,7 @@ class ConversationManager:
         machine: bool = False,
         offer_tools: bool = True,
         session_id: str = "default",
-    ) -> tuple[Message, str, "_Turn | None"]:
+    ) -> tuple[Message, str, "_Turn | None", TaskClass]:
         """
         Everything both paths do before the provider is called.
 
@@ -348,36 +380,69 @@ class ConversationManager:
         machine turn, which has nothing to re-render and is never offered
         a tool.
 
+        The task class is returned too. It is decided here, once, from
+        the same material the prompt was built from - so a tool round
+        re-rendering the turn cannot land in a different lane than the
+        first pass did, and the choice of worker cannot drift mid-turn.
+
         `machine` strips the turn back to the device state and the rules
         for reading it. Nothing conversational is assembled - no history,
-        no recalled facts, no vision, no identity anchor, no style hint,
-        no clock and no memory pipeline - and no UserInputEvent is
-        published, because "agent_tick" is not something the user said.
+        no recalled facts, no vision, no identity anchor, no style hint and
+        no memory pipeline - and no UserInputEvent is published, because
+        "agent_tick" is not something the user said.
+
+        The clock is the one exception, and the rule the rest of the list
+        obeys is what makes it one: everything above is withheld for
+        existing to make Aura sound like herself, and the time is not that.
+        It is a fact about the present, like the device state the tick
+        already carries. The request reaches the model in the owner's own
+        words, so "hôm nay" and "tomorrow morning" arrive with it, and a
+        model asked to type a date with no date in its prompt invents one
+        (section 16). `_temporal_lines` returns nothing when no clock was
+        injected, so a manager built without one still produces the tick
+        prompt byte-for-byte.
         """
 
         user_msg = Message(role="user", content=user_message)
 
         if machine:
+            self._absorb(context, session_id)
+
             return user_msg, self.builder.build(
                 history=[],
                 user_message=user_msg,
                 contexts=[],
                 context=context,
-            ), None
+                plan=self._plan(context, session_id),
+                temporal=self._temporal_lines(),
+            ), None, classify_task(user_message, context)
 
         self._emit(UserInputEvent(text=user_msg.content, source=source))
+
+        history = self.history(session_id=session_id)
 
         turn = _Turn(
             user_msg=user_msg,
             contexts=list(contexts or []),
             context=context,
-            history=self.history(session_id=session_id),
+            history=history,
+            persona=persona_of(self.persona, history, user_msg),
             vision=self._vision_context(),
             knowledge=self._knowledge_for(user_msg.content),
             temporal=self._temporal_lines(),
+            task=classify_task(
+                user_message,
+                context,
+                [message.content for message in history],
+            ),
         )
 
-        return user_msg, self._compose(turn, offer_tools=offer_tools), turn
+        return (
+            user_msg,
+            self._compose(turn, offer_tools=offer_tools),
+            turn,
+            turn.task,
+        )
 
 
 
@@ -402,10 +467,7 @@ class ConversationManager:
             vision=turn.vision,
             knowledge=turn.knowledge,
             identity=anchor_of(self.identity, len(turn.history)),
-            persona=render_of(
-                self.persona,
-                persona_of(self.persona, turn.history, turn.user_msg),
-            ),
+            persona=render_of(self.persona, turn.persona),
             style=hint_of(self.style),
             context=turn.context,
             tools=self._catalogue() if offer_tools else None,
@@ -414,17 +476,23 @@ class ConversationManager:
         )
 
 
-    def _generate(self, prompt: str) -> str:
+    def _generate(self, prompt: str, task: TaskClass | None = None) -> str:
         """
         Ask the provider, announcing a failure before re-raising it.
 
         Swallowing it would hide provider outages behind an empty reply.
         Emitted for a machine turn too: a provider that is down is a fact
         about Aura, not about the caller.
+
+        `task` says what kind of work this is, and an LLM that can route
+        on it will. `generate_for` falls back to plain `generate` for one
+        that cannot, so every provider, mock and test fake in the tree
+        keeps working unedited - and a default install, where the owner
+        has configured no lanes, behaves exactly as it did before.
         """
 
         try:
-            return self.llm.generate(prompt)
+            return generate_for(self.llm, prompt, task)
 
         except Exception as error:
             self._emit(
@@ -503,7 +571,8 @@ class ConversationManager:
             offer = not settled and calls < TOOL_CALL_LIMIT
 
             text = self._generate(
-                self._compose(turn, tool_results=results, offer_tools=offer)
+                self._compose(turn, tool_results=results, offer_tools=offer),
+                TaskClass.TOOL_PLANNING if offer else turn.task,
             )
 
             if not offer:
@@ -708,6 +777,170 @@ class ConversationManager:
                 error,
             )
 
+    def _absorb(self, context: dict | None, session_id: str) -> None:
+        """
+        Record what an agent tick reported, if anyone is keeping track.
+
+        Same shape as `_emit` and `_vision_context`, and for the same
+        reason: this is bookkeeping alongside the turn, not part of it. A
+        store that raised would take down the action the device is waiting
+        for, and an agent that stops mid-task because its notebook tore is
+        worse than one working from a stale note.
+        """
+
+        if self.cognitive is None:
+            return
+
+        try:
+            absorb(self.cognitive.for_session(session_id), context)
+        except Exception as error:
+            logger.debug("Cognitive absorb failed: %s", error)
+
+    def _plan(self, context: dict | None, session_id: str) -> list[str] | None:
+        """
+        What remains of this request, as prompt lines.
+
+        Called immediately after `_absorb`, and the order matters: the plan
+        is marked against what the tick just reported, so absorbing second
+        would render a plan one step behind the device.
+
+        Kept separate from `_absorb` rather than folded into it because the
+        two answer different questions - what the device said happened,
+        versus what we derive from it - and a fault in the derivation
+        should not read as a fault in the ingest.
+
+        Nothing is stored except on the state that already owns it. The
+        plan's *structure* is recomputed here every tick instead of being
+        persisted, which is safe precisely because `plan_for` is pure: the
+        request does not change mid-task, so two calls cannot disagree, and
+        there is no second copy to drift. What does get written is the
+        state's own record of the plan and the current node - `set_plan`
+        and `enter_node`, which phase 4 built for this and which nothing
+        had called until now.
+
+        Returns None rather than an empty list when there is nothing to
+        say, so the prompt omits the section entirely and a request the
+        planner cannot parse costs the tick nothing.
+        """
+
+        if self.cognitive is None:
+            return None
+
+        try:
+            state = self.cognitive.for_session(session_id)
+            plan = plan_for((context or {}).get("user_request"))
+            graph = build(plan, state)
+
+            # Recovery is asked only when the graph says there is nothing
+            # left to try, and it is asked before the current node is read
+            # because opening or closing recovery changes which node that
+            # is. Rebuilt rather than patched when it moves: the graph is a
+            # reading of the state, so the honest way to reflect a changed
+            # state is to read it again.
+            if reconcile(plan, state, graph.is_stuck):
+                graph = build(plan, state)
+
+            # Read before writing, because the edge is the whole point.
+            # `_plan` runs every tick and rebuilds the same graph from the
+            # same pure `plan_for`, so "what step is current" is usually
+            # the answer it already was. Publishing that every time would
+            # put the repetition section 10 exists to prevent onto the bus
+            # as noise; publishing the difference says something moved.
+            #
+            # Both reads happen before both writes. `had_plan` is needed
+            # because "no current node" has two causes that look identical
+            # in the state - a task not started and a task finished are
+            # both `task_node == ""` - and a device can report a task
+            # already complete on its very first tick.
+            was = state.task_node
+            had_plan = bool(state.plan)
+
+            state.set_plan(step.kind.value for step in plan.steps)
+
+            node = graph.current.step.kind.value if graph.current else ""
+
+            state.enter_node(node)
+
+            self._announce(plan, graph, was, node, had_plan)
+
+            return render(graph) or None
+        except Exception as error:
+            # The same bargain `_absorb` makes. A device is waiting for an
+            # action, and an agent that stops mid-task because it could not
+            # describe the task is worse than one working without a plan.
+            logger.debug("Planning failed: %s", error)
+
+            return None
+
+    def _announce(
+        self, plan, graph, was: str, node: str, had_plan: bool
+    ) -> None:
+        """
+        Tell the bus what moved, if anything did.
+
+        Called from inside `_plan`'s try block on purpose, so a fault here
+        is caught by the same handler for the same reason: a device is
+        waiting for an action, and announcing a task is worth strictly
+        less than performing it.
+
+        Three edges, and nothing on a tick that repeats itself:
+
+            the current step changed      -> TaskStepChangedEvent
+            the graph settled every node  -> TaskFinishedEvent
+            nothing left to try           -> TaskStuckEvent
+
+        Finished and stuck are both "no current node", which is why
+        `graph.current` alone cannot be the signal - `is_finished` and
+        `is_stuck` are what separate a completed task from an abandoned
+        one, and a subscriber that confused them would congratulate the
+        owner on a search that never happened.
+        """
+
+        if node:
+
+            if node == was:
+                # The ordinary tick: an action is still in flight and the
+                # graph reads the same as it did a moment ago.
+                return
+
+            self._emit(
+                TaskStepChangedEvent(
+                    goal=plan.goal,
+                    step=node,
+                    index=next(
+                        (
+                            position
+                            for position, candidate in enumerate(graph.nodes)
+                            if candidate is graph.current
+                        ),
+                        0,
+                    ),
+                    total=len(plan.steps),
+                )
+            )
+
+            return
+
+        # No current node, which is where the two-causes problem lands. It
+        # is worth saying once when the agent *arrives* here - either
+        # because it just left a step (`was`), or because this is the
+        # first tick of a plan and the device reported a task that was
+        # already complete (`not had_plan`). On every later tick both are
+        # false and nothing is said, which is how a finished task is
+        # announced once instead of forever.
+        if not (was or not had_plan):
+            return
+
+        if graph.is_finished:
+            self._emit(
+                TaskFinishedEvent(goal=plan.goal, steps=len(plan.steps))
+            )
+
+        elif graph.is_stuck:
+            # `was` rather than the current node, because there isn't one.
+            # The step it gave up on is the useful half.
+            self._emit(TaskStuckEvent(goal=plan.goal, step=was))
+
     def _vision_context(self):
         if self.vision is None:
             return None
@@ -762,6 +995,34 @@ class ConversationManager:
         except Exception as error:
             logger.debug("Temporal context unavailable: %s", error)
             return []
+
+    def _voiced(self, text: str, turn: "_Turn | None") -> str:
+        """
+        Hold the reply to the register the prompt asked for.
+
+        Sections 13 and 14 both say prompt instructions alone are
+        insufficient, and this is where that stops being an observation. The
+        prompt already tells the model which pronouns to use and asks it not
+        to spam emoji; what was missing was any consequence for ignoring it.
+
+        Runs after the style filter, not before. Style is subtractive over a
+        whole reply and can delete a clause, which changes what "the address
+        term in every sentence" means - so validating last is what makes the
+        thing the user reads the thing that was checked.
+
+        A validator that raises loses its correction, not the answer, for
+        the same reason `_styled` is written this way: a bad regex must cost
+        a pronoun, never a turn.
+        """
+
+        if turn is None or turn.persona is None:
+            return text
+
+        try:
+            return validate(text, turn.persona)
+        except Exception as error:
+            logger.debug("Persona validation failed, returning reply: %s", error)
+            return text
 
     def _styled(self, text: str) -> str:
         """

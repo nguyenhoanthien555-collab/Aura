@@ -12,8 +12,9 @@ companion is that you miss a reminder. The failure mode of a too-loud one
 is that it gets uninstalled, and no amount of good judgement afterwards
 recovers from that.
 
-Six independent rules, each of which can veto alone:
+Seven independent rules, each of which can veto alone:
 
+    known category       the closed set, enforced where sending happens
     quiet hours          nothing at all, whatever the reason
     global cooldown      one unprompted message per window, any category
     category cooldown    greetings throttled separately from reminders
@@ -48,6 +49,23 @@ DEFAULT_CATEGORY_COOLDOWN = {
     Category.WELLBEING.value: 12 * 3600.0,
     Category.TASK.value: 4 * 3600.0,
 }
+
+# The closed set, derived from the one authority on it rather than
+# retyped. `proactive/decision.py` says of `Category`: "A closed set on
+# purpose. Each one has its own cooldown and its own justification rule,
+# and a category that is not listed here cannot be sent at all."
+#
+# That last clause was true of the decision engine and false here. This
+# module took a plain string and looked it up with `.get()`, so a
+# category the system does not know arrived with no per-category
+# cooldown - not an error, not a warning, just an unthrottled send. A
+# probe put five distinct messages through an unlisted category in five
+# seconds while a listed one allowed one.
+#
+# So the sentence is now enforced where the sending is decided. Derived
+# from the enum and not a second literal list, because a hand-maintained
+# copy of a closed set is the thing that drifted in the first place.
+KNOWN_CATEGORIES = frozenset(category.value for category in Category)
 
 # The ceiling that survives every other rule failing.
 DEFAULT_MAX_PER_DAY = 4
@@ -154,13 +172,34 @@ class ProactivePolicy:
     a monotonic counter.
     """
 
-    def __init__(self, settings: ProactiveSettings | None = None, clock=local_now):
+    def __init__(
+        self,
+        settings: ProactiveSettings | None = None,
+        clock=local_now,
+        ledger=None,
+    ):
 
         self.settings = settings or ProactiveSettings()
         self.clock = clock
 
         self._lock = Lock()
         self._sent: deque = deque(maxlen=64)     # (when, category, message)
+
+        # Optional on purpose. Without a ledger this class behaves exactly
+        # as it did - in-memory, no file, no disk touched - because a
+        # great many tests build a bare policy and none of them asked for
+        # a file to appear next to them. The composition root supplies one.
+        self.ledger = ledger
+
+        if ledger is not None:
+            # Loaded once, here, rather than on each question. `allows`
+            # asks the history four separate things under a single lock,
+            # and re-reading the file per question would let the answers
+            # disagree with each other inside one decision. The cost is
+            # an assumption worth stating: one process owns this file. Two
+            # servers over one ledger would each enforce the owner's limit
+            # against a stale copy of the other's sends.
+            self._sent.extend(ledger.load())
 
     # ------------------------------------------------------------------
 
@@ -170,9 +209,45 @@ class ProactivePolicy:
         with self._lock:
             self._sent.append((self.clock(), str(category), message))
 
+            self._save()
+
     def reset(self) -> None:
         with self._lock:
             self._sent.clear()
+
+            # The file too. `reset` is the owner dropping the limit they
+            # are currently under; if only the copy in memory were
+            # cleared, the next start would read the old sends back and
+            # restore a limit the owner had just been told was gone.
+            self._save()
+
+    def history(self) -> tuple:
+        """
+        The raw send history, oldest first: `(when, category, message)`.
+
+        Exposed because `ProactiveEngine` needs to know which parts of
+        which day it has already greeted, and that is derivable from
+        this - `part_of_day` is a pure function of any datetime. Keeping a
+        second copy over in the engine is the duplicated state section 8
+        forbids, and the copy is the half that used to be lost on restart.
+        """
+
+        with self._lock:
+            return tuple(self._sent)
+
+    def _save(self) -> None:
+        """
+        Write the history out. Caller holds the lock.
+
+        Inside the lock deliberately, despite being disk I/O: two sends
+        racing here would otherwise each snapshot the deque and write in
+        whichever order the filesystem happened to see them, and the file
+        could end up without the later message in it. The deque is at
+        most a few dozen short rows, so the write is brief.
+        """
+
+        if self.ledger is not None:
+            self.ledger.save(self._sent)
 
     def sent_today(self, now: datetime | None = None) -> int:
 
@@ -219,6 +294,22 @@ class ProactivePolicy:
 
         if not str(message or "").strip():
             return False, "nothing to say"
+
+        # The closed set, enforced where sending is decided rather than
+        # only where the reason is chosen. An unknown category is not a
+        # category with a lenient cooldown - it is a caller bug, and
+        # inventing a plausible throttle for it would hide the bug and
+        # ship the spam (sections 20, 21).
+        #
+        # Placed after `enabled` and the empty-message check, which are
+        # cheaper and more fundamental, and before quiet hours, so the
+        # reason an operator reads names the actual problem instead of
+        # the time of day.
+        if str(category) not in KNOWN_CATEGORIES:
+            return False, (
+                f"unknown category '{category}' - "
+                "not one of " + ", ".join(sorted(KNOWN_CATEGORIES))
+            )
 
         now = self.clock()
 

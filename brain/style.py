@@ -229,12 +229,12 @@ class AuraStyle:
         if not text or not text.strip():
             return text
 
-        protected, spans = _hide_code(text)
+        protected, spans = hide_code(text)
 
         cleaned = _strip_openers(protected)
         cleaned = _strip_closers(cleaned)
 
-        cleaned = _restore_code(cleaned, spans)
+        cleaned = restore_code(cleaned, spans)
 
         if not cleaned.strip():
             self.note_reply(text)
@@ -280,8 +280,16 @@ DEFAULT_HINT = (
 # Code protection
 # ----------------------------------------------------------------------
 
-def _hide_code(text: str) -> tuple[str, list[str]]:
-    """Replace code spans with placeholders the filter cannot match."""
+def hide_code(text: str) -> tuple[str, list[str]]:
+    """
+    Replace code spans with placeholders the filter cannot match.
+
+    Public because `brain/persona_validator.py` needs exactly this and a
+    second implementation of it would be a second answer to "what counts as
+    code" - and the two rules that must never touch code are the filler
+    filter here and the pronoun pass there, so a disagreement between them
+    would show up as one of them editing a snippet.
+    """
 
     spans: list[str] = []
 
@@ -292,7 +300,8 @@ def _hide_code(text: str) -> tuple[str, list[str]]:
     return CODE.sub(take, text), spans
 
 
-def _restore_code(text: str, spans: list[str]) -> str:
+def restore_code(text: str, spans: list[str]) -> str:
+    """Put the hidden code spans back where their placeholders sit."""
 
     def give(match: re.Match) -> str:
         index = int(match.group(1))

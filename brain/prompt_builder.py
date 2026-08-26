@@ -19,6 +19,7 @@ from brain.prompt_sections import (
     DEVICE_STATE,
     INTENT_RULES,
     LAST_ACTION_ERROR,
+    PLAN,
 
     SYSTEM,
     PERSONALITY,
@@ -346,6 +347,8 @@ class PromptBuilder:
         self,
         user_message: Message,
         context: dict,
+        plan: list[str] | None = None,
+        temporal: list[str] | None = None,
     ) -> str:
         """
         One step of the Android device agent.
@@ -365,6 +368,23 @@ class PromptBuilder:
         The persona survives in exactly one place: the `message` field of
         the `complete` action, which is the only text here a person ever
         reads.
+
+        `temporal` is the one section above that this prompt *does* take,
+        and the exclusion rule above is what admits it: everything stripped
+        here is stripped for existing to make Aura sound like herself, and
+        the time is not that. It is a fact about the present, the same
+        category as DEVICE STATE, which this prompt has always carried. It
+        earns its place because the request arrives in the owner's own
+        words - "hôm nay", "today", "tomorrow morning" are ordinary things
+        to type - and a model asked to type a date with no date in its
+        prompt does not decline, it invents one (section 16).
+
+        `plan` is what stops this prompt asking the model to rederive the
+        task on every step. Without it the model gets the screen, the
+        request and a list of what has been done, and has to work out what
+        remains - ten times over a ten-step task, with a fresh chance each
+        time to reach a different answer. It is optional because a request
+        the planner cannot parse must leave this prompt exactly as it was.
         """
 
         import json
@@ -416,6 +436,27 @@ class PromptBuilder:
                 ACTION_HISTORY,
                 "\n".join(action_lines),
             ])
+
+        # 2.7 What remains, and which step we are on
+        if plan:
+            prompt.extend([
+                PLAN,
+                "\n".join(plan),
+            ])
+
+        # 2.8 When "now" is.
+        #
+        # Below the tree rather than beside DEVICE STATE, which is where it
+        # belongs by category, because the request text lives in AGENT
+        # RULES and a date is needed exactly when that sentence is read.
+        # The tree is the largest thing in this prompt; a date placed above
+        # it is a date read a long way from its use.
+        #
+        # `_build_time` is reused rather than re-rendered here, so the
+        # section header and the omit-when-empty rule have one definition -
+        # and so a deployment with no clock gets a byte-identical prompt,
+        # which is the guarantee every optional section here makes.
+        prompt.extend(self._build_time(temporal))
 
         # 3. Agent rules
         prompt.extend([
@@ -514,6 +555,7 @@ class PromptBuilder:
         tool_results: list[str] | None = None,
         temporal: list[str] | None = None,
         persona: str | None = None,
+        plan: list[str] | None = None,
     ):
         """
         Render the full prompt.
@@ -544,10 +586,19 @@ class PromptBuilder:
         intent probe - is not this prompt at all. It routes to a prompt
         built for a parser, with none of the sections above; see
         `brain/agent_mode.py`.
+
+        `plan` is the one parameter that belongs to that other prompt
+        rather than this one. It arrives already rendered, like every
+        parameter here: the manager owns the cognitive state and works out
+        which step is current, and this class places the result. A builder
+        that read the state itself would be a second consumer of it, free
+        to disagree with the first about where the task had got to.
         """
 
         if is_agent_tick(context):
-            return self._build_agent_prompt(user_message, context)
+            return self._build_agent_prompt(
+                user_message, context, plan, temporal
+            )
 
         if is_intent_probe(context):
             return self._build_intent_prompt(user_message)

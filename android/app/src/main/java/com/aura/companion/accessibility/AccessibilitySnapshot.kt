@@ -44,7 +44,24 @@ data class AccessibilitySnapshot(
     @SerialName("screenshot_available") val screenshotAvailable: Boolean = false,
     @SerialName("user_request") val userRequest: String? = null,
     @SerialName("last_action_error") val lastActionError: String? = null,
-    @SerialName("completed_actions") val completedActions: List<String> = emptyList()
+    @SerialName("completed_actions") val completedActions: List<String> = emptyList(),
+    /**
+     * Actions that did not work, as `kind(args) [VERDICT xN]`.
+     *
+     * The sibling of `completed_actions`, and the reason the server can
+     * tell a launch that failed twice from one nobody has tried. Until
+     * this existed, failure crossed the wire only as `last_action_error` -
+     * free prose addressed to the model - so the server could not mark a
+     * step failed, could not know an attempt had been spent, and could
+     * not decide anything about retrying.
+     *
+     * `VERDICT` is FAILED or UNVERIFIED, the loop's own `ExecutionResult`
+     * names: could not be performed, versus performed without its
+     * postcondition being observed. Defaulted so an installed build that
+     * predates the field still deserialises, and so the server reads a
+     * missing list as "nothing reported" rather than as an error.
+     */
+    @SerialName("failed_actions") val failedActions: List<String> = emptyList()
 )
 
 

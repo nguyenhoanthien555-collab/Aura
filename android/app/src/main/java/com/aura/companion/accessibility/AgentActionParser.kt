@@ -35,6 +35,15 @@ object AgentActionParser {
      * this set is a hallucination: executing it would fail anyway, and
      * saying so precisely here gives the model something it can act on
      * instead of a generic "target not clickable".
+     *
+     * That agreement is now enforced rather than promised, by
+     * `test_the_parser_accepts_every_action_the_prompt_offers` in
+     * tests/test_agent_protocol.py, which reads this literal set and the
+     * rendered prompt. It is enforced because it had already broken:
+     * `submit` was offered by the prompt and implemented by
+     * [AuraActionExecutor], but missing here, so a model following the
+     * documented search flow was told its own instructions were
+     * unsupported.
      */
     val KNOWN_ACTIONS: Set<String> = setOf(
         "complete",
@@ -50,6 +59,7 @@ object AgentActionParser {
         "open_quick_settings",
         "open_app",
         "focus",
+        "submit",
     )
 
     /**

@@ -189,12 +189,26 @@ class CompanionEngine:
             logger.debug("Companion event publish failed: %s", error)
 
 
-def build_companion_engine(config: dict | None, events=None, llm=None):
+def build_companion_engine(
+    config: dict | None,
+    events=None,
+    llm=None,
+    ledger=None,
+    last_user_message=None,
+):
     """
     Build the engine from the `server.companion` section of config.
 
     Returns None when the section is absent, which keeps a caller from
     having to know whether the feature exists.
+
+    `ledger` and `last_user_message` are what make section 20's ceiling and
+    section 21's "do not talk over the owner" survive a restart, and both
+    stay None here. A builder that reached for a real file and a real
+    database on its own would make every test that calls it either write to
+    `data/` or need a fixture to stop it; the server supplies them in
+    `ServerRuntime._build_companion`, which is the only caller that has
+    them to give.
     """
 
     server = (config or {}).get("server") or {}
@@ -204,7 +218,11 @@ def build_companion_engine(config: dict | None, events=None, llm=None):
     evaluator = LLMRelevanceEvaluator(llm) if llm is not None else None
 
     return CompanionEngine(
-        policy=CompanionPolicy(settings=settings),
+        policy=CompanionPolicy(
+            settings=settings,
+            ledger=ledger,
+            last_user_message=last_user_message,
+        ),
         evaluator=evaluator,
         events=events,
     )

@@ -212,6 +212,81 @@ class TestDeliberatelyNotSettable:
 
 
 # ----------------------------------------------------------------------
+# The zone Aura thinks it is in
+# ----------------------------------------------------------------------
+
+class TestTimezoneSetting:
+    """
+    `temporal.timezone` has existed in config.yaml since Phase 8 and is
+    read by `TemporalClock.from_config`, but it was not in ALLOWED - so
+    the phone was *told* the value in `effective` and could never change
+    it. On a container that runs in UTC while its owner does not, that is
+    Aura being confidently wrong about the time, which section 16 rules
+    out more firmly than it rules out not knowing at all.
+    """
+
+    def store(self, tmp_path) -> RuntimeSettings:
+        return RuntimeSettings(path=tmp_path / "settings.json")
+
+    def test_in_the_allow_list(self):
+        assert "temporal.timezone" in ALLOWED
+
+    def test_a_resolvable_zone_is_accepted(self, tmp_path):
+        accepted = self.store(tmp_path).update(
+            {"temporal": {"timezone": "UTC"}}
+        )
+        assert accepted["temporal.timezone"] == "UTC"
+
+    @pytest.mark.parametrize("written", ["utc", "  Utc ", "gmt", "Z"])
+    def test_the_utc_aliases_normalise(self, tmp_path, written):
+        # `resolve_timezone` already treats all three as UTC. Keeping the
+        # owner's casing would put "utc" into the prompt's TIME section,
+        # which reads as some zone other than the one they picked.
+        accepted = self.store(tmp_path).update(
+            {"temporal": {"timezone": written}}
+        )
+        assert accepted["temporal.timezone"] == "UTC"
+
+    def test_an_unresolvable_zone_is_refused_and_names_the_fix(self, tmp_path):
+        with pytest.raises(SettingsError) as error:
+            self.store(tmp_path).update(
+                {"temporal": {"timezone": "Mars/Olympus_Mons"}}
+            )
+
+        # Storing it would resolve to None at every read, leaving Aura on
+        # the host's clock while the settings screen showed Mars: exactly
+        # the dead setting `validate_path` refuses by name. And on Windows
+        # the cause is usually one missing package, so the message says
+        # so rather than leaving the owner to guess at their own typo.
+        assert "tzdata" in str(error.value).lower()
+
+    @pytest.mark.parametrize("written", ["", "   ", None])
+    def test_nothing_clears_it_back_to_the_machine_zone(self, tmp_path, written):
+        # Clearing has to be expressible or a zone set once is permanent -
+        # the same reason `llm.custom_base_url` accepts "".
+        accepted = self.store(tmp_path).update(
+            {"temporal": {"timezone": written}}
+        )
+        assert accepted["temporal.timezone"] == ""
+
+    def test_a_zone_is_not_lowercased(self, tmp_path):
+        # IANA keys are case-sensitive to `ZoneInfo`, so the coercion that
+        # `_provider_name` applies would break every real zone name. Only
+        # the three UTC aliases are rewritten.
+        try:
+            accepted = self.store(tmp_path).update(
+                {"temporal": {"timezone": "Asia/Ho_Chi_Minh"}}
+            )
+        except SettingsError:
+            # No timezone database on this machine, which is the Windows
+            # default. The claim under test cannot be observed here, and
+            # inventing a pass would hide that.
+            pytest.skip("no system timezone database")
+
+        assert accepted["temporal.timezone"] == "Asia/Ho_Chi_Minh"
+
+
+# ----------------------------------------------------------------------
 # `applied` is a promise: the conditional handlers must keep it
 # ----------------------------------------------------------------------
 
@@ -242,9 +317,12 @@ def build_service(tmp_path):
         present = {
             "proactive": None,
             "memory": None,
+            "pipeline": None,
+            "knowledge": None,
             "vision": None,
             "tools": None,
             "tts": None,
+            "clock": None,
         }
         present.update(services)
 
@@ -287,6 +365,119 @@ class TestLiveApplyHonesty:
         assert report["applied"] == []
         assert report["restart_required"] == ["server.screen.min_interval"]
         assert report["needs_restart"] is True
+
+    def test_recall_moves_a_live_pipeline(self, build_service):
+        """
+        `Services` keeps `pipeline` as a sibling of `memory`, not inside
+        it - line 36 next to line 31 - so a handler that reaches through
+        the memory manager finds nothing and reports success anyway.
+        The stand-in below is deliberately shaped like the real
+        `MemoryManager`: it has no `pipeline` attribute at all.
+        """
+
+        pipeline = SimpleNamespace(recall_enabled=True)
+
+        report = build_service(
+            memory=SimpleNamespace(session=None), pipeline=pipeline
+        ).apply({"memory": {"recall": False}})
+
+        assert pipeline.recall_enabled is False
+        assert report["applied"] == ["memory.recall"]
+        assert report["restart_required"] == []
+
+    def test_recall_back_on_moves_it_back(self, build_service):
+
+        pipeline = SimpleNamespace(recall_enabled=False)
+
+        build_service(pipeline=pipeline).apply({"memory": {"recall": True}})
+
+        assert pipeline.recall_enabled is True
+
+    def test_recall_on_swaps_the_legacy_retriever_live(self, build_service):
+        """
+        `memory.recall` gates two mechanisms and `applied` is a promise
+        about both. `MemoryKnowledgeProvider.retriever` is a plain
+        attribute read on every turn through `_recalled`, so the older
+        half is swappable and does not need a restart to honour the
+        toggle - which is what stops `applied` from being half true.
+        """
+
+        from memory.retrieval import KeywordRetriever, NullRetriever
+
+        knowledge = SimpleNamespace(retriever=NullRetriever())
+
+        report = build_service(
+            memory=SimpleNamespace(session=object()), knowledge=knowledge
+        ).apply({"memory": {"recall": True}})
+
+        assert isinstance(knowledge.retriever, KeywordRetriever)
+        assert report["applied"] == ["memory.recall"]
+
+    def test_recall_off_swaps_the_legacy_retriever_back(self, build_service):
+
+        from memory.retrieval import KeywordRetriever, NullRetriever
+
+        knowledge = SimpleNamespace(
+            retriever=KeywordRetriever(session=object())
+        )
+
+        build_service(
+            memory=SimpleNamespace(session=object()), knowledge=knowledge
+        ).apply({"memory": {"recall": False}})
+
+        assert isinstance(knowledge.retriever, NullRetriever)
+
+    def test_recall_moves_both_halves_at_once(self, build_service):
+
+        from memory.retrieval import KeywordRetriever, NullRetriever
+
+        pipeline = SimpleNamespace(recall_enabled=False)
+        knowledge = SimpleNamespace(retriever=NullRetriever())
+
+        report = build_service(
+            memory=SimpleNamespace(session=object()),
+            pipeline=pipeline,
+            knowledge=knowledge,
+        ).apply({"memory": {"recall": True}})
+
+        assert pipeline.recall_enabled is True
+        assert isinstance(knowledge.retriever, KeywordRetriever)
+        assert report["applied"] == ["memory.recall"]
+
+    def test_the_legacy_half_is_skipped_without_a_session(self, build_service):
+        """
+        `KeywordRetriever.__init__` opens its own database when handed no
+        session. A settings PATCH is not the place to do that, so the
+        older half is left alone and the pipeline half still counts.
+        """
+
+        from memory.retrieval import NullRetriever
+
+        knowledge = SimpleNamespace(retriever=NullRetriever())
+        pipeline = SimpleNamespace(recall_enabled=False)
+
+        report = build_service(
+            memory=None, pipeline=pipeline, knowledge=knowledge
+        ).apply({"memory": {"recall": True}})
+
+        assert isinstance(knowledge.retriever, NullRetriever)
+        assert pipeline.recall_enabled is True
+        assert report["applied"] == ["memory.recall"]
+
+    def test_recall_demoted_without_a_pipeline(self, build_service):
+        """
+        A deployment with `memory.pipeline` off has no pipeline to move.
+        The setting still persists - it decides what the next start
+        does - but it must be reported as needing one, not as applied.
+        """
+
+        service = build_service()
+
+        report = service.apply({"memory": {"recall": False}})
+
+        assert service.runtime.settings_store.overrides["memory.recall"] is False
+        assert report["applied"] == []
+        assert report["restart_required"] == ["memory.recall"]
 
     def test_tools_replace_the_running_policy(self, build_service):
         from tools.base import ToolRisk
@@ -372,6 +563,52 @@ class TestLiveApplyHonesty:
         assert report["restart_required"] == ["tools.timeout"]
         assert report["needs_restart"] is True
 
+    def test_a_timezone_moves_the_live_clock(self, build_service):
+        # Not a rebuild. `launcher/services.py` hands one clock object to
+        # six subsystems, so the only change that reaches all of them is
+        # one made in place on the object they are already holding.
+        from core.temporal import TemporalClock
+
+        clock = TemporalClock()
+
+        report = build_service(clock=clock).apply(
+            {"temporal": {"timezone": "UTC"}}
+        )
+
+        assert clock.timezone_name == "UTC"
+        assert clock.context().utc_offset == "+00:00"
+        assert report["applied"] == ["temporal.timezone"]
+        assert report["restart_required"] == []
+
+    def test_a_timezone_is_demoted_without_a_clock(self, build_service):
+        service = build_service()
+
+        report = service.apply({"temporal": {"timezone": "UTC"}})
+
+        # Persisted either way: the next process reads it from the overlay
+        # through `TemporalClock.from_config`.
+        assert service.runtime.settings_store.overrides[
+            "temporal.timezone"
+        ] == "UTC"
+        assert report["applied"] == []
+        assert report["restart_required"] == ["temporal.timezone"]
+        assert report["needs_restart"] is True
+
+    def test_clearing_the_timezone_reaches_the_live_clock_too(
+        self, build_service
+    ):
+        from core.temporal import TemporalClock
+
+        clock = TemporalClock(timezone_name="UTC")
+
+        report = build_service(clock=clock).apply(
+            {"temporal": {"timezone": ""}}
+        )
+
+        assert clock.timezone is None
+        assert clock.timezone_name == ""
+        assert report["applied"] == ["temporal.timezone"]
+
 
 # ----------------------------------------------------------------------
 # The API surface the phone parses
@@ -440,6 +677,7 @@ class TestConfigurableContract:
             "voice.tts.voice",
             "voice.tts.volume",
             "voice.tts.playback",
+            "temporal.timezone",
         ],
     )
     def test_includes_the_paths_this_phase_added(self, api, path):
@@ -634,9 +872,22 @@ class TestHealthSurvivesADeadProvider:
         response = api.get("/api/health", headers=AUTH)
 
         assert response.status_code == 200
+
+        # Credential fragments are distinctive enough to look for in the
+        # whole body.
         assert "gsk_live" not in response.text
         assert "SECRETVALUE" not in response.text
-        assert "401" not in response.text
+
+        # The HTTP status the provider quoted is checked against the field
+        # that would carry it, not the whole body. `"401" not in
+        # response.text` was the same assertion for a while and was
+        # flaky at about 1% per run: `runtime.uptime_seconds` is an
+        # unrounded `time.time()` delta, so roughly one health response in
+        # eighty happens to contain the digits 401 somewhere in its
+        # decimals - e.g. 7.330945879406765 - and the test failed for a
+        # reason that had nothing to do with a leak. A security assertion
+        # that cries wolf teaches people to re-run it.
+        assert response.json()["runtime"]["llm_provider"] == "unavailable (ValueError)"
 
     def test_a_healthy_provider_still_reports_its_chain(self, api):
 
@@ -804,6 +1055,45 @@ class TestReportsTrackWrites:
         assert "server" in get_runtime().config
 
         assert api.get("/api/health", headers=AUTH).status_code == 200
+
+    def test_the_owner_can_set_the_timezone_over_the_wire(self, api):
+
+        # The whole point of putting `temporal.timezone` in the allow-list:
+        # the phone is the only settings screen a container deployment has,
+        # and `effective` has always shown this value. Reading a setting the
+        # owner cannot write is the dead control section 2 rules out, so the
+        # end-to-end path is worth pinning and not just the store.
+        report = self.patch(api, {"temporal": {"timezone": "UTC"}})
+
+        assert report["applied"] == ["temporal.timezone"]
+        assert report["restart_required"] == []
+
+        after = api.get("/api/settings", headers=AUTH).json()
+
+        assert after["effective"]["temporal"]["timezone"] == "UTC"
+
+    def test_an_unresolvable_timezone_is_refused_over_the_wire(self, api):
+
+        before = api.get("/api/settings", headers=AUTH).json()
+
+        response = api.patch(
+            "/api/settings",
+            json={"settings": {"temporal": {"timezone": "Mars/Olympus_Mons"}}},
+            headers=AUTH,
+        )
+
+        assert response.status_code == 422
+
+        # The refusal reaches the owner as words he can act on, not as a
+        # bare 422 - `patch_settings` returns `SettingsError` verbatim
+        # precisely so a validator can say what the fix is.
+        assert "tzdata" in response.text.lower()
+
+        after = api.get("/api/settings", headers=AUTH).json()
+
+        # And nothing moved. Section 41: a bad value must not be able to
+        # leave the owner's clock somewhere he did not put it.
+        assert after["effective"]["temporal"] == before["effective"]["temporal"]
 
 
 @pytest.fixture

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -66,6 +67,12 @@ fun ModelsSection(
     var picking by remember { mutableStateOf<Picker?>(null) }
 
     var keyFor by remember { mutableStateOf<String?>(null) }
+
+    var editingLane by remember { mutableStateOf<TaskLane?>(null) }
+
+    var editingCustomEndpoint by remember { mutableStateOf(false) }
+
+    var editingCustomModel by remember { mutableStateOf(false) }
 
     val server = state.server
 
@@ -186,6 +193,65 @@ fun ModelsSection(
         }
 
         // ------------------------------------------------------------------
+        // Task routing and the custom endpoint (phase 23)
+        //
+        // The five lanes and the two custom-provider keys have been
+        // settable over PATCH since the capability router shipped, with no
+        // control anywhere. A lane left blank is not a missing value - it
+        // is "use the primary", which is what every install had before
+        // lanes existed, so blank is offered as a choice rather than
+        // hidden.
+        // ------------------------------------------------------------------
+
+        SettingsSection(
+            title = "Task routing",
+            subtitle = "Which provider handles which kind of question",
+        ) {
+
+            TASK_LANES.forEach { lane ->
+
+                SelectRow(
+                    title = lane.label,
+                    value = lane.read(llm.taskModels).ifBlank {
+                        "Same as primary"
+                    },
+                    subtitle = lane.subtitle,
+                    icon = Icons.Filled.Tune,
+                    lockedReason = state.lockedReason(lane.path),
+                    onClick = { editingLane = lane },
+                )
+
+                RowDivider()
+            }
+        }
+
+        SettingsSection(
+            title = "Custom endpoint",
+            subtitle = "For an OpenAI-compatible gateway",
+        ) {
+
+            SelectRow(
+                title = "Endpoint URL",
+                value = llm.customBaseUrl.ifBlank { "Not set" },
+                subtitle = "Must be a complete http(s) address. Needs a restart.",
+                icon = Icons.Filled.Link,
+                lockedReason = state.lockedReason("llm.custom_base_url"),
+                onClick = { editingCustomEndpoint = true },
+            )
+
+            RowDivider()
+
+            SelectRow(
+                title = "Model",
+                value = llm.customModel.ifBlank { "Not set" },
+                subtitle = "The model name your gateway expects. Needs a restart.",
+                icon = Icons.Filled.Cloud,
+                lockedReason = state.lockedReason("llm.custom_model"),
+                onClick = { editingCustomModel = true },
+            )
+        }
+
+        // ------------------------------------------------------------------
         // Providers
         // ------------------------------------------------------------------
 
@@ -301,6 +367,47 @@ fun ModelsSection(
         null -> Unit
     }
 
+    editingLane?.let { lane ->
+
+        TextEntryDialog(
+            title = lane.label,
+            initial = lane.read(llm.taskModels),
+            label = "Provider name",
+            help = "The provider that answers ${lane.label.lowercase()} questions" +
+                " - for example groq or gemini. Left empty, the primary answers.",
+            onCommit = { viewModel.setText(lane.path, it.trim()) },
+            onDismiss = { editingLane = null },
+        )
+    }
+
+    if (editingCustomEndpoint) {
+        TextEntryDialog(
+            title = "Endpoint URL",
+            initial = llm.customBaseUrl,
+            label = "https://...",
+            help = "The complete base address of an OpenAI-compatible gateway." +
+                " The server refuses anything without an explicit scheme - no" +
+                " guessing http versus https, so a mistyped URL cannot send" +
+                " the key in cleartext. Cleared rather than set on an empty" +
+                " commit.",
+            onCommit = { viewModel.setText("llm.custom_base_url", it.trim()) },
+            onDismiss = { editingCustomEndpoint = false },
+        )
+    }
+
+    if (editingCustomModel) {
+        TextEntryDialog(
+            title = "Custom model",
+            initial = llm.customModel,
+            label = "Model name",
+            help = "The model name your gateway expects. Unlike every vendor" +
+                " model this one can be cleared, which sends nothing and lets" +
+                " the gateway decide.",
+            onCommit = { viewModel.setText("llm.custom_model", it.trim()) },
+            onDismiss = { editingCustomModel = false },
+        )
+    }
+
     keyFor?.let { name ->
 
         val provider = server.providers.firstOrNull { it.name == name }
@@ -317,6 +424,55 @@ fun ModelsSection(
 }
 
 private enum class Picker { Provider, Model, Fallback }
+
+/**
+ * One routing lane, as data.
+ *
+ * [read] is a function rather than a mirrored copy of [TaskModelsDto] so
+ * adding a lane on the server means adding one entry here and nowhere else;
+ * the five paths must match `core/settings_store.py` exactly or the PATCH
+ * is refused with 422 - which the row then shows, rather than silently
+ * doing nothing.
+ */
+private data class TaskLane(
+    val path: String,
+    val label: String,
+    val subtitle: String,
+    val read: (com.aura.companion.data.remote.TaskModelsDto) -> String,
+)
+
+private val TASK_LANES = listOf(
+    TaskLane(
+        path = "llm.task_models.reasoning",
+        label = "Reasoning",
+        subtitle = "Hard multi-step thinking",
+        read = { it.reasoning },
+    ),
+    TaskLane(
+        path = "llm.task_models.coding",
+        label = "Coding",
+        subtitle = "Writing and changing code",
+        read = { it.coding },
+    ),
+    TaskLane(
+        path = "llm.task_models.tool_planning",
+        label = "Tool planning",
+        subtitle = "Deciding which tools to call",
+        read = { it.toolPlanning },
+    ),
+    TaskLane(
+        path = "llm.task_models.fast_response",
+        label = "Fast responses",
+        subtitle = "Short, quick turns",
+        read = { it.fastResponse },
+    ),
+    TaskLane(
+        path = "llm.task_models.long_context",
+        label = "Long context",
+        subtitle = "Very large conversations or documents",
+        read = { it.longContext },
+    ),
+)
 
 /**
  * The fallback chain, as a set of toggles.

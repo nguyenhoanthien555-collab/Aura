@@ -191,7 +191,7 @@ class MemoryPipeline:
     def memory_lines(
         self,
         query: str,
-        recall_episodic: bool = True,
+        recall_episodic: bool | None = None,
         max_episodic: int = 3,
         max_temporary: int = 3,
         max_user_model: int = 6,
@@ -220,6 +220,20 @@ class MemoryPipeline:
         if max_user_model > 0:
             lines.extend(self.user_model.render(query, limit=max_user_model))
 
+        # `None` - the default, and what the one production caller passes
+        # by passing nothing - defers to the owner. An explicit argument
+        # still wins, because callers that pass one mean it.
+        #
+        # Until this read existed, `recall_enabled` was written by
+        # `build_memory_pipeline` from `memory.recall` and read by nobody,
+        # so the literal `True` that used to sit in the signature decided
+        # instead: the owner set the key, the store accepted it,
+        # `effective` reported it back, and Aura recalled anyway. That is
+        # the silent override section 2 forbids, and it is worse than an
+        # unimplemented setting because it looks implemented.
+        if recall_episodic is None:
+            recall_episodic = self.recall_enabled
+
         if recall_episodic and max_episodic > 0:
             lines.extend(self.retriever.search(query, limit=max_episodic))
 
@@ -235,9 +249,37 @@ def build_memory_pipeline(
     """
     Composition helper, configurable per the `memory` section.
 
-    `recall_episodic` is read from `memory.recall` in config.yaml - the
-    same key the existing keyword recall reads - so switching recall on
-    or off does one thing everywhere.
+    `recall_enabled` is read from `memory.recall` - the same key
+    `launcher/services.py` reads to choose `KeywordRetriever` over
+    `NullRetriever` - so switching recall off silences both halves rather
+    than only the older one.
+
+    That the key covers *this* half was not obvious, and two places in
+    the repository disagreed about it. `config.yaml` calls it "keyword
+    search over the older transcript", which is the Sprint 5 mechanism
+    and would scope it to the legacy retriever alone. The phone calls it
+    "Use memory in replies / Look things up from past conversations while
+    answering", and `PrivacySection` lists it under privacy as "turn
+    recall and the profile off".
+
+    The phone wins, for two reasons. It is the settings surface section 2
+    names as the owner's, and it is the one making a *privacy* promise -
+    when a capability reading and a privacy reading of the same switch
+    conflict, being wrong in the privacy direction means past
+    conversation content reaching a prompt after the owner said not to.
+    So the phone was displaying "off" while Aura recalled: the display
+    was not the thing that was wrong.
+
+    Consequence worth stating rather than discovering: the shipped
+    default is `recall: false`, so honouring it *reduces* what a current
+    deployment injects. One toggle restores it, and the toggle now does
+    what its label says.
+
+    It gates the episodic search and nothing else. The user model is who
+    the owner *is* and the temporary tier is what is true this minute;
+    neither is a search over past conversations, which is what the label
+    promises, and folding them in would make one checkbox mean three
+    things.
 
     `clock` is accepted rather than always built here because the
     retriever below captures `clock.now` as a bound method. Building a

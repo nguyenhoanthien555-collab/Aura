@@ -54,6 +54,7 @@ class ChatEngine:
         tools: ToolRunner | None = None,
         clock=None,
         pipeline=None,
+        cognitive=None,
     ):
         """
         Create the chat engine with dependency injection.
@@ -69,6 +70,12 @@ class ChatEngine:
         can be built from config if absent; a tool runner is the one thing
         that can change the world, so it exists only when a composition
         root deliberately built one and handed it over.
+
+        `cognitive` has no default for a different reason. A
+        CognitiveStore built here would be a second one, private to this
+        engine, and two records of what the agent has already done is
+        precisely the duplication it exists to end. It arrives from the
+        composition root or not at all.
         """
 
         if memory is None:
@@ -103,6 +110,7 @@ class ChatEngine:
             tools=tools,
             clock=clock,
             pipeline=pipeline,
+            cognitive=cognitive,
         )
 
     @staticmethod

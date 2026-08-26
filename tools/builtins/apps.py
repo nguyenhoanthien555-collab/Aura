@@ -112,7 +112,7 @@ class OpenApplicationTool(Tool):
 
         program = command[0]
 
-        executable = _resolve(program)
+        executable = resolve_executable(program)
 
         if executable is None:
             # Resolved before spawning, not after. This is the case that
@@ -192,7 +192,7 @@ class OpenApplicationTool(Tool):
         )
 
 
-def _resolve(program: str) -> str | None:
+def resolve_executable(program: str) -> str | None:
     """
     The executable a configured name refers to, or None if there is none.
 

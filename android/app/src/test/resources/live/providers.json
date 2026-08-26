@@ -255,6 +255,27 @@
       "vision": false
     },
     {
+      "api_base": "",
+      "api_base_overridden": false,
+      "api_key_env": "CUSTOM_API_KEY",
+      "base_url_env": "CUSTOM_BASE_URL",
+      "chat": true,
+      "configured": false,
+      "is_fallback": false,
+      "is_primary": false,
+      "key_masked": "",
+      "key_source": "",
+      "keyless": false,
+      "label": "Custom endpoint (OpenAI-compatible)",
+      "model": "",
+      "model_setting": "llm.custom_model",
+      "models": [],
+      "name": "custom",
+      "streaming": true,
+      "tools": true,
+      "vision": false
+    },
+    {
       "api_base": "http://localhost:11434",
       "api_base_overridden": false,
       "api_key_env": "",

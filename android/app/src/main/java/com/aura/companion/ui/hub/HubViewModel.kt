@@ -494,8 +494,14 @@ class HubViewModel(
      * most four windows - and a screen assembling that by hand is how the
      * shape drifts from what `_quiet_hours` accepts.
      */
-    fun setQuietHours(windows: List<List<Int>>) = patch(
-        "proactive.quiet_hours",
+    fun setQuietHours(
+        windows: List<List<Int>>,
+        // Defaulted rather than hardcoded so the companion gate's quiet
+        // hours go through the same shape-checking helper; the call sites
+        // name their path explicitly.
+        path: String = "proactive.quiet_hours",
+    ) = patch(
+        path,
         JsonArray(
             windows.map { window ->
                 JsonArray(window.map { JsonPrimitive(it) })

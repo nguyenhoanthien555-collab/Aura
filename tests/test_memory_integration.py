@@ -262,12 +262,29 @@ def test_a_machine_turn_reaches_neither_store(pipeline, clock, context):
     assert len(pipeline.temporary) == 0
 
 
-def test_a_machine_turn_prompt_has_no_time_or_memory_section(pipeline, clock):
+def test_a_machine_turn_prompt_has_no_memory_section(pipeline, clock):
     """
     The reply to this is parsed by an accessibility service. Every
     section that exists to make Aura sound like herself is absent, and
-    the two Phase 8 sections join that list rather than becoming an
-    exception to it.
+    recalled memory joins that list rather than becoming an exception to
+    it - a device step that quotes the owner's private facts at a JSON
+    parser has spent them for nothing and gained no accuracy.
+
+    This test asserted `TIME not in prompt` as well, and that half was
+    reversed on purpose in Phase 10. The rule this docstring names is
+    what reversed it: the sections a tick strips are stripped for
+    existing to make Aura sound like herself, and the time is not one of
+    those. It is a fact about the present, the same category as DEVICE
+    STATE, which this prompt has always carried. The two arrived in the
+    same sprint and were pinned together for that reason rather than
+    because one rule covered both.
+
+    What made it urgent: the request reaches the model in the owner's own
+    words, so "hom nay" and "tomorrow morning" arrive with it, and
+    `input_text` takes free text - a model asked to type a date with no
+    date in its prompt does not decline, it invents one (section 16).
+    `TestATickKnowsWhenItIs` in `tests/test_machine_turns.py` owns that
+    half now, including the byte-identical-without-a-clock guarantee.
     """
 
     llm = StubLLM(reply='{"action": "home"}')
@@ -276,10 +293,88 @@ def test_a_machine_turn_prompt_has_no_time_or_memory_section(pipeline, clock):
         "open youtube", context=AGENT_CONTEXT
     )
 
+    assert MEMORY not in llm.prompts[0]
+
+
+# ======================================================================
+# The recall gate, end to end
+# ======================================================================
+
+def test_recall_off_keeps_episodes_out_of_a_real_prompt(pipeline, clock):
+    """
+    The whole chain, not the gate on its own: a stored episode, the
+    owner's setting off, and a real `ConversationManager` turn whose
+    prompt does not carry it.
+
+    This is the test that would have caught the original bug, and the
+    reason it did not exist is instructive - the unit tests asserted
+    that `build_memory_pipeline` *stores* `recall_enabled`, and the
+    settings tests asserted that PATCH *reports* `memory.recall` as
+    applied. Both passed. Nothing asked whether a turn changed.
+    """
+
+    llm = StubLLM()
+
+    pipeline.observe("user", "I just finished the sqlite migration")
+    pipeline.recall_enabled = False
+
+    manager_with(pipeline=pipeline, clock=clock, llm=llm).chat(
+        "how did the migration go"
+    )
+
+    # "sqlite" and not "migration": the query carries "migration" into the
+    # prompt as the user's own message whatever recall does, so asserting
+    # on it would fail with recall correctly off - and, in the paired test
+    # below, would pass with recall entirely broken. "sqlite" appears only
+    # in the stored episode, so it is the one word here that discriminates.
+    assert "sqlite" not in llm.prompts[0].lower()
+
+
+def test_recall_on_puts_them_in_the_same_prompt(pipeline, clock):
+    """The pair to the above: same episode, same query, gate open. A
+    fix that silences recall outright must fail here."""
+
+    llm = StubLLM()
+
+    pipeline.observe("user", "I just finished the sqlite migration")
+    pipeline.recall_enabled = True
+
+    manager_with(pipeline=pipeline, clock=clock, llm=llm).chat(
+        "how did the migration go"
+    )
+
     prompt = llm.prompts[0]
 
-    assert TIME not in prompt
-    assert MEMORY not in prompt
+    assert MEMORY in prompt
+    assert "sqlite" in prompt.lower()
+
+
+def test_recall_off_still_carries_who_the_owner_is(pipeline, clock):
+    """
+    Turning recall off must not cost Aura the owner's identity. The
+    section survives with the user model in it, because `memory.recall`
+    gates the episodic search and not the tier that holds "she speaks
+    Vietnamese" - a checkbox named recall that also erased identity
+    would be one control silently meaning three.
+    """
+
+    llm = StubLLM()
+
+    pipeline.user_model.confirm(
+        "identity.primary_language", "Vietnamese", category="identity"
+    )
+    pipeline.observe("user", "I just finished the sqlite migration")
+    pipeline.recall_enabled = False
+
+    manager_with(pipeline=pipeline, clock=clock, llm=llm).chat(
+        "what language do I speak"
+    )
+
+    prompt = llm.prompts[0]
+
+    assert MEMORY in prompt
+    assert "Vietnamese" in prompt
+    assert "sqlite" not in prompt.lower()
 
 
 def test_a_machine_turn_cannot_be_recalled_later(pipeline, clock):
@@ -467,6 +562,24 @@ def test_build_services_wires_the_clock_pipeline_and_proactive(services):
 
     assert conversation.clock is services.clock
     assert conversation.pipeline is services.pipeline
+
+
+def test_build_services_wires_one_cognitive_store(services):
+    """
+    One record of what the agent has already done.
+
+    Two would be worse than none: the engine reading a store the device
+    never wrote to is how an app gets opened twice after a verified
+    launch, which is the failure section 10 names outright.
+    """
+
+    assert services.cognitive is not None
+    assert services.engine.conversation.cognitive is services.cognitive
+
+    # And it borrows the process clock rather than starting a seventh
+    # source of "now" - so when an action was recorded and what time the
+    # prompt says it is are the same reading.
+    assert services.cognitive.for_session("s").now == services.clock.now()
 
 
 def test_the_pipeline_can_be_switched_off(services):

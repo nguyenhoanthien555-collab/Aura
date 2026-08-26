@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.aura.companion.data.AuraRepository
+import com.aura.companion.data.chat.TranscriptStore
 import com.aura.companion.data.settings.SettingsStore
 
 /**
@@ -64,5 +65,16 @@ class AppContainer(application: Application) {
 
     val settings: SettingsStore by lazy { SettingsStore(application) }
 
-    val repository: AuraRepository by lazy { AuraRepository(settings) }
+    /**
+     * The conversation, across launches.
+     *
+     * One object serving both halves of §15: the chat screen reads its
+     * bubbles from it and the repository reads the session id behind them.
+     * Two stores would let the two drift apart, which is the failure worth
+     * avoiding - a restored transcript beside a session the server has never
+     * heard of.
+     */
+    val transcript: TranscriptStore by lazy { TranscriptStore(application) }
+
+    val repository: AuraRepository by lazy { AuraRepository(settings, transcript) }
 }

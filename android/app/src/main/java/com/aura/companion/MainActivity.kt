@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
                     factory = ChatViewModel.factory(
                         container.repository,
                         container.settings,
+                        container.transcript,
                     )
                 )
 

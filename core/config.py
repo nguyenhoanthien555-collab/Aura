@@ -13,6 +13,7 @@ watch, click or launch anything until asked to.
 """
 
 import copy
+import threading
 
 import yaml
 
@@ -65,6 +66,34 @@ DEFAULT_CONFIG = {
         "deepseek_model": "deepseek-chat",
         "qwen_model": "qwen-plus",
 
+        # The owner's own endpoint: a gateway, a proxy, or a model server
+        # on their own machine. Empty on purpose, all three of them - a
+        # placeholder URL would resolve, answer 404, and read exactly like
+        # an outage at a provider they never configured. `brain/router.py`
+        # skips `custom` until the owner has filled these in, and names
+        # which one is still empty.
+        "custom_base_url": "",
+        "custom_model": "",
+
+        # Which provider answers which kind of question. Empty means
+        # "whatever `provider` above says", which is the default and what
+        # every install had before lanes existed - so an owner who
+        # configures nothing here notices no difference at all.
+        #
+        # A lane is additive: it never rewrites `provider`, and a lane
+        # that is dead or misconfigured degrades back to it rather than
+        # failing the turn. Keys are the task classes `classify_task` can
+        # actually return (brain/capabilities.py). `vision`, `embedding`
+        # and `fallback` are task classes too, but nothing routes to them
+        # yet and a setting nothing reads is worse than no setting.
+        "task_models": {
+            "reasoning": "",
+            "coding": "",
+            "tool_planning": "",
+            "fast_response": "",
+            "long_context": "",
+        },
+
         "temperature": 0.7,
         "max_output_tokens": 768,
 
@@ -87,8 +116,16 @@ DEFAULT_CONFIG = {
         "history_limit": 20,
 
         # Long term recall. Profile facts are cheap and always useful;
-        # keyword recall is off until the transcript is long enough to
-        # be worth searching.
+        # recall is off until the transcript is long enough to be worth
+        # searching.
+        #
+        # `recall` gates *both* recall mechanisms: the Sprint 5 keyword
+        # search over the transcript (`launcher/services.py` picks
+        # `KeywordRetriever` or `NullRetriever`) and the Memory 2.0
+        # ranked episodic search (`MemoryPipeline.recall_enabled`). It
+        # only reached the first until Phase 11. The phone presents it as
+        # "Use memory in replies - look things up from past
+        # conversations", under privacy, so it has to mean both.
         "profile": True,
         "recall": False,
         "max_facts": 8,
@@ -377,8 +414,22 @@ DEFAULT_CONFIG = {
         # means those tools are not even registered.
         "allowed_paths": [],
 
+        # Directories write_file, append_to_file, create_directory and
+        # delete_file may touch. A SEPARATE list from allowed_paths, not
+        # a default from it: reading a directory and being allowed to
+        # overwrite it are two different grants, and section 2 says the
+        # owner must not find the second one already made. Empty means
+        # those four tools are not registered.
+        "writable_paths": [],
+
         # Nickname to executable. The only programs Aura can launch.
         "applications": {},
+
+        # Name to argv. The only commands Aura can run, and the only
+        # arguments she may fill in. Empty means `run_command` is not
+        # registered, which is a clearer answer to the model than a tool
+        # that refuses every name it is given.
+        "commands": {},
     },
 
     "plugins": {
@@ -456,6 +507,11 @@ DEFAULT_CONFIG = {
             # Seconds after the user's last message during which nothing
             # unprompted is sent - she is already in the conversation.
             "suppress_after_chat_seconds": 120,
+
+            # How long a remark counts as "already said". Named here rather
+            # than left a module constant so the owner can reach it, the
+            # way they already can on the proactive side.
+            "duplicate_window_seconds": 1800,
         },
     },
 }
@@ -488,6 +544,15 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+_cache_lock = threading.Lock()
+
+# The last merged config and the key it was built from. The key is
+# (config.yaml stat, overlay token+version); a mismatch of any part
+# forces a full re-merge. See `load_config`.
+_cached_config: dict | None = None
+_cache_key: tuple | None = None
+
+
 def load_config() -> dict:
     """
     Load config.yaml, filling in anything it does not specify.
@@ -503,10 +568,54 @@ def load_config() -> dict:
     `vision/settings.py` - call this function directly and would
     otherwise never see a setting the user had changed. One merge point
     means no dead settings.
+
+    The merged result is cached; a full re-merge happens only when
+    something could have changed: config.yaml was rewritten (its stat
+    moved), the overlay's overrides changed (its version counter moved),
+    or a different - or no - overlay is installed (its token moved).
+    Callers always receive a fresh deep copy, so nobody can mutate the
+    cache out from under the next caller - the same isolation
+    re-reading everything gave them.
     """
+
+    global _cached_config, _cache_key
 
     if not CONFIG_PATH.exists():
         save_default_config()
+
+    try:
+        stat = CONFIG_PATH.stat()
+        stamp: tuple | None = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        stamp = None
+
+    # Overlay identity must come from the same source apply_overlay uses,
+    # but lazily and guarded exactly like apply_overlay does: importing
+    # settings_store here must not break configuration loading.
+    try:
+        from core.settings_store import peek_runtime_settings
+
+        overlay = peek_runtime_settings()
+        if overlay is None:
+            overlay_key: tuple = ("none",)
+        else:
+            overlay_key = (
+                # A random per-store token rather than id(): the singleton
+                # is swapped by plain attribute assignment all over the
+                # tests, and CPython may hand a freed store's id to its
+                # replacement - which would let one store's cached merge
+                # be served for another.
+                overlay.cache_token,
+                overlay.version,
+            )
+    except Exception:
+        overlay_key = ("none",)
+
+    key = (stamp, overlay_key)
+
+    with _cache_lock:
+        if _cached_config is not None and _cache_key == key:
+            return copy.deepcopy(_cached_config)
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as file:
@@ -524,8 +633,13 @@ def load_config() -> dict:
         config = {}
 
     merged = deep_merge(DEFAULT_CONFIG, config)
+    merged = apply_overlay(merged)
 
-    return apply_overlay(merged)
+    with _cache_lock:
+        _cache_key = key
+        _cached_config = merged
+
+    return copy.deepcopy(merged)
 
 
 def apply_overlay(config: dict) -> dict:

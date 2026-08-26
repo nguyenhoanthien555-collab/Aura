@@ -18,6 +18,12 @@
       "in_chain": false,
       "state": "unconfigured"
     },
+    "custom": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
     "deepseek": {
       "configured": false,
       "healthy": false,

@@ -99,8 +99,17 @@ class ToolRegistry:
         """
         Every tool, as text.
 
-        This is the string that will be dropped into the TOOLS prompt
-        section once tool calling is enabled.
+        Every registered tool, with no policy filter - which is what
+        makes this the wrong thing to put in a prompt. The TOOLS section
+        comes from `ToolExecutor.catalogue()`, which describes only
+        `available()`, because a model offered a tool the allow list
+        forbids will request it, be denied, and spend a turn learning
+        what the policy already knew.
+
+        Both render through `describe_tool`, so a tool is described in
+        one place no matter who asks. This one is for looking at the
+        whole registry - diagnostics, and a test that a mixed set comes
+        out whole.
         """
 
         return "\n".join(describe_tool(tool) for tool in self.all())

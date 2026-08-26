@@ -84,7 +84,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health
     "voice_input": "disabled",
     "screen": "disabled",
     "companion": "disabled",
-    "proactive": "disabled"
+    "proactive": "disabled",
+    "tools": "2 available",
+    "plugins": "off"
   }
 }
 ```
@@ -93,6 +95,18 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health
 when a fallback initialized, not merely what `config.yaml` requested.
 Obtaining it constructs the lazy provider, which is why this is a
 diagnostic route and not something to poll.
+
+`tools` counts what the executor would **actually approve** — the
+intersection of the registry with `tools.allowed` — because a registered
+tool the owner never named cannot run and must not inflate the number.
+`"disabled"` means `tools.enabled` is false.
+
+`plugins` is the manager's own summary — `"1/3 plugins active"` — with the
+names of any plugin that failed to initialize appended:
+`"0/2 plugins active (weather failed to initialize)"`. A plugin that is
+enabled in config but broken is exactly the fact a bare count would hide,
+so it is spelled out here rather than left to the startup log.
+`"off"` means no plugin system was built at all.
 
 `screen`, `companion` and `proactive` each say whether a class of
 unprompted message can arrive: screen observations are only accepted

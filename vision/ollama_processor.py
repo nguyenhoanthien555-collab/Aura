@@ -65,6 +65,15 @@ class OllamaVisionProcessor:
     the title instead of the screen.
     """
 
+    # Where the pixels can end up, advertised so a caller can price the
+    # act rather than guess at it. Read with getattr and a False default
+    # at every use site, so this is a fact a processor may offer and not
+    # a member the VisionProcessor protocol demands.
+    # Loopback by default and a host the owner typed otherwise. Either
+    # way this is the owner's own daemon, not a third party, so looking
+    # through it stays the same act as looking.
+    sends_pixels_offsite = False
+
     def __init__(
         self,
         model: str = DEFAULT_MODEL,

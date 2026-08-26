@@ -231,7 +231,9 @@ class ToolExecutor:
                 fail(f"permission denied for {name}", tool=name),
             )
 
-        return self._finish(name, self._run(tool, arguments))
+        result = self._run(tool, arguments)
+
+        return self._finish(name, self._verified(tool, arguments, result))
 
     def _run(self, tool: ToolProtocol, arguments: dict) -> ToolResult:
 
@@ -256,6 +258,78 @@ class ToolExecutor:
             return fail(f"{type(error).__name__}: {error}", tool=name)
 
         return self._normalise(tool, result)
+
+    def _verified(
+        self, tool: ToolProtocol, arguments: dict, result: ToolResult
+    ) -> ToolResult:
+        """
+        Ask the tool's postcondition, and downgrade a success it denies.
+
+        Section 11: verification "must not rely only on: the command
+        executed without throwing". `_run` gives exactly that - a call
+        that returned - so a tool may offer a `verify()` that re-asks the
+        condition the call was supposed to establish, and a success it
+        rejects is reported as the failure it is.
+
+        Optional by absence, like `timeout` and `describe`: a tool with no
+        `verify` is trusted at its word, and the Protocol stays three
+        members wide (`test_the_protocol_stayed_narrow`). This is not the
+        device verifier from `brain/recovery.py` - that reconciles actions
+        a phone performed, reported back over the wire; this re-checks a
+        local tool's own postcondition, and the two never see each other's
+        work.
+
+        Three deliberate limits:
+
+          * A failure is never re-verified. There is no success to
+            second-guess, and a postcondition asserted over a side effect
+            that was never established would be checking the wrong thing.
+
+          * A `verify` that raises fails closed. It gives precisely "it
+            ran without throwing" - for the verify - which is the sentence
+            Section 11 forbids trusting, so an unreadable postcondition is
+            unverified, not confirmed.
+
+          * `None` asserts nothing. A tool that has no postcondition to
+            offer for these arguments returns None, and the result stands
+            unchanged - absence of a check is not a failed check.
+        """
+
+        if not result.ok:
+            return result
+
+        check = getattr(tool, "verify", None)
+
+        if not callable(check):
+            return result
+
+        name = getattr(tool, "name", "tool")
+
+        try:
+            verdict = check(**arguments)
+
+        except Exception as error:
+            logger.warning("Tool %s could not verify: %s", name, error)
+            return fail(
+                f"{name} ran but could not be verified: "
+                f"{type(error).__name__}: {error}",
+                tool=name,
+            )
+
+        if verdict is None:
+            return result
+
+        if getattr(verdict, "ok", True):
+            return result
+
+        reason = str(getattr(verdict, "error", "") or "").strip()
+
+        logger.info("Tool %s failed verification: %s", name, reason)
+
+        return fail(
+            reason or f"{name} ran but its result could not be verified",
+            tool=name,
+        )
 
     def _timeout_for(self, tool: ToolProtocol) -> float:
         """

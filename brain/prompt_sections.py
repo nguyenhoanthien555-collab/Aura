@@ -73,6 +73,12 @@ LAST_ACTION_ERROR = "===== LAST ACTION ERROR ====="
 
 ACTION_HISTORY = "===== COMPLETED ACTIONS ====="
 
+# What remains. Sits below COMPLETED ACTIONS and above AGENT RULES: what
+# has happened, then what is left, then how to choose the next action.
+# Above the rules rather than below them because a plan arriving after the
+# instructions for reading it is new information in the wrong place.
+PLAN = "===== PLAN ====="
+
 AGENT_RULES = "===== AGENT RULES ====="
 
 INTENT_RULES = "===== INTENT RULES ====="

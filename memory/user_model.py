@@ -73,6 +73,31 @@ MOTIVATION = "motivation"
 INTEREST = "interest"
 PROJECT = "project"
 
+# The same ten as a set, for callers that have to *check* a category
+# rather than pass one.
+#
+# The comment above is true only for callers that import these names. A
+# category can also arrive as free text from a language model choosing an
+# argument for the `remember` tool, and that caller cannot get an
+# ImportError - `category="notes"` would write a row that `all(category=)`
+# and `valid(category=)` can never return, which is the silently
+# unqueryable row the constants exist to prevent. Anything taking a
+# category from outside Python checks it against this.
+CATEGORIES = frozenset(
+    {
+        IDENTITY,
+        PERSONALITY,
+        COMMUNICATION,
+        VALUES,
+        FEEDBACK,
+        DECISION,
+        THINKING,
+        MOTIVATION,
+        INTEREST,
+        PROJECT,
+    }
+)
+
 
 @dataclass(frozen=True)
 class Belief:

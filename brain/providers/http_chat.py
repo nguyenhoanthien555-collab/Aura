@@ -226,6 +226,17 @@ class HttpChatProvider(BaseProvider):
     default_url = ""
     endpoint_path = ""
 
+    # Whether the endpoint must come from the owner. False for every
+    # vendor: they have one URL, this file knows it, and requiring an
+    # owner to retype it would be configuration for its own sake.
+    #
+    # True means there is no default that could be right - a gateway,
+    # a proxy, a model server on the owner's own machine - and an absent
+    # URL is therefore a missing precondition rather than something to
+    # fall back on. Without this flag the fallback is `default_url`, which
+    # for such a provider is "", and the request would POST to nowhere.
+    requires_base_url = False
+
     # Used when neither the caller nor config names a model.
     default_model = ""
 
@@ -244,6 +255,7 @@ class HttpChatProvider(BaseProvider):
         timeout: float = 45.0,
         max_tokens: int = 768,
         temperature: float | None = None,
+        base_url: str | None = None,
     ):
         load_dotenv()
 
@@ -264,7 +276,30 @@ class HttpChatProvider(BaseProvider):
         # here, and some models reject any explicit value at all.
         self.temperature = None if temperature is None else float(temperature)
 
-        self.url = self.resolve_url(os.getenv(self.base_url_env) or "")
+        # Both spellings belong to the owner, so the question is only
+        # which one they most recently meant. `base_url` arrives from
+        # `llm.<name>_base_url`, which is the surface the settings screen
+        # writes and the owner can see; the environment variable is a
+        # deployment-level default underneath it. Blank means "not
+        # configured here", not "configured to nothing" - otherwise saving
+        # any unrelated setting would silently un-configure an endpoint
+        # that came from the environment.
+        self.url = self.resolve_url(
+            (base_url or "").strip() or (os.getenv(self.base_url_env) or "")
+        )
+
+        if self.requires_base_url and not self.url:
+            # Named in both spellings, because the owner may be holding
+            # either one: a phone with a settings screen, or a shell on the
+            # host. `BrainRouter._instantiate_provider` checks the same
+            # precondition first and skips the provider rather than
+            # reaching this, so this is the guard for direct construction -
+            # a POST to "" would fail as an unreadable URLError instead.
+            raise ValueError(
+                f"{self.base_url_env} is not set and "
+                f"llm.{self.provider_name}_base_url is empty - a custom "
+                f"endpoint has no default, so {self.label} needs one"
+            )
 
     # ------------------------------------------------------------------
     # Endpoint

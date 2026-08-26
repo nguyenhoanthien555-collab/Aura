@@ -272,7 +272,7 @@ fun ProactiveSection(
     if (editingQuietHours) {
         QuietHoursDialog(
             windows = proactive.quietHours,
-            onCommit = viewModel::setQuietHours,
+            onCommit = { viewModel.setQuietHours(it) },
             onDismiss = { editingQuietHours = false },
         )
     }
@@ -286,9 +286,12 @@ fun ProactiveSection(
  * between 10pm and 8am"), and says so rather than pretending the extra
  * three do not exist. Anything more elaborate is set where Aura is
  * deployed.
+ *
+ * Shared by the proactive and companion gates (phase 23): both accept the
+ * same shape, so one editor serves both and the two screens cannot drift.
  */
 @Composable
-private fun QuietHoursDialog(
+internal fun QuietHoursDialog(
     windows: List<List<Int>>,
     onCommit: (List<List<Int>>) -> Unit,
     onDismiss: () -> Unit,
@@ -330,12 +333,12 @@ private fun QuietHoursDialog(
     }
 }
 
-private val HOURS: List<String> = (0..23).map { hourLabel(it) }
+internal val HOURS: List<String> = (0..23).map { hourLabel(it) }
 
-private fun hourLabel(hour: Int): String = "%02d:00".format(hour.coerceIn(0, 23))
+internal fun hourLabel(hour: Int): String = "%02d:00".format(hour.coerceIn(0, 23))
 
 /** "None", or "22:00 - 08:00", or "2 windows". */
-private fun List<List<Int>>.describe(): String = when {
+internal fun List<List<Int>>.describe(): String = when {
     isEmpty() -> "None"
     size == 1 -> {
         val window = first()
@@ -347,7 +350,7 @@ private fun List<List<Int>>.describe(): String = when {
 }
 
 /** Seconds as something a person reads: "2 hours", "45 minutes". */
-private fun formatDuration(seconds: Int): String = when {
+internal fun formatDuration(seconds: Int): String = when {
     seconds < 60 -> "${seconds}s"
     seconds < 3600 -> "${seconds / 60} min"
     seconds < 86_400 -> {

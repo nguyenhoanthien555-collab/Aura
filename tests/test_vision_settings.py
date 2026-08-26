@@ -207,9 +207,22 @@ def test_the_desktop_processor_is_built_with_the_ollama_tag():
         "llm": {"model": "gemini-3.6-flash", "host": ""},
     }
 
-    processor = _build_vision_processor(config["vision"], config)
+    chain = _build_vision_processor(config["vision"], config)
 
-    assert processor.model == "qwen2.5vl:7b"
+    # A chain since 19.1, not a bare processor: pixel processors first,
+    # WindowTitleProcessor last. Reach through it for the Ollama link
+    # rather than relaxing the assertion, because the regression this
+    # test exists for - the cloud name being handed to a local daemon -
+    # is still exactly as possible one layer down.
+    ollama = [
+        processor
+        for processor in chain.processors
+        if type(processor).__name__ == "OllamaVisionProcessor"
+    ]
+
+    assert len(ollama) == 1, [type(p).__name__ for p in chain.processors]
+
+    assert ollama[0].model == "qwen2.5vl:7b"
 
 
 def test_the_cloud_processor_is_built_with_the_cloud_name(monkeypatch):

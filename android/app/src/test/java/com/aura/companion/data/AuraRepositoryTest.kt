@@ -1,5 +1,6 @@
 package com.aura.companion.data
 
+import com.aura.companion.data.chat.SessionStore
 import com.aura.companion.data.settings.FakeSettings
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -419,6 +420,82 @@ class AuraRepositoryTest {
         assertEquals("ok", health.status)
         assertEquals("0.1.0", health.version)
         assertEquals("ollama", health.runtime["llm_provider"])
+    }
+
+    // ------------------------------------------------------------------
+    // The session id across a restart (§15)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a stored session id is continued rather than replaced`() = runTest {
+
+        // Restoring the transcript without this shows the user a
+        // conversation Aura has no memory of: the bubbles are theirs, the
+        // session behind them is new, and the next reply arrives with no
+        // idea what any of it referred to. §38 - the user should never have
+        // to explain the situation again because something restarted.
+        val stored = FakeSessionStore("s-from-yesterday")
+        val restored = AuraRepository(settings, stored)
+
+        server.enqueue(chatResponse(sessionId = "s-from-yesterday", reply = "Hi."))
+        restored.send("carrying on")
+
+        val body = json.parseToJsonElement(server.takeRequest().body.readUtf8()) as JsonObject
+
+        assertEquals("s-from-yesterday", body["session_id"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `the session the server names is stored, not just remembered`() = runTest {
+
+        val stored = FakeSessionStore()
+        val repository = AuraRepository(settings, stored)
+
+        server.enqueue(chatResponse(sessionId = "s-new", reply = "Hi."))
+        repository.send("first")
+
+        assertEquals("s-new", stored.sessionId)
+    }
+
+    @Test
+    fun `resetSession clears the stored id too`() = runTest {
+
+        // Otherwise "new conversation" survives only until the app closes,
+        // and the old session comes back with a cleared screen in front of
+        // it - the worst of both.
+        val stored = FakeSessionStore("s-old")
+        val repository = AuraRepository(settings, stored)
+
+        repository.resetSession()
+
+        assertNull(stored.sessionId)
+    }
+
+    @Test
+    fun `a session store that throws does not take the message with it`() = runTest {
+
+        // Persisting the session is a convenience for the next launch. A
+        // Keystore that has become unavailable - a locked device, a
+        // restored backup - must not stop the message the user is sending
+        // now.
+        val stored = FakeSessionStore(failWrites = true)
+        val repository = AuraRepository(settings, stored)
+
+        server.enqueue(chatResponse(sessionId = "s-1", reply = "Hi."))
+
+        assertTrue(repository.send("hello") is AuraResult.Ok)
+        assertEquals("s-1", repository.sessionId)
+    }
+
+    private class FakeSessionStore(
+        override var sessionId: String? = null,
+        private val failWrites: Boolean = false,
+    ) : SessionStore {
+
+        override fun remember(sessionId: String?) {
+            if (failWrites) throw IllegalStateException("keystore unavailable")
+            this.sessionId = sessionId
+        }
     }
 
     // ------------------------------------------------------------------

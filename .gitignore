@@ -26,6 +26,17 @@ data/credentials.enc
 data/credentials.enc.tmp
 data/settings.json
 data/settings.json.tmp
+# The proactive send ledger (proactive/ledger.py). Not a secret, but it
+# is a record of what Aura said to this owner unprompted, and it is
+# written by the running server rather than by anyone editing the repo.
+data/proactive.json
+data/proactive.json.tmp
+# The companion gate's own history, same file format and same reasoning
+# (companion/policy.py). A separate file from the one above on purpose:
+# one shared ledger would make each gate count the other's sends, and the
+# owner configured two budgets, not one.
+data/companion.json
+data/companion.json.tmp
 logs/
 .aider*
 
@@ -58,3 +69,19 @@ aura-tree.txt
 # A separate upstream clone that happens to live inside this working copy.
 # It has its own .git, so tracking it here would nest two repositories.
 awesome-claude-skills/
+
+# Local Qwen coding-agent harness: only the sources (agent.py, prompts.py,
+# config.yaml) are project files. The rest is machine state - its own
+# virtualenv, bytecode, and a telemetry log that records what the agent
+# thought about while reading this working copy.
+local_agent/.venv/
+local_agent/runtime/
+local_agent/__pycache__/
+
+# Device-agent capture logs (android/aura-agent*.log): transcripts of real
+# accessibility sessions on this machine, not source.
+# shot.png: screenshot tooling artifact. `da`: stray captured diff output.
+android/.kotlin/
+android/aura-agent*.log
+shot.png
+đa
