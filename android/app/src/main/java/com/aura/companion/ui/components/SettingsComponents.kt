@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aura.companion.ui.theme.AuraMotion
 import com.aura.companion.ui.theme.auraGlassEdge
+import com.aura.companion.ui.theme.auraGlassBlur
 import com.aura.companion.ui.theme.rememberReducedMotion
 
 /**
@@ -141,16 +142,14 @@ fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(28.dp)
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .auraGlassEdge(shape),
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            .auraGlassBlur(shape),
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) { content() }
+        Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
     }
 }
 
@@ -482,14 +481,12 @@ fun NoticeCard(
     tone: StatusTone = StatusTone.Neutral,
     icon: ImageVector? = null,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(20.dp)
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .auraGlassEdge(shape),
-        shape = shape,
-        color = tone.contentColour().copy(alpha = 0.10f),
+            .auraGlassBlur(shape, tint = tone.contentColour().copy(alpha = 0.15f)),
     ) {
         Row(
             verticalAlignment = Alignment.Top,

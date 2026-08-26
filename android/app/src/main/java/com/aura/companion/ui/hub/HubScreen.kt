@@ -491,7 +491,7 @@ private fun HubTileKind.icon(): ImageVector = when (this) {
 @Composable
 private fun ChatCard(onClick: () -> Unit) {
 
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(28.dp)
 
     Box(
         modifier = Modifier

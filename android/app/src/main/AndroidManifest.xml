@@ -12,6 +12,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
+        Phase 3: Floating Chat Bubble.
+        Allows Aura to draw a floating messenger-style bubble over other apps.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!--
         What `open_app` needs to exist at all.
 
         Since Android 11 (API 30) a package query is filtered to apps the
@@ -95,6 +103,11 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/aura_accessibility_service" />
         </service>
+
+        <service
+            android:name=".floating.FloatingChatService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
 
     </application>
 
