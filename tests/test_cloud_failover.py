@@ -333,6 +333,7 @@ def test_upload_screenshot_vision_unavailable(monkeypatch):
 
 
 def test_gemini_429_to_openrouter_success(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-key")
 
     from brain.providers.gemini import GeminiProvider

@@ -115,6 +115,11 @@ class RouterToolCallingLLM:
         if not hasattr(candidate, "generate_with_tools"):
             if hasattr(candidate, "provider"):
                 candidate = candidate.provider
+            elif hasattr(candidate, "providers"):
+                for p in candidate.providers:
+                    if hasattr(p, "generate_with_tools"):
+                        candidate = p
+                        break
             else:
                 candidate = getattr(candidate, "_provider", None)
 

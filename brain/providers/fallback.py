@@ -92,3 +92,29 @@ class FallbackProvider:
         if isinstance(last_error, Exception):
             raise last_error
         raise ProviderUnavailableError("No cloud provider is configured")
+
+    def generate_with_tools(self, system: str, messages: list, tools: list):
+        last_error = None
+        for index, provider in enumerate(self.providers):
+            if not hasattr(provider, "generate_with_tools"):
+                continue
+            p_name = getattr(provider, "provider_name", type(provider).__name__)
+            try:
+                turn = provider.generate_with_tools(system, messages, tools)
+                self.active_provider_name = p_name
+                return turn
+            except Exception as error:
+                last_error = error
+                category = _category_of(error)
+                logger.warning(
+                    "Provider failed generate_with_tools: %s | Failure category: %s | %s: %s",
+                    p_name,
+                    category,
+                    type(error).__name__,
+                    str(error),
+                )
+                if category == ACCOUNT_LIMIT:
+                    break
+        if isinstance(last_error, Exception):
+            raise last_error
+        raise ProviderUnavailableError("No cloud provider is configured or supports function calling")
