@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -61,6 +62,13 @@ import java.util.Locale
  * action rather than disappearing - losing what someone typed because the
  * signal dropped is the fastest way to make an app untrustworthy.
  */
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.buildAnnotatedString
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun MessageBubble(
     message: ChatMessage,
@@ -68,41 +76,68 @@ fun MessageBubble(
 ) {
 
     val fromUser = message.author == ChatMessage.Author.USER
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start,
     ) {
 
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (fromUser) 18.dp else 4.dp,
-                bottomEnd = if (fromUser) 4.dp else 18.dp,
-            ),
-            color = when {
-                message.failed -> MaterialTheme.colorScheme.errorContainer
-                fromUser -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            },
-            modifier = Modifier.widthIn(max = 300.dp),
-        ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodyLarge,
+        Box {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
                 color = when {
-                    message.failed -> MaterialTheme.colorScheme.onErrorContainer
-                    fromUser -> MaterialTheme.colorScheme.onPrimaryContainer
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    message.failed -> MaterialTheme.colorScheme.errorContainer
+                    fromUser -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
                 },
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            )
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onLongPress = {
+                                clipboardManager.setText(buildAnnotatedString { append(message.text) })
+                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    },
+            ) {
+                val codeBg = if (fromUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                Text(
+                    text = parseMarkdownToAnnotatedString(message.text, codeColor = codeBg),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = when {
+                        message.failed -> MaterialTheme.colorScheme.onErrorContainer
+                        fromUser -> MaterialTheme.colorScheme.onPrimaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
+            
+            if (message.reactions.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier
+                        .align(if (fromUser) Alignment.BottomStart else Alignment.BottomEnd)
+                        .padding(horizontal = 12.dp)
+                        .offset(y = 12.dp)
+                ) {
+                    Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
+                        message.reactions.values.toSet().forEach { emoji ->
+                            Text(text = emoji, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
         }
 
+        Spacer(Modifier.height(4.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
+            modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp),
         ) {
 
             Text(
@@ -264,7 +299,7 @@ fun TypingIndicator(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "typing")
 
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = modifier.semantics {
             liveRegion = LiveRegionMode.Polite

@@ -37,6 +37,7 @@ data class ChatMessage(
      * longer the same fact.
      */
     val streaming: Boolean = false,
+    val reactions: Map<String, String> = emptyMap(),
 ) {
     enum class Author { USER, AURA }
 }
