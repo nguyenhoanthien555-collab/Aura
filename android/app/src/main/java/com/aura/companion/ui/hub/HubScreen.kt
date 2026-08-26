@@ -77,6 +77,7 @@ import com.aura.companion.ui.theme.AuraMotion
 import com.aura.companion.ui.theme.auraBackgroundBrush
 import com.aura.companion.ui.theme.auraGlass
 import com.aura.companion.ui.theme.auraGlassEdge
+import com.aura.companion.ui.theme.auraGlassBlur
 import com.aura.companion.ui.theme.auraHeroBrush
 import com.aura.companion.ui.theme.auraTileBrush
 import com.aura.companion.ui.theme.rememberReducedMotion
@@ -269,8 +270,11 @@ private fun HeroCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(brush = auraHeroBrush(), shape = shape)
-            .auraGlassEdge(shape = shape),
+            .auraGlassBlur(
+                shape = shape,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+            .background(brush = auraHeroBrush(), shape = shape, alpha = 0.5f),
     ) {
         Row(
             modifier = Modifier.padding(22.dp),
@@ -281,8 +285,8 @@ private fun HeroCard(
 
                 Text(
                     text = "Aura",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
                 )
 
                 Spacer(Modifier.height(6.dp))
@@ -438,8 +442,11 @@ private fun StatusTile(
 
     Box(
         modifier = modifier
-            .background(brush = auraTileBrush(), shape = shape)
-            .auraGlassEdge(shape = shape)
+            .auraGlassBlur(
+                shape = shape,
+                tint = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            )
+            .background(brush = auraTileBrush(), shape = shape, alpha = 0.6f)
             .clickable(onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -486,12 +493,13 @@ private fun ChatCard(onClick: () -> Unit) {
 
     val shape = RoundedCornerShape(20.dp)
 
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .auraGlassEdge(shape = shape)
+            .auraGlassBlur(
+                shape = shape,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            )
             .clickable(onClick = onClick),
     ) {
         Row(
