@@ -211,7 +211,22 @@ class GeminiProvider(BaseProvider):
         wire_messages = []
         if system:
             wire_messages.append({"role": "system", "content": system})
-        wire_messages.extend(messages)
+        for m in messages:
+            role = m.get("role")
+            if role == "tool":
+                wire_messages.append({
+                    "role": "tool",
+                    "tool_call_id": m.get("tool_call_id") or "call_0",
+                    "content": str(m.get("content", "")),
+                })
+            elif role == "assistant" and m.get("tool_calls"):
+                wire_messages.append({
+                    "role": "assistant",
+                    "content": m.get("content") or None,
+                    "tool_calls": m.get("tool_calls"),
+                })
+            else:
+                wire_messages.append(m)
 
         payload = {
             "model": self.model,

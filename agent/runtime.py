@@ -392,29 +392,12 @@ class AgentRuntime:
         only - verification verdicts are read here just as they are from
         an inline run.
         """
-
-        assistant_calls = [
-            {
-                "id": f"{envelope['tool_call_id']}|"
-                      f"{envelope.get('call_id', '')}",
-                "type": "function",
-                "function": {
-                    "name": envelope["tool"],
-                    "arguments": json.dumps(
-                        envelope.get("arguments", {}), ensure_ascii=False
-                    ),
-                },
-            }
-            for envelope in envelopes
-        ]
-
-        run.messages.append({
-            "role": "assistant",
-            "content": "",
-            "tool_calls": assistant_calls,
-        })
+        call_id = envelopes[0].get("tool_call_id", "") if envelopes else "call_0"
+        raw_id = envelopes[0].get("call_id", "") if envelopes else ""
+        match_id = f"{call_id}|{raw_id}" if raw_id else call_id
         run.messages.append({
             "role": "tool",
+            "tool_call_id": match_id,
             "content": json.dumps(envelopes, ensure_ascii=False, default=str),
         })
 
@@ -484,8 +467,10 @@ class AgentRuntime:
             "content": turn.text or "",
             "tool_calls": raw_calls,
         })
+        tool_call_id = raw_calls[0]["id"] if raw_calls else "call_0"
         run.messages.append({
             "role": "tool",
+            "tool_call_id": tool_call_id,
             "content": json.dumps(envelopes, ensure_ascii=False, default=str),
         })
 
