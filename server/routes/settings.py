@@ -139,10 +139,14 @@ async def update_settings(
             await asyncio.sleep(1.0)
             logger.info("Performing in-place restart to apply settings...")
             try:
-                # sys.argv[0] is the script path (e.g., uvicorn), so this runs `python /path/to/uvicorn ...`
-                os.execv(sys.executable, ["python"] + sys.argv)
+                # sys.argv[0] is often the absolute script path. To avoid ModuleNotFoundError
+                # for absolute imports like `server.config`, we must ensure the working
+                # directory is in PYTHONPATH.
+                env = os.environ.copy()
+                env["PYTHONPATH"] = os.getcwd() + os.pathsep + env.get("PYTHONPATH", "")
+                os.execve(sys.executable, ["python"] + sys.argv, env)
             except Exception as e:
-                logger.error("Failed to execv: %s", e)
+                logger.error("Failed to execve: %s", e)
 
         background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
 
@@ -201,9 +205,11 @@ async def reset_settings(
             await asyncio.sleep(1.0)
             logger.info("Performing in-place restart to apply settings reset...")
             try:
-                os.execv(sys.executable, ["python"] + sys.argv)
+                env = os.environ.copy()
+                env["PYTHONPATH"] = os.getcwd() + os.pathsep + env.get("PYTHONPATH", "")
+                os.execve(sys.executable, ["python"] + sys.argv, env)
             except Exception as e:
-                logger.error("Failed to execv: %s", e)
+                logger.error("Failed to execve: %s", e)
 
         background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
 
