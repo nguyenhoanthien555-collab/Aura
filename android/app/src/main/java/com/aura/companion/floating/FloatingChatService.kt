@@ -104,6 +104,16 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
             setViewTreeSavedStateRegistryOwner(this@FloatingChatService)
             
             setContent {
+                val app = application as com.aura.companion.AuraApplication
+                val container = app.container
+                val chatViewModel: com.aura.companion.ui.chat.ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    factory = com.aura.companion.ui.chat.ChatViewModel.factory(
+                        container.repository,
+                        container.settings,
+                        container.transcript
+                    )
+                )
+
                 AuraTheme {
                     var isExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
 
@@ -115,6 +125,7 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                         windowManager.updateViewLayout(this, params)
                         
                         MiniChatUI(
+                            viewModel = chatViewModel,
                             onClose = { 
                                 isExpanded = false 
                                 params.width = WindowManager.LayoutParams.WRAP_CONTENT
@@ -174,25 +185,31 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 }
 
 @Composable
-fun MiniChatUI(onClose: () -> Unit) {
+fun MiniChatUI(viewModel: com.aura.companion.ui.chat.ChatViewModel, onClose: () -> Unit) {
     Box(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(8.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(Color.White)
-            .padding(16.dp)
+            .padding(8.dp)
+            .fillMaxWidth()
     ) {
-        androidx.compose.foundation.layout.Column {
+        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
             ) {
-                androidx.compose.material3.Text("Aura Mini", style = MaterialTheme.typography.titleMedium)
+                androidx.compose.material3.Text("Aura Mini", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(8.dp))
                 androidx.compose.material3.IconButton(onClick = onClose) {
                     Icon(androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Close")
                 }
             }
-            androidx.compose.material3.Text("Mini chat coming soon in Phase 4!", color = Color.Gray)
+            Box(modifier = Modifier.weight(1f, fill = false)) {
+                com.aura.companion.ui.chat.ChatScreen(
+                    viewModel = viewModel,
+                    onOpenSettings = onClose // Or open MainActivity
+                )
+            }
         }
     }
 }
