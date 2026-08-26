@@ -158,8 +158,11 @@ class AuraRepository(
      * conversation. That is what lets a caller fall back from one to the
      * other without the user losing their thread.
      */
-    fun stream(message: String): Flow<StreamEvent> =
-        streamClient.stream(message, _sessionId.get())
+    fun stream(
+        message: String,
+        context: JsonObject = JsonObject(emptyMap()),
+    ): Flow<StreamEvent> =
+        streamClient.stream(message, _sessionId.get(), context)
             .onEach { event ->
                 when (event) {
                     is StreamEvent.Started -> adopt(event.sessionId)

@@ -92,9 +92,17 @@ def resolve_timezone(name: str | None):
 
     An IANA name needs a timezone database. Linux images have one;
     Windows does not ship one, so a name like "Asia/Ho_Chi_Minh" resolves
-    there only if `tzdata` is installed. "UTC" is special-cased because
-    `datetime.timezone.utc` is always available, and UTC is the one value
-    a deployment is actually likely to write down.
+    there only if `tzdata` is installed (it is a hard requirement in
+    requirements.txt for exactly this reason). "UTC" is special-cased
+    because `datetime.timezone.utc` is always available, and UTC is the
+    one value a deployment is actually likely to write down.
+
+    Fixed-offset spellings - the "GMT+7" a phone keyboard produces, or
+    "UTC+07:00" - are accepted alongside IANA names and resolve to a
+    `timezone` with that offset. They are not zone names: they carry no
+    DST history, which for Vietnam (no DST) is exactly right, and they
+    were previously rejected outright even though an owner who typed one
+    said something precise and machine-readable.
 
     An unresolvable name is a configuration mistake, not a crash: it is
     logged and the system clock is used, because a companion that
@@ -113,6 +121,11 @@ def resolve_timezone(name: str | None):
     if text.upper() in UTC_ALIASES:
         return dt_timezone.utc
 
+    fixed = _fixed_offset(text)
+
+    if fixed is not None:
+        return fixed
+
     try:
         from zoneinfo import ZoneInfo
 
@@ -126,6 +139,56 @@ def resolve_timezone(name: str | None):
             error,
         )
         return None
+
+
+# "GMT+7", "UTC+07:00", "GMT-5", "+09:30". The bare signed form is a
+# spelling phones produce; the prefixed forms are what people type when
+# they mean an offset rather than a zone. Hours are 1-2 digits so that
+# "GMT+7" and "GMT+07" both parse; minutes are optional and two digits
+# when present.
+_OFFSET_PATTERN = None
+
+
+def _fixed_offset(text: str):
+    """
+    A fixed-offset `timezone` for spellings like "GMT+7", or None.
+
+    Deliberately narrower than `str` would allow: only explicit offsets
+    are matched, so a real zone name ("GMT+7" collides with nothing in
+    the IANA database) can never be shadowed by this rule. Returns None
+    for anything that is not an offset, and the caller falls through to
+    `ZoneInfo`.
+    """
+
+    global _OFFSET_PATTERN
+
+    if _OFFSET_PATTERN is None:
+        import re
+
+        _OFFSET_PATTERN = re.compile(
+            r"^(?:(?:GMT|UTC))?\s*([+-])\s*(\d{1,2})(?::(\d{2}))?$",
+            re.IGNORECASE,
+        )
+
+    match = _OFFSET_PATTERN.match(text.strip())
+
+    if match is None:
+        return None
+
+    sign, hours, minutes = match.groups()
+
+    delta = timedelta(hours=int(hours), minutes=int(minutes or 0))
+
+    if hours == "0" and not minutes:
+        # "+0"/"-0" both mean UTC; keep the sign from mattering.
+        pass
+    elif int(hours) > 23 or (minutes and int(minutes) > 59):
+        return None
+
+    if sign == "-":
+        delta = -delta
+
+    return dt_timezone(delta)
 
 
 def _strip(moment: datetime) -> datetime:

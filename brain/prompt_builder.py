@@ -16,6 +16,7 @@ from brain.prompt_sections import (
     ACCESSIBILITY_TREE,
     ACTION_HISTORY,
     AGENT_RULES,
+    CURRENT_APP,
     DEVICE_STATE,
     INTENT_RULES,
     LAST_ACTION_ERROR,
@@ -177,6 +178,54 @@ class PromptBuilder:
 
         return section
 
+
+    def _build_current_app(self, context: dict | None = None):
+        """
+        Which app is in front of the owner right now.
+
+        Fed by a phone that attaches its foreground-app identity to an
+        ordinary chat message - package, label and, when the window-state
+        event has named it, the activity. It answers "app gì vậy?" from
+        accessibility metadata alone; no screenshot and no vision model
+        are involved, which is exactly why it works with pixels off.
+
+        `screen_note`, when the client sends one, is a sentence the
+        *device* wrote about what its screen pipeline cannot do (for
+        instance that screenshot upload is switched off). It is quoted
+        verbatim rather than re-derived here: the reason lives on the
+        phone, and inventing one server-side would be fabrication. An
+        absent note costs nothing - the section simply stays honest by
+        saying only what is known.
+
+        Absent entirely when the context carries no app, so desktop turns
+        and older clients produce a prompt identical to before.
+        """
+
+        app = (context or {}).get("app") or {}
+
+        if not isinstance(app, dict):
+            return []
+
+        package = str(app.get("package") or "").strip()
+        label = str(app.get("label") or "").strip()
+        activity = str(app.get("activity") or "").strip()
+        note = str((context or {}).get("screen_note") or "").strip()
+
+        if not package and not label:
+            return []
+
+        lines = [CURRENT_APP]
+
+        if label:
+            lines.append(f"Application: {label}")
+        if package:
+            lines.append(f"Package: {package}")
+        if activity:
+            lines.append(f"Activity: {activity}")
+        if note:
+            lines.append(note)
+
+        return lines
 
     def _build_vision(self, vision: VisionContextLike | None = None):
         """
@@ -647,6 +696,15 @@ class PromptBuilder:
 
         prompt.extend(
             self._build_vision(vision)
+        )
+
+        # After VISION rather than beside DEVICE STATE: this section
+        # belongs to the same category of fact - what is in front of the
+        # owner - but arrives through the conversation door, so it sits
+        # where vision's description would, keeping the agent prompt's
+        # section order untouched.
+        prompt.extend(
+            self._build_current_app(context)
         )
 
 

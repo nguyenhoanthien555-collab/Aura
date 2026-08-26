@@ -51,7 +51,11 @@ class AuraStreamClient(
      *
      * Cancelling the collector closes the socket.
      */
-    fun stream(message: String, sessionId: String?): Flow<StreamEvent> = callbackFlow {
+    fun stream(
+        message: String,
+        sessionId: String?,
+        context: JsonObject = JsonObject(emptyMap()),
+    ): Flow<StreamEvent> = callbackFlow {
 
         val url = streamUrl(sessionId)
 
@@ -70,10 +74,14 @@ class AuraStreamClient(
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocketRef.set(webSocket)
                     // The server reads exactly one frame, then replies.
+                    // `context` rides along when the caller has one - the
+                    // frame schema already carried the field, and the
+                    // route forwards it into the same conversation
+                    // pipeline a REST turn uses.
                     webSocket.send(
                         ApiFactory.json.encodeToString(
                             StreamRequestDto.serializer(),
-                            StreamRequestDto(message = message),
+                            StreamRequestDto(message = message, context = context),
                         )
                     )
                 }

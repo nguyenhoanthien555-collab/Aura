@@ -56,6 +56,7 @@ TOOLS = "===== TOOLS ====="
 TOOL_RESULTS = "===== TOOL RESULTS ====="
 
 VISION = "===== VISION ====="
+CURRENT_APP = "===== CURRENT APP ====="
 
 PLUGINS = "===== PLUGINS ====="
 

@@ -2,6 +2,12 @@
 rich
 python-dotenv
 pyyaml
+# Timezone database for `zoneinfo`. Windows does not ship a system tz
+# database, so every IANA name - "Asia/Ho_Chi_Minh" included - fails to
+# resolve without this package; Linux images have one and ignore it.
+# Harmless where the OS already provides the data: zoneinfo only falls
+# back to it when the system lookup misses.
+tzdata>=2024.1
 # Floor, not decoration: releases before 2.0.51 cannot map a
 # `Mapped[str | None]` column on Python 3.14. `memory/models.py` has three
 # of them, so an older SQLAlchemy on a newer interpreter is not a

@@ -209,6 +209,14 @@ class AuraAccessibilityService : AccessibilityService() {
         var settled = false
         var skipScreenshot = false
 
+    // The foreground package the previous tick reported. A change between
+    // ticks means a screen transition happened under us - an open_app or
+    // click we just verified - and the accessibility tree of the *new*
+    // window is often still inflating when the package already reports as
+    // the target. One bounded settle per tick (see SNAPSHOT_SETTLE_MS)
+    // keeps every reasoning step on a fresh observable state.
+    var lastTickPackage = ""
+
 
         while (stepCount < maxSteps) {
             stepCount++
@@ -216,14 +224,36 @@ class AuraAccessibilityService : AccessibilityService() {
             Log.d("AuraAgent", "Starting agent step $stepCount for task: $currentRequest")
 
             val t0 = System.currentTimeMillis()
-            val root = rootInActiveWindow
+            var root = rootInActiveWindow
             if (root == null) {
                 Log.d("AuraAgent", "No active window root found. Retrying in 300ms...")
                 delay(300)
                 continue
             }
 
-            val activePackage = root.packageName?.toString().orEmpty()
+            var activePackage = root.packageName?.toString().orEmpty()
+
+            // A tick that follows a verified transition reads the NEW
+            // screen. Its package can report before the tree has finished
+            // inflating, so give it one bounded settle and re-capture -
+            // reasoning on a half-drawn screen is how multi-step tasks
+            // burned their step budget flailing at stale snapshots.
+            if (lastTickPackage.isNotEmpty() && activePackage != lastTickPackage) {
+                Log.d(
+                    "AuraAgent",
+                    "Foreground changed $lastTickPackage -> $activePackage; settling before snapshot"
+                )
+                root.recycle()
+                delay(SNAPSHOT_SETTLE_MS)
+                root = rootInActiveWindow
+                if (root == null) {
+                    Log.d("AuraAgent", "No active window root after settle. Retrying in 300ms...")
+                    delay(300)
+                    continue
+                }
+                activePackage = root.packageName?.toString().orEmpty()
+            }
+            lastTickPackage = activePackage
             val nodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
             val tree = AccessibilityNodeSerializer.serialize(root, nodeMap)
             root.recycle()
@@ -755,6 +785,19 @@ class AuraAccessibilityService : AccessibilityService() {
          * appeared three times in the loop.
          */
         const val MAX_ACTION_ATTEMPTS = 2
+
+        /**
+         * How long the loop waits after noticing the foreground package
+         * changed, before snapshotting for the next reasoning step.
+         *
+         * Shorter than `OPEN_APP_SETTLE_TIMEOUT_MS` on purpose: that wait
+         * has to prove a launch worked, this one only gives a window that
+         * already reported its package a moment to finish drawing its
+         * tree. 600ms covers the observed draw time of a warm activity
+         * without making ten-step tasks pay a full second per transition.
+         * Bounded by definition - one wait per tick, never a loop.
+         */
+        const val SNAPSHOT_SETTLE_MS = 600L
 
         /**
          * Why an action failed, written for the model.
@@ -1386,6 +1429,44 @@ class AuraAccessibilityService : AccessibilityService() {
 
 
 
+        /**
+         * The foreground app, as an ordinary chat message should know it.
+         *
+         * Answers "app gì vậy?" without a screenshot or a vision model:
+         * the package comes from the active window, the label from
+         * PackageManager, and the activity only when a window-state event
+         * has named one for *this* package - `activityFor`'s rule against
+         * pairing one app's package with another's screen applies here
+         * exactly as it does in the agent snapshot.
+         *
+         * Null when no service is connected or nothing is known yet -
+         * never a guess. Safe to call from the main thread, where the
+         * chat ViewModel lives.
+         */
+        fun currentForegroundApp(): ForegroundApp? {
+            val service = instance.get() ?: return null
+
+            val root = service.rootInActiveWindow
+            val pkg = root?.packageName?.toString()
+            root?.recycle()
+
+            // The remembered window backs the answer up for the instant a
+            // transition leaves no active window to ask.
+            val window = service.lastWindow.get()
+
+            val resolved = pkg?.trim()?.takeIf { it.isNotEmpty() }
+                ?: window?.packageName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: return null
+
+            val label = runCatching {
+                service.packageManager.getApplicationLabel(
+                    service.packageManager.getApplicationInfo(resolved, 0)
+                ).toString()
+            }.getOrDefault(resolved)
+
+            return ForegroundApp(resolved, activityFor(window, resolved), label)
+        }
+
         fun startAgentTask(request: String, onComplete: (String) -> Unit): Boolean {
             val service = instance.get()
             return if (service != null) {
@@ -1401,3 +1482,17 @@ class AuraAccessibilityService : AccessibilityService() {
         }
     }
 }
+
+/**
+ * The foreground app, as an ordinary chat message carries it.
+ *
+ * Deliberately metadata only: a package name, a label, and an activity
+ * when one is honestly known. Screen *text* keeps travelling through
+ * [ScreenObservationService] behind its own switch, so this answer never
+ * becomes a second, ungated copy of observation.
+ */
+data class ForegroundApp(
+    val packageName: String,
+    val activity: String?,
+    val label: String,
+)

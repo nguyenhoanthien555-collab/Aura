@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.util.UUID
 
 /**
@@ -306,7 +309,12 @@ class ChatViewModel(
                 }
             }
 
-            val streamed = streamReply(text, slowNotice)
+            // The phone knows which app is in front of the owner; the
+            // server does not unless this message says so. Built once per
+            // turn and used by whichever transport answers.
+            val context = conversationContext()
+
+            val streamed = streamReply(text, slowNotice, context)
 
             // Falling back rather than reporting a failure: a proxy that
             // will not carry a WebSocket is a deployment property, not
@@ -315,9 +323,69 @@ class ChatViewModel(
             // continues and the only visible difference is that the reply
             // arrives whole instead of growing.
             if (!streamed) {
-                sendOverRest(outgoing.id, text, slowNotice)
+                sendOverRest(outgoing.id, text, slowNotice, context)
             }
         }
+    }
+
+    /**
+     * What this phone can tell the server about the screen, per message.
+     *
+     * Two halves, both honest:
+     *
+     *  - `app`: the foreground package/label/activity from the
+     *    accessibility layer. This is metadata, not observation - it rides
+     *    with a message the owner deliberately sent, and answers "app gì
+     *    vậy?" without any pixels. Screen *text* still travels only
+     *    through [com.aura.companion.screen.ScreenObservationService]
+     *    behind its own switch; nothing here becomes a second, ungated
+     *    copy of that stream.
+     *
+     *  - `screen_note`: one sentence, written on the phone, about what
+     *    this phone's screen pipeline cannot do right now - quoted by the
+     *    server verbatim rather than re-derived. When pixels flow, there
+     *    is no note: absence of bad news means there is no bad news.
+     *
+     * Empty when the accessibility service is not connected, so an older
+     * or un-permissioned install sends exactly what it always sent.
+     */
+    private fun conversationContext(): JsonObject {
+
+        val app = AuraAccessibilityService.currentForegroundApp()
+            ?: return JsonObject(emptyMap())
+
+        val entries = mutableMapOf<String, JsonElement>(
+            "app" to JsonObject(
+                buildMap {
+                    put("package", JsonPrimitive(app.packageName))
+                    if (app.label.isNotBlank()) put("label", JsonPrimitive(app.label))
+                    app.activity?.takeIf { it.isNotBlank() }?.let {
+                        put("activity", JsonPrimitive(it))
+                    }
+                }
+            )
+        )
+
+        screenNote()?.let { entries["screen_note"] = JsonPrimitive(it) }
+
+        return JsonObject(entries)
+    }
+
+    /**
+     * Why "look at my screen" cannot mean pixels right now, or nothing.
+     *
+     * Mirrors the gates [com.aura.companion.screen.ScreenshotUploader]
+     * applies, in the same order, so the sentence the server quotes is
+     * the reason the uploader would have given.
+     */
+    private fun screenNote(): String? = when {
+        !settings.current.screenObservationEnabled ->
+            "Screen observation is switched off on this phone, so Aura " +
+                "cannot read what is on screen beyond the foreground app."
+        !settings.current.uploadScreenshots ->
+            "Screenshot upload is switched off on this phone, so Aura " +
+                "cannot see the screen's pixels."
+        else -> null
     }
 
     /**
@@ -372,7 +440,11 @@ class ChatViewModel(
      * re-sending would ask the model the same question twice and show the
      * user two answers.
      */
-    private suspend fun streamReply(message: String, slowNotice: Job): Boolean {
+    private suspend fun streamReply(
+        message: String,
+        slowNotice: Job,
+        context: JsonObject = JsonObject(emptyMap()),
+    ): Boolean {
 
         val messageId = UUID.randomUUID().toString()
 
@@ -380,7 +452,7 @@ class ChatViewModel(
 
         var failure: AuraError? = null
 
-        repository.stream(message).collect { event ->
+        repository.stream(message, context).collect { event ->
 
             when (event) {
 
@@ -466,9 +538,10 @@ class ChatViewModel(
         outgoingId: String,
         text: String,
         slowNotice: Job,
+        context: JsonObject = JsonObject(emptyMap()),
     ) {
 
-        when (val result = repository.send(text)) {
+        when (val result = repository.send(text, context)) {
 
             is AuraResult.Ok -> {
                 slowNotice.cancel()

@@ -37,6 +37,8 @@ rich==13.9.4
 sqlalchemy==2.0.51
 google-genai==2.17.0
 pillow==11.1.0
+# Timezone database for zoneinfo on Windows; see requirements.txt.
+tzdata==2026.3
 
 # Testing (not installed in the final image; kept here for CI)
 pytest==8.3.4
