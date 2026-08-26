@@ -57,6 +57,7 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
     private lateinit var windowManager: WindowManager
     private lateinit var composeView: ComposeView
+    private lateinit var closeTargetView: ComposeView
 
     // Required for Compose in Service
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -72,10 +73,8 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
     override val lifecycle: Lifecycle
         get() = lifecycleRegistry
 
-    private var initialX = 0
-    private var initialY = 0
-    private var initialTouchX = 0f
-    private var initialTouchY = 0f
+    private var screenWidth = 0
+    private var screenHeight = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +82,9 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val metrics = resources.displayMetrics
+        screenWidth = metrics.widthPixels
+        screenHeight = metrics.heightPixels
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -91,12 +93,40 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
                 WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 0
         params.y = 100
+
+        val closeParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        closeParams.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        closeParams.y = 100
+
+        closeTargetView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(this@FloatingChatService)
+            setViewTreeViewModelStoreOwner(this@FloatingChatService)
+            setViewTreeSavedStateRegistryOwner(this@FloatingChatService)
+            setContent {
+                AuraTheme {
+                    var showClose by androidx.compose.runtime.remember { mutableStateOf(false) }
+                    // We expose this state to the outer scope later or update it via a flow
+                    CloseTargetUI()
+                }
+            }
+        }
+        windowManager.addView(closeTargetView, closeParams)
+        closeTargetView.visibility = android.view.View.GONE
 
         composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@FloatingChatService)
@@ -118,11 +148,11 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                     var isExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
 
                     if (isExpanded) {
-                        // Update window params for Mini Chat
                         params.width = WindowManager.LayoutParams.MATCH_PARENT
-                        params.height = 1000 // Fixed height for mini chat, or calculate DP
+                        params.height = (screenHeight * 0.7).toInt() // 70% of screen
                         params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
                         windowManager.updateViewLayout(this, params)
+                        closeTargetView.visibility = android.view.View.GONE
                         
                         MiniChatUI(
                             viewModel = chatViewModel,
@@ -136,10 +166,20 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                         )
                     } else {
                         FloatingBubbleUI(
+                            onDragStart = {
+                                closeTargetView.visibility = android.view.View.VISIBLE
+                            },
                             onDrag = { dx, dy ->
                                 params.x += dx.toInt()
                                 params.y += dy.toInt()
                                 windowManager.updateViewLayout(this, params)
+                            },
+                            onDragEnd = {
+                                closeTargetView.visibility = android.view.View.GONE
+                                // Check if close to bottom
+                                if (params.y > screenHeight - 400) {
+                                    stopSelf()
+                                }
                             },
                             onClick = {
                                 isExpanded = true
@@ -179,9 +219,35 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         if (::composeView.isInitialized) {
             windowManager.removeView(composeView)
         }
+        if (::closeTargetView.isInitialized) {
+            windowManager.removeView(closeTargetView)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+}
+
+@Composable
+fun CloseTargetUI() {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 50.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(CircleShape)
+                .background(Color.Red.copy(alpha = 0.8f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Close",
+                tint = Color.White,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -215,7 +281,12 @@ fun MiniChatUI(viewModel: com.aura.companion.ui.chat.ChatViewModel, onClose: () 
 }
 
 @Composable
-fun FloatingBubbleUI(onDrag: (Float, Float) -> Unit, onClick: () -> Unit) {
+fun FloatingBubbleUI(
+    onDragStart: () -> Unit = {},
+    onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit = {},
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .size(60.dp)
@@ -223,10 +294,15 @@ fun FloatingBubbleUI(onDrag: (Float, Float) -> Unit, onClick: () -> Unit) {
             .background(Color.White.copy(alpha = 0.8f))
             .clickable(onClick = onClick)
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
-                }
+                detectDragGestures(
+                    onDragStart = { onDragStart() },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragEnd() },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    }
+                )
             },
         contentAlignment = Alignment.Center
     ) {

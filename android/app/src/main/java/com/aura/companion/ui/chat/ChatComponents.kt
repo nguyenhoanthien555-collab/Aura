@@ -89,15 +89,19 @@ fun MessageBubble(
     ) {
 
         Box {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = when {
-                    message.failed -> MaterialTheme.colorScheme.errorContainer
-                    fromUser -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                },
+            val bubbleShape = RoundedCornerShape(24.dp)
+            val bubbleColor = when {
+                message.failed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                fromUser -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            }
+            Box(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
+                    .com.aura.companion.ui.theme.auraGlassBlur(
+                        shape = bubbleShape,
+                        tint = bubbleColor
+                    )
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onLongPress = {

@@ -71,6 +71,15 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    IconButton(onClick = {
+                        context.startService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
+                    }) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.NotificationsActive, // fallback for now
+                            contentDescription = "Floating Bubble",
+                        )
+                    }
                     if (state.messages.isNotEmpty()) {
                         IconButton(onClick = viewModel::newConversation) {
                             Icon(
