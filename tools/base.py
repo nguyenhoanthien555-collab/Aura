@@ -17,7 +17,7 @@ right attributes qualify without subclassing anything.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
@@ -46,12 +46,20 @@ class ToolResult:
     Tools report failure by returning `ok=False`, not by raising. The
     executor converts stray exceptions into this shape anyway, so a
     caller never has to wrap a tool call in try/except.
+
+    `output` is the human/model-readable line. `data` is the structured
+    payload behind it - result values, postconditions, verification
+    evidence - for callers that need facts rather than prose (the agent
+    runtime's structured envelopes, the CLI's --json mode). Empty for
+    tools that have nothing structured to say; never a second, divergent
+    account of the outcome.
     """
 
     ok: bool
     output: str = ""
     error: str = ""
     tool: str = ""
+    data: dict = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return self.ok
@@ -80,6 +88,12 @@ class Parameter:
     name: str
     description: str = ""
     required: bool = True
+
+    # The JSON Schema type of the argument, for native function calling.
+    # A string default keeps every existing declaration valid: most tool
+    # arguments are strings, and the schema exporter (tools/schema.py)
+    # reads this rather than guessing from the description text.
+    type: str = "string"
 
 
 @runtime_checkable

@@ -149,3 +149,57 @@ class OpenAICompatibleProvider(HttpChatProvider):
 
                 if text:
                     yield text
+
+    # ------------------------------------------------------------------
+    # Native function calling
+    # ------------------------------------------------------------------
+
+    def generate_with_tools(
+        self,
+        system: str,
+        messages: list[dict],
+        tools: list[dict],
+    ) -> "ModelTurn":
+        """
+        One round with tools offered natively.
+
+        `messages` are already in wire form - including prior assistant
+        turns carrying `tool_calls` and `tool` results - because only the
+        caller knows which history belongs to this run. The system
+        instruction rides as the first message exactly as `_payload`
+        would put it.
+
+        This is the method that retires the action-string parser: the
+        reply's tool calls are structured fields read by
+        `native_fc.extract_turn`, not prose scanned for an action name.
+        """
+
+        from brain.native_fc import extract_turn
+
+        wire_messages = []
+
+        if system:
+            wire_messages.append({"role": "system", "content": system})
+
+        wire_messages.extend(messages)
+
+        payload = {
+            "model": self.model,
+            "messages": wire_messages,
+            self.token_field: self.max_tokens,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+
+        data = self._send(payload)
+
+        try:
+            return extract_turn(data["choices"][0]["message"])
+
+        except (KeyError, IndexError, TypeError) as error:
+            raise ProviderUnavailableError(
+                f"{self.label} returned an invalid response"
+            ) from error
