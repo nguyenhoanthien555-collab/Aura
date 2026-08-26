@@ -34,6 +34,7 @@ Report shape (both directions of failure are structured, never prose):
 """
 
 import time
+from contextvars import ContextVar
 from typing import Protocol
 
 
@@ -343,3 +344,135 @@ class LoopbackDeviceBridge:
                 "note": "settles asynchronously; use android.wait_for",
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# The real device bridge
+# ---------------------------------------------------------------------------
+
+# The run/tool-call scope of the invocation currently being executed.
+#
+# `AndroidTool.execute(**arguments)` deliberately carries no run identity -
+# a tool's signature is its declared parameters and nothing else - but the
+# gateway needs one, because cancelling a run must resolve exactly that
+# run's pending work (PART 11/TEST I) and a report must never be folded
+# into a different run (TEST J). A ContextVar carries it without widening
+# every tool signature, and `starlette.concurrency.run_in_threadpool`
+# copies the context into the worker thread, so a scope set by the route
+# is visible to the blocking submit underneath it.
+# (run_id, tool_call_id, timeout_s | None). The deadline rides along
+# because it belongs to the *caller* - `/api/device/invoke` accepts one
+# per request - and a bridge default silently overriding it would make a
+# 0.3s request wait 30s, which is how this was first caught.
+device_call_scope: ContextVar[tuple[str, str, "float | None"]] = ContextVar(
+    "device_call_scope", default=("", "", None),
+)
+
+
+class GatewayDeviceBridge:
+    """
+    The bridge to a real phone, over the polling gateway.
+
+    This is the production `DeviceBridge`: the same object the CLI's
+    `--bridge http` path and the server's AgentRuntime both execute
+    through, which is what makes "it worked from the CLI" evidence about
+    the agent path rather than about a parallel implementation.
+
+    It owns no Android logic and no transport of its own. `invoke` queues
+    the named tool on `server.device_gateway.DeviceGateway` and blocks
+    until the handset's structured report comes back, or the bounded wait
+    produces the gateway's own TIMEOUT report. Failure is always a report;
+    nothing raises across this boundary.
+    """
+
+    def __init__(self, gateway=None, timeout_s: float = 30.0):
+        self._gateway = gateway
+        self.timeout_s = float(timeout_s)
+
+    @property
+    def gateway(self):
+        """Resolved lazily so importing this module needs no server."""
+
+        if self._gateway is not None:
+            return self._gateway
+
+        from server.device_gateway import get_device_gateway
+
+        return get_device_gateway()
+
+    def invoke(self, tool: str, arguments: dict) -> dict:
+
+        run_id, tool_call_id, requested = device_call_scope.get()
+
+        # `wait_for` owns its own deadline, so the transport must outlive
+        # it or a legitimate wait would be reported as a device timeout.
+        timeout_s = self.timeout_s if requested is None else float(requested)
+
+        if tool.endswith(".wait_for"):
+            requested_ms = arguments.get("timeout_ms") or 3000
+
+            try:
+                timeout_s = max(timeout_s, float(requested_ms) / 1000.0 + 5.0)
+            except (TypeError, ValueError):
+                pass
+
+        report = self.gateway.submit(
+            tool,
+            arguments,
+            run_id=run_id,
+            tool_call_id=tool_call_id,
+            timeout_s=timeout_s,
+        )
+
+        return normalise_device_report(report, tool)
+
+
+def normalise_device_report(report: dict, tool: str) -> dict:
+    """
+    A device report in the bridge's report shape.
+
+    The handset answers `/api/device/results` with the envelope it filled
+    in; the gateway adds nothing but its own TIMEOUT/CANCELLED failures.
+    This function is the one place that guarantees the provider sees the
+    keys it documents - notably `tool`, which the device omits because the
+    invocation id already identifies the call.
+
+    A report that is neither ok nor carrying an error is a malformed
+    answer, not a success: it becomes EXECUTION_FAILED rather than being
+    handed upward as an empty result the model would read as "done".
+    """
+
+    if not isinstance(report, dict):
+        return failure(
+            tool, "EXECUTION_FAILED",
+            f"device returned {type(report).__name__}, not a report",
+        )
+
+    normalised = dict(report)
+    normalised["tool"] = normalised.get("tool") or tool
+
+    if normalised.get("ok"):
+        normalised.setdefault("result", {})
+        normalised.setdefault("postcondition", None)
+
+        postcondition = normalised.get("postcondition")
+
+        if isinstance(postcondition, dict):
+            normalised["verified"] = bool(postcondition.get("verified", False))
+
+        return normalised
+
+    error = normalised.get("error")
+
+    if not isinstance(error, dict) or not error.get("code"):
+        return failure(
+            tool, "EXECUTION_FAILED",
+            "device reported failure without an error code",
+        )
+
+    normalised["error"] = {
+        "code": str(error.get("code")),
+        "message": str(error.get("message", "")),
+    }
+
+    return normalised

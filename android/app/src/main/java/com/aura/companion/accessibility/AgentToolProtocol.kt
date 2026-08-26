@@ -53,6 +53,34 @@ data class ToolResultReport(
     val error: ToolError? = null,
     val postcondition: JsonObject? = null,
     @SerialName("observation_id") val observationId: String? = null,
+    /**
+     * What the device saw while answering, with its own identity.
+     *
+     * Carried on the report rather than inferred by the server: only the
+     * handset knows when it looked and at what, and PARTS 7 and 12
+     * require a caller to be able to tell one observation from the next
+     * without trusting that two calls in a row saw different screens.
+     */
+    val observation: ObservationPayload? = null,
+)
+
+/**
+ * One thing the device observed, identified and timestamped at the
+ * moment of observation.
+ *
+ * `contentHash` is what makes staleness decidable rather than assumed:
+ * two captures of an unchanged screen hash the same, and a changed
+ * screen cannot hash the same, so "is this the frame I already had?" is
+ * a comparison instead of a guess.
+ */
+@Serializable
+data class ObservationPayload(
+    @SerialName("observation_id") val observationId: String,
+    val kind: String,
+    val source: String = "android_device",
+    @SerialName("observed_at") val observedAt: Double,
+    @SerialName("content_hash") val contentHash: String = "",
+    val data: JsonObject = JsonObject(emptyMap()),
 )
 
 /**
@@ -68,9 +96,11 @@ data class ToolResultReport(
  */
 object DeviceToolCatalog {
 
-    /** Stable failure codes shared with the server's envelopes. */
-    const val UNKNOWN_TOOL = "UNKNOWN_TOOL"
-    const val INVALID_ARGUMENTS = "INVALID_ARGUMENTS"
+    // Failure codes deliberately live in ONE place -
+    // AccessibilityToolDispatcher's companion - because two copies of a
+    // wire vocabulary are two things that can disagree. This object
+    // decides only whether a call is valid; naming the refusal is the
+    // dispatcher's job.
 
     data class ToolSpec(
         val name: String,

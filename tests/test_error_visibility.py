@@ -464,10 +464,15 @@ def test_setup_logger_does_not_stack_handlers(monkeypatch, fresh_logger):
 
     first = setup_logger()
 
-    assert len(first.handlers) == 1
+    application_handlers = lambda: [
+        handler for handler in first.handlers
+        if getattr(handler, "_aura_application_handler", False)
+    ]
+
+    assert len(application_handlers()) == 1
 
     assert setup_logger() is first
-    assert len(first.handlers) == 1
+    assert len(application_handlers()) == 1
 
 
 # ----------------------------------------------------------------------

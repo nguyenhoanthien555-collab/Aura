@@ -823,16 +823,18 @@ class TestUnauthenticatedCallerChangesNothing:
 
         from server.main import app
 
+        from server.route_introspection import iter_http_routes
+
         checked = 0
 
-        for route in app.routes:
+        for route in iter_http_routes(app):
 
-            path = getattr(route, "path", "")
+            path = route.path
 
             if not path.startswith(("/api/settings", "/api/providers")):
                 continue
 
-            for method in getattr(route, "methods", set()) - {"HEAD", "OPTIONS"}:
+            for method in route.methods - {"HEAD", "OPTIONS"}:
 
                 # The only templated segment in this router.
                 target = path.replace("{provider}", "groq")

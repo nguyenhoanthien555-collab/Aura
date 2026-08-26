@@ -628,8 +628,22 @@ def _resolve_roots(roots: list[str] | None) -> list[Path]:
     for root in roots or []:
 
         try:
-            resolved.append(Path(root).expanduser().resolve())
-        except Exception:
+            # pathlib on Windows can carry NUL/control characters through
+            # ``resolve(strict=False)`` without asking the OS to validate
+            # them. Reject such roots before resolution: an invalid root
+            # must be dropped, never converted into a broad permission.
+            raw = os.fspath(root)
+            if not isinstance(raw, (str, bytes)):
+                continue
+            if isinstance(raw, bytes):
+                invalid = any(byte < 32 for byte in raw)
+            else:
+                invalid = any(ord(character) < 32 for character in raw)
+            if invalid:
+                continue
+
+            resolved.append(Path(raw).expanduser().resolve())
+        except (OSError, RuntimeError, TypeError, ValueError):
             continue
 
     return resolved

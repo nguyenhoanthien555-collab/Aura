@@ -188,3 +188,60 @@ class GeminiProvider(BaseProvider):
             if text:
                 yield text
 
+    def generate_with_tools(
+        self,
+        system: str,
+        messages: list[dict],
+        tools: list[dict],
+    ):
+        """
+        One round with tools offered natively via the Gemini OpenAI-compatible endpoint.
+        """
+        import json
+        import urllib.request
+        from brain.native_fc import extract_turn
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ProviderUnavailableError("GEMINI_API_KEY not found in .env")
+
+        base_url = os.getenv("GEMINI_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta/openai"
+        url = f"{base_url.rstrip('/')}/chat/completions"
+
+        wire_messages = []
+        if system:
+            wire_messages.append({"role": "system", "content": system})
+        wire_messages.extend(messages)
+
+        payload = {
+            "model": self.model,
+            "messages": wire_messages,
+            "max_tokens": self.max_output_tokens,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "Aura/1.0",
+            "Connection": "close",
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return extract_turn(data["choices"][0]["message"])
+        except Exception as error:
+            self._raise_cloud_error(error)
+
+

@@ -3,8 +3,15 @@ package com.aura.companion.data
 import com.aura.companion.data.remote.ApiFactory
 import com.aura.companion.data.remote.ApiKeyRequestDto
 import com.aura.companion.data.remote.ApiKeyResponseDto
+import com.aura.companion.data.remote.AgentRunSnapshotDto
+import com.aura.companion.data.remote.AgentStepRequestDto
 import com.aura.companion.data.remote.AuraApi
 import com.aura.companion.data.remote.ChatRequestDto
+import com.aura.companion.data.remote.DevicePollRequestDto
+import com.aura.companion.data.remote.DevicePollResponseDto
+import com.aura.companion.data.remote.DeviceResultAckDto
+import com.aura.companion.data.remote.DeviceResultReportDto
+import com.aura.companion.data.remote.DeviceResultSubmissionDto
 import com.aura.companion.data.remote.DecisionDto
 import com.aura.companion.data.remote.HealthDto
 import com.aura.companion.data.remote.NotificationDto
@@ -118,6 +125,29 @@ class AuraRepository(
     // ------------------------------------------------------------------
 
     suspend fun health(): AuraResult<HealthDto> = call { it.health() }
+
+    // ------------------------------------------------------------------
+    // Agent tool protocol
+    // ------------------------------------------------------------------
+
+    /** One round of the agent loop, driven by this device. */
+    suspend fun agentStep(
+        request: AgentStepRequestDto,
+    ): AuraResult<AgentRunSnapshotDto> = call { it.agentStep(request) }
+
+    /** The device gateway's queued invocations, if any. */
+    suspend fun pollDeviceInvocations(
+        deviceId: String,
+    ): AuraResult<DevicePollResponseDto> =
+        call { it.pollDeviceInvocations(DevicePollRequestDto(deviceId)) }
+
+    /** Structured reports for invocations this device executed. */
+    suspend fun submitDeviceResults(
+        deviceId: String,
+        reports: List<DeviceResultReportDto>,
+    ): AuraResult<DeviceResultAckDto> = call {
+        it.submitDeviceResults(DeviceResultSubmissionDto(deviceId, reports))
+    }
 
     // ------------------------------------------------------------------
     // Chat

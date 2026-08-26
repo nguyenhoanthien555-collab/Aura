@@ -579,7 +579,10 @@ def test_build_services_wires_one_cognitive_store(services):
     # And it borrows the process clock rather than starting a seventh
     # source of "now" - so when an action was recorded and what time the
     # prompt says it is are the same reading.
-    assert services.cognitive.for_session("s").now == services.clock.now()
+    state = services.cognitive.for_session("s")
+
+    assert services.cognitive._clock is services.clock
+    assert state._clock is services.clock
 
 
 def test_the_pipeline_can_be_switched_off(services):

@@ -31,8 +31,11 @@ playbook.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
+
+from dotenv import dotenv_values
 
 # Runnable from anywhere: the harness is a script, and a developer will
 # invoke it from whatever directory they are debugging in.
@@ -64,17 +67,22 @@ def build_bridge(name: str):
 
         class HttpRelay:
             """
-            Forwards invocations to a server that owns a real bridge.
-            The relay is deliberately tiny: it exists so this CLI can
-            reach whatever backend the deployment runs without growing a
-            second implementation of any capability.
+            Forwards invocations to a running Aura server, which queues
+            them for the connected phone via its device gateway.
+
+            Authentication is the server's authoritative bearer token,
+            `AURA_SERVER_AUTH_TOKEN`, loaded from the project-root `.env`
+            just as it is by the server. `AURA_TOKEN` remains an explicit
+            compatibility override for older automation. The token travels
+            only in the Authorization header and is never logged.
             """
 
             def __init__(self, base_url: str):
+                import urllib.error       # noqa: F401 (used below)
                 import urllib.request
 
                 self.base_url = base_url.rstrip("/")
-                self._request = urllib.request.Request
+                self.token = configured_auth_token()
 
             def invoke(self, tool: str, arguments: dict) -> dict:
 
@@ -84,24 +92,66 @@ def build_bridge(name: str):
                     {"tool": tool, "arguments": arguments}
                 ).encode("utf-8")
 
-                request = self._request(
+                headers = {"Content-Type": "application/json"}
+
+                if self.token:
+                    headers["Authorization"] = f"Bearer {self.token}"
+
+                request = urllib.request.Request(
                     f"{self.base_url}/api/device/invoke",
                     data=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     method="POST",
                 )
 
                 try:
-                    with urllib.request.urlopen(request, timeout=30) as r:
+                    with urllib.request.urlopen(request, timeout=90) as r:
                         return json.loads(r.read().decode("utf-8"))
 
+                except urllib.error.HTTPError as error:
+                    # The server answers a refusal WITH its envelope -
+                    # 504 TIMEOUT, 404 TOOL_NOT_FOUND, 422
+                    # INVALID_ARGUMENTS, 409 STALE_RUN. Reading only the
+                    # status would turn every one of them into a generic
+                    # transport failure and lose the reason.
+                    body = self._body_of(error)
+
+                    if isinstance(body, dict) and body.get("error"):
+                        return body
+
+                    if error.code == 401:
+                        return _relay_failure(
+                            tool, "AUTH_REQUIRED",
+                            "the server rejected the configured bearer token "
+                            "(check AURA_SERVER_AUTH_TOKEN in the project .env)",
+                        )
+
+                    detail = ""
+
+                    if isinstance(body, dict):
+                        detail = str(body.get("detail", ""))
+
+                    return _relay_failure(
+                        tool,
+                        "INVALID_ARGUMENTS" if error.code == 422
+                        else "EXECUTION_FAILED",
+                        detail or f"server returned HTTP {error.code}",
+                    )
+
                 except Exception as error:
-                    return {
-                        "ok": False,
-                        "tool": tool,
-                        "error": {"code": "BRIDGE_UNREACHABLE",
-                                  "message": str(error)},
-                    }
+                    return _relay_failure(
+                        tool, "BRIDGE_UNREACHABLE",
+                        f"{type(error).__name__}: {error}",
+                    )
+
+            @staticmethod
+            def _body_of(error):
+                """The JSON body of an error response, or None."""
+
+                try:
+                    return json.loads(error.read().decode("utf-8"))
+                except Exception:
+                    return None
 
         return HttpRelay(_env("AURA_SERVER_URL", "http://127.0.0.1:8000"))
 
@@ -110,8 +160,65 @@ def build_bridge(name: str):
 
 
 def _env(key: str, default: str) -> str:
-    import os
     return os.environ.get(key) or default
+
+
+def configured_auth_token(env_file: Path | None = None) -> str:
+    """Resolve the server token without copying it into another shell."""
+
+    # Preserve the old automation variable as the highest-priority explicit
+    # override, then use the server's real environment name. Only if neither
+    # is exported do we read the same project-root .env the server reads.
+    exported = os.environ.get("AURA_TOKEN") or os.environ.get(
+        "AURA_SERVER_AUTH_TOKEN"
+    )
+    if exported:
+        return exported
+
+    path = env_file or Path(__file__).resolve().parent.parent / ".env"
+    configured = dotenv_values(path).get("AURA_SERVER_AUTH_TOKEN")
+    return str(configured or "")
+
+
+def _relay_failure(tool: str, code: str, message: str) -> dict:
+    """A relay-authored failure, in the same envelope the device uses."""
+
+    return {
+        "ok": False,
+        "tool": tool,
+        "error": {"code": code, "message": message},
+    }
+
+
+# PART 18: a script must be able to branch on WHICH failure happened
+# without parsing prose, so the distinctions that call for different
+# handling get different codes. Everything unrecognised is 1 - a
+# structured failure whose class this table has no opinion about.
+EXIT_CODES = {
+    "BRIDGE_UNREACHABLE": 3,          # no server / no route
+    "AUTH_REQUIRED": 4,               # wrong or missing token
+    "TOOL_NOT_FOUND": 5,              # not in the registry
+    "UNKNOWN_TOOL": 5,
+    "INVALID_ARGUMENTS": 6,           # the call was malformed
+    "TIMEOUT": 7,                     # device never answered
+    "CAPABILITY_UNAVAILABLE": 8,      # device cannot do this right now
+    "SCREEN_CAPTURE_UNAVAILABLE": 8,
+    "ACCESSIBILITY_ROOT_UNAVAILABLE": 8,
+    "BRIDGE_UNAVAILABLE": 8,
+    "CANCELLED": 9,                   # the run went away
+    "STALE_RUN": 9,
+}
+
+
+def exit_code_for(report: dict) -> int:
+    """The process exit code this report deserves."""
+
+    if report.get("ok"):
+        return 0
+
+    code = str((report.get("error") or {}).get("code", ""))
+
+    return EXIT_CODES.get(code, 1)
 
 
 def build_registry(bridge) -> ToolRegistry:
@@ -171,10 +278,10 @@ def invoke(registry, tool_name, arguments, as_json: bool,
 
     if tool is None:
         report = {"ok": False, "tool": tool_name,
-                  "error": {"code": "UNKNOWN_TOOL",
+                  "error": {"code": "TOOL_NOT_FOUND",
                             "message": f"no tool {tool_name!r}"}}
         _emit(report, as_json)
-        return 1
+        return exit_code_for(report)
 
     if dry_run and tool_name in MUTATING:
         _emit({"ok": True, "tool": tool_name, "dry_run": True,
@@ -192,10 +299,21 @@ def invoke(registry, tool_name, arguments, as_json: bool,
 
     _emit(report, as_json)
 
-    return 0 if result.ok else 1
+    return exit_code_for(report)
 
 
 def _emit(report: dict, as_json: bool) -> None:
+
+    # A real accessibility tree is allowed to contain any Unicode the
+    # foreground app exposes. Windows PowerShell commonly starts Python with
+    # a cp1252 stdout, which made a successful device call fail while merely
+    # rendering (for example) Vietnamese UI text. Keep the wire report
+    # unchanged and make the CLI's text boundary UTF-8 when the stream
+    # supports reconfiguration; test capture streams do not need it.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
     if as_json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -294,6 +412,15 @@ def repl(bridge, as_json: bool) -> int:
 # ----------------------------------------------------------------------
 
 def main(argv=None) -> int:
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
     parser = argparse.ArgumentParser(
         prog="aura-android",

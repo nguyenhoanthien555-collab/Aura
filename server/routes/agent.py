@@ -43,6 +43,7 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 # ----------------------------------------------------------------------
 
 _agent_runtime = None
+_device_registry = None
 
 
 def configure_agent_runtime(runtime) -> None:
@@ -50,6 +51,45 @@ def configure_agent_runtime(runtime) -> None:
 
     global _agent_runtime
     _agent_runtime = runtime
+
+
+def get_device_registry():
+    """
+    The one Tool Registry that owns the android.* catalogue.
+
+    Shared, not copied: `/api/device/invoke` resolves tools out of this
+    exact registry, so the CLI harness and the agent runtime execute the
+    same tool objects through the same provider and the same bridge. A
+    capability that works from one therefore works from the other by
+    construction rather than by two implementations agreeing.
+    """
+
+    global _device_registry
+
+    if _device_registry is not None:
+        return _device_registry
+
+    from tools.providers.android_bridge import GatewayDeviceBridge
+    from tools.providers.android_provider import AndroidProvider
+    from tools.registry import ToolRegistry
+
+    registry = ToolRegistry()
+
+    # The gateway bridge, not the declared-only one: in deferred mode the
+    # runtime hands tool calls to the phone and never invokes the bridge,
+    # but `/api/device/invoke` does - and PART 5 forbids advertising an
+    # android tool the real provider cannot execute.
+    AndroidProvider(GatewayDeviceBridge()).register_into(registry)
+
+    _device_registry = registry
+    return _device_registry
+
+
+def configure_device_registry(registry) -> None:
+    """Install a registry explicitly (tests install a fake bridge)."""
+
+    global _device_registry
+    _device_registry = registry
 
 
 class RouterToolCallingLLM:
@@ -73,7 +113,10 @@ class RouterToolCallingLLM:
         # BrainRouter-style wrappers hold the concrete provider behind
         # them; walk one level of indirection if needed.
         if not hasattr(candidate, "generate_with_tools"):
-            candidate = getattr(candidate, "_provider", None)
+            if hasattr(candidate, "provider"):
+                candidate = candidate.provider
+            else:
+                candidate = getattr(candidate, "_provider", None)
 
             if candidate is None or not hasattr(
                 candidate, "generate_with_tools"
@@ -101,12 +144,8 @@ def get_agent_runtime():
         return _agent_runtime
 
     from agent.runtime import AgentRuntime
-    from tools.providers.android_bridge import DeclaredOnlyBridge
-    from tools.providers.android_provider import AndroidProvider
-    from tools.registry import ToolRegistry
 
-    registry = ToolRegistry()
-    AndroidProvider(DeclaredOnlyBridge()).register_into(registry)
+    registry = get_device_registry()
 
     _agent_runtime = AgentRuntime(
         llm=_resolve_llm(),
@@ -311,4 +350,16 @@ async def cancel_run(run_id: str, token: str = Depends(verify_token)):
     if not runtime.cancel(run_id):
         raise HTTPException(409, "run not running or unknown")
 
-    return {"cancelled": True, "run_id": run_id}
+    # Whatever this run had queued for the phone dies with it. Without
+    # this the run is cancelled while its invocations stay pending, and
+    # the handset executes an action for a task nobody is waiting on -
+    # the orphaned-operation failure TEST I looks for.
+    from server.device_gateway import get_device_gateway
+
+    orphaned = get_device_gateway().cancel_run(run_id)
+
+    return {
+        "cancelled": True,
+        "run_id": run_id,
+        "device_invocations_cancelled": orphaned,
+    }

@@ -405,21 +405,33 @@ def test_no_classified_message_quotes_the_exception():
 # 4. The deployed server stays honest about the PC  (AURA-P0-005)
 # ======================================================================
 
-def test_the_server_still_exposes_no_device_execution_route():
-    # Phase 4 pinned this; Phase 6 keeps it pinned, because "deployment
-    # hardening" is exactly the sort of change that would quietly add a
-    # dispatch endpoint. Duplicated on purpose: this file is what a
-    # security review reads.
+def test_every_device_execution_route_requires_authorization():
+    """A real device transport is permitted; an open one is not."""
+    from fastapi.testclient import TestClient
+
+    from server.config import settings
     from server.main import app
+    from server.route_introspection import iter_http_routes
 
-    paths = {route.path for route in getattr(app, "routes", [])}
-
-    forbidden = [
-        path for path in paths
-        if any(word in path for word in ("device", "command", "exec", "shell"))
+    routes = [
+        route for route in iter_http_routes(app)
+        if route.path.startswith("/api/device")
     ]
+    assert len(routes) == 3, "the device security check found the wrong routes"
 
-    assert forbidden == []
+    previous_token = settings.auth_token
+    settings.auth_token = TOKEN
+
+    try:
+        client = TestClient(app)
+        for route in routes:
+            for method in route.methods - {"HEAD", "OPTIONS"}:
+                response = client.request(method, route.path, json={})
+                assert response.status_code in (401, 403), (
+                    f"{method} {route.path} answered without authorization"
+                )
+    finally:
+        settings.auth_token = previous_token
 
 
 def test_no_physical_device_executor_is_registered_in_server_mode():
@@ -457,54 +469,52 @@ def test_readiness_never_claims_a_physical_device_capability():
         assert f'"{word}"' not in source
 
 
-def test_a_deployed_server_cannot_report_a_physical_action_as_executed():
-    """
-    The regression STEP 5 exists for: server deployment must not be able
-    to claim a physical PC action succeeded without trusted execution
-    evidence.
+def test_a_deployed_server_cannot_fabricate_physical_action_evidence():
+    """Success can enter the gateway only as a correlated device report."""
+    import threading
+    import time
 
-    This asserts the *structural* half, which is what makes the claim
-    impossible rather than merely discouraged. There is no route to a
-    device, and the only runnable tool reads a clock - so no code path
-    exists from a device request to a result the model could truthfully
-    cite. The spoken half (the standing rule in `prompts/system.md`) is
-    pinned by `tests/test_device_boundary.py`.
-    """
+    from server.device_gateway import DeviceGateway
 
-    from core.config import load_config
-    from server.main import app
-    from tools.executor import ToolExecutor, ToolPolicy
-    from tools.factory import build_registry
+    gateway = DeviceGateway()
 
-    # 1. Nothing to dispatch to.
-    paths = {route.path for route in getattr(app, "routes", [])}
+    # A report not correlated to pending work is rejected, even if it
+    # claims success and carries plausible-looking observation evidence.
+    assert gateway.complete("invo_fabricated", {
+        "ok": True,
+        "observation_id": "obs_fabricated0001",
+        "postcondition": {"foreground": "com.example"},
+    }) is False
 
-    assert not [
-        p for p in paths
-        if any(w in p for w in ("device", "command", "exec", "shell"))
-    ]
+    answer = {}
 
-    # 2. Nothing that could execute if it were dispatched.
-    tools_config = (load_config() or {}).get("tools") or {}
+    def invoke():
+        answer["report"] = gateway.submit(
+            "android.get_foreground_app", {}, timeout_s=2,
+        )
 
-    executor = ToolExecutor(
-        registry=build_registry(tools_config),
-        policy=ToolPolicy.from_config(tools_config),
-    )
+    thread = threading.Thread(target=invoke)
+    thread.start()
 
-    assert executor.available() == ["current_time"]
+    deadline = time.monotonic() + 1
+    pending = None
+    while pending is None and time.monotonic() < deadline:
+        pending = gateway.poll()
+        time.sleep(0.01)
 
-    # 3. A device request refused rather than reported as done. `ok` is
-    #    False, so there is no successful result for the model to relay -
-    #    which is the only kind of evidence the prompt permits it to cite.
-    for name, arguments in (
-        ("open_url", {"url": "https://youtube.com"}),
-        ("run_command", {"command": "notepad"}),
-        ("click", {"x": 10, "y": 10}),
-    ):
-        result = executor.execute(name, arguments)
+    assert pending is not None
 
-        assert result.ok is False, f"{name} executed on a deployed server"
+    trusted_report = {
+        "ok": True,
+        "result": {"package": "com.example"},
+        "observation_id": "obs_device00000001",
+        "postcondition": {"foreground": "com.example"},
+    }
+    assert gateway.complete(pending.invocation_id, trusted_report) is True
+
+    thread.join(timeout=1)
+    assert not thread.is_alive()
+    assert answer["report"] == trusted_report
 
 
 def test_readiness_being_true_does_not_imply_a_reachable_pc():

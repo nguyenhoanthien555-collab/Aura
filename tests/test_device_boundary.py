@@ -183,17 +183,38 @@ def test_a_machine_turn_is_not_told_it_has_no_hands(context):
 # 4. The structural half: nothing can execute
 # ======================================================================
 
-def test_the_server_exposes_no_device_execution_route():
+def test_device_execution_routes_are_authenticated():
+    """The transport may exist, but no unauthenticated caller can use it."""
+    from fastapi.testclient import TestClient
+
+    from server.config import settings
     from server.main import app
+    from server.route_introspection import iter_http_routes
 
-    paths = {route.path for route in app.routes}
-
-    forbidden = [
-        path for path in paths
-        if any(word in path for word in ("device", "command", "exec", "shell"))
+    routes = [
+        route for route in iter_http_routes(app)
+        if route.path.startswith("/api/device")
     ]
 
-    assert forbidden == [], f"a device execution surface appeared: {forbidden}"
+    assert {route.path for route in routes} == {
+        "/api/device/invoke",
+        "/api/device/poll",
+        "/api/device/results",
+    }
+
+    previous_token = settings.auth_token
+    settings.auth_token = "device-boundary-test-token"
+
+    try:
+        client = TestClient(app)
+        for route in routes:
+            for method in route.methods - {"HEAD", "OPTIONS"}:
+                response = client.request(method, route.path, json={})
+                assert response.status_code in (401, 403), (
+                    f"{method} {route.path} answered without authorization"
+                )
+    finally:
+        settings.auth_token = previous_token
 
 
 def test_the_shipped_policy_grants_nothing_that_can_touch_the_machine():

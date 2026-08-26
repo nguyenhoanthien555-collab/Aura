@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.aura.companion.AuraApplication
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
+import com.aura.companion.data.remote.ObservationDto
 import com.aura.companion.data.settings.SettingsStore
 import com.aura.companion.screen.AccessibilityScreenshotCapture
 import com.aura.companion.screen.ScreenshotOutcome
@@ -21,8 +22,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import java.util.concurrent.atomic.AtomicReference
 
 class AuraAccessibilityService : AccessibilityService() {
@@ -37,6 +40,7 @@ class AuraAccessibilityService : AccessibilityService() {
     private val scope = CoroutineScope(Dispatchers.Main + job)
 
     private var agentJob: Job? = null
+    private var devicePollerJob: Job? = null
 
     /**
      * The screen the last window-state change named, and the package it
@@ -61,6 +65,16 @@ class AuraAccessibilityService : AccessibilityService() {
             cacheDir = cacheDir,
         )
         instance.set(this)
+
+        // One polling executor for the lifetime of this connected service.
+        // Reconnection cannot create a duplicate because the previous job is
+        // cancelled before replacement, and service teardown cancels scope.
+        devicePollerJob?.cancel()
+        val dispatcher = AccessibilityToolDispatcher(this)
+        devicePollerJob = scope.launch {
+            DeviceInvocationPoller(repository, settings, dispatcher).pollForever()
+        }
+
         Log.d("AuraAgentService", "Aura Accessibility Service Connected")
     }
 
@@ -98,9 +112,11 @@ class AuraAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        devicePollerJob?.cancel()
+        devicePollerJob = null
         instance.set(null)
         scope.cancel()
+        super.onDestroy()
     }
 
     /**
@@ -160,18 +176,46 @@ class AuraAccessibilityService : AccessibilityService() {
     fun startAgentLoop(request: String, onComplete: (String) -> Unit) {
         agentJob?.cancel()
         agentJob = scope.launch {
-            // The chat UI keeps its loading flag set until this
-            // callback fires, so the loop must deliver it exactly once
-            // on EVERY exit - a settled completion, the step budget, a
-            // crash, or a cancellation from stopAgentLoop / a newer task
-            // / service teardown. `runWithGuaranteedCompletion` is that
-            // guarantee: without it, a cancelled or crashed loop left
-            // the spinner spinning forever and lost the final message.
+            // Server AgentRuntime is now the only reasoning loop. This
+            // service only captures fresh state and executes directives.
+            val dispatcher = AccessibilityToolDispatcher(this@AuraAccessibilityService)
+            val driver = AgentRunDriver(
+                repository = repository,
+                dispatcher = dispatcher,
+                observe = { captureAgentObservation() },
+            )
             runWithGuaranteedCompletion(
-                block = { runAgentSteps(request) },
+                block = { driver.run(request) },
                 onComplete = onComplete,
             )
         }
+    }
+
+    private fun captureAgentObservation(): ObservationDto {
+        val app = currentForegroundApp()
+        val root = rootInActiveWindow
+        val nodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
+        val tree = if (root == null) emptyMap() else
+            AccessibilityNodeSerializer.serialize(root, nodeMap)
+        nodeMap.values.forEach { it.recycle() }
+        root?.recycle()
+
+        val data = buildJsonObject {
+            put("package", app?.packageName ?: "")
+            put("label", app?.label ?: "")
+            put("activity", app?.activity ?: "")
+            put("node_count", tree.size)
+            put("nodes", Json.encodeToJsonElement(tree))
+        }
+        val id = ObservationIds.newObservationId()
+        return ObservationDto(
+            kind = "accessibility_tree",
+            source = "android_device",
+            data = data,
+            observationId = id,
+            observedAt = ObservationIds.nowEpochSeconds(),
+            contentHash = ObservationIds.hashOf(data.toString()),
+        )
     }
 
     /**
@@ -450,6 +494,17 @@ class AuraAccessibilityService : AccessibilityService() {
     }
 
 
+    /** Protocol entry point; preserves the existing SafetyGuard/recovery path. */
+    internal suspend fun executeActionForProtocol(
+        action: AgentAction,
+        oldTree: Map<String, AccessibilityNode>,
+    ): ExecutionResult = executeActionWithRecovery(action, oldTree)
+
+    /** Owner-controlled screenshot gate used by android.screenshot. */
+    internal fun screenshotToolAllowed(): Boolean =
+        settings.current.screenObservationEnabled &&
+            settings.current.uploadScreenshots
+
     private suspend fun executeActionWithRecovery(
         action: AgentAction,
         oldTree: Map<String, AccessibilityNode>
@@ -489,16 +544,23 @@ class AuraAccessibilityService : AccessibilityService() {
 
             val freshNodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
 
+            val targetNodeId = action.nodeId ?: oldTree.entries.firstOrNull { (_, node) ->
+                if (action.action == "input_text" && node.editable) return@firstOrNull true
+                val q = action.text?.trim()
+                q != null && (node.text?.contains(q, ignoreCase = true) == true ||
+                             node.contentDescription?.contains(q, ignoreCase = true) == true)
+            }?.key
+
             // Resolve target node using AuraActionExecutor
-            val (resolvedNode, resolvedNodeMeta) = if (action.nodeId != null && execRoot != null) {
-                executor.resolveNode(action.nodeId, oldTree, execRoot, freshNodeMap)
+            val (resolvedNode, resolvedNodeMeta) = if (targetNodeId != null && execRoot != null) {
+                executor.resolveNode(targetNodeId, oldTree, execRoot, freshNodeMap)
             } else {
                 Pair(null, null)
             }
 
             // Log diagnostics for the target node
-            if (action.nodeId != null) {
-                executor.logNodeDiagnostics("AuraActionExecutor", action.nodeId, resolvedNode, resolvedNodeMeta)
+            if (targetNodeId != null) {
+                executor.logNodeDiagnostics("AuraActionExecutor", targetNodeId, resolvedNode, resolvedNodeMeta)
             }
 
             // Run SafetyGuard check on the resolved node

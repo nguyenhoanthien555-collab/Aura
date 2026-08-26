@@ -73,19 +73,25 @@ def resolve_level(value) -> int | None:
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger("Aura")
 
-    # Avoid attaching the handler twice when imported from several
-    # modules.
-    if logger.hasHandlers():
-        return logger
-
+    # Re-evaluate the startup environment on every explicit setup call.
+    # This matters to launchers that set the variable after importing a
+    # module, and it is independent of whether a handler already exists.
     level = resolve_level(os.getenv(LOG_LEVEL_ENV))
-
     logger.setLevel(DEFAULT_LEVEL if level is None else level)
+
+    # Only Aura's own application handler counts for idempotence. Pytest
+    # temporarily attaches LogCaptureHandlers to this logger; treating
+    # those as ours both suppresses normal output and makes setup depend
+    # on whether capture happens to be active.
+    if any(getattr(handler, "_aura_application_handler", False)
+           for handler in logger.handlers):
+        return logger
 
     handler = RichHandler(
         rich_tracebacks=True,
         show_path=False,
     )
+    setattr(handler, "_aura_application_handler", True)
 
     formatter = logging.Formatter("%(message)s")
     handler.setFormatter(formatter)

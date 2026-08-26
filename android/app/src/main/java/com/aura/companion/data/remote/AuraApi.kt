@@ -61,6 +61,25 @@ interface AuraApi {
     ): Response<NotificationsResponseDto>
 
     // ------------------------------------------------------------------
+    // Agent tool protocol (server/routes/agent.py, server/routes/device.py)
+    // ------------------------------------------------------------------
+
+    @POST("api/agent/step")
+    suspend fun agentStep(
+        @Body request: AgentStepRequestDto,
+    ): Response<AgentRunSnapshotDto>
+
+    @POST("api/device/poll")
+    suspend fun pollDeviceInvocations(
+        @Body request: DevicePollRequestDto,
+    ): Response<DevicePollResponseDto>
+
+    @POST("api/device/results")
+    suspend fun submitDeviceResults(
+        @Body submission: DeviceResultSubmissionDto,
+    ): Response<DeviceResultAckDto>
+
+    // ------------------------------------------------------------------
     // Control Hub
     //
     // Every route below is authenticated server-side by the same bearer

@@ -9,9 +9,13 @@ local `.env` file. Nothing is hardcoded and nothing is committed - see
 from typing import List
 
 import os
+from pathlib import Path
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 # The opt-in that permits running with no authentication. Named without
@@ -37,7 +41,7 @@ class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="AURA_SERVER_",
         case_sensitive=False,
-        env_file=".env",
+        env_file=PROJECT_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
