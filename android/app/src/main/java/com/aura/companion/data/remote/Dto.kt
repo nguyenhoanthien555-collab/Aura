@@ -195,6 +195,7 @@ data class AgentRunSnapshotDto(
 @Serializable
 data class DevicePollRequestDto(
     @SerialName("device_id") val deviceId: String = "",
+    @SerialName("timeout_s") val timeoutS: Double = 0.0,
 )
 
 /** One queued invocation from `/api/device/poll`. */

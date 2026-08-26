@@ -517,13 +517,24 @@ class AuraAccessibilityService : AccessibilityService() {
             Log.d("AuraAgent", "Attempt $attempt to execute ${action.action} for ${action.nodeId}")
 
             // --- Capture pre-action state ---
-            val preRoot = rootInActiveWindow
-            val preFingerprint = if (preRoot != null) {
-                val fp = ScreenFingerprint.capture(preRoot)
-                preRoot.recycle()
-                fp
+            val preFingerprint = if (oldTree.isNotEmpty()) {
+                val pkg = currentForegroundApp()?.packageName.orEmpty()
+                val count = oldTree.size
+                var hash = 0
+                for ((_, node) in oldTree) {
+                    hash = 31 * hash + (node.text?.hashCode() ?: 0)
+                    hash = 31 * hash + (node.contentDescription?.hashCode() ?: 0)
+                }
+                ScreenFingerprint(pkg, count, hash)
             } else {
-                null
+                val preRoot = rootInActiveWindow
+                if (preRoot != null) {
+                    val fp = ScreenFingerprint.capture(preRoot)
+                    preRoot.recycle()
+                    fp
+                } else {
+                    null
+                }
             }
 
             if (preFingerprint == null && action.action != "open_app") {
@@ -667,7 +678,7 @@ class AuraAccessibilityService : AccessibilityService() {
         }
 
         // --- Generic path: wait for UI to settle, then one snapshot ---
-        delay(250)
+        delay(80)
 
         val postRoot = rootInActiveWindow
         val postFingerprint = if (postRoot != null) {

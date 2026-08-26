@@ -178,10 +178,18 @@ class DeviceGateway:
     # Device side
     # ------------------------------------------------------------------
 
-    def poll(self) -> PendingInvocation | None:
-        """The next queued invocation, oldest first, or None."""
+    def poll(self, timeout_s: float = 0.0) -> PendingInvocation | None:
+        """
+        The next queued invocation, oldest first, or None.
+
+        When timeout_s > 0, blocks up to timeout_s on the gateway condition
+        for an invocation to be enqueued. Woken instantly by submit().
+        """
 
         with self._condition:
+            if not self._pending and timeout_s > 0:
+                self._condition.wait(timeout=float(timeout_s))
+
             return self._pending[0] if self._pending else None
 
     def complete(self, invocation_id: str, report: dict) -> bool:

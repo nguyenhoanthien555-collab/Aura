@@ -214,7 +214,6 @@ class GeminiProvider(BaseProvider):
         for m in messages:
             role = m.get("role")
             if role == "tool":
-                import json
                 content_str = str(m.get("content", ""))
                 try:
                     content_obj = json.loads(content_str)
@@ -257,11 +256,7 @@ class GeminiProvider(BaseProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
             "User-Agent": "Aura/1.0",
-            "Connection": "close",
         }
-        
-        print("GEMINI PAYLOAD:")
-        print(json.dumps(payload, indent=2))
 
         req = urllib.request.Request(
             url,
@@ -275,7 +270,8 @@ class GeminiProvider(BaseProvider):
                 data = json.loads(resp.read().decode("utf-8"))
                 return extract_turn(data["choices"][0]["message"])
         except urllib.error.HTTPError as e:
-            print("GEMINI HTTP ERROR BODY:", e.read().decode("utf-8"))
+            error_body = e.read().decode("utf-8", "replace")
+            logger.debug("Gemini HTTP Error %s: %s", e.code, error_body)
             self._raise_cloud_error(e)
         except Exception as error:
             self._raise_cloud_error(error)

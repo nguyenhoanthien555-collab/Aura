@@ -46,3 +46,49 @@ def test_device_routes_auth_and_no_secret_leakage(monkeypatch):
     assert valid.status_code == 200
     assert valid.json() == {"invocations": []}
     assert FAKE_TOKEN not in missing.text + wrong.text + valid.text
+
+
+def test_device_poll_supports_long_polling(monkeypatch):
+    import threading
+    import time
+    from server.device_gateway import configure_device_gateway, DeviceGateway
+
+    monkeypatch.setattr(auth.settings, "auth_token", FAKE_TOKEN)
+    gw = DeviceGateway()
+    configure_device_gateway(gw)
+
+    app = FastAPI()
+    app.include_router(device_router)
+
+    with TestClient(app) as client:
+        # 1. Immediate poll with timeout_s=0
+        r = client.post(
+            "/api/device/poll",
+            json={"device_id": "test", "timeout_s": 0.0},
+            headers={"Authorization": f"Bearer {FAKE_TOKEN}"},
+        )
+        assert r.status_code == 200
+        assert r.json() == {"invocations": []}
+
+        # 2. Long poll woken by submit
+        received = []
+
+        def poll_worker():
+            resp = client.post(
+                "/api/device/poll",
+                json={"device_id": "test", "timeout_s": 2.0},
+                headers={"Authorization": f"Bearer {FAKE_TOKEN}"},
+            )
+            received.append(resp.json())
+
+        t = threading.Thread(target=poll_worker)
+        t.start()
+
+        time.sleep(0.05)
+        gw.submit(tool="android.tap", arguments={"text": "OK"}, timeout_s=0.5)
+        t.join(timeout=3.0)
+
+        assert len(received) == 1
+        invs = received[0].get("invocations", [])
+        assert len(invs) == 1
+        assert invs[0]["tool"] == "android.tap"

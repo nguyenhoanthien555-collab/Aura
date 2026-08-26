@@ -43,6 +43,7 @@ class PollRequest(BaseModel):
     """The device identifies itself so logs can distinguish handsets."""
 
     device_id: str = ""
+    timeout_s: float = Field(default=0.0, ge=0.0, le=30.0)
 
 
 class ResultReport(BaseModel):
@@ -267,12 +268,15 @@ async def poll(
     token: str = Depends(verify_token),
 ):
     """
-    The device asks for work. One invocation or none; never blocking,
-    so a poll every second costs the handset almost nothing.
+    The device asks for work. One invocation or none.
+
+    Supports long polling: when timeout_s > 0, the server waits up to
+    timeout_s on the gateway condition rather than answering empty
+    immediately, eliminating poll interval latency when a tool is queued.
     """
 
     gateway = get_device_gateway()
-    pending = gateway.poll()
+    pending = await run_in_threadpool(gateway.poll, request.timeout_s)
 
     if pending is None:
         return {"invocations": []}

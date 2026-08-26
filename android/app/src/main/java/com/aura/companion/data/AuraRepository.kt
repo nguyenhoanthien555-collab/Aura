@@ -138,8 +138,9 @@ class AuraRepository(
     /** The device gateway's queued invocations, if any. */
     suspend fun pollDeviceInvocations(
         deviceId: String,
+        timeoutS: Double = 0.0,
     ): AuraResult<DevicePollResponseDto> =
-        call { it.pollDeviceInvocations(DevicePollRequestDto(deviceId)) }
+        call { it.pollDeviceInvocations(DevicePollRequestDto(deviceId, timeoutS)) }
 
     /** Structured reports for invocations this device executed. */
     suspend fun submitDeviceResults(

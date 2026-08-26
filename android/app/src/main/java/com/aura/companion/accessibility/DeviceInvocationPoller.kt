@@ -68,8 +68,10 @@ class DeviceInvocationPoller(
                 continue
             }
 
+            val timeoutS = if (idlePolls >= IDLE_THRESHOLD) IDLE_POLL_TIMEOUT_S else ACTIVE_POLL_TIMEOUT_S
+
             val invocations = when (
-                val result = repository.pollDeviceInvocations(deviceId())
+                val result = repository.pollDeviceInvocations(deviceId(), timeoutS = timeoutS)
             ) {
                 is AuraResult.Ok -> result.value.invocations
                 is AuraResult.Failed -> {
@@ -84,10 +86,9 @@ class DeviceInvocationPoller(
 
             if (invocations.isEmpty()) {
                 idlePolls++
-                delay(
-                    if (idlePolls >= IDLE_THRESHOLD) IDLE_DELAY_MS
-                    else ACTIVE_DELAY_MS
-                )
+                // Server-side long polling already held the connection up to timeoutS.
+                // Minimal pause between consecutive long-poll cycles to yield.
+                delay(if (idlePolls >= IDLE_THRESHOLD) 200L else 20L)
                 continue
             }
 
@@ -144,7 +145,7 @@ class DeviceInvocationPoller(
                 postcondition = report.postcondition,
                 observationId = report.observationId,
                 observation = report.observation?.let {
-                    JSON.encodeToJsonElement(it).jsonObject
+                    PROTOCOL_JSON.encodeToJsonElement(it).jsonObject
                 },
             ).also { completedReports[invocation.invocationId] = it }
         }
@@ -182,21 +183,21 @@ class DeviceInvocationPoller(
     private companion object {
         const val TAG = "AuraDevicePoller"
 
-        /** Quick while a run is in flight - a caller is blocked on it. */
-        const val ACTIVE_DELAY_MS = 400L
+        /** Long-poll server wait budgets. */
+        const val ACTIVE_POLL_TIMEOUT_S = 10.0
+        const val IDLE_POLL_TIMEOUT_S = 20.0
 
         /** Empty polls before easing off. */
-        const val IDLE_THRESHOLD = 30
+        const val IDLE_THRESHOLD = 5
 
-        const val IDLE_DELAY_MS = 2_000L
         const val BACKOFF_DELAY_MS = 5_000L
         const val UNCONFIGURED_DELAY_MS = 10_000L
         const val MAX_CACHED_REPORTS = 100
-
-        val JSON: Json = Json { encodeDefaults = true }
     }
 }
 
+internal val PROTOCOL_JSON: Json = Json { encodeDefaults = true }
+
 /** The observation payload as the wire object `/results` accepts. */
 internal fun ObservationPayload.toJsonObject(): JsonObject =
-    Json { encodeDefaults = true }.encodeToJsonElement(this).jsonObject
+    PROTOCOL_JSON.encodeToJsonElement(this).jsonObject
