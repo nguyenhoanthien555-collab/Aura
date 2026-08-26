@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
@@ -144,7 +145,7 @@ fun Modifier.auraGlassBlur(
     return this
         .then(
             if (isBlurSupported) {
-                Modifier.androidx.compose.ui.graphics.graphicsLayer {
+                Modifier.graphicsLayer {
                     // Note: RenderEffect on graphicsLayer blurs the *content* of the modifier, 
                     // not what is strictly behind it. For true behind-blur in Compose without libraries,
                     // we accept this limitation or use Haze/Cloudy. 
