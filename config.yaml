@@ -4,7 +4,7 @@ app:
 
 llm:
   provider: gemini
-  model: gemini-3.6-flash
+  model: gemini-3.5-flash-lite
 
   # The fallback chain, in order. This key is authoritative. The singular
   # `fallback_provider` is its superseded form and is read only when this

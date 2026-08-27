@@ -249,14 +249,14 @@ class LaunchApp(_Mutation):
     name = "android.launch_app"
     capability = "android.app_launch"
     description = (
-        "Launch an app by package name. Returns while the app settles; "
-        "follow with android.wait_for('foreground=<package>')."
+        "Launch an app by Android package name (e.g. 'com.aura.companion' for AURA, "
+        "'com.google.android.youtube' for YouTube, 'com.android.chrome' for Chrome). "
+        "Returns while the app settles; follow with android.wait_for('foreground=<package>')."
     )
     parameters = (
         Parameter(
             name="package",
-            description="Android package name, e.g. "
-                        "com.google.android.youtube.",
+            description="Android package name (e.g. 'com.aura.companion' for AURA, 'com.google.android.youtube' for YouTube).",
         ),
     )
 

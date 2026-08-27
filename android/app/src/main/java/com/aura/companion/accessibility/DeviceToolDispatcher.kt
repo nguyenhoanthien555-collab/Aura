@@ -750,10 +750,20 @@ fun ToolCallDirective.toAgentAction(): AgentAction? {
         }
         "android.back" -> AgentAction(action = "back")
         "android.home" -> AgentAction(action = "home")
-        "android.launch_app" -> AgentAction(
-            action = "open_app",
-            packageName = args.stringArg("package"),
-        )
+        "android.launch_app" -> {
+            val rawPkg = args.stringArg("package") ?: args.stringArg("app")
+            val resolvedPkg = when (rawPkg?.trim()?.lowercase()) {
+                "aura", "com.aura", "aura companion" -> "com.aura.companion"
+                "youtube" -> "com.google.android.youtube"
+                "chrome" -> "com.android.chrome"
+                "settings" -> "com.android.settings"
+                else -> rawPkg
+            }
+            AgentAction(
+                action = "open_app",
+                packageName = resolvedPkg,
+            )
+        }
         else -> null
     }
 }

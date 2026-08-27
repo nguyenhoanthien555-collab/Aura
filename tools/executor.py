@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tool executor.
 
 The only place in Aura where a tool actually runs, which makes it the

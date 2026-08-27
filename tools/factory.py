@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tool construction.
 
 Builds a registry and an executor from the `tools:` config section.
@@ -302,6 +302,17 @@ def _pc_tools() -> list[ToolProtocol]:
             "move_mouse, click_mouse, type_text and press_keys not "
             "registered: input synthesis is unavailable on this platform"
         )
+
+    # Android tools attached via the shared device registry
+    try:
+        from server.routes.agent import get_device_registry
+        device_reg = get_device_registry()
+        existing_names = {getattr(t, "name", "") for t in tools}
+        for tool in device_reg.all():
+            if tool.name not in existing_names:
+                tools.append(tool)
+    except Exception as error:
+        logger.debug("Android tools not attached to builtin tools: %s", error)
 
     return tools
 
