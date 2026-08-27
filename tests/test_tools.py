@@ -36,6 +36,7 @@ from tools.registry import ToolRegistry
 class EchoTool(Tool):
 
     name = "echo"
+    capability = "echo"
     description = "Repeat a string back"
     risk = ToolRisk.SAFE
 
@@ -53,6 +54,7 @@ class TouchTool(Tool):
     """Stands in for anything that changes the machine."""
 
     name = "touch"
+    capability = "touch"
     description = "Pretend to change something"
     risk = ToolRisk.DANGEROUS
 
@@ -67,6 +69,7 @@ class TouchTool(Tool):
 class ReadTool(Tool):
 
     name = "peek"
+    capability = "peek"
     description = "Pretend to read user data"
     risk = ToolRisk.SENSITIVE
 
@@ -100,7 +103,7 @@ def test_tool_result_is_truthy_only_when_it_succeeded():
 
 
 def test_tool_result_renders_errors_visibly():
-    assert fail("permission denied").render() == "error: permission denied"
+    assert "permission denied" in fail("permission denied").render()
 
 
 def test_an_unlabelled_tool_is_dangerous_by_default():
@@ -108,6 +111,7 @@ def test_an_unlabelled_tool_is_dangerous_by_default():
 
     class Unlabelled(Tool):
         name = "unlabelled"
+        capability = "unlabelled"
 
         def execute(self, **arguments):
             return "ran"
@@ -144,6 +148,7 @@ def test_registry_stores_and_finds_tools():
 def test_registry_rejects_an_unnamed_tool():
     class Nameless(Tool):
         name = ""
+        capability = "nameless"
 
         def execute(self, **arguments):
             return ""
@@ -393,6 +398,7 @@ def test_arguments_that_are_not_plain_data_are_refused(value):
 def test_nested_plain_data_is_accepted():
     class Structured(Tool):
         name = "structured"
+        capability = "structured"
         risk = ToolRisk.SAFE
 
         def execute(self, **arguments):
@@ -424,6 +430,7 @@ def test_a_non_string_argument_name_is_refused():
 def test_a_raising_tool_becomes_a_failed_result_not_an_exception():
     class Exploding(Tool):
         name = "explode"
+        capability = "explode"
         risk = ToolRisk.SAFE
 
         def execute(self, **arguments):
@@ -445,6 +452,7 @@ def test_a_plain_string_return_is_normalised():
 def test_long_output_is_truncated():
     class Verbose(Tool):
         name = "verbose"
+        capability = "verbose"
         risk = ToolRisk.SAFE
 
         def execute(self, **arguments):

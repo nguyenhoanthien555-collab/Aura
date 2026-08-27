@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tool construction.
 
 Builds a registry and an executor from the `tools:` config section.
@@ -33,6 +33,7 @@ def build_registry(
     """
 
     config = config or {}
+    register_core_capabilities(config)
 
     registry = ToolRegistry()
 
@@ -390,6 +391,8 @@ def _warn_about_policy(executor: ToolExecutor) -> None:
 
 
 
+from core.capabilities.factory import register_core_capabilities
+
 def build_tools(
     config: dict | None = None,
     events=None,
@@ -405,6 +408,7 @@ def build_tools(
     """
 
     config = config or {}
+    register_core_capabilities(config)
 
     executor = ToolExecutor(
         registry=build_registry(config, memory, vision),
@@ -424,3 +428,4 @@ def build_tools(
     _warn_about_policy(executor)
 
     return executor
+

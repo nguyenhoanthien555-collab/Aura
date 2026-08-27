@@ -52,6 +52,7 @@ class StructuralTool:
     """
 
     name = "structural"
+    capability = "structural"
     risk = ToolRisk.SAFE
 
     def __init__(self):
@@ -66,6 +67,7 @@ class EchoingTool(Tool):
     """The ordinary path: inherits the base class, declares parameters."""
 
     name = "echo"
+    capability = "echo"
     description = "Repeat a string back"
     risk = ToolRisk.SAFE
 
@@ -85,6 +87,7 @@ class HangingTool(Tool):
     """
 
     name = "hang"
+    capability = "hang"
     description = "Never returns on its own"
     risk = ToolRisk.SAFE
 
@@ -102,6 +105,7 @@ class ThreadRecordingTool(Tool):
     """Records which thread it ran on."""
 
     name = "which_thread"
+    capability = "which_thread"
     description = "Reports its own thread"
     risk = ToolRisk.SAFE
 
@@ -303,6 +307,7 @@ def test_a_tool_missing_its_own_arguments_fails_rather_than_crashing():
 
     class Strict:
         name = "strict"
+        capability = "strict"
         risk = ToolRisk.SAFE
 
         def execute(self, required):
@@ -318,6 +323,7 @@ def test_a_tool_whose_parameter_list_raises_does_not_break_the_call():
 
     class Moody(Tool):
         name = "moody"
+        capability = "moody"
         risk = ToolRisk.SAFE
 
         def required_parameters(self):
@@ -541,6 +547,7 @@ def test_a_tool_can_raise_its_own_limit_above_the_policy():
 
     class Deliberate(Tool):
         name = "deliberate"
+        capability = "deliberate"
         risk = ToolRisk.SAFE
         timeout = 10.0
 
@@ -579,6 +586,7 @@ def test_an_exception_still_becomes_a_failed_result_across_the_thread():
 
     class Exploding(Tool):
         name = "explode"
+        capability = "explode"
         risk = ToolRisk.SAFE
 
         def execute(self, **arguments):
@@ -595,6 +603,7 @@ def test_a_tool_result_survives_the_thread_unchanged():
 
     class Structured(Tool):
         name = "structured"
+        capability = "structured"
         risk = ToolRisk.SAFE
 
         def execute(self, **arguments):
@@ -660,6 +669,7 @@ class VerifyingTool(Tool):
     """
 
     name = "verifying"
+    capability = "verifying"
     description = "Claims success; its postcondition is configurable"
     risk = ToolRisk.SAFE
 
@@ -679,6 +689,7 @@ class FailingThenVerifyingTool(Tool):
     """execute() fails; verify() would pass if it were ever asked."""
 
     name = "fails_first"
+    capability = "fails_first"
     description = "Fails in execute; records whether verify was consulted"
     risk = ToolRisk.SAFE
 
@@ -697,6 +708,7 @@ class RaisingVerifyTool(Tool):
     """execute() succeeds; verify() cannot complete."""
 
     name = "verify_raises"
+    capability = "verify_raises"
     description = "Succeeds, then its verify blows up"
     risk = ToolRisk.SAFE
 

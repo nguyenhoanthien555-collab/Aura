@@ -61,6 +61,7 @@ class OpenApplicationTool(Tool):
     name = "open_application"
     description = "Launch one of the applications the user has allowed"
     risk = ToolRisk.DANGEROUS
+    capability = 'desktop.applications'
 
     parameters = (
         Parameter(

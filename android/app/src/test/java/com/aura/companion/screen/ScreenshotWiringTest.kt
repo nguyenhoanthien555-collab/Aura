@@ -2,7 +2,6 @@ package com.aura.companion.screen
 
 import com.aura.companion.accessibility.AccessibilitySnapshot
 import com.aura.companion.accessibility.AppInfo
-import com.aura.companion.accessibility.AuraAccessibilityService
 import com.aura.companion.accessibility.DeviceState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
@@ -38,16 +37,24 @@ class ScreenshotWiringTest {
     }
 
     @Test
-    fun `the agent service holds a screenshot uploader`() {
-        assertHasUploader(AuraAccessibilityService::class.java)
+    fun `the active device tool catalog exposes screenshot capture`() {
+        // The legacy agent loop used to own a ScreenshotUploader field. It is
+        // intentionally disabled now: AgentRunDriver delegates device tools
+        // to AccessibilityToolDispatcher, where screenshot capture is a
+        // concrete non-mutating catalog entry and is gated at dispatch time.
+        val screenshot =
+            com.aura.companion.accessibility.DeviceToolCatalog.TOOLS[
+                "android.screenshot"
+            ]
+
+        assertTrue("active device catalog has no screenshot tool", screenshot != null)
+        assertEquals(false, screenshot?.mutating)
     }
 
     /**
-     * Both services, and only these two.
-     *
-     * A third capture path is the thing the brief rules out - Android has
-     * exactly one screenshot mechanism this app can use, and both services
-     * already have the accessibility grant it needs.
+     * The passive observation service owns uploads; the active device-tool
+     * path is checked below through its catalog instead of the disabled
+     * legacy agent loop.
      */
     private fun assertHasUploader(service: Class<*>) {
 

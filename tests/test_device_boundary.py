@@ -228,7 +228,7 @@ def test_the_shipped_policy_grants_nothing_that_can_touch_the_machine():
         policy=ToolPolicy.from_config(tools_config),
     )
 
-    assert executor.available() == ["current_time"]
+    assert set(executor.available()) == {"current_time", "react_to_message"}
 
     for name in ("open_url", "open_application", "run_command", "click"):
         assert executor.check(name), f"{name} is runnable"

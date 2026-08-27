@@ -196,6 +196,16 @@ data class AgentRunSnapshotDto(
 data class DevicePollRequestDto(
     @SerialName("device_id") val deviceId: String = "",
     @SerialName("timeout_s") val timeoutS: Double = 0.0,
+    /** Runtime facts used by the server capability registry. */
+    val capabilities: Map<String, DeviceCapabilityStatusDto> = emptyMap(),
+)
+
+@Serializable
+data class DeviceCapabilityStatusDto(
+    val state: String = "UNKNOWN",
+    val healthy: Boolean = false,
+    val reason: String = "",
+    val permissions: Map<String, Boolean> = emptyMap(),
 )
 
 /** One queued invocation from `/api/device/poll`. */

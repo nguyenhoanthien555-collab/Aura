@@ -482,6 +482,7 @@ def _echo_plugin_file(directory: Path) -> None:
 
             class EchoTool:
                 name = "echo_tool"
+                capability = "echo"
                 description = "Returns its argument back."
                 risk = ToolRisk.SAFE
 

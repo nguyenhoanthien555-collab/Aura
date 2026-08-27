@@ -327,6 +327,7 @@ class SystemInformationTool(Tool):
     name = "system_information"
     description = "Describe the computer Aura is running on"
     risk = ToolRisk.SENSITIVE
+    capability = 'system.info'
 
     parameters: tuple[Parameter, ...] = ()
 
@@ -554,6 +555,7 @@ class ListProcessesTool(Tool):
     name = "list_processes"
     description = "List the programs currently running on this computer"
     risk = ToolRisk.SENSITIVE
+    capability = 'system.processes'
 
     parameters = (
         Parameter(

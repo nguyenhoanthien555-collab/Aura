@@ -3,6 +3,7 @@ package com.aura.companion.accessibility
 import android.graphics.BitmapFactory
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aura.companion.screen.AccessibilityScreenshotCapture
+import com.aura.companion.data.remote.DeviceCapabilityStatusDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -33,11 +34,50 @@ import kotlinx.serialization.json.put
  */
 class AccessibilityToolDispatcher(
     private val service: AuraAccessibilityService,
-) : DeviceToolExecutor {
+) : DeviceToolExecutor, DeviceCapabilityReporter {
+
+    override fun capabilityStatus(): Map<String, DeviceCapabilityStatusDto> {
+        val basePermissions = mapOf("android.accessibility" to true)
+        val statuses = listOf(
+            "android.foreground_app", "android.ui_tree", "android.ui_search",
+            "android.tap", "android.long_press", "android.swipe",
+            "android.text_input", "android.key_input", "android.back",
+            "android.home", "android.app_launch", "android.wait_for",
+            "android.verification",
+        ).associateWith {
+            DeviceCapabilityStatusDto(
+                state = "AVAILABLE",
+                healthy = true,
+                reason = "Aura accessibility service is connected",
+                permissions = basePermissions,
+            )
+        }.toMutableMap()
+
+        val captureSupported = AccessibilityScreenshotCapture(service).isSupported
+        val captureAllowed = service.screenshotToolAllowed()
+        statuses["android.screen_capture"] = DeviceCapabilityStatusDto(
+            state = when {
+                !captureSupported -> "UNAVAILABLE"
+                !captureAllowed -> "BLOCKED_PERMISSION"
+                else -> "AVAILABLE"
+            },
+            healthy = captureSupported,
+            reason = when {
+                !captureSupported -> "this Android version cannot take screenshots"
+                !captureAllowed -> "screen observation and screenshot upload are switched off in Aura"
+                else -> "accessibility screenshot capture is available"
+            },
+            permissions = basePermissions + ("android.screen_capture" to captureAllowed),
+        )
+        return statuses
+    }
 
     companion object {
         const val TOOL_NOT_FOUND = "TOOL_NOT_FOUND"
         const val INVALID_ARGUMENTS = "INVALID_ARGUMENTS"
+        const val BLOCKED_PERMISSION = "BLOCKED_PERMISSION"
+        const val CAPABILITY_UNHEALTHY = "CAPABILITY_UNHEALTHY"
+        const val CAPABILITY_UNKNOWN = "CAPABILITY_UNKNOWN"
         const val CAPABILITY_UNAVAILABLE = "CAPABILITY_UNAVAILABLE"
         const val EXECUTION_FAILED = "EXECUTION_FAILED"
         const val ROOT_UNAVAILABLE = "ACCESSIBILITY_ROOT_UNAVAILABLE"
@@ -45,6 +85,23 @@ class AccessibilityToolDispatcher(
         const val CAPTURE_UNAVAILABLE = "SCREEN_CAPTURE_UNAVAILABLE"
         const val BLOCKED = "BLOCKED_BY_SAFETY_GUARD"
         const val TIMEOUT = "TIMEOUT"
+
+        private val CAPABILITY_BY_TOOL = mapOf(
+            "android.get_foreground_app" to "android.foreground_app",
+            "android.get_ui_tree" to "android.ui_tree",
+            "android.find_node" to "android.ui_search",
+            "android.screenshot" to "android.screen_capture",
+            "android.tap" to "android.tap",
+            "android.long_press" to "android.long_press",
+            "android.swipe" to "android.swipe",
+            "android.type_text" to "android.text_input",
+            "android.press_key" to "android.key_input",
+            "android.back" to "android.back",
+            "android.home" to "android.home",
+            "android.launch_app" to "android.app_launch",
+            "android.wait_for" to "android.wait_for",
+            "android.verify" to "android.verification",
+        )
     }
 
     /**
@@ -59,8 +116,28 @@ class AccessibilityToolDispatcher(
      */
     override suspend fun execute(
         directive: ToolCallDirective,
-    ): ToolResultReport =
-        when (val validation = DeviceToolCatalog.validate(directive)) {
+    ): ToolResultReport {
+        val capabilityId = CAPABILITY_BY_TOOL[directive.tool]
+        if (capabilityId != null) {
+            val status = capabilityStatus()[capabilityId]
+            val state = status?.state ?: "UNKNOWN"
+            if (state != "AVAILABLE") {
+                val code = when (state) {
+                    "BLOCKED_PERMISSION" -> BLOCKED_PERMISSION
+                    "UNHEALTHY" -> CAPABILITY_UNHEALTHY
+                    "UNKNOWN" -> CAPABILITY_UNKNOWN
+                    else -> CAPABILITY_UNAVAILABLE
+                }
+                return failure(
+                    directive,
+                    code,
+                    status?.reason
+                        ?: "capability $capabilityId is not available",
+                )
+            }
+        }
+
+        return when (val validation = DeviceToolCatalog.validate(directive)) {
             is DeviceToolCatalog.Validation.UnknownTool ->
                 failure(directive, TOOL_NOT_FOUND,
                     "this device has no tool ${directive.tool}")
@@ -77,6 +154,7 @@ class AccessibilityToolDispatcher(
                     error.message ?: "${directive.tool} failed")
             }
         }
+    }
 
     // ------------------------------------------------------------------
     // Dispatch table
@@ -664,6 +742,10 @@ fun ToolCallDirective.toAgentAction(): AgentAction? {
         )
         "android.press_key" -> when (args.stringArg("key")?.lowercase()) {
             "enter", "search", "submit" -> AgentAction(action = "submit")
+            "backspace", "delete", "clear" -> AgentAction(
+                action = "clear_text",
+                nodeId = args.stringArg("node_id"),
+            )
             else -> null
         }
         "android.back" -> AgentAction(action = "back")

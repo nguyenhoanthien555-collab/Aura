@@ -1,4 +1,4 @@
-from tools.base import Tool
+﻿from tools.base import Tool
 from typing import Dict, Any
 
 class ReactToMessageTool(Tool):
@@ -6,7 +6,7 @@ class ReactToMessageTool(Tool):
     React to the user's latest message with an emoji.
     """
     name = "react_to_message"
-    description = "React to the user's most recent message using an emoji (e.g. ❤️, 👍, 😂). You MUST use this tool to react to the user's message when they ask you to, or when you feel it is appropriate. Do NOT simply output an emoji in your text response to fulfill a reaction request."
+    description = "React to the user's most recent message using an emoji (e.g. â¤ï¸, ðŸ‘, ðŸ˜‚). You MUST use this tool to react to the user's message when they ask you to, or when you feel it is appropriate. Do NOT simply output an emoji in your text response to fulfill a reaction request."
     parameters = {
         "type": "object",
         "properties": {
@@ -17,6 +17,8 @@ class ReactToMessageTool(Tool):
         },
         "required": ["emoji"]
     }
+
+    capability = 'chat.react'
 
     def execute(self, params: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         emoji = params.get("emoji")
@@ -32,3 +34,4 @@ class ReactToMessageTool(Tool):
             )
         
         return {"status": "success", "message": f"Reacted with {emoji}"}
+

@@ -57,6 +57,7 @@ class RememberTool(Tool):
     )
 
     risk = ToolRisk.SAFE
+    capability = 'memory.write'
 
     # Inline, not on the executor's worker thread, and this is required
     # rather than an optimisation.

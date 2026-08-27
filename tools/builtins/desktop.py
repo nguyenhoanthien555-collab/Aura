@@ -379,6 +379,7 @@ class ListWindowsTool(Tool):
     name = "list_windows"
     description = "List the windows currently open on this computer"
     risk = ToolRisk.SENSITIVE
+    capability = 'desktop.windows'
 
     parameters = (
         Parameter(
@@ -455,6 +456,7 @@ class FocusWindowTool(Tool):
     name = "focus_window"
     description = "Bring an open window to the front by part of its title"
     risk = ToolRisk.DANGEROUS
+    capability = 'desktop.windows'
 
     parameters = (
         Parameter(

@@ -1,4 +1,4 @@
-"""
+﻿"""
 A picture of the owner's screen, written where the owner allowed writing.
 
 Section 24's "screenshots", and the shape follows from three facts that
@@ -205,6 +205,8 @@ class ScreenshotTool(Tool):
                 f"monitor must be a number, got {monitor!r}"
             ) from None
 
+    capability = 'vision.capture'
+
     def execute(self, path: str, monitor=None, overwrite=False) -> str:
 
         target = self._target(path, overwrite)
@@ -288,3 +290,4 @@ class ScreenshotTool(Tool):
             )
 
         return ok(f"{target.name} reads back as a {width}x{height} PNG")
+

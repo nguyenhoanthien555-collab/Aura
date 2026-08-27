@@ -76,8 +76,9 @@ class DeviceGateway:
     both queues.
     """
 
-    def __init__(self, clock=time.time):
+    def __init__(self, clock=time.time, require_heartbeat: bool = False):
         self._clock = clock
+        self._require_heartbeat = require_heartbeat
         self._condition = threading.Condition(threading.Lock())
         self._pending: list[PendingInvocation] = []
         self._results: dict[str, dict] = {}
@@ -85,6 +86,7 @@ class DeviceGateway:
         self.submitted = 0
         self.completed = 0
         self.timed_out = 0
+        self._devices: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Caller side
@@ -178,6 +180,77 @@ class DeviceGateway:
     # Device side
     # ------------------------------------------------------------------
 
+    def heartbeat(self, device_id: str, capabilities: dict | None = None) -> None:
+        """Record runtime facts reported by a polling companion."""
+        key = str(device_id or "unknown")
+        with self._condition:
+            self._devices[key] = {
+                "last_seen": self._clock(),
+                "capabilities": dict(capabilities or {}),
+            }
+
+    def device_status(self, device_id: str = "", max_age_s: float = 35.0) -> dict:
+        """Return the freshest live companion status, or an explicit absence."""
+        with self._condition:
+            record = self._devices.get(device_id) if device_id else max(
+                self._devices.values(),
+                key=lambda item: item["last_seen"],
+                default=None,
+            )
+
+            if record is None:
+                if not self._require_heartbeat:
+                    return {
+                        "state": "AVAILABLE",
+                        "healthy": True,
+                        "reason": "unidentified in-process device test bridge",
+                        "permissions": {
+                            "android.accessibility": True,
+                            "android.screen_capture": True,
+                        },
+                        "capabilities": {},
+                    }
+                return {
+                    "state": "UNAVAILABLE",
+                    "healthy": False,
+                    "reason": "no Android companion poll heartbeat has been received",
+                    "permissions": {},
+                    "capabilities": {},
+                }
+
+            age = max(0.0, self._clock() - record["last_seen"])
+            if age > max_age_s:
+                return {
+                    "state": "UNAVAILABLE",
+                    "healthy": False,
+                    "reason": f"Android companion heartbeat is {age:.1f}s old",
+                    "permissions": {},
+                    "capabilities": {},
+                }
+
+            capabilities = record["capabilities"]
+            if self._require_heartbeat and not capabilities:
+                return {
+                    "state": "UNKNOWN",
+                    "healthy": False,
+                    "reason": "Android companion heartbeat contained no capability status",
+                    "permissions": {},
+                    "capabilities": {},
+                }
+
+            permissions = {}
+            for value in capabilities.values():
+                if isinstance(value, dict):
+                    permissions.update(value.get("permissions") or {})
+
+            return {
+                "state": "AVAILABLE",
+                "healthy": True,
+                "reason": f"Android companion heartbeat received {age:.1f}s ago",
+                "permissions": permissions,
+                "capabilities": capabilities,
+            }
+
     def poll(self, timeout_s: float = 0.0) -> PendingInvocation | None:
         """
         The next queued invocation, oldest first, or None.
@@ -239,7 +312,7 @@ def get_device_gateway() -> DeviceGateway:
 
     with _gateway_lock:
         if _gateway is None:
-            _gateway = DeviceGateway()
+            _gateway = DeviceGateway(require_heartbeat=True)
         return _gateway
 
 

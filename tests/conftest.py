@@ -1,3 +1,26 @@
+﻿import pytest
+from core.capabilities import registry, permissions
+from core.capabilities.models import Capability
+from core.capabilities.factory import register_core_capabilities
+
+@pytest.fixture(autouse=True, scope="function")
+def _auto_register_test_capabilities():
+    # Make sure core capabilities are registered
+    register_core_capabilities()
+
+    test_caps = [
+        "echo", "touch", "peek", "unlabelled", "strict", "moody", "hang",
+        "verbose", "which_thread", "structural", "explode", "structured",
+        "danger", "take_screenshot", "describe_screen", "dummy", "my_plugin_tool",
+        "verify_raises", "verifying", "deliberate", "fails_first", "secret",
+        "nameless"
+    ]
+    for c in test_caps:
+        registry.register(Capability(capability_id=c, name=c, description="test", category="test"))
+        permissions.grant(c)
+    
+    yield
+
 """
 Suite-wide safety net: the tests never touch `data/memory.db`.
 
@@ -140,3 +163,7 @@ def never_the_real_settings(tmp_path, monkeypatch):
             os.environ.pop(var, None)
         else:
             os.environ[var] = value
+
+
+
+

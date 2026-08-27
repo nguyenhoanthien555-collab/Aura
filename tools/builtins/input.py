@@ -767,6 +767,10 @@ class _InputTool(Tool):
     express, so that is where the effort went.
     """
 
+    # Mouse and keyboard synthesis share one explicitly registered
+    # capability. This prevents direct tool construction from falling back
+    # to a tool-name capability and skipping capability resolution.
+    capability = "desktop.input"
     risk = ToolRisk.DANGEROUS
 
     def __init__(

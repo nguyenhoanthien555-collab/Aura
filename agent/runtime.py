@@ -42,6 +42,9 @@ from brain.native_fc import ModelTurn, ToolCallRequest
 from core.ids import new_run_id, new_task_id, new_tool_call_id
 from core.logger import logger
 from core.observations import ObservationKind, ObservationStore
+from core.capabilities import resolve_capability
+from core.capabilities.discovery import SkillDiscovery
+from core.capabilities.models import CapabilityState
 from tools.schema import openai_tools_payload
 
 
@@ -256,6 +259,7 @@ class AgentRuntime:
 
         self._runs: dict[str, AgentRun] = {}
         self._lock = threading.Lock()
+        self.discovery = SkillDiscovery()
 
         if not deferred and executor is None:
             raise ValueError(
@@ -263,9 +267,7 @@ class AgentRuntime:
                 "deferred=True for device-driven execution"
             )
 
-        self._tools_payload = (
-            openai_tools_payload(registry.all()) if registry is not None else []
-        )
+        self._tools_payload = []
 
     # ------------------------------------------------------------------
     # Run lifecycle
@@ -411,8 +413,23 @@ class AgentRuntime:
 
         self._compact(run)
 
+        # Capability state can change while a deferred run is alive (for
+        # example, the phone reconnects or screen capture is switched on),
+        # so schemas are filtered at every round rather than frozen at boot.
+        executable = []
+        if self.registry is not None:
+            for tool in self.registry.all():
+                capability_id = getattr(tool, "capability", None)
+                if not capability_id:
+                    continue
+                if resolve_capability(capability_id) == CapabilityState.AVAILABLE:
+                    executable.append(tool)
+        self._tools_payload = openai_tools_payload(executable)
+
+        live_context = self._live_capability_context(run.goal)
+
         turn = self.llm.generate_with_tools(
-            self.system_prompt,
+            self.system_prompt + live_context,
             list(run.messages),
             self._tools_payload,
         )
@@ -423,6 +440,23 @@ class AgentRuntime:
             run.consecutive_failures = 0
 
         return turn
+
+    def _live_capability_context(self, intent: str) -> str:
+        """Provide the model runtime evidence without exposing blocked schemas."""
+        if self.registry is None:
+            return ""
+
+        ranked = self.discovery.discover(intent)
+        lines = [
+            "\nLIVE CAPABILITY EVIDENCE (authoritative for this turn):",
+            "Only capabilities in AVAILABLE state may be called.",
+        ]
+        for item in ranked[:8]:
+            reason = f"; {item['reason']}" if item.get("reason") else ""
+            lines.append(
+                f"- {item['capability_id']}: {item['state']}{reason}"
+            )
+        return "\n" + "\n".join(lines)
 
     def _take_tool_calls(self, run: AgentRun, turn) -> Directive:
 

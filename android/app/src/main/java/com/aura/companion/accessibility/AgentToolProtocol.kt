@@ -119,7 +119,7 @@ object DeviceToolCatalog {
         ToolSpec("android.long_press", emptySet(), setOf("node_id", "text"), true),
         ToolSpec("android.swipe", setOf("direction"), emptySet(), true),
         ToolSpec("android.type_text", setOf("text"), setOf("node_id"), true),
-        ToolSpec("android.press_key", setOf("key"), emptySet(), true),
+        ToolSpec("android.press_key", setOf("key"), setOf("node_id"), true),
         ToolSpec("android.back", emptySet(), emptySet(), true),
         ToolSpec("android.home", emptySet(), emptySet(), true),
         ToolSpec("android.launch_app", setOf("package"), emptySet(), true),

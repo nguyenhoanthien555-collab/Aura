@@ -9,6 +9,7 @@ import com.aura.companion.data.remote.AuraApi
 import com.aura.companion.data.remote.ChatRequestDto
 import com.aura.companion.data.remote.DevicePollRequestDto
 import com.aura.companion.data.remote.DevicePollResponseDto
+import com.aura.companion.data.remote.DeviceCapabilityStatusDto
 import com.aura.companion.data.remote.DeviceResultAckDto
 import com.aura.companion.data.remote.DeviceResultReportDto
 import com.aura.companion.data.remote.DeviceResultSubmissionDto
@@ -139,8 +140,9 @@ class AuraRepository(
     suspend fun pollDeviceInvocations(
         deviceId: String,
         timeoutS: Double = 0.0,
+        capabilities: Map<String, DeviceCapabilityStatusDto> = emptyMap(),
     ): AuraResult<DevicePollResponseDto> =
-        call { it.pollDeviceInvocations(DevicePollRequestDto(deviceId, timeoutS)) }
+        call { it.pollDeviceInvocations(DevicePollRequestDto(deviceId, timeoutS, capabilities)) }
 
     /** Structured reports for invocations this device executed. */
     suspend fun submitDeviceResults(

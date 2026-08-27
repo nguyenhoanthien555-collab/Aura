@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tool base types.
 
 A tool is a capability Aura can be granted: reading a file, opening an
@@ -59,6 +59,9 @@ class ToolResult:
     output: str = ""
     error: str = ""
     tool: str = ""
+    capability: str = "unknown"
+    authorization: str = "unknown"
+    execution: str = "completed"
     data: dict = field(default_factory=dict)
 
     def __bool__(self) -> bool:
@@ -66,19 +69,28 @@ class ToolResult:
 
     def render(self) -> str:
         """One line summary, for prompts and logs."""
-
+        
+        import json
+        structured = {
+            "success": self.ok,
+            "capability": self.capability,
+            "authorization": self.authorization,
+            "execution": self.execution,
+        }
         if self.ok:
-            return self.output
-
-        return f"error: {self.error}"
-
-
-def ok(output: str = "", tool: str = "") -> ToolResult:
-    return ToolResult(ok=True, output=output, tool=tool)
+            structured["result"] = self.output
+        else:
+            structured["reason"] = self.error
+            
+        return json.dumps(structured)
 
 
-def fail(error: str, tool: str = "") -> ToolResult:
-    return ToolResult(ok=False, error=error, tool=tool)
+def ok(output: str = "", tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "completed") -> ToolResult:
+    return ToolResult(ok=True, output=output, tool=tool, capability=capability, authorization=authorization, execution=execution)
+
+
+def fail(error: str, tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "not_attempted") -> ToolResult:
+    return ToolResult(ok=False, error=error, tool=tool, capability=capability, authorization=authorization, execution=execution)
 
 
 @dataclass(frozen=True)
@@ -190,6 +202,7 @@ class Tool(ABC):
     name: str = ""
     description: str = ""
     risk: ToolRisk = ToolRisk.DANGEROUS
+    capability: str = None
 
     # A tuple, not a list: this is a class attribute shared by every
     # instance, and an immutable default cannot be appended to by
@@ -240,3 +253,4 @@ class Tool(ABC):
 
     def __repr__(self) -> str:
         return f"<Tool {self.name} risk={self.risk.value}>"
+

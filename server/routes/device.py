@@ -29,6 +29,34 @@ from server.device_gateway import (
 
 router = APIRouter(prefix="/api/device", tags=["device"])
 
+_device_executor = None
+
+
+def get_device_executor():
+    """The only server-side executor allowed to submit Android work."""
+    global _device_executor
+    if _device_executor is None:
+        from tools.base import ToolRisk
+        from tools.executor import ToolExecutor, ToolPolicy
+        from server.routes.agent import get_device_registry
+
+        registry = get_device_registry()
+        _device_executor = ToolExecutor(
+            registry=registry,
+            policy=ToolPolicy(
+                enabled=True,
+                allowed=frozenset(registry.names()),
+                # An authenticated device invocation is the explicit
+                # approval for this narrow, non-shell Android tool set.
+                # Capability permission and runtime health still gate every
+                # call before the bridge is touched.
+                auto_approve=frozenset({
+                    ToolRisk.SAFE, ToolRisk.SENSITIVE, ToolRisk.DANGEROUS,
+                }),
+            ),
+        )
+    return _device_executor
+
 
 class InvokeRequest(BaseModel):
 
@@ -44,6 +72,7 @@ class PollRequest(BaseModel):
 
     device_id: str = ""
     timeout_s: float = Field(default=0.0, ge=0.0, le=30.0)
+    capabilities: dict = Field(default_factory=dict)
 
 
 class ResultReport(BaseModel):
@@ -53,7 +82,11 @@ class ResultReport(BaseModel):
     result: Optional[dict] = None
     error: Optional[dict] = None
     postcondition: Optional[dict] = None
-    observation_id: str = ""
+    # Device failures are allowed to have no observation.  The Android
+    # protocol deliberately leaves this null when validation fails before a
+    # screen read; rejecting that report would strand the invocation in the
+    # poll queue and cause an endless retry loop.
+    observation_id: Optional[str] = None
     observation: Optional[dict] = None
 
 
@@ -126,17 +159,10 @@ async def invoke(
             },
         })
 
-    invalid = _argument_error(tool, request.arguments)
-
-    if invalid is not None:
-        return JSONResponse(status_code=422, content={
-            **envelope, "ok": False,
-            "error": {"code": "INVALID_ARGUMENTS", "message": invalid},
-        })
-
     report = await run_in_threadpool(
         _execute_scoped,
-        tool,
+        get_device_executor(),
+        request.tool,
         dict(request.arguments),
         request.run_id,
         request.tool_call_id,
@@ -189,38 +215,9 @@ def _stale_run_reason(run_id: str) -> Optional[str]:
     return None
 
 
-def _argument_error(tool, arguments: dict) -> Optional[str]:
-    """
-    Why these arguments do not fit the tool's declaration, or None.
-
-    Checked here rather than left to `execute(**arguments)`: a missing
-    argument would otherwise surface as a TypeError from deep inside the
-    provider, and an unexpected one would be silently ignored - which
-    would let the caller believe something happened that did not.
-    """
-
-    declared = {
-        parameter.name for parameter in getattr(tool, "parameters", ())
-    }
-
-    missing = [
-        name for name in tool.required_parameters()
-        if name not in arguments
-    ]
-
-    if missing:
-        return f"{tool.name} requires {', '.join(sorted(missing))}"
-
-    foreign = [name for name in arguments if name not in declared]
-
-    if foreign:
-        return f"{tool.name} does not accept {', '.join(sorted(foreign))}"
-
-    return None
-
-
 def _execute_scoped(
-    tool,
+    executor,
+    tool_name: str,
     arguments: dict,
     run_id: str,
     tool_call_id: str,
@@ -239,7 +236,7 @@ def _execute_scoped(
     token = device_call_scope.set((run_id, tool_call_id, timeout_s))
 
     try:
-        result = tool.execute(**arguments)
+        result = executor.execute(tool_name, arguments)
     finally:
         device_call_scope.reset(token)
 
@@ -253,10 +250,16 @@ def _execute_scoped(
     if getattr(result, "ok", False):
         return {"ok": True, "result": {"output": getattr(result, "output", "")}}
 
+    error_code = "EXECUTION_FAILED"
+    if getattr(result, "capability", "") and getattr(result, "authorization", "") == "missing":
+        error_code = "BLOCKED_PERMISSION"
+    elif getattr(result, "execution", "") == "not_attempted":
+        error_code = "CAPABILITY_UNAVAILABLE"
+
     return {
         "ok": False,
         "error": {
-            "code": "EXECUTION_FAILED",
+            "code": error_code,
             "message": str(getattr(result, "error", "") or "tool failed"),
         },
     }
@@ -276,6 +279,7 @@ async def poll(
     """
 
     gateway = get_device_gateway()
+    gateway.heartbeat(request.device_id, request.capabilities)
     pending = await run_in_threadpool(gateway.poll, request.timeout_s)
 
     if pending is None:

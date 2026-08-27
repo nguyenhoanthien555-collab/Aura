@@ -1,4 +1,4 @@
-"""
+﻿"""
 Looking at the screen on request.
 
 Vision has two shapes in Aura and this module is the second one.
@@ -100,6 +100,7 @@ class DescribeScreenTool(Tool):
     # instance, and the approval gate reads it again per call, so the
     # per-instance value is the one that decides anything.
     risk = ToolRisk.SENSITIVE
+    capability = 'vision.describe'
 
     parameters: tuple[Parameter, ...] = ()
 
@@ -120,6 +121,10 @@ class DescribeScreenTool(Tool):
     # ------------------------------------------------------------------
     # Execute
     # ------------------------------------------------------------------
+
+    capability = 'vision.describe'
+
+    capability = 'vision.describe'
 
     def execute(self) -> str:
         """
@@ -218,3 +223,4 @@ class DescribeScreenTool(Tool):
             f"observed {age:.1f}s ago and still held: {held.render()}",
             tool=self.name,
         )
+

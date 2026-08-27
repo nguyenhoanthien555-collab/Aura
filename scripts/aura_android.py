@@ -43,6 +43,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tools.providers.android_bridge import LoopbackDeviceBridge
 from tools.providers.android_provider import AndroidProvider
+from tools.base import ToolRisk
+from tools.executor import ToolExecutor, ToolPolicy
 from tools.registry import ToolRegistry
 
 
@@ -144,6 +146,81 @@ def build_bridge(name: str):
                         f"{type(error).__name__}: {error}",
                     )
 
+            def status(self) -> dict:
+                """Mirror the server's live capability inventory.
+
+                The HTTP harness still uses the local ToolExecutor gate, so
+                its gate must be grounded in the same runtime facts as the
+                server route.  This is a read-only inventory request; it
+                never fabricates device availability when the server has no
+                companion heartbeat.
+                """
+
+                import urllib.error
+                import urllib.request
+
+                request = urllib.request.Request(
+                    f"{self.base_url}/api/capabilities",
+                    headers=self._headers(),
+                    method="GET",
+                )
+
+                try:
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        payload = json.loads(response.read().decode("utf-8"))
+                except Exception as error:
+                    return {
+                        "state": "UNKNOWN",
+                        "healthy": False,
+                        "reason": f"capability inventory unavailable: {type(error).__name__}",
+                        "permissions": {},
+                    }
+
+                capabilities = {}
+                permissions = {}
+                for capability_id, value in payload.items():
+                    if not isinstance(value, dict):
+                        continue
+                    capabilities[capability_id] = {
+                        "state": value.get("state", "UNKNOWN"),
+                        "healthy": value.get("health") == "healthy",
+                        "reason": value.get("reason", ""),
+                    }
+                    for permission in value.get("required_permissions", []):
+                        permissions[permission] = (
+                            value.get("authorization") == "granted"
+                        )
+
+                states = {
+                    str(value.get("state", "UNKNOWN"))
+                    for value in capabilities.values()
+                }
+                if "AVAILABLE" in states:
+                    state = "AVAILABLE"
+                elif "UNAVAILABLE" in states:
+                    state = "UNAVAILABLE"
+                elif "BLOCKED_PERMISSION" in states:
+                    state = "BLOCKED_PERMISSION"
+                else:
+                    state = "UNKNOWN"
+
+                return {
+                    "state": state,
+                    "healthy": any(
+                        bool(value.get("healthy"))
+                        for value in capabilities.values()
+                    ),
+                    "reason": "server capability inventory",
+                    "permissions": permissions,
+                    "capabilities": capabilities,
+                }
+
+            def _headers(self) -> dict:
+                headers = {"Content-Type": "application/json"}
+                if self.token:
+                    headers["Authorization"] = f"Bearer {self.token}"
+                return headers
+
             @staticmethod
             def _body_of(error):
                 """The JSON body of an error response, or None."""
@@ -228,6 +305,21 @@ def build_registry(bridge) -> ToolRegistry:
     return registry
 
 
+def build_executor(bridge) -> ToolExecutor:
+    """Build the same executor gate used by the server device route."""
+    registry = build_registry(bridge)
+    return ToolExecutor(
+        registry=registry,
+        policy=ToolPolicy(
+            enabled=True,
+            allowed=frozenset(registry.names()),
+            auto_approve=frozenset({
+                ToolRisk.SAFE, ToolRisk.SENSITIVE, ToolRisk.DANGEROUS,
+            }),
+        ),
+    )
+
+
 # ----------------------------------------------------------------------
 # Command surface - CLI verbs map onto registry tools, never around them
 # ----------------------------------------------------------------------
@@ -264,7 +356,7 @@ def resolve(group, verb):
     return COMMANDS.get((group, verb))
 
 
-def invoke(registry, tool_name, arguments, as_json: bool,
+def invoke(executor, tool_name, arguments, as_json: bool,
            dry_run: bool) -> int:
     """
     One invocation, reported either for humans or for machines.
@@ -274,7 +366,7 @@ def invoke(registry, tool_name, arguments, as_json: bool,
     exactly the property the agent's own envelopes have.
     """
 
-    tool = registry.get(tool_name)
+    tool = executor.registry.get(tool_name)
 
     if tool is None:
         report = {"ok": False, "tool": tool_name,
@@ -289,7 +381,7 @@ def invoke(registry, tool_name, arguments, as_json: bool,
               as_json)
         return 0
 
-    result = tool.execute(**arguments)
+    result = executor.execute(tool_name, arguments)
     report = dict(result.data) if result.data else {
         "ok": bool(result.ok), "tool": tool_name,
     }
@@ -352,7 +444,8 @@ def repl(bridge, as_json: bool) -> int:
     workflow step by step and watch state change between steps.
     """
 
-    registry = build_registry(bridge)
+    executor = build_executor(bridge)
+    registry = executor.registry
 
     print("aura-android REPL - try: current | find Search | tap Search "
           "| type Minecraft | verify text_visible=Minecraft | quit")
@@ -404,7 +497,7 @@ def repl(bridge, as_json: bool) -> int:
 
         # A failed step is information in a session, not a reason to
         # evict the user from it.
-        invoke(registry, entry[0], entry[1], as_json, dry_run=False)
+        invoke(executor, entry[0], entry[1], as_json, dry_run=False)
 
 
 # ----------------------------------------------------------------------
@@ -449,7 +542,7 @@ def main(argv=None) -> int:
         return repl(build_bridge(args.bridge), args.json)
 
     bridge = build_bridge(args.bridge)
-    registry = build_registry(bridge)
+    executor = build_executor(bridge)
 
     if args.demo and hasattr(bridge, "install_screen"):
         bridge.install_screen("com.android.launcher", {
@@ -483,7 +576,7 @@ def main(argv=None) -> int:
         first_key = next(iter(argument_names.values()))
         arguments[first_key] = args.value
 
-    return invoke(registry, tool_name, arguments, args.json, args.dry_run)
+    return invoke(executor, tool_name, arguments, args.json, args.dry_run)
 
 
 if __name__ == "__main__":

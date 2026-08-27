@@ -92,6 +92,8 @@ class ToolPolicy:
         )
 
 
+from core.capabilities import resolve_capability, CapabilityState, registry as capability_registry
+
 class ToolExecutor:
 
     def __init__(
@@ -123,28 +125,47 @@ class ToolExecutor:
             name
             for name in self.registry.names()
             if name in self.policy.allowed
+            and getattr(self.registry.get(name), "capability", None)
+            and resolve_capability(
+                getattr(self.registry.get(name), "capability", None)
+            ) == CapabilityState.AVAILABLE
         ]
 
     def catalogue(self) -> str:
         """
         The available tools, described, for a prompt.
 
-        `available()` and not the whole registry: a model offered a tool
-        it is not permitted to run will request it, be denied, and have
-        spent a turn learning something the policy already knew.
-
-        The text comes from `describe_tool`, which is what the registry
-        and the CLI already use, so a tool is described in exactly one
-        place no matter who is asking.
+        Modified: Now strictly grounds the LLM by explicitly noting if a tool's underlying 
+        capability is currently BLOCKED or UNHEALTHY, so the LLM will not hallucinate 
+        that it can use it, but will instead see exactly WHY it cannot be used.
         """
 
-        described = [
-            describe_tool(tool)
-            for tool in (self.registry.get(name) for name in self.available())
-            if tool is not None
-        ]
+        if not self.policy.enabled:
+            return ""
 
-        return "\n".join(part for part in described if part)
+        lines = []
+        for name in self.registry.names():
+            if name not in self.policy.allowed:
+                continue
+
+            tool = self.registry.get(name)
+            if tool is None:
+                continue
+
+            capability_id = getattr(tool, "capability", None)
+            if not capability_id:
+                continue
+            cap_state = resolve_capability(capability_id)
+            
+            description = describe_tool(tool)
+            
+            # The model receives executable tools only. The live inventory
+            # endpoint/system context carries blocked reasons separately;
+            # exposing a blocked schema invites the model to call it.
+            if cap_state == CapabilityState.AVAILABLE:
+                lines.append(description)
+                
+        return "\n".join(lines)
 
     def check(self, name: str) -> str:
         """
@@ -219,19 +240,94 @@ class ToolExecutor:
             return self._finish(name, fail(reason, tool=name))
 
         tool = self.registry.get(name)
+        capability_id = getattr(tool, "capability", None)
+        if not capability_id:
+            detail = (
+                f"tool {name} has no registered capability; it is not "
+                "implemented or registered"
+            )
+            return self._finish(name, ToolResult(
+                ok=False,
+                error=detail,
+                tool=name,
+                capability="",
+                authorization="unknown",
+                execution="not_attempted",
+                data={
+                    "ok": False,
+                    "tool": name,
+                    "error": {"code": "NOT_IMPLEMENTED", "message": detail},
+                    "capability": "",
+                    "authorization": "unknown",
+                    "execution": "not_attempted",
+                },
+            ))
+
+        cap_state = resolve_capability(capability_id)
+        if cap_state != CapabilityState.AVAILABLE:
+            cap = capability_registry.get(capability_id)
+            reason = (cap.discovery_metadata.get("state_reason", "") if cap else "")
+            state_message = {
+                CapabilityState.BLOCKED_PERMISSION: "permission denied for capability",
+                CapabilityState.UNHEALTHY: "is currently unhealthy",
+                CapabilityState.UNAVAILABLE: "currently unavailable",
+                CapabilityState.UNKNOWN: "has unknown runtime state",
+                CapabilityState.NOT_IMPLEMENTED: "is not implemented or registered",
+            }.get(cap_state, f"is {cap_state.value.lower()}")
+            if cap_state == CapabilityState.BLOCKED_PERMISSION:
+                detail = f"permission denied for capability {capability_id}"
+            else:
+                detail = f"capability {capability_id} {state_message}"
+            if reason:
+                detail += f": {reason}"
+            error_code = {
+                CapabilityState.BLOCKED_PERMISSION: "BLOCKED_PERMISSION",
+                CapabilityState.UNAVAILABLE: "CAPABILITY_UNAVAILABLE",
+                CapabilityState.UNHEALTHY: "CAPABILITY_UNHEALTHY",
+                CapabilityState.UNKNOWN: "CAPABILITY_UNKNOWN",
+                CapabilityState.NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
+            }.get(cap_state, "CAPABILITY_UNAVAILABLE")
+            return self._finish(name, ToolResult(
+                ok=False,
+                error=detail,
+                tool=name,
+                capability=capability_id,
+                authorization=(
+                    "missing"
+                    if cap_state == CapabilityState.BLOCKED_PERMISSION
+                    else "unknown"
+                ),
+                execution="not_attempted",
+                data={
+                    "ok": False,
+                    "tool": name,
+                    "error": {"code": error_code, "message": detail},
+                    "capability": capability_id,
+                    "authorization": (
+                        "missing"
+                        if cap_state == CapabilityState.BLOCKED_PERMISSION
+                        else "unknown"
+                    ),
+                    "execution": "not_attempted",
+                },
+            ))
 
         problem = self._validate(tool, arguments)
 
         if problem:
-            return self._finish(name, fail(problem, tool=name))
+            return self._finish(name, fail(problem, tool=name, capability=capability_id))
 
         if not self._approved(tool, arguments):
             return self._finish(
                 name,
-                fail(f"permission denied for {name}", tool=name),
+                fail(f"permission denied for {name}", tool=name, capability=capability_id, authorization="missing", execution="not_attempted"),
             )
 
         result = self._run(tool, arguments)
+        
+        # Inject capability context into normal returns
+        if isinstance(result, ToolResult):
+            result = ToolResult(ok=result.ok, output=result.output, error=result.error, tool=result.tool, capability=capability_id, authorization="granted", execution="completed" if result.ok else "failed", data=result.data)
 
         return self._finish(name, self._verified(tool, arguments, result))
 
@@ -502,3 +598,5 @@ class ToolExecutor:
                 type(event).__name__,
                 error,
             )
+
+

@@ -254,6 +254,7 @@ class RunCommandTool(Tool):
     name = "run_command"
     description = "Run one of the commands the user has declared"
     risk = ToolRisk.DANGEROUS
+    capability = 'desktop.commands'
 
     parameters = (
         Parameter(

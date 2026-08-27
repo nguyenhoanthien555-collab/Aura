@@ -176,3 +176,8 @@ internal fun ObservationPayload.toDto(): ObservationDto = ObservationDto(
 interface DeviceToolExecutor {
     suspend fun execute(directive: ToolCallDirective): ToolResultReport
 }
+
+/** Optional runtime inventory reporter implemented by the real dispatcher. */
+interface DeviceCapabilityReporter {
+    fun capabilityStatus(): Map<String, com.aura.companion.data.remote.DeviceCapabilityStatusDto>
+}

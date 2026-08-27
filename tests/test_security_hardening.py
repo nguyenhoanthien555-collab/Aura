@@ -447,7 +447,7 @@ def test_no_physical_device_executor_is_registered_in_server_mode():
     )
 
     # Nothing that reaches a machine. `current_time` reads a clock.
-    assert executor.available() == ["current_time"]
+    assert set(executor.available()) == {"current_time", "react_to_message"}
 
 
 def test_readiness_never_claims_a_physical_device_capability():

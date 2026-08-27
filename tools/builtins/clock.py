@@ -16,6 +16,7 @@ class CurrentTimeTool(Tool):
     name = "current_time"
     description = "Get the current local date and time"
     risk = ToolRisk.SAFE
+    capability = 'system.time'
 
     parameters = (
         Parameter(

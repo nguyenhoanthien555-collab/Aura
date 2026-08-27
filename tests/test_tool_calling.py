@@ -164,6 +164,7 @@ class RaisingRunner(RecordingRunner):
 class EchoTool(Tool):
 
     name = "echo"
+    capability = "echo"
     description = "Echo a phrase back"
     risk = ToolRisk.SAFE
     parameters = (Parameter(name="text", description="what to echo"),)
@@ -768,6 +769,7 @@ def test_a_tool_the_policy_forbids_is_denied_through_the_real_executor():
 
     class Secret(Tool):
         name = "secret"
+        capability = "secret"
         description = "Not allowed"
         risk = ToolRisk.SAFE
 
@@ -809,6 +811,7 @@ def test_a_dangerous_tool_cannot_run_with_no_one_to_ask():
 
     class Danger(Tool):
         name = "danger"
+        capability = "danger"
         description = "Changes the machine"
         risk = ToolRisk.DANGEROUS
 
@@ -1046,7 +1049,7 @@ def test_the_shipped_config_grants_exactly_one_safe_tool():
 
     executor = build_tools(load_config().get("tools") or {})
 
-    assert executor.available() == ["current_time"]
+    assert set(executor.available()) == {"current_time", "react_to_message"}
 
 
 # ======================================================================

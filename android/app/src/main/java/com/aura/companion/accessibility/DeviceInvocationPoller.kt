@@ -71,7 +71,13 @@ class DeviceInvocationPoller(
             val timeoutS = if (idlePolls >= IDLE_THRESHOLD) IDLE_POLL_TIMEOUT_S else ACTIVE_POLL_TIMEOUT_S
 
             val invocations = when (
-                val result = repository.pollDeviceInvocations(deviceId(), timeoutS = timeoutS)
+                val result = repository.pollDeviceInvocations(
+                    deviceId(),
+                    timeoutS = timeoutS,
+                    capabilities = (dispatcher as? DeviceCapabilityReporter)
+                        ?.capabilityStatus()
+                        ?: emptyMap(),
+                )
             ) {
                 is AuraResult.Ok -> result.value.invocations
                 is AuraResult.Failed -> {

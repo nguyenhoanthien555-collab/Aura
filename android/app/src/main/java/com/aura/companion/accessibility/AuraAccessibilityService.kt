@@ -7,12 +7,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.aura.companion.AuraApplication
 import com.aura.companion.data.AuraRepository
-import com.aura.companion.data.AuraResult
 import com.aura.companion.data.remote.ObservationDto
 import com.aura.companion.data.settings.SettingsStore
-import com.aura.companion.screen.AccessibilityScreenshotCapture
-import com.aura.companion.screen.ScreenshotOutcome
-import com.aura.companion.screen.ScreenshotUploader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +28,6 @@ class AuraAccessibilityService : AccessibilityService() {
 
     private lateinit var settings: SettingsStore
     private lateinit var repository: AuraRepository
-    private lateinit var screenshots: ScreenshotUploader
     private val safetyGuard = SafetyGuard()
     private val executor by lazy { AuraActionExecutor(this) }
 
@@ -58,12 +53,6 @@ class AuraAccessibilityService : AccessibilityService() {
         val container = (application as AuraApplication).container
         settings = container.settings
         repository = container.repository
-        screenshots = ScreenshotUploader(
-            capture = AccessibilityScreenshotCapture(this),
-            repository = repository,
-            settings = settings,
-            cacheDir = cacheDir,
-        )
         instance.set(this)
 
         // One polling executor for the lifetime of this connected service.
@@ -229,7 +218,9 @@ class AuraAccessibilityService : AccessibilityService() {
      * guarantee lives in `runWithGuaranteedCompletion` so that a
      * cancelled or crashed run still clears the UI.
      */
-    private suspend fun runAgentSteps(request: String): String {
+    private suspend fun runAgentSteps(request: String): String =
+        "Legacy agent path is disabled; use AgentRunDriver."
+    /*
         var stepCount = 0
         val maxSteps = 10
         var currentRequest = request
@@ -493,6 +484,8 @@ class AuraAccessibilityService : AccessibilityService() {
         return finalMessage
     }
 
+
+    */
 
     /** Protocol entry point; preserves the existing SafetyGuard/recovery path. */
     internal suspend fun executeActionForProtocol(

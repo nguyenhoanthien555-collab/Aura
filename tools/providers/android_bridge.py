@@ -45,6 +45,10 @@ class DeviceBridge(Protocol):
         """Run one named tool; return a structured report."""
         ...
 
+    def status(self) -> dict:
+        """Return live availability, health, and permission facts."""
+        ...
+
 
 class BridgeError(Exception):
     """Raised when the bridge itself fails, as opposed to the tool."""
@@ -90,6 +94,17 @@ class DeclaredOnlyBridge:
             "this process only advertises them",
         )
 
+    def status(self) -> dict:
+        return {
+            "state": "AVAILABLE",
+            "healthy": True,
+            "reason": "declared-only test bridge",
+            "permissions": {
+                "android.accessibility": True,
+                "android.screen_capture": True,
+            },
+        }
+
 
 class LoopbackDeviceBridge:
     """
@@ -120,6 +135,17 @@ class LoopbackDeviceBridge:
         self.foreground_package = "com.aura.companion"
         self.nodes: dict[str, dict] = {}
         self.invocations: list[tuple[str, dict]] = []
+
+    def status(self) -> dict:
+        return {
+            "state": "AVAILABLE",
+            "healthy": True,
+            "reason": "loopback bridge is active",
+            "permissions": {
+                "android.accessibility": True,
+                "android.screen_capture": True,
+            },
+        }
 
     def install_screen(self, package: str, nodes: dict[str, dict]) -> None:
         """Replace the whole visible screen."""
@@ -425,6 +451,9 @@ class GatewayDeviceBridge:
         )
 
         return normalise_device_report(report, tool)
+
+    def status(self) -> dict:
+        return self.gateway.device_status()
 
 
 def normalise_device_report(report: dict, tool: str) -> dict:

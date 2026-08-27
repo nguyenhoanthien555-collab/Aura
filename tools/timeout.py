@@ -25,6 +25,7 @@ help it.
 """
 
 import threading
+from contextvars import copy_context
 
 from core.logger import logger
 
@@ -57,6 +58,8 @@ def call_with_timeout(call, timeout: float, name: str = "tool"):
     outcome: dict = {}
     finished = threading.Event()
 
+    context = copy_context()
+
     def run() -> None:
 
         try:
@@ -73,7 +76,8 @@ def call_with_timeout(call, timeout: float, name: str = "tool"):
             finished.set()
 
     worker = threading.Thread(
-        target=run,
+        target=context.run,
+        args=(run,),
         name=f"aura-tool-{name}",
         daemon=True,
     )

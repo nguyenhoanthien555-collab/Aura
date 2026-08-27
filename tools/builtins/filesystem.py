@@ -32,6 +32,7 @@ class ReadFileTool(Tool):
     name = "read_file"
     description = "Read a text file inside an allowed directory"
     risk = ToolRisk.SENSITIVE
+    capability = 'filesystem.read'
 
     parameters = (
         Parameter(name="path", description="File to read"),
@@ -66,6 +67,7 @@ class ListDirectoryTool(Tool):
     name = "list_directory"
     description = "List the contents of an allowed directory"
     risk = ToolRisk.SENSITIVE
+    capability = 'filesystem.read'
 
     parameters = (
         Parameter(name="path", description="Directory to list"),
@@ -144,6 +146,7 @@ class WriteFileTool(Tool):
     name = "write_file"
     description = "Create or replace a text file inside a writable directory"
     risk = ToolRisk.DANGEROUS
+    capability = 'filesystem.write'
 
     parameters = (
         Parameter(name="path", description="File to write"),
@@ -255,6 +258,7 @@ class AppendToFileTool(Tool):
     name = "append_to_file"
     description = "Add text to the end of a file inside a writable directory"
     risk = ToolRisk.DANGEROUS
+    capability = 'filesystem.write'
 
     parameters = (
         Parameter(name="path", description="File to append to"),
@@ -355,6 +359,7 @@ class CreateDirectoryTool(Tool):
     name = "create_directory"
     description = "Create a directory inside a writable directory"
     risk = ToolRisk.DANGEROUS
+    capability = 'filesystem.write'
 
     parameters = (
         Parameter(name="path", description="Directory to create"),
@@ -420,6 +425,7 @@ class DeleteFileTool(Tool):
     name = "delete_file"
     description = "Delete one file inside a writable directory"
     risk = ToolRisk.DANGEROUS
+    capability = 'filesystem.write'
 
     parameters = (
         Parameter(name="path", description="File to delete"),

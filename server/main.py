@@ -1,4 +1,4 @@
-"""
+﻿"""
 Aura API Server - FastAPI application.
 
 Main entry point for the server mode.
@@ -20,7 +20,7 @@ load_dotenv()
 
 from server.config import cors_policy, enforce_auth_policy, settings
 from server.runtime import init_runtime, is_initialized, shutdown_runtime
-from server.routes import health, chat, ws_chat, screen, notifications, settings as settings_routes
+from server.routes import capabilities, health, chat, ws_chat, screen, notifications, settings as settings_routes
 from server.routes import agent as agent_routes
 from server.routes import device as device_routes
 from core.logger import logger
@@ -76,6 +76,7 @@ app.add_middleware(CORSMiddleware, **cors_policy())
 
 # Routes
 app.include_router(health.router)
+app.include_router(capabilities.router)
 app.include_router(chat.router)
 app.include_router(ws_chat.router)
 app.include_router(screen.router)
