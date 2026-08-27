@@ -473,6 +473,7 @@ class ConversationManager:
             tools=self._catalogue() if offer_tools else None,
             tool_results=tool_results,
             temporal=turn.temporal,
+            capabilities=self._render_capabilities(),
         )
 
 
@@ -633,6 +634,18 @@ class ConversationManager:
         output = str(getattr(result, "output", "") or "").strip()
 
         return f"{name} ran successfully. It returned: {output or '(nothing)'}"
+
+
+    def _render_capabilities(self) -> str:
+        """
+        The live, authoritative capability inventory rendered for the prompt.
+        """
+        try:
+            from core.capabilities.introspection import get_introspection_service
+            return get_introspection_service().render_summary()
+        except Exception as error:
+            logger.debug("Could not render live capabilities for prompt: %s", error)
+            return ""
 
 
     def _catalogue(self) -> str:

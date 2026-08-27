@@ -53,6 +53,8 @@ REVISION = "===== REVISION ====="
 # brain/tool_calling.py and split_prompt() in brain/providers/base.py.
 TOOLS = "===== TOOLS ====="
 
+CAPABILITIES = "===== LIVE CAPABILITIES ====="
+
 TOOL_RESULTS = "===== TOOL RESULTS ====="
 
 VISION = "===== VISION ====="

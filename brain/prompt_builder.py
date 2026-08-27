@@ -34,6 +34,7 @@ from brain.prompt_sections import (
     IDENTITY,
     STYLE,
     TOOLS,
+    CAPABILITIES,
     TOOL_RESULTS,
 )
 
@@ -363,6 +364,25 @@ class PromptBuilder:
         ]
 
 
+    def _build_capabilities(self, capabilities: str | None = None):
+        """
+        Authoritative runtime capability inventory.
+
+        Provides the model with the live status of all system, desktop, vision,
+        filesystem, and Android capabilities, their availability, permissions,
+        and health states.
+        """
+        text = (capabilities or "").strip()
+
+        if not text:
+            return []
+
+        return [
+            CAPABILITIES,
+            text,
+        ]
+
+
     def _build_tool_results(self, tool_results: list[str] | None = None):
         """
         What running a tool actually produced.
@@ -605,6 +625,7 @@ class PromptBuilder:
         temporal: list[str] | None = None,
         persona: str | None = None,
         plan: list[str] | None = None,
+        capabilities: str | None = None,
     ):
         """
         Render the full prompt.
@@ -676,6 +697,11 @@ class PromptBuilder:
 
         prompt.extend(
             self._build_tools(tools)
+        )
+
+
+        prompt.extend(
+            self._build_capabilities(capabilities)
         )
 
 

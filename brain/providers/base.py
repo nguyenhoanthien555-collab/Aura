@@ -50,6 +50,8 @@ def split_prompt(prompt: str) -> tuple[str, str]:
         "===== AGENT RULES =====",
         "===== INTENT RULES =====",
         "===== TOOLS =====",
+        "===== LIVE CAPABILITIES =====",
+        "===== CAPABILITIES =====",
     }
 
     if parts[0].strip():
@@ -101,6 +103,8 @@ def split_prompt_to_messages(prompt: str):
         "===== AGENT RULES =====",
         "===== INTENT RULES =====",
         "===== TOOLS =====",
+        "===== LIVE CAPABILITIES =====",
+        "===== CAPABILITIES =====",
         "===== CONTEXT =====",
         "===== CURRENT TIME =====",
         "===== MEMORY =====",

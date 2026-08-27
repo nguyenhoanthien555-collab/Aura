@@ -36,6 +36,9 @@ class PermissionResolver:
             logger.warning("Permission check failed for %s: %s", permission, error)
             return False, f"permission check failed: {type(error).__name__}"
 
+        if isinstance(result, tuple) and len(result) >= 2:
+            return bool(result[0]), str(result[1])
+
         if isinstance(result, dict):
             return bool(result.get("granted", False)), str(result.get("reason", ""))
 
