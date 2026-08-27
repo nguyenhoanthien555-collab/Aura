@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tool executor.
 
 The only place in Aura where a tool actually runs, which makes it the
@@ -598,5 +598,6 @@ class ToolExecutor:
                 type(event).__name__,
                 error,
             )
+
 
 

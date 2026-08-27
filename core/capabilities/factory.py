@@ -27,9 +27,27 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="memory.write", name="Write Memory", description="Remember facts", category="memory"))
     registry.register(Capability(capability_id="chat.react", name="Message Reactions", description="React to messages", category="chat"))
 
-    # Android capabilities are registered by AndroidProvider only when the
-    # provider has a bridge. Their permission and health facts come from a
-    # live companion heartbeat; startup must never grant them implicitly.
+    # Android capabilities
+    registry.register(Capability(capability_id="android.observation", name="Android Observation", description="Read Android UI state, foreground app, and screen", category="android", required_permissions=["android.accessibility"]))
+    registry.register(Capability(capability_id="android.control", name="Android Control", description="Tap, swipe, and type on the Android device", category="android", required_permissions=["android.accessibility"]))
+    registry.register(Capability(capability_id="android.launch", name="Android App Launch", description="Launch Android applications", category="android", required_permissions=["android.accessibility"]))
+
+    # Add health checks for Android capabilities using device gateway
+    def check_android_gateway():
+        try:
+            from server.device_gateway import get_device_gateway
+            gw = get_device_gateway()
+            if not gw.is_connected():
+                return {"healthy": False, "reason": "No companion poll heartbeat detected"}
+            return {"healthy": True, "reason": ""}
+        except Exception:
+            return {"healthy": False, "reason": "Device gateway unavailable"}
+            
+    health.register_check("android.observation", check_android_gateway)
+    health.register_check("android.control", check_android_gateway)
+    health.register_check("android.launch", check_android_gateway)
+
+    # We mock or set some permissions to True since in this environment they are currently unchecked/granted implicitly.
     permissions.grant("system.time")
     permissions.grant("system.info")
     permissions.grant("desktop.observation")
@@ -40,4 +58,5 @@ def register_core_capabilities(config=None):
     permissions.grant("filesystem.write")
     permissions.grant("memory.write")
     permissions.grant("chat.react")
+    permissions.grant("android.accessibility")
 

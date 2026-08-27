@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+﻿from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -39,3 +39,5 @@ class Capability:
     side_effects: bool = False
     risk_level: str = "safe"
     discovery_metadata: Dict[str, Any] = field(default_factory=dict)
+
+
