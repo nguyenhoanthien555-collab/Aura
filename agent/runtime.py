@@ -33,6 +33,7 @@ task debugged over the CLI replays byte-for-byte against the live path.
 """
 
 import json
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -96,6 +97,11 @@ KEEP_VERBATIM_ROUNDS = 6
 # frame reference block), and payloads are what compaction exists for.
 COMPACTION_MIN_LENGTH = 600
 
+# Corrective nudges allowed before an unobserved answer is filed
+# as completed-unverified: nudging must be able to lose
+# gracefully rather than trap a run forever.
+MAX_UNOBSERVED_ANSWERS = 2
+
 
 @dataclass
 class AgentRun:
@@ -129,6 +135,12 @@ class AgentRun:
     unverified: list[tuple] = field(default_factory=list)
 
     created_at: float = field(default_factory=time.time)
+
+    # Question-shaped goals ("what app is open?") must be answered from a
+    # successful observation; these track whether one actually happened.
+    requires_observation: bool = False
+    observed_ok: int = 0
+    unobserved_rounds: int = 0
 
     def snapshot(self) -> dict:
         """Status for APIs and logs, without the transcript bulk."""
@@ -295,6 +307,7 @@ class AgentRuntime:
         )
 
         run.messages.append({"role": "user", "content": f"Goal: {goal}"})
+        run.requires_observation = self._requires_observation_goal(goal)
 
         with self._lock:
             self._runs[run.run_id] = run
@@ -456,23 +469,145 @@ class AgentRuntime:
             lines.append(
                 f"- {item['capability_id']}: {item['state']}{reason}"
             )
-        return "\n" + "\n".join(lines)
+        evidence = "\n" + "\n".join(lines)
+
+        if re.search(r"what can you|abilities|capabilit", intent.lower()):
+            try:
+                from core.capabilities.introspection import \
+                    get_introspection_service
+
+                inventory = get_introspection_service().render_summary()
+            except Exception as error:
+                logger.debug(
+                    "Capability inventory unavailable for context: %s", error
+                )
+                inventory = ""
+
+            if inventory:
+                evidence += (
+                    "\n\nFULL LIVE CAPABILITY INVENTORY (authoritative, "
+                    "changes with real device state):\n" + inventory
+                )
+
+        return evidence
+
+    # ------------------------------------------------------------------
+    # Grounding question intents in observations
+    # ------------------------------------------------------------------
+
+    def _is_observation_tool(self, tool_name: str) -> bool:
+        """Does this registered tool report current device state?"""
+
+        if self.registry is None:
+            return False
+
+        tool = self.registry.get(tool_name)
+        capability_id = getattr(tool, "capability", "") if tool else ""
+
+        return capability_id in SkillDiscovery.OBSERVATION_CAPABILITIES
+
+    def _hallucinated_call_report(
+        self, request: ToolCallRequest,
+    ) -> dict | None:
+        """
+        The deferred-mode pre-handout guard. None when the named tool is
+        declared by this registry; otherwise the structured refusal that
+        stands in for it locally, so invented tools stop at the runtime.
+        Health/permission truth is re-checked on the device by its own
+        just-in-time gate rather than from stale server state here.
+        """
+
+        if self.registry is not None \
+                and self.registry.get(request.name) is not None:
+            return None
+
+        return {
+            "ok": False,
+            "tool": request.name,
+            "error": {
+                "code": "UNKNOWN_TOOL",
+                "message": (
+                    f"requested tool {request.name} is not declared by "
+                    "this registry; refusing before any directive is "
+                    "handed out"
+                ),
+            },
+            "execution": "not_attempted",
+        }
+
+    @staticmethod
+    def _requires_observation_goal(goal: str) -> bool:
+        """
+        Questions about live device state need observations. Questions
+        about Aura itself are answered from the capability inventory,
+        and commands simply do what they say.
+        """
+
+        lowered = goal.lower()
+
+        if re.search(r"what can you|what do you|your capabilit|abilities", lowered):
+            return False
+
+        asked = SkillDiscovery.QUESTION_PATTERN.search(goal) is not None
+        tokens = set(lowered.replace("?", "").replace(".", "").split())
+        device_words = {
+            "phone", "android", "screen", "app", "apps", "button",
+            "message", "notification", "battery", "launcher", "field",
+        }
+
+        return asked and bool(device_words & tokens)
+
+    def _observation_gap_correction(self, run: AgentRun) -> str | None:
+        """
+        What to tell a run about to answer a device-state question with
+        no successful observation behind it - or None once some
+        observation really did land this run.
+        """
+
+        if not run.requires_observation or run.observed_ok > 0:
+            return None
+
+        available = [
+            item["capability_id"]
+            for item in self.discovery.discover(run.goal)
+            if item["state"] == CapabilityState.AVAILABLE.value
+        ]
+        hint = ", ".join(available[:4]) or             "no matching capability is AVAILABLE right now"
+
+        return (
+            "You are about to answer a question about live device "
+            "state, but this run has no successful observation yet. "
+            f"Call an available observation capability first ({hint}), "
+            "then answer strictly from its result. If none is "
+            "executable, say exactly what blocked you instead of "
+            "describing the device from memory."
+        )
 
     def _take_tool_calls(self, run: AgentRun, turn) -> Directive:
+        """
+        Assign ids, refuse what may not leave the runtime, then execute
+        or hand out the rest.
+
+        Deferred mode validates the model's selection before hand-out: a
+        call naming a tool this registry does not declare folds straight
+        back as UNKNOWN_TOOL with execution=not_attempted, so a
+        hallucinated name can never become a device directive. Inline
+        mode defers entirely to ToolExecutor, which stays the single
+        gate for anything that runs.
+        """
 
         assigned = []
-        raw_calls = []
+        raw_calls_by_id = {}
 
         for request in turn.tool_calls:
             call_id = new_tool_call_id()
             assigned.append((call_id, request))
-            
+
             if request.raw:
                 call_obj = request.raw.copy()
                 call_obj["id"] = f"{call_id}|{request.call_id}"
-                raw_calls.append(call_obj)
             else:
-                raw_calls.append({
+                call_obj = {
                     "id": f"{call_id}|{request.call_id}",
                     "type": "function",
                     "function": {
@@ -481,7 +616,8 @@ class AgentRuntime:
                             request.arguments, ensure_ascii=False
                         ),
                     },
-                })
+                }
+            raw_calls_by_id[call_id] = call_obj
 
         run.tool_call_count += len(assigned)
         # Deliberately NO reset of consecutive_failures here: it is what
@@ -489,25 +625,50 @@ class AgentRuntime:
         # envelope (see _absorb_envelopes) proves progress worth
         # resetting on.
 
-        if self.deferred:
-            run.messages.append({
-                "role": "assistant",
-                "content": turn.text or "",
-                "tool_calls": raw_calls,
-            })
-            return Directive(kind="tool_calls", tool_calls=tuple(assigned))
+        envelopes: list[dict] = []
+        executed = []
 
-        envelopes = [
-            self._execute_inline(call_id, request, run)
-            for call_id, request in assigned
-        ]
+        for call_id, request in assigned:
+            problem = (
+                self._hallucinated_call_report(request)
+                if self.deferred
+                else None
+            )
+
+            if problem is None:
+                executed.append((call_id, request))
+                continue
+
+            report = {**problem, "result": {}}
+            envelopes.append(
+                self._build_envelope(call_id, request, report, run=run)
+            )
+
+        wire_calls = [raw_calls_by_id[call_id] for call_id, _ in executed]
 
         run.messages.append({
             "role": "assistant",
             "content": turn.text or "",
-            "tool_calls": raw_calls,
+            "tool_calls": wire_calls,
         })
-        tool_call_id = raw_calls[0]["id"] if raw_calls else "call_0"
+
+        if self.deferred:
+            # Immediate refusals fold exactly like device reports so a
+            # deferred transcript mirrors an inline one call for call.
+            for envelope in envelopes:
+                self.fold_tool_reports(run, [envelope])
+            return Directive(
+                kind="tool_calls",
+                tool_calls=tuple(executed),
+                envelopes=tuple(envelopes),
+            )
+
+        envelopes.extend(
+            self._execute_inline(call_id, request, run)
+            for call_id, request in executed
+        )
+
+        tool_call_id = wire_calls[0]["id"] if wire_calls else "call_0"
         run.messages.append({
             "role": "tool",
             "tool_call_id": tool_call_id,
@@ -516,7 +677,7 @@ class AgentRuntime:
 
         self._absorb_envelopes(run, envelopes)
 
-        return Directive(kind="tool_calls", tool_calls=tuple(assigned),
+        return Directive(kind="tool_calls", tool_calls=tuple(executed),
                          envelopes=tuple(envelopes))
 
     def _execute_inline(
@@ -612,6 +773,9 @@ class AgentRuntime:
 
             run.consecutive_failures = 0
 
+            if self._is_observation_tool(envelope["tool"]):
+                run.observed_ok += 1
+
             risk = self._risk_of(envelope["tool"])
             postcondition = envelope.get("postcondition")
 
@@ -676,7 +840,23 @@ class AgentRuntime:
 
         text = turn.text.strip()
 
-        if run.unverified and run.verify_rounds < MAX_VERIFY_ROUNDS:
+        gap = self._observation_gap_correction(run)
+        if gap is not None:
+            remaining = MAX_UNOBSERVED_ANSWERS - run.unobserved_rounds
+            if remaining > 1:
+                run.unobserved_rounds += 1
+                run.messages.append({"role": "assistant", "content": text})
+                run.messages.append({"role": "user", "content": gap})
+                return Directive(kind="final", text="observation required")
+            # Out of corrections: accept the words but file them as
+            # unverified so nothing downstream reads fabrication as fact.
+            run.unverified.append((
+                "observation", "",
+                "question answered without any successful observation",
+                "",
+            ))
+
+        elif run.unverified and run.verify_rounds < MAX_VERIFY_ROUNDS:
             # The model does not get to declare success over an
             # unverified mutation. One bounded corrective round asks for
             # evidence; if it never arrives, completion is accepted but

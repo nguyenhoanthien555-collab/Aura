@@ -193,7 +193,10 @@ def _system_prompt() -> str:
         "fresh observation exists (the device sends one each step). "
         "After actions that change the screen, wait_for or verify the "
         "expected state before continuing. Finish only when the goal is "
-        "achieved AND verified."
+        "achieved AND verified. Answer questions about current device "
+        "state strictly from what your observations returned - never "
+        "from assumption - and if nothing observable supports you, say "
+        "exactly what blocked you."
     )
 
 
@@ -238,6 +241,132 @@ class AgentStepRequest(BaseModel):
 # ----------------------------------------------------------------------
 # Routes
 # ----------------------------------------------------------------------
+
+class IntentRequest(BaseModel):
+
+    session_id: str = ""
+    intent: str
+
+
+# ----------------------------------------------------------------------
+# Natural-language intents: discovery -> capability gates -> ToolExecutor
+# ----------------------------------------------------------------------
+
+_intent_runtime = None
+
+
+def get_intent_runtime():
+    """
+    The inline autonomous runtime for one natural-language intent.
+
+    It uses the SAME tool registry, AndroidProvider and GatewayDeviceBridge
+    as everything else in this process - there is no second execution
+    path. Only the loop's site differs: inline, so skill discovery,
+    permission/health refusals, postcondition verification and the final
+    grounded reply all happen here, bounded by a low round ceiling.
+    """
+
+    global _intent_runtime
+
+    if _intent_runtime is not None:
+        return _intent_runtime
+
+    from agent.runtime import AgentRuntime
+    from tools.base import ToolRisk
+    from tools.executor import ToolExecutor, ToolPolicy
+
+    registry = get_device_registry()
+
+    # Mirrors the device-invoke policy: authenticated use of these narrow
+    # Android endpoints is the approval; capability permission, health and
+    # heartbeat still gate every single call before any bridge work.
+    executor = ToolExecutor(
+        registry=registry,
+        policy=ToolPolicy(
+            enabled=True,
+            allowed=frozenset(registry.names()),
+            auto_approve=frozenset({
+                ToolRisk.SAFE, ToolRisk.SENSITIVE, ToolRisk.DANGEROUS,
+            }),
+        ),
+    )
+
+    _intent_runtime = AgentRuntime(
+        llm=_resolve_llm(),
+        executor=executor,
+        registry=registry,
+        observations=ObservationStore(),
+        system_prompt=_system_prompt(),
+        deferred=False,
+        max_steps=8,
+    )
+
+    logger.info(
+        "Intent runtime initialised inline: %d tools declared",
+        len(registry),
+    )
+
+    return _intent_runtime
+
+
+@router.post("/intent")
+async def agent_intent(
+    request: IntentRequest,
+    token: str = Depends(verify_token),
+):
+    """
+    One natural-language intent -> discovery -> execution -> grounded
+    answer.
+
+    Nothing here trusts the model's wording: skills come from discovery
+    ranked against LIVE capability state, unavailable or unauthorized
+    candidates are filtered out by the registry, ToolExecutor remains the
+    only thing that runs anything, and mutating actions need verified
+    postconditions before completion counts. `grounded` reports whether
+    the verdict rests on real executed evidence rather than prose.
+    """
+
+    from agent.runtime import RunStatus, StopReason
+    from core.ids import new_session_id
+
+    runtime = get_intent_runtime()
+
+    session_id = request.session_id or new_session_id()
+
+    run = await run_in_threadpool(
+        lambda: runtime.run_to_completion(
+            runtime.start_run(request.intent, session_id)
+        )
+    )
+
+    reply = ""
+    for message in reversed(run.messages):
+        content = message.get("content")
+        if (
+            message.get("role") == "assistant"
+            and not message.get("tool_calls")
+            and isinstance(content, str)
+            and content.strip()
+        ):
+            reply = content.strip()
+            break
+
+    return {
+        "session_id": session_id,
+        "run_id": run.run_id,
+        "task_id": run.task_id,
+        "status": run.status.value,
+        "stop_reason": run.stop_reason.value if run.stop_reason else None,
+        "grounded": (
+            run.status is RunStatus.COMPLETED
+            and run.stop_reason is StopReason.GOAL_VERIFIED
+        ),
+        "reply": reply,
+        "rounds": run.rounds,
+        "tool_calls": run.tool_call_count,
+        "unverified_count": len(run.unverified),
+    }
+
 
 @router.post("/step")
 async def agent_step(
