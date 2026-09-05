@@ -1,5 +1,75 @@
 # Progress
 
+## 2026-09-05 (final) — Phase 5A LIVE-CLOSED: mutating-action chain proven
+
+The last open link is closed with live device evidence. `IBCQMB4PTGNZJVTO`,
+screen unlocked, owner-set Connection URL `http://127.0.0.1:8000/`, local
+server started from `feature/aura-identity` (HEAD `6105e10`), reverse tunnel
+`adb reverse tcp:8000 tcp:8000` active. Exactly ONE `android.launch_app` was
+performed, on the stock calculator `com.coloros.calculator` — an ordinary
+installed utility with no user content, no network and no side effects.
+
+The device's own report (`test_tmp/live5a/close_launch.json`):
+
+    tool          android.launch_app
+    status        SUCCESS      evidence  VERIFIED
+    result        {"action":"launch_app","target":"com.coloros.calculator",
+                   "package":"com.coloros.calculator"}
+    postcondition {"verified":true,"observation_id":"obs_8c5e98b655db4df4",
+                   "package":"com.coloros.calculator"}
+    observation   kind=post_action source=android_device
+                  observed_at=1788608531.381
+                  data={"tool":"android.launch_app",
+                        "package":"com.coloros.calculator",
+                        "node_count":26,"screen_changed":true}
+
+The postcondition is OBSERVED, not asserted: the device re-read the resulting
+UI (`node_count=26`), reported `screen_changed=true`, and the observed package
+equals the requested one. Corroborated twice independently — a separate
+read-only `android.get_foreground_app` returned
+`com.coloros.calculator / com.android.calculator2.Calculator`, and adb
+`dumpsys activity activities` reported the same as `topResumedActivity`.
+Foreground before the launch was `com.aura.companion`, so this was a real
+state change, not a no-op.
+
+Chain verified 16/16 through the production seam and the real
+`ConversationManager`, never a mirror of them
+(`test_tmp/live5a/close_chain.py`):
+
+1. `android.launch_app` -> postcondition with an explicit boolean `true`,
+   observed, package-matched, and NOT a bare `{"ok": true}`.
+2. `tool_result_from_report` -> `ToolResult.status=SUCCESS`, one
+   `EvidenceKind.POSTCONDITION`, `verified=True`,
+   `source="android.postcondition"`, `evidence_state=VERIFIED`.
+3. `ConversationManager._record_tool_evidence` -> ledger entry
+   `evandroid_launch_app1`, tool `android.launch_app`, status SUCCESS,
+   state VERIFIED, evidence `[POSTCONDITION] verified=[True]`.
+4. Claim "I launched the calculator on your Android phone." -> classified
+   ACTION with a world object, bound to `android.launch_app` via
+   `evandroid_launch_app1`, **`ClaimState.VERIFIED`**,
+   `VerifierDecision.PASS`, no hallucination flag, reply returned
+   **unmodified**.
+
+So the VERIFIED direction is now live-proven for a mutating action, not only
+for the read-only `android.verify`. Together with the earlier CONTRADICTED
+proof for the same tool (the locked-screen launch that returned
+`{"verified": false, "note": "executed; state change not observed"}`), both
+directions of the mutating-action path are live evidence.
+
+Regression: Phase 5A / evidence-chain suites **192 passed**, before and after
+the launch, with no product code changed in this session. Nothing under
+`brain/verify/`, `tools/` or the Android sources was touched.
+
+Device left as found apart from the one authorised launch: no install, no data
+cleared, no permission granted, no setting changed, no credential read or
+written. The calculator is left in the foreground — pressing home would have
+been a second unrequested mutation. Local server stopped; the reverse tunnel
+is inert without a listener. The Connection URL is still
+`http://127.0.0.1:8000/` and is deliberately left for the owner to restore to
+the Render URL.
+
+**PHASE 5A: LIVE-CLOSED.**
+
 ## 2026-09-05 (later) — Phase 5A.8 final closure attempt: NOT CLOSED
 
 Both manual prerequisites were done by the owner and both are confirmed by

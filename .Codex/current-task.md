@@ -1,13 +1,14 @@
 # Current task
 
-Phase 5A.8 LIVE VERIFICATION **COMPLETE** — 2026-09-05, on real hardware
-(`IBCQMB4PTGNZJVTO`). Verify-only execution: no architecture change, no gate
-weakened, no install, no permission granted, screen never unlocked. Full
-detail and evidence in `.Codex/progress.md` (2026-09-05).
+Phase 5A **LIVE-CLOSED** — 2026-09-05. Every item of the Phase 5A.8 brief is
+VERIFIED on real hardware (`IBCQMB4PTGNZJVTO`), including the final mutating-
+action link: one live `android.launch_app` on the stock calculator produced an
+observed `postcondition {"verified": true}` that reached
+`ClaimState.VERIFIED` with `VerifierDecision.PASS` and an unmodified reply.
+Chain proof 16/16; evidence and the exact device report in
+`.Codex/progress.md` (2026-09-05 final).
 
-All Phase 1–5A work is now COMMITTED and PUSHED: `9466f89` on
-`origin/feature/aura-identity` (167 files, +17472 / −3147). It had been
-sitting uncommitted since Phase 1.
+All Phase 1–5A work is COMMITTED and PUSHED on `origin/feature/aura-identity`.
 
 ## Status table
 
@@ -24,39 +25,35 @@ sitting uncommitted since Phase 1.
 | Diagnostics privacy | VERIFIED (0 leaks in 10,567 lines) |
 | postcondition → POSTCONDITION Evidence | VERIFIED |
 | Evidence → `ClaimState.VERIFIED` | VERIFIED (live, decision PASS) |
-| False postcondition → CONTRADICTED | VERIFIED (both read + mutating tools) |
+| **Verified postcondition on a mutating action** | **VERIFIED (live, 16/16)** |
+| False postcondition → CONTRADICTED | VERIFIED (read-only + mutating tools) |
 | Bare `{"ok": true}` is not verification | VERIFIED (INFERRED, not VERIFIED) |
 | Observation ≠ postcondition | VERIFIED |
 | Regression vs baseline | VERIFIED — 3489/2/1/5, zero regressions |
-| Stored URL = `https://aura-xwm4.onrender.com/` | VERIFIED 2026-09-05 (later) |
-| Screen unlocked | VERIFIED 2026-09-05 (later) |
-| Verified postcondition on a mutating action | BLOCKED (device now polls Render) |
+
+Nothing in Phase 5A remains UNKNOWN or BLOCKED.
 
 ## Open items
 
-1. ~~**Stored server URL**~~ RESOLVED 2026-09-05: the owner set it to the
-   Render URL and the companion now long-polls that server successfully.
-   Evidence in `.Codex/progress.md` (2026-09-05 later) — established from the
-   poller's error class (`Waking` = HTTP 502/504) and its subsequent silence,
-   without reading the encrypted prefs or the token.
-2. **Verified postcondition on a mutating action** — still not obtained, now
-   for a different reason. The screen is unlocked, so the original blocker is
-   gone, but the device now polls the Render deployment and the one live
-   `android.launch_app` test cannot be driven there: enqueueing an invocation
-   needs that deployment's bearer credential (out of bounds), and
-   independently the seam under test is absent from `origin/main`
-   (`tools/outcome.py` and `brain/verify/` do not exist there; main is 18
-   commits behind). To close it: point the Connection UI back at
-   `http://127.0.0.1:8000/` (the token field is pre-filled, so the token
-   survives), restore `adb reverse tcp:8000 tcp:8000`, run the single test
-   against a local server on this branch, then set the URL back to Render.
+1. **Connection URL is `http://127.0.0.1:8000/`** — left deliberately for the
+   owner to restore to `https://aura-xwm4.onrender.com/` through the
+   Connection UI, which pre-fills the token from state
+   (`ui/hub/ConnectionSection.kt`) and therefore preserves it. Verified
+   earlier that the Render URL works: the companion long-polled it
+   successfully once Render had woken.
+2. **Production is 18 commits behind.** `origin/main` has neither
+   `tools/outcome.py` nor `brain/verify/`, so the deployed server cannot emit
+   POSTCONDITION Evidence or grade a ClaimState. Everything verified here
+   lives on `feature/aura-identity` only. Merging is a separate decision.
 3. **Not fixed on purpose** (verify-only): `ToolResult.capability` is the
-   literal `"unknown"` for bridge reports, so claim binding rests on tool
-   name and outcome text; and repair phrasing can pick an awkward object noun
+   literal `"unknown"` for bridge reports, so claim binding rests on tool name
+   and outcome text; and repair phrasing can pick an awkward object noun
    ("I can't verify that the android was actually confirmed").
 4. `tests/conftest_caps.py` and `tests/conftest_capabilities.py` are dead,
    unreferenced scratch. Left on disk, deliberately NOT committed and NOT
    deleted — the owner's call.
+5. The stock calculator is left in the foreground on the device; pressing home
+   would have been a second unrequested mutation.
 
 ## NEXT
 

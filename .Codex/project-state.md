@@ -3,9 +3,10 @@
 Server-side grounding, the Android companion transport, and the device-side
 dispatcher are implemented and committed. As of 2026-09-05 ALL Phase 1-5A work
 is committed and pushed: `9466f89` on `origin/feature/aura-identity` (167
-files, +17472 / -3147), on top of `a97bc69`. Phase 5A.8 live verification is
-COMPLETE on real hardware — see the 2026-09-05 section at the end of this file
-and `.Codex/progress.md`.
+files, +17472 / -3147), on top of `a97bc69`. Phase 5A is **LIVE-CLOSED** on
+real hardware as of 2026-09-05, including a verified postcondition on a
+mutating action — see the two 2026-09-05 sections at the end of this file and
+`.Codex/progress.md`.
 
 Production still runs older code than this branch: its `/api/capabilities`
 reports Android capabilities as `authorization=granted, health=unavailable`,
@@ -258,7 +259,8 @@ Now VERIFIED (was IMPLEMENTED BUT NOT VERIFIED or UNKNOWN):
   (211.61 s) — byte-identical to the baseline, the 5 being exactly the
   pre-existing settings-restart set. Zero regressions.
 
-Still not VERIFIED:
+Still not VERIFIED **at the time of that section** (both device items were
+closed later the same day — see the next section):
 
 - Stored server URL is `http://127.0.0.1:8000/`, not
   `https://aura-xwm4.onrender.com/`. BLOCKED on the in-app Connection UI:
@@ -268,3 +270,55 @@ Still not VERIFIED:
   unlocked screen. The contradicted direction for a mutating action IS proven.
 - Semantic recall / model-backed embeddings: unchanged, still IMPLEMENTED BUT
   NOT VERIFIED (no live conversation has exercised them).
+
+## Phase 5A LIVE-CLOSED — 2026-09-05 (final)
+
+The last open device item is closed. The owner unlocked the screen and set the
+Connection UI to `http://127.0.0.1:8000/`; a local server was started from
+`feature/aura-identity`, `adb reverse tcp:8000 tcp:8000` restored, and the
+companion confirmed polling by a live `POST /api/device/poll -> 200` in the
+server log. Exactly ONE mutating action was performed, as authorised.
+
+`android.launch_app package=com.coloros.calculator` (stock calculator; nothing
+installed, uninstalled, cleared or purchased) returned a genuinely **observed**
+postcondition, not a bare `ok:true`:
+
+    postcondition: {"verified": true,
+                    "observation_id": "obs_8c5e98b655db4df4",
+                    "package": "com.coloros.calculator"}
+    observation:   kind=post_action source=android_device
+                   data={"tool": "android.launch_app",
+                         "package": "com.coloros.calculator",
+                         "node_count": 26, "screen_changed": true}
+
+Corroborated twice without a second launch: AURA's own
+`android.get_foreground_app` and adb `topResumedActivity` both reported
+`com.coloros.calculator` / `com.android.calculator2.Calculator`, where the
+foreground before the launch was `com.aura.companion`. A real state change.
+
+The chain was then driven through the production seam and the real
+`ConversationManager` (never a mirror of it) — 16/16 checks PASS:
+
+    android.launch_app
+      -> observed postcondition verified=true
+      -> tool_result_from_report -> EvidenceKind.POSTCONDITION (verified=True)
+      -> evidence_state() == VERIFIED
+      -> ConversationManager._record_tool_evidence
+      -> EvidenceLedger entry `evandroid_launch_app1`, state VERIFIED
+      -> claim classified ACTION, bound to android.launch_app
+      -> ClaimState.VERIFIED, VerifierDecision.PASS, no hallucination
+      -> reply returned UNMODIFIED
+
+Phase 5A regression set: 192 passed before and after. The full-suite baseline
+`3489 / 2 / 1 / 5` is unchanged.
+
+Now VERIFIED that was previously UNKNOWN: **a verified postcondition on a
+mutating action reaching `ClaimState.VERIFIED`.** Nothing in Phase 5A remains
+UNKNOWN or BLOCKED.
+
+Deliberately left as-is: the Connection URL stays on `http://127.0.0.1:8000/`
+for the owner to restore through the Connection UI (which pre-fills the token
+from state and therefore preserves it); the calculator is left in the
+foreground, because pressing home would have been a second unrequested
+mutation. Semantic recall / model-backed embeddings are still IMPLEMENTED BUT
+NOT VERIFIED — unrelated to Phase 5A.

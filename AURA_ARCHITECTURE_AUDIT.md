@@ -215,18 +215,35 @@ found).
    claim is repaired away (shown for `android.verify` and for the mutating
    `android.launch_app`), an inventory observation stays `OBSERVATION`, and a
    bare `{"ok": true}` grades INFERRED. The full suite is unchanged at
-   3489/2/1/5. One gap remains open: a *verified* postcondition on a
-   *mutating* action needs an unlocked screen and is still UNKNOWN.
+   3489/2/1/5.
+
+   **Mutating-action closure (2026-09-05, final):** the last gap is closed.
+   Exactly ONE authorised mutating action — `android.launch_app
+   package=com.coloros.calculator` — returned an *observed* postcondition
+   (`verified=true`, `observation_id=obs_8c5e98b655db4df4`, observation
+   `kind=post_action`, `source=android_device`, `data={"node_count": 26,
+   "screen_changed": true}`), corroborated by `android.get_foreground_app` and
+   adb `topResumedActivity` against a pre-launch foreground of
+   `com.aura.companion`. Through the production seam and the real
+   `ConversationManager`: `EvidenceKind.POSTCONDITION` → `EvidenceLedger`
+   (`evandroid_launch_app1`, VERIFIED) → **`ClaimState.VERIFIED`**, decision
+   PASS, reply unmodified — 16/16 checks. Phase 5A is LIVE-CLOSED; nothing in
+   it remains UNKNOWN or BLOCKED.
 
 ## 4. Hard blockers and unknowns
 
-- **Physical device `IBCQMB4PTGNZJVTO` disconnected** (2026-08-28): all
-  device-side verification (new APK install, 11 real capability executions,
-  `NODE_NOT_FOUND` path, screen grounding) remains NOT VERIFIED. Recorded in
-  `.Codex/current-task.md`.
-- **Device stored URL regression:** companion still points at
-  `http://127.0.0.1:8000/`; must be restored via the app's Connection UI
-  when the device reconnects.
+- ~~**Physical device `IBCQMB4PTGNZJVTO` disconnected**~~ RESOLVED 2026-09-05:
+  the device reconnected and all Phase 5A device-side verification was
+  completed live (installed APK == source by sha256, 15 capabilities
+  AVAILABLE, real capability executions, and a verified postcondition on a
+  mutating action). See `.Codex/progress.md` (2026-09-05 and 2026-09-05 final).
+- **Device stored URL:** companion currently points at
+  `http://127.0.0.1:8000/` — left there deliberately after the live closure
+  test, for the owner to restore to `https://aura-xwm4.onrender.com/` via the
+  app's Connection UI (which pre-fills the token, so it survives). Note that
+  `origin/main` is 18 commits behind and lacks `tools/outcome.py` and
+  `brain/verify/`, so the deployed server cannot emit POSTCONDITION Evidence
+  until this branch merges.
 - **UNKNOWN:** whether any Android 16 AppFunctions surface exists on the
   target device (API 33 — expected no). Treated as UNKNOWN, not assumed.
 - **UNKNOWN:** which installed LLM providers actually support native FC in
