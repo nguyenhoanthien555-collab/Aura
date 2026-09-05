@@ -1,5 +1,58 @@
 # Progress
 
+## 2026-09-05 (later) — Phase 5A.8 final closure attempt: NOT CLOSED
+
+Both manual prerequisites were done by the owner and both are confirmed by
+evidence. The one remaining live test still could not be run, for a NEW reason.
+
+Newly established (read-only):
+
+- Screen is unlocked: `mWakefulness=Awake`, `mDreamingLockscreen=false`. The
+  previous blocker on the mutating-action postcondition is cleared.
+- Stored server URL IS now the Render URL. Proven without reading the prefs
+  (they are EncryptedSharedPreferences): `AuraDevicePoller` logged
+  `poll unavailable: Waking` at 18:27:21, and `AuraError.Waking` is raised
+  only for HTTP **502/504** (`data/AuraRepository.kt:413`) — a remote proxy
+  cold-start, not the `Offline` a dead localhost would give
+  (`AuraStreamClient.kt:260`). No poller line has appeared in the 4+ minutes
+  since, and `DeviceInvocationPoller.pollForever` logs on EVERY failed cycle
+  (line 87) while logging nothing on success, so the silence means the
+  companion is now long-polling Render successfully. Open item 1 of the
+  2026-09-05 report is RESOLVED.
+
+Why the launch_app test still cannot run — two independent blockers:
+
+1. The device can only be driven by the server it polls, and enqueueing an
+   invocation on the Render deployment requires that deployment's bearer
+   credential. The instruction for this task was explicitly not to touch
+   credentials/tokens and not to modify connection settings, so there is no
+   permitted path to `POST /api/device/invoke` on it.
+2. Independently: the seam under test does not exist on `origin/main`.
+   `git cat-file -e origin/main:tools/outcome.py` and
+   `origin/main:brain/verify/ledger.py` both fail, and main is 18 commits
+   behind `feature/aura-identity`. If Render deploys main — likely but NOT
+   verified from here — it structurally cannot emit
+   `EvidenceKind.POSTCONDITION` or grade a `ClaimState` at all.
+
+The device exposes no adb-reachable dispatch path as an alternative: the
+manifest declares no exported `BroadcastReceiver`, only the launcher
+activities and the two non-exported accessibility services. Driving the app
+via `am start`/`am broadcast` was not attempted; launching an app by shell
+would produce no device postcondition report, and manufacturing one would be
+fabrication.
+
+The only clean unblock is the owner's to make: point the Connection UI back at
+`http://127.0.0.1:8000/` (the token field is pre-filled from state, so the
+token survives), restore `adb reverse tcp:8000 tcp:8000`, run the single
+`android.launch_app` test against a local server on this branch, then set the
+URL back to Render.
+
+Regression re-check with no product code changed since the earlier run:
+`tests/test_android_inventory.py`, `test_android_provider.py`,
+`test_tool_output_contract.py`, `test_response_verifier.py`,
+`test_phase45_integration.py` — **192 passed**. No launch was performed, no
+setting changed, no credential read.
+
 ## 2026-09-05 — Phase 5A.8 live verification: COMPLETE on real hardware
 
 Device `IBCQMB4PTGNZJVTO` reconnected and every step of the Phase 5A.8 brief

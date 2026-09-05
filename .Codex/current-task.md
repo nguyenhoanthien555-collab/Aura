@@ -28,23 +28,28 @@ sitting uncommitted since Phase 1.
 | Bare `{"ok": true}` is not verification | VERIFIED (INFERRED, not VERIFIED) |
 | Observation ≠ postcondition | VERIFIED |
 | Regression vs baseline | VERIFIED — 3489/2/1/5, zero regressions |
-| Stored URL = `https://aura-xwm4.onrender.com/` | BLOCKED (needs in-app UI) |
-| Verified postcondition on a mutating action | UNKNOWN (needs unlocked screen) |
+| Stored URL = `https://aura-xwm4.onrender.com/` | VERIFIED 2026-09-05 (later) |
+| Screen unlocked | VERIFIED 2026-09-05 (later) |
+| Verified postcondition on a mutating action | BLOCKED (device now polls Render) |
 
 ## Open items
 
-1. **Stored server URL** is still `http://127.0.0.1:8000/`. Connection prefs
-   are EncryptedSharedPreferences (keys and values), so adb can neither read
-   nor write them. Restore via the app's Connection UI, which pre-fills the
-   token from state (`ui/hub/ConnectionSection.kt`) and therefore preserves
-   it. Until then the companion only reaches a server through
-   `adb reverse tcp:8000 tcp:8000`, and that mapping was removed at teardown.
-2. **Verified postcondition on a mutating action** was not obtained: with the
-   screen off and locked, `android.launch_app` correctly returned
-   `{"verified": false, "note": "executed; state change not observed"}`. The
-   CONTRADICTED direction is therefore live-proven for a mutating tool, but
-   the VERIFIED direction for a mutating tool is not. The VERIFIED direction
-   IS live-proven for `android.verify`. Needs an unlocked screen.
+1. ~~**Stored server URL**~~ RESOLVED 2026-09-05: the owner set it to the
+   Render URL and the companion now long-polls that server successfully.
+   Evidence in `.Codex/progress.md` (2026-09-05 later) — established from the
+   poller's error class (`Waking` = HTTP 502/504) and its subsequent silence,
+   without reading the encrypted prefs or the token.
+2. **Verified postcondition on a mutating action** — still not obtained, now
+   for a different reason. The screen is unlocked, so the original blocker is
+   gone, but the device now polls the Render deployment and the one live
+   `android.launch_app` test cannot be driven there: enqueueing an invocation
+   needs that deployment's bearer credential (out of bounds), and
+   independently the seam under test is absent from `origin/main`
+   (`tools/outcome.py` and `brain/verify/` do not exist there; main is 18
+   commits behind). To close it: point the Connection UI back at
+   `http://127.0.0.1:8000/` (the token field is pre-filled, so the token
+   survives), restore `adb reverse tcp:8000 tcp:8000`, run the single test
+   against a local server on this branch, then set the URL back to Render.
 3. **Not fixed on purpose** (verify-only): `ToolResult.capability` is the
    literal `"unknown"` for bridge reports, so claim binding rests on tool
    name and outcome text; and repair phrasing can pick an awkward object noun
