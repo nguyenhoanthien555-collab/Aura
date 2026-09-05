@@ -1,8 +1,78 @@
 # Current task
 
-Phase 5A OFFLINE FOUNDATION (installed-app inventory + chat-path Evidence
-seam) IMPLEMENTED — 2026-08-31. Scope: offline/CI-verifiable only; NO live
-device work, NO APK/install, NO companion, NO URL/token restore. See
+Phase 5A.8 LIVE VERIFICATION **COMPLETE** — 2026-09-05, on real hardware
+(`IBCQMB4PTGNZJVTO`). Verify-only execution: no architecture change, no gate
+weakened, no install, no permission granted, screen never unlocked. Full
+detail and evidence in `.Codex/progress.md` (2026-09-05).
+
+All Phase 1–5A work is now COMMITTED and PUSHED: `9466f89` on
+`origin/feature/aura-identity` (167 files, +17472 / −3147). It had been
+sitting uncommitted since Phase 1.
+
+## Status table
+
+| Item | State |
+| --- | --- |
+| Repo integrity (nothing discarded) | VERIFIED |
+| Phase 1–5A committed + pushed | VERIFIED |
+| Installed APK == current source | VERIFIED (sha256 match) |
+| Companion connection + token | VERIFIED (heartbeat 200; token never read) |
+| 15 Android capabilities AVAILABLE | VERIFIED |
+| `android.app_inventory` AVAILABLE live | VERIFIED |
+| Live `PackageManager` enumeration | VERIFIED (277 pkgs, 3.80 s) |
+| Inventory freshness / no cache | VERIFIED (`observed_at` 23.9 s old) |
+| Diagnostics privacy | VERIFIED (0 leaks in 10,567 lines) |
+| postcondition → POSTCONDITION Evidence | VERIFIED |
+| Evidence → `ClaimState.VERIFIED` | VERIFIED (live, decision PASS) |
+| False postcondition → CONTRADICTED | VERIFIED (both read + mutating tools) |
+| Bare `{"ok": true}` is not verification | VERIFIED (INFERRED, not VERIFIED) |
+| Observation ≠ postcondition | VERIFIED |
+| Regression vs baseline | VERIFIED — 3489/2/1/5, zero regressions |
+| Stored URL = `https://aura-xwm4.onrender.com/` | BLOCKED (needs in-app UI) |
+| Verified postcondition on a mutating action | UNKNOWN (needs unlocked screen) |
+
+## Open items
+
+1. **Stored server URL** is still `http://127.0.0.1:8000/`. Connection prefs
+   are EncryptedSharedPreferences (keys and values), so adb can neither read
+   nor write them. Restore via the app's Connection UI, which pre-fills the
+   token from state (`ui/hub/ConnectionSection.kt`) and therefore preserves
+   it. Until then the companion only reaches a server through
+   `adb reverse tcp:8000 tcp:8000`, and that mapping was removed at teardown.
+2. **Verified postcondition on a mutating action** was not obtained: with the
+   screen off and locked, `android.launch_app` correctly returned
+   `{"verified": false, "note": "executed; state change not observed"}`. The
+   CONTRADICTED direction is therefore live-proven for a mutating tool, but
+   the VERIFIED direction for a mutating tool is not. The VERIFIED direction
+   IS live-proven for `android.verify`. Needs an unlocked screen.
+3. **Not fixed on purpose** (verify-only): `ToolResult.capability` is the
+   literal `"unknown"` for bridge reports, so claim binding rests on tool
+   name and outcome text; and repair phrasing can pick an awkward object noun
+   ("I can't verify that the android was actually confirmed").
+4. `tests/conftest_caps.py` and `tests/conftest_capabilities.py` are dead,
+   unreferenced scratch. Left on disk, deliberately NOT committed and NOT
+   deleted — the owner's call.
+
+## NEXT
+
+Phase 5 task tools (calendar / email / SMS / contacts). Still gated on the
+security review for dangerous permissions, and on API level: AppFunctions is
+Android 16+ and this device is API 33.
+
+---
+
+## Historical record below (superseded, kept deliberately)
+
+The 2026-08-31 offline foundation and the 2026-09-01 stopped live attempt are
+retained as written, because their statuses were honest at the time. One of
+them was wrong and is corrected here: the 2026-09-01 entry recorded the
+installed APK as the OLD pre-Phase-5A build, but the install did land
+(`lastUpdateTime=2026-09-01 08:31:25`, sha256 match with the local build).
+
+## Phase 5A offline foundation — 2026-08-31
+
+Scope at the time: offline/CI-verifiable only; NO live device work, NO
+APK/install, NO companion, NO URL/token restore. See
 `.aura/decisions/ADR-010.md`.
 
 What was implemented (all reusing existing primitives, no new model, no new

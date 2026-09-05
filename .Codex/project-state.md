@@ -1,16 +1,20 @@
 # AURA project state
 
 Server-side grounding, the Android companion transport, and the device-side
-dispatcher are implemented and committed (a97bc69 on `feature/aura-identity`).
-The device-side evidence in this file comes from the 2026-08-27 session; as of
-2026-08-28 the physical device is DISCONNECTED and none of it can currently be
-reproduced. Production still runs older code than this branch: its
-`/api/capabilities` reports Android capabilities as
-`authorization=granted, health=unavailable`, and it does not serve
-`/api/agent/intent`.
+dispatcher are implemented and committed. As of 2026-09-05 ALL Phase 1-5A work
+is committed and pushed: `9466f89` on `origin/feature/aura-identity` (167
+files, +17472 / -3147), on top of `a97bc69`. Phase 5A.8 live verification is
+COMPLETE on real hardware — see the 2026-09-05 section at the end of this file
+and `.Codex/progress.md`.
+
+Production still runs older code than this branch: its `/api/capabilities`
+reports Android capabilities as `authorization=granted, health=unavailable`,
+and it does not serve `/api/agent/intent`.
 
 - Android companion package: `com.aura.companion`
-- Target ADB device: `IBCQMB4PTGNZJVTO` (OPPO CPH2251, API 33) - DISCONNECTED as of 2026-08-28; `adb devices` is empty.
+- Target ADB device: `IBCQMB4PTGNZJVTO` (OPPO CPH2251, API 33) — CONNECTED and
+  fully exercised on 2026-09-05. The 2026-08-28 "DISCONNECTED" note below is
+  historical.
 - As of 2026-08-27 (not reproducible today): `accessibility_enabled=1` and
   both `AuraAccessibilityService` and `ScreenObservationService` were enabled
   and bound.
@@ -210,3 +214,57 @@ proven through adb reverse at TCP level. Blocked on: physical device reconnect.
 Live heartbeat / live inventory / live privacy diagnostics / live
 postcondition→Evidence / chat-path grounding all remain UNVERIFIED — no live
 claim may be made from this attempt.
+
+## Phase 5A.8 live verification COMPLETE — 2026-09-05
+
+Executed on `IBCQMB4PTGNZJVTO` under verify-only rules: no architecture
+change, no gate weakened, no install, no permission granted, no app data
+cleared, screen never unlocked. Everything below is live device evidence.
+
+Repository: all Phase 1-5A work committed as `9466f89` and pushed to
+`origin/feature/aura-identity`. Nothing was reset, checked out, cleaned or
+stashed. `.gitignore` gained six rules for non-source artifacts
+(`.codegraph/` at 438 MB, `test_tmp/`, `/server_out.log`, `/server_err.log`,
+`_dbg_*.py`, `android/screen*.png`).
+
+Now VERIFIED (was IMPLEMENTED BUT NOT VERIFIED or UNKNOWN):
+
+- Installed APK matches current source: sha256
+  `927891325cecd1a9367c182d3ee548d58d5f18faa6765d926ec49c9446218952` shared by
+  the local `app-debug.apk` and the pulled installed `base.apk`; no source
+  file postdates the build. No install was needed or performed.
+- Companion connection and token: repeated `POST /api/device/poll -> 200`.
+  The token was never read or printed; a 200 is itself the proof it matches.
+- All **15** Android capabilities `AVAILABLE`, including
+  `android.app_inventory` (bound tool `android.list_apps`),
+  `authorization=granted`, `health=healthy`, nothing stale.
+- Live `PackageManager` enumeration: 277 packages in **3.80 s**, `count=277`,
+  fresh `observed_at` (23.9 s old at read), `device_id`,
+  `source="android.package_manager"`, `side_effect=READ_ONLY`. Performance is
+  no longer UNKNOWN.
+- Diagnostics privacy: 0 inventory package names across all 10,567 lines of
+  `logs/diagnostics.jsonl`; observation payload carries counts plus a SHA-256
+  only. NO privacy regression.
+- The full evidence chain, both directions: a live `{"verified": true}`
+  postcondition becomes `EvidenceKind.POSTCONDITION` and reaches
+  **`ClaimState.VERIFIED`** with decision PASS; `{"verified": false}` reaches
+  CONTRADICTED and the false claim is repaired away — proven for a read-only
+  check (`android.verify`) and for a mutating tool (`android.launch_app`,
+  which honestly refused to confirm an unobserved state change while the
+  screen was locked). An `app_inventory` observation is `OBSERVATION`, never
+  `POSTCONDITION`. A bare `{"ok": true}` yields no Evidence and grades
+  INFERRED, never VERIFIED.
+- Regression: full suite `3489 passed, 2 skipped, 1 deselected, 5 failed`
+  (211.61 s) — byte-identical to the baseline, the 5 being exactly the
+  pre-existing settings-restart set. Zero regressions.
+
+Still not VERIFIED:
+
+- Stored server URL is `http://127.0.0.1:8000/`, not
+  `https://aura-xwm4.onrender.com/`. BLOCKED on the in-app Connection UI:
+  connection prefs are EncryptedSharedPreferences (keys and values), so adb
+  can neither read nor write them.
+- A *verified* postcondition on a *mutating* action: UNKNOWN, needs an
+  unlocked screen. The contradicted direction for a mutating action IS proven.
+- Semantic recall / model-backed embeddings: unchanged, still IMPLEMENTED BUT
+  NOT VERIFIED (no live conversation has exercised them).

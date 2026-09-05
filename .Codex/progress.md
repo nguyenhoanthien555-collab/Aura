@@ -1,5 +1,118 @@
 # Progress
 
+## 2026-09-05 — Phase 5A.8 live verification: COMPLETE on real hardware
+
+Device `IBCQMB4PTGNZJVTO` reconnected and every step of the Phase 5A.8 brief
+was executed live. Verify-only: no architecture changed, no gate weakened, no
+install, no device mutation beyond one already-captured `android.launch_app`
+attempt, screen never unlocked.
+
+- Step 1 (repo): nothing reset, checked out, cleaned or stashed. All
+  previously uncommitted Phase 1-5A work is now committed as `9466f89`
+  (167 files, +17472 / -3147) and pushed to `origin/feature/aura-identity`
+  (`a97bc69..9466f89`). Not pushed to main. `.gitignore` gained six rules for
+  things that were never source: `.codegraph/` (438 MB index), `test_tmp/`,
+  `/server_out.log`, `/server_err.log`, `_dbg_*.py`, `android/screen*.png`.
+- Step 2 (device, read-only): API 33, `com.aura.companion` installed,
+  accessibility enabled and both services bound.
+- Step 3 (APK freshness) — **CORRECTS THE 2026-09-01 RECORD**. The installed
+  APK IS the Phase 5A build; the earlier entry saying it "remains the OLD
+  build (pre-Phase 5A)" is wrong. Evidence: `dumpsys` reports
+  `lastUpdateTime=2026-09-01 08:31:25`, which is AFTER the 08:25 state-file
+  write that made the claim; the local `app-debug.apk` (19,901,173 bytes,
+  built 2026-09-01 07:41) and the pulled installed `base.apk` share sha256
+  `927891325cecd1a9367c182d3ee548d58d5f18faa6765d926ec49c9446218952`; and
+  `find app/src -newer app-debug.apk` is empty, so no source postdates the
+  build. The 2026-09-01 session did reach Step 4 even though its own notes
+  say it did not.
+- Step 4 (install): correctly SKIPPED. Nothing was installed, and
+  `lastUpdateTime` is unchanged after the session.
+- Step 5 (companion connection): verified WITHOUT reading or printing the
+  token. Repeated `POST /api/device/poll -> 200` proves both that the stored
+  URL resolves to the running server and that the companion's stored bearer
+  token matches the server's. The stored URL is still
+  `http://127.0.0.1:8000/` (reached through `adb reverse`), NOT
+  `https://aura-xwm4.onrender.com/`. Connection prefs are
+  EncryptedSharedPreferences (keys AND values), so the URL cannot be read or
+  written from adb - restoring it requires the in-app Connection UI, which
+  pre-fills the token from state. STILL OPEN.
+- Step 6 (server): started via the documented entrypoint on `config.yaml`;
+  live heartbeat received. `/api/capabilities` reported all **15** Android
+  capabilities `AVAILABLE`, including `android.app_inventory` (bound tool
+  `android.list_apps`), `authorization=granted`, `health=healthy`, nothing
+  degraded or stale.
+- Step 7 (live inventory): `android.list_apps` SUCCESS in **3.80 s**.
+  Aggregates only, per the privacy rule: **277 packages**, `count=277`,
+  `observed_at=1788605555.79` (fresh - 23.9 s old at read),
+  `device_id="android-c9874ac1-fb2"`, `source="android.package_manager"`.
+  Record shape `(enabled, label, launchable, package, version_name)`;
+  launchable 88, enabled 269, 0 duplicates; `postcondition=null`;
+  `evidence=VERIFIED`, `side_effect=READ_ONLY`. Live `PackageManager`
+  enumeration moves from IMPLEMENTED BUT NOT VERIFIED to **VERIFIED**, and
+  real-enumeration performance from UNKNOWN to **3.80 s / 277 packages**.
+- Step 8 (privacy): NO regression. The observation payload carries only
+  `{count, launchable_count, source}` plus a SHA-256 content hash; the
+  `tool_execution` diagnostics line carries ids/status/duration/evidence/
+  capability only. A sweep of all **10,567** lines of
+  `logs/diagnostics.jsonl` found 0 inventory package names. One naive
+  substring hit was a false positive - the package literally named `android`
+  matching inside the string `"android.package_manager"` - cleared by a
+  word-boundary re-check (`real leaks: []`). The single "YouTube" label hit
+  traces to pre-existing 2026-08-28/29 test goal strings, not to inventory.
+- Steps 9-10 (postcondition -> Evidence -> ClaimState, both directions):
+  **5/5 PASS** live, driven through the production seam
+  (`tool_result_from_report`) and the real
+  `ConversationManager._record_tool_evidence` / `_verify_final`, never a
+  mirror of them:
+  1. live `{"verified": true}` -> `EvidenceKind.POSTCONDITION` verified=True
+     -> `evidence_state VERIFIED` -> **`ClaimState.VERIFIED`**, decision
+     PASS, reply returned unchanged. This is the link that had never been
+     live-proven.
+  2. live `{"verified": false}` -> **CONTRADICTED**, decision REPAIR, the
+     false claim removed.
+  3. live MUTATING action: `android.launch_app` returned
+     `{"verified": false, "note": "executed; state change not observed"}`
+     because the screen was off and locked (`mWakefulness=Dozing`,
+     `mScreenLocked=true`) -> **CONTRADICTED**, repaired to "I can't verify
+     that the app actually launched." A device declining to observe a state
+     change correctly cannot produce a claim.
+  4. live inventory observation -> `OBSERVATION` only, never
+     `POSTCONDITION`.
+  5. bare `{"ok": true}` from the same tool -> no Evidence at all ->
+     `INFERRED`, never VERIFIED.
+- Step 11 (regression): full suite `3489 passed, 2 skipped, 1 deselected,
+  5 failed` in 211.61 s - **identical to the baseline**, and the 5 are
+  exactly the pre-existing settings-restart set (`test_companion`
+  restart-reply, `test_settings_api` x2, `test_settings_contract` x2, all
+  from `coroutine 'update_settings.<locals>._do_restart' was never
+  awaited`). Zero regressions, zero new failures, and none of them touched.
+  Targeted: `tests/test_android_inventory.py` 36 passed;
+  `test_phase45_integration` + `test_android_provider` +
+  `test_tool_output_contract` + `test_response_verifier` 156 passed.
+
+A harness fault was found and fixed in the HARNESS, not the product: the
+first revision asserted "I checked the foreground app on your phone.",
+whose tokens do not intersect the ledger entry's tool name
+(`android verify`), outcome text, or capability id, so
+`EvidenceLedger.matching_tool` bound nothing and the claim was correctly
+graded UNKNOWN. Token overlap is deliberate and documented in
+`brain/verify/ledger.py`. Nothing under `brain/verify/` was changed.
+
+Two observations recorded and deliberately NOT fixed, because this was a
+verify-only task: `ToolResult.capability` is the literal string `"unknown"`
+for bridge reports, so claim binding currently rests on tool name and
+outcome text alone; and the repair phrasing for case 2 reads "I can't verify
+that the android was actually confirmed", because the object noun is chosen
+mechanically. Neither affects correctness - both are candidates for a later
+phase.
+
+Teardown: server stopped, `adb reverse tcp:8000 tcp:8000` removed. Device
+left as found - no install, no data cleared, no permission granted, no
+setting changed, screen never unlocked; `versionName=0.1.0` and
+`lastUpdateTime=2026-09-01 08:31:25` unchanged, `accessibility_enabled=1`.
+Live capture artifacts kept at `test_tmp/live5a/` (gitignored) as the audit
+trail behind every number above.
+
 ## 2026-09-01 — Phase 5A.8 live verification attempt: STOPPED (device disconnected)
 
 - Read-only pre-flight completed: repo state intact (feature/aura-identity,
@@ -15,6 +128,10 @@
   was performed. Nothing live may be claimed VERIFIED.
 - Installed v0.1.0 APK remains the OLD build (pre-Phase 5A) - recorded, not
   assumed.
+  **WRONG - corrected 2026-09-05.** The installed APK is the Phase 5A build:
+  `lastUpdateTime=2026-09-01 08:31:25` postdates this note, and the installed
+  `base.apk` hashes identically to the locally built `app-debug.apk`. This
+  session did reach Step 4. See the 2026-09-05 entry above.
 - Honest statuses recorded in .Codex/current-task.md; offline baseline
   unchanged (3489 passed / 2 skipped / 1 deselected / 5 pre-existing
   settings-restart failures).

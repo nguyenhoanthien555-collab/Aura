@@ -104,7 +104,7 @@ found).
 | Tool execution through device (14 canonical Android tools) | EXISTS | `tools/providers/android_provider.py`, `AccessibilityToolDispatcher.kt`, `DeviceToolCatalog` (catalog-parity test `AgentToolProtocolTest.kt`), live-verified on 2026-08-27 (see `.Codex/current-task.md`) |
 | Just-in-time capability gating on device | EXISTS | Dispatcher re-checks runtime capability status before dispatch (committed a97bc69) |
 | Heartbeat-derived availability (never hardcoded) | EXISTS | `GatewayDeviceBridge.status()` delegates to real heartbeat; permissive branch unreachable in production (bypass audit, `.Codex/progress.md`) |
-| App inventory via PackageManager | IMPLEMENTED (offline); live NOT VERIFIED | Phase 5A (`android.list_apps` / `android.app_inventory`, ADR-010): `AppInventory.kt` enumerates via a `PackageSource` seam over `PackageManager`; loopback/scripted bridge + JVM tests pass offline; live enumeration BLOCKED on the disconnected device |
+| App inventory via PackageManager | EXISTS, live VERIFIED (2026-09-05) | Phase 5A (`android.list_apps` / `android.app_inventory`, ADR-010): `AppInventory.kt` enumerates via a `PackageSource` seam over `PackageManager`. Verified on `IBCQMB4PTGNZJVTO` (API 33): 277 packages in 3.80 s, fresh `observed_at`, `READ_ONLY`, capability `AVAILABLE` over a live heartbeat, 0 package names in 10,567 diagnostics lines |
 | Calendar / email / SMS / contacts tools | MISSING | The 14 Android tools are accessibility primitives (ui_tree, find_node, screenshot, tap, type_text, key_input, back, home, launch_app, wait_for, verify, …). No calendar-provider, email, SMS, or contacts tools exist |
 | AppFunctions (Android 16+) | NOT APPLICABLE / UNKNOWN | Target device is API 33; `AppFunctionManager` is Android 16+. Requires a documented decision before any work |
 | Exact-alarm policy (`canScheduleExactAlarms`) | NOT APPLICABLE | No alarm tool exists |
@@ -201,8 +201,22 @@ found).
    device state, never persisted memory), carries `observed_at` and a content
    hash, and never leaks package names/labels into diagnostics; no cache is
    added. Offline-verified in `tests/test_android_inventory.py` (36 tests) and
-   `AppInventoryTest.kt` (26 tests). Live `PackageManager` enumeration remains
-   **IMPLEMENTED BUT NOT VERIFIED** (device disconnected).
+   `AppInventoryTest.kt` (26 tests).
+
+   **Live verification (2026-09-05):** all of the above is now confirmed on
+   real hardware (`IBCQMB4PTGNZJVTO`, API 33), verify-only, no install and no
+   device mutation. `android.list_apps` returned 277 packages in 3.80 s with a
+   fresh `observed_at` and `READ_ONLY` side effect; `android.app_inventory`
+   reported `AVAILABLE` among 15 Android capabilities over a live heartbeat; a
+   sweep of all 10,567 diagnostics lines found 0 package names or labels. The
+   evidence chain was proven end to end in both directions: a live
+   `{"verified": true}` postcondition reaches `ClaimState.VERIFIED` with
+   decision PASS, `{"verified": false}` reaches CONTRADICTED and the false
+   claim is repaired away (shown for `android.verify` and for the mutating
+   `android.launch_app`), an inventory observation stays `OBSERVATION`, and a
+   bare `{"ok": true}` grades INFERRED. The full suite is unchanged at
+   3489/2/1/5. One gap remains open: a *verified* postcondition on a
+   *mutating* action needs an unlocked screen and is still UNKNOWN.
 
 ## 4. Hard blockers and unknowns
 
