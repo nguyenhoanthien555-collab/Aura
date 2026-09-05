@@ -1,0 +1,19 @@
+﻿{
+    "id":  "ADR-002",
+    "title":  "Refactor BENCH_TASK_017",
+    "status":  "ACCEPTED",
+    "recorded_at":  "2026-08-28T07:47:58.6127391+07:00",
+    "context":  "Modularize subsystem",
+    "decision":  "Approved by Architecture Council (HIGH_QUALITY)",
+    "alternatives":  [
+
+                     ],
+    "rejected_alternatives":  [
+                                  "Speculative unverified changes"
+                              ],
+    "consequences":  "Enforces architectural invariants",
+    "affected_components":  [
+                                "core/runtime",
+                                "api/server"
+                            ]
+}

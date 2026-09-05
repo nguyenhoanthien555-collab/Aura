@@ -24,13 +24,35 @@ do is documented in tools/timeout.py, and the short version is that the
 wait is bounded, not the tool.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Callable
 
+from core.ids import new_id
 from core.logger import logger
+from core.trace import emit_trace
 from events.types import ToolCompletedEvent, ToolInvokedEvent
 from tools.base import ToolProtocol, ToolResult, ToolRisk, describe_tool, fail, ok
+from tools.outcome import (
+    CODE_CONFIRMATION_REQUIRED,
+    CODE_INTERNAL,
+    CODE_INVALID_ARGUMENTS,
+    CODE_NOT_ALLOWED,
+    CODE_NOT_IMPLEMENTED,
+    CODE_OUTPUT_SCHEMA,
+    CODE_TIMEOUT,
+    CODE_TOOL_ERROR,
+    CODE_TOOL_NOT_FOUND,
+    CODE_TOOLS_DISABLED,
+    CODE_UNVERIFIED,
+    Evidence,
+    EvidenceKind,
+    SideEffect,
+    ToolStatus,
+    retryability_of,
+)
 from tools.registry import ToolRegistry
+from tools.schema import matches_type, validate_output
 from tools.timeout import (
     DEFAULT_TOOL_TIMEOUT,
     ToolTimeout,
@@ -226,6 +248,9 @@ class ToolExecutor:
         """
 
         arguments = arguments or {}
+        started_at = datetime.now(timezone.utc).isoformat(
+            timespec="milliseconds"
+        )
 
         self._emit(
             ToolInvokedEvent(
@@ -237,7 +262,37 @@ class ToolExecutor:
         reason = self.check(name)
 
         if reason:
-            return self._finish(name, fail(reason, tool=name))
+            # The gate that refused decides the canonical status. Each
+            # refusal reason is a different fact: a disabled subsystem is
+            # policy, an unknown name is a malformed request, an unlisted
+            # tool is policy. Nothing ran in any of them.
+            if reason == "tool use is disabled":
+                status, error_code = (
+                    ToolStatus.DENIED.value,
+                    CODE_TOOLS_DISABLED,
+                )
+            elif reason.startswith("unknown tool:"):
+                status, error_code = (
+                    ToolStatus.INVALID_ARGUMENTS.value,
+                    CODE_TOOL_NOT_FOUND,
+                )
+            else:
+                status, error_code = (
+                    ToolStatus.DENIED.value,
+                    CODE_NOT_ALLOWED,
+                )
+
+            return self._finish(
+                name,
+                fail(
+                    reason,
+                    tool=name,
+                    execution="not_attempted",
+                    status=status,
+                    error_code=error_code,
+                ),
+                started_at,
+            )
 
         tool = self.registry.get(name)
         capability_id = getattr(tool, "capability", None)
@@ -253,6 +308,8 @@ class ToolExecutor:
                 capability="",
                 authorization="unknown",
                 execution="not_attempted",
+                status=ToolStatus.UNAVAILABLE.value,
+                error_code=CODE_NOT_IMPLEMENTED,
                 data={
                     "ok": False,
                     "tool": name,
@@ -261,7 +318,7 @@ class ToolExecutor:
                     "authorization": "unknown",
                     "execution": "not_attempted",
                 },
-            ))
+            ), started_at)
 
         cap_state = resolve_capability(capability_id)
         if cap_state != CapabilityState.AVAILABLE:
@@ -287,6 +344,15 @@ class ToolExecutor:
                 CapabilityState.UNKNOWN: "CAPABILITY_UNKNOWN",
                 CapabilityState.NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
             }.get(cap_state, "CAPABILITY_UNAVAILABLE")
+            # A missing permission is a DENIAL - a human must act, and
+            # retrying cannot help. Every other blocked state is an
+            # unavailability: the request was fine, the world is not
+            # ready, and the device reconnecting may fix it outright.
+            cap_status = (
+                ToolStatus.DENIED.value
+                if cap_state == CapabilityState.BLOCKED_PERMISSION
+                else ToolStatus.UNAVAILABLE.value
+            )
             return self._finish(name, ToolResult(
                 ok=False,
                 error=detail,
@@ -298,6 +364,8 @@ class ToolExecutor:
                     else "unknown"
                 ),
                 execution="not_attempted",
+                status=cap_status,
+                error_code=error_code,
                 data={
                     "ok": False,
                     "tool": name,
@@ -310,26 +378,86 @@ class ToolExecutor:
                     ),
                     "execution": "not_attempted",
                 },
-            ))
+            ), started_at)
 
         problem = self._validate(tool, arguments)
 
         if problem:
-            return self._finish(name, fail(problem, tool=name, capability=capability_id))
+            return self._finish(
+                name,
+                fail(
+                    problem,
+                    tool=name,
+                    capability=capability_id,
+                    execution="not_attempted",
+                    status=ToolStatus.INVALID_ARGUMENTS.value,
+                    error_code=CODE_INVALID_ARGUMENTS,
+                ),
+                started_at,
+            )
 
         if not self._approved(tool, arguments):
             return self._finish(
                 name,
-                fail(f"permission denied for {name}", tool=name, capability=capability_id, authorization="missing", execution="not_attempted"),
+                fail(
+                    f"permission denied for {name}",
+                    tool=name,
+                    capability=capability_id,
+                    authorization="missing",
+                    execution="not_attempted",
+                    status=ToolStatus.DENIED.value,
+                    error_code=CODE_CONFIRMATION_REQUIRED,
+                ),
+                started_at,
             )
 
         result = self._run(tool, arguments)
         
-        # Inject capability context into normal returns
+        # Inject capability context into normal returns. `replace`
+        # re-runs __post_init__, so the status/ok reconciliation and the
+        # completed_at stamp stay intact - rebuilding the dataclass by
+        # hand here would have silently dropped every Phase 3 field.
         if isinstance(result, ToolResult):
-            result = ToolResult(ok=result.ok, output=result.output, error=result.error, tool=result.tool, capability=capability_id, authorization="granted", execution="completed" if result.ok else "failed", data=result.data)
+            result = replace(
+                result,
+                capability=capability_id,
+                authorization="granted",
+                execution="completed" if result.ok else "failed",
+            )
 
-        return self._finish(name, self._verified(tool, arguments, result))
+        result = self._verified(tool, arguments, result)
+
+        # Output validation (Phase 3, section 13): a success whose data
+        # violates the tool's own declared output schema is not a
+        # success - the call ran, but its result cannot be trusted, and
+        # that distinction is exactly what UNKNOWN exists to carry. An
+        # empty payload counts as missing output: a tool that declared a
+        # schema owes the shape it promised.
+        if result.ok:
+            try:
+                mismatch = validate_output(tool, result.data)
+            except ValueError as error:
+                mismatch = ""
+                logger.debug("Output schema unreadable for %s: %s", name, error)
+
+            if mismatch:
+                logger.info(
+                    "Tool %s returned output its schema rejects: %s",
+                    name,
+                    mismatch,
+                )
+                result = replace(
+                    result,
+                    ok=False,
+                    status=ToolStatus.UNKNOWN.value,
+                    error_code=CODE_OUTPUT_SCHEMA,
+                    error=(
+                        f"{name} ran but its output did not match its "
+                        f"declared schema: {mismatch}"
+                    ),
+                )
+
+        return self._finish(name, result, started_at)
 
     def _run(self, tool: ToolProtocol, arguments: dict) -> ToolResult:
 
@@ -346,12 +474,26 @@ class ToolExecutor:
             # Not "the tool failed" but "we stopped waiting". Said
             # differently on purpose: the call may still be running, and
             # a user who sees "timed out" knows to raise the limit rather
-            # than to go looking for a bug in the tool.
-            return fail(str(error), tool=name)
+            # than to go looking for a bug in the tool. Canonical status
+            # TIMEOUT, whose whole meaning is "outcome genuinely unknown
+            # - the wait is bounded, the tool is not".
+            return fail(
+                str(error),
+                tool=name,
+                execution="not_attempted",
+                status=ToolStatus.TIMEOUT.value,
+                error_code=CODE_TIMEOUT,
+            )
 
         except Exception as error:
             logger.warning("Tool %s failed: %s", name, error)
-            return fail(f"{type(error).__name__}: {error}", tool=name)
+            return fail(
+                f"{type(error).__name__}: {error}",
+                tool=name,
+                execution="failed",
+                status=ToolStatus.FAILED.value,
+                error_code=CODE_TOOL_ERROR,
+            )
 
         return self._normalise(tool, result)
 
@@ -410,13 +552,39 @@ class ToolExecutor:
                 f"{name} ran but could not be verified: "
                 f"{type(error).__name__}: {error}",
                 tool=name,
+                execution="failed",
+                status=ToolStatus.FAILED.value,
+                error_code=CODE_UNVERIFIED,
+                evidence=(
+                    Evidence(
+                        EvidenceKind.POSTCONDITION,
+                        source="verify",
+                        verified=False,
+                        detail=f"{type(error).__name__}: {error}",
+                    ),
+                ),
             )
 
         if verdict is None:
+            # The tool asserts nothing; the result's evidence stays what
+            # it was (see execute: a bare RETURN_VALUE), which is the
+            # honest "it returned and nobody confirmed anything".
             return result
 
         if getattr(verdict, "ok", True):
-            return result
+            # A passed postcondition is real evidence, and attaching it
+            # is what lets a caller read VERIFIED instead of guessing.
+            return replace(
+                result,
+                evidence=result.evidence
+                + (
+                    Evidence(
+                        EvidenceKind.POSTCONDITION,
+                        source="verify",
+                        verified=True,
+                    ),
+                ),
+            )
 
         reason = str(getattr(verdict, "error", "") or "").strip()
 
@@ -425,6 +593,17 @@ class ToolExecutor:
         return fail(
             reason or f"{name} ran but its result could not be verified",
             tool=name,
+            execution="failed",
+            status=ToolStatus.FAILED.value,
+            error_code=CODE_UNVERIFIED,
+            evidence=(
+                Evidence(
+                    EvidenceKind.POSTCONDITION,
+                    source="verify",
+                    verified=False,
+                    detail=reason,
+                ),
+            ),
         )
 
     def _timeout_for(self, tool: ToolProtocol) -> float:
@@ -451,14 +630,15 @@ class ToolExecutor:
         if isinstance(result, ToolResult):
 
             if len(result.output) > MAX_OUTPUT:
-                return ToolResult(
-                    ok=result.ok,
+                # `replace`, not a hand-built ToolResult: truncation must
+                # not strip the status, evidence or execution identity.
+                return replace(
+                    result,
                     output=result.output[:MAX_OUTPUT] + " ...(truncated)",
-                    error=result.error,
                     tool=tool.name,
                 )
 
-            return result
+            return replace(result, tool=tool.name or result.tool)
 
         text = "" if result is None else str(result)
 
@@ -480,6 +660,36 @@ class ToolExecutor:
 
             if not self._is_plain(value, MAX_ARGUMENT_DEPTH):
                 return f"argument '{key}' is not plain data"
+
+        # Phase 3, section 12: a malformed argument must never reach the
+        # tool. Declared parameters are checked here for two things the
+        # old gate let through - a name the tool never declared, and a
+        # value of the wrong type - both of which previously became a
+        # TypeError raised *inside* the tool and surfaced as a generic
+        # execution failure. An undeclared parameter set checks nothing:
+        # a tool that never said what it takes cannot be accused of
+        # taking something it should not.
+        declared = getattr(tool, "parameters", ()) or ()
+
+        if declared:
+
+            known = {
+                parameter.name: getattr(parameter, "type", "string")
+                for parameter in declared
+            }
+
+            for key, value in arguments.items():
+
+                if key not in known:
+                    return f"unknown argument: {key}"
+
+                expected = known[key]
+
+                if not matches_type(value, expected):
+                    return (
+                        f"argument '{key}' must be {expected}, "
+                        f"got {type(value).__name__}"
+                    )
 
         missing = [
             name
@@ -563,9 +773,114 @@ class ToolExecutor:
     # Reporting
     # ------------------------------------------------------------------
 
-    def _finish(self, name: str, result: ToolResult) -> ToolResult:
+    def _finish(
+        self,
+        name: str,
+        result: ToolResult,
+        started_at: str = "",
+    ) -> ToolResult:
+        """
+        Stamp the execution contract onto a finished call, then report it.
+
+        This is the one place every execution passes, so it is where the
+        mechanical bookkeeping lives: the side-effect class read from the
+        tool's own declaration, the execution identity, the evidence a
+        bare success actually has (a RETURN_VALUE - the call came back,
+        nothing more), and the structured contract folded into `data` so
+        envelope-style callers get the vocabulary without re-deriving it.
+
+        Existing `data` entries win over the contract's: a device report
+        that already carries a richer `error` dict is not flattened by
+        the stamp. Finally the execution is traced - identifiers,
+        statuses and durations only, never arguments or content - and a
+        diagnostics failure cannot touch the result (emit_trace already
+        swallows, but the lookup around it is guarded on its own).
+        """
+
+        tool = self.registry.get(name)
+
+        side_effect = ""
+        if tool is not None:
+            declared = getattr(tool, "side_effect", None)
+            if declared is not None:
+                side_effect = getattr(declared, "value", "")
+
+        stamps: dict = {}
+
+        if side_effect and not result.side_effect:
+            stamps["side_effect"] = side_effect
+
+        if not result.execution_id:
+            stamps["execution_id"] = new_id("exec")
+
+        if started_at and not result.started_at:
+            stamps["started_at"] = started_at
+
+        if result.ok and not result.evidence:
+            # The evidence of a success nobody verified: the call
+            # returned. Named so it can never masquerade as a check.
+            stamps["evidence"] = (
+                Evidence(
+                    EvidenceKind.RETURN_VALUE,
+                    source="execute",
+                    verified=None,
+                ),
+            )
+
+        if stamps:
+            result = replace(result, **stamps)
+
+        if isinstance(result.data, dict):
+
+            contract: dict = {
+                "status": result.status,
+                "retryable": result.retryability.value,
+                "evidence": result.evidence_summary,
+                "side_effect": result.side_effect,
+                "execution_id": result.execution_id,
+            }
+
+            if result.error_code:
+                contract["error_code"] = result.error_code
+                contract["error_category"] = result.error_category.value
+
+            result = replace(result, data={**contract, **result.data})
 
         self.history.append((name, result.ok))
+
+        duration_ms = ""
+        try:
+            if result.started_at:
+                started = datetime.fromisoformat(result.started_at)
+                duration_ms = round(
+                    (
+                        datetime.now(timezone.utc) - started
+                    ).total_seconds()
+                    * 1000
+                )
+        except ValueError:
+            duration_ms = ""
+
+        emit_trace(
+            "tool_execution",
+            execution_id=result.execution_id,
+            tool=name,
+            status=result.status,
+            duration_ms=duration_ms,
+            error_code=result.error_code or "",
+            error_category=(
+                result.error_category.value if result.error_code else ""
+            ),
+            evidence=result.evidence_summary,
+            retryable=result.retryability.value,
+            side_effect=result.side_effect,
+            capability=result.capability or "",
+            verification=(
+                "verified"
+                if result.evidence_summary == "VERIFIED"
+                else result.evidence_summary.lower()
+            ),
+        )
 
         self._emit(
             ToolCompletedEvent(

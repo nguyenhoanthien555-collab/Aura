@@ -1,0 +1,12 @@
+﻿{
+  "project": "AURA",
+  "version": "0.9.0",
+  "status": "ready",
+  "active_subsystem": "core",
+  "last_build_status": "PASS",
+  "last_test_run": "2026-08-28T00:07:00Z",
+  "tests_passed": 69,
+  "tests_failed": 2,
+  "active_checkpoint_id": null,
+  "git_branch": "main"
+}

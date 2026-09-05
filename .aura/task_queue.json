@@ -1,0 +1,9 @@
+﻿[
+  {
+    "id": "AURA-TASK-001",
+    "title": "Settings API Async Coroutine Restart Cleanup",
+    "description": "Fix un-awaited coroutine warning in test_patch_restart_required_path and test_reset_reverts_settings",
+    "status": "pending",
+    "priority": "high"
+  }
+]

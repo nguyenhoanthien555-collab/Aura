@@ -1,0 +1,32 @@
+{
+    "id": "ADR-010",
+    "title": "Device App Inventory + Postcondition to Evidence Seam (Phase 5A)",
+    "status": "ACCEPTED",
+    "recorded_at": "2026-08-31T20:00:00+07:00",
+    "context": "On the normal chat path, Android postconditions lived in ToolResult.data but were not converted into canonical Phase 3 Evidence in the ledger the response verifier grades, so a verified Android action on chat stayed capped at INFERRED. Separately there was no fresh, timestamped, privacy-safe way to answer installed-app device-state questions.",
+    "decision": "Add exactly one read-only capability (android.app_inventory / android.list_apps) registered via the canonical core/capabilities/factory.py mechanism with required dependency android.companion, plus a deterministic evidence seam. The tool is ToolRisk.SAFE / SideEffect.READ_ONLY with structured output (observed_at required, device_id when known); normalise_device_report validates the wire shape and maps malformed inventory to EXECUTION_FAILED (never success, never coerced; UNKNOWN stays UNKNOWN). The Android half enumerates PackageManager behind a narrow PackageSource seam; pure AppInventory.collect is JVM-testable and deterministic; launchability comes from the MAIN/LAUNCHER query only and QUERY_ALL_PACKAGES is not added. _evidence_from_report converts a postcondition with an explicit boolean verified into EvidenceKind.POSTCONDITION evidence (true grounds a VERIFIED action, false stays failed/CONTRADICTED, missing or malformed yields none) and an app_inventory observation into EvidenceKind.OBSERVATION evidence that is never promoted to memory. No cache by default: every list_apps re-enumerates and stamps a fresh observed_at so a stale list can never be served as current.",
+    "alternatives": [
+        "Cache enumeration behind a TTL",
+        "Background / event-driven inventory",
+        "Grant QUERY_ALL_PACKAGES",
+        "A parallel tool/provider framework for inventory",
+        "A second model call to grade device state"
+    ],
+    "rejected_alternatives": [
+        "TTL cache (no measured need; a cache is a way for a stale list to be served as current); revisit only if a real device measurement justifies it",
+        "Event-driven inventory (violates observe-on-demand; complexity without offline need)",
+        "QUERY_ALL_PACKAGES (answers far more than which apps are here, needs a Play policy declaration; the existing MAIN/LAUNCHER query suffices)",
+        "Parallel framework (reuses existing Tool/ToolResult/Evidence machinery)",
+        "Second model call (non-deterministic; unchanged from ADR-009)"
+    ],
+    "consequences": "The chat-path verifier can reach VERIFIED for a verified Android action via postcondition Evidence; installed-app claims require fresh OBSERVATION evidence; package data is structurally kept out of diagnostics; no regression to Phase 4/4.5 adversarial rules (verified=false/missing/malformed never VERIFIED); a platform visibility-filtered answer is never reported as not-installed.",
+    "affected_components": [
+        "core/capabilities/factory.py",
+        "tools/providers/android_provider.py",
+        "tools/providers/android_bridge.py",
+        "android/.../accessibility/AppInventory.kt",
+        "android/.../accessibility/DeviceToolDispatcher.kt",
+        "android/app/src/test/.../AppInventoryTest.kt",
+        "tests/test_android_inventory.py"
+    ]
+}

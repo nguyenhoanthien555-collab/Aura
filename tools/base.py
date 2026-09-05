@@ -18,10 +18,19 @@ right attributes qualify without subclassing anything.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
 from core.logger import logger
+from tools.outcome import (
+    SideEffect,
+    ToolErrorCategory,
+    ToolStatus,
+    category_for_code,
+    evidence_state,
+    retryability_of,
+)
 
 
 class ToolRisk(str, Enum):
@@ -53,6 +62,19 @@ class ToolResult:
     runtime's structured envelopes, the CLI's --json mode). Empty for
     tools that have nothing structured to say; never a second, divergent
     account of the outcome.
+
+    Phase 3 adds the canonical outcome contract on top, without moving
+    the original fields: `status` is the ToolStatus vocabulary from
+    tools/outcome.py, `error_code` its machine-readable error code,
+    `evidence` the tuple of Evidence about what actually happened, and
+    `execution_id`/`started_at`/`completed_at` the execution identity the
+    diagnostics trace correlates. `side_effect` is the tool's declared
+    SideEffect class, which drives the derived retryability.
+
+    The one invariant enforced here rather than hoped for: `ok` is
+    reconciled FROM `status`, and only SUCCESS may produce `ok=True`.
+    An UNKNOWN outcome therefore cannot be read as a success by any
+    construction path, however it was built.
     """
 
     ok: bool
@@ -63,9 +85,129 @@ class ToolResult:
     authorization: str = "unknown"
     execution: str = "completed"
     data: dict = field(default_factory=dict)
+    status: str = ""
+    error_code: str = ""
+    evidence: tuple = ()
+    execution_id: str = ""
+    started_at: str = ""
+    completed_at: str = ""
+    side_effect: str = ""
+
+    def __post_init__(self):
+
+        # Reconcile the two vocabularies. An explicit status always wins,
+        # because it is the richer fact; only SUCCESS maps onto ok=True,
+        # so a result cannot be both UNKNOWN and truthy. A result built
+        # by the old two-argument shape (ok, error) gets its status
+        # derived rather than left empty - downstream readers may rely on
+        # the field always naming something.
+        if self.status:
+            canonical = ToolStatus(self.status)
+            if canonical.ok != self.ok:
+                object.__setattr__(self, "ok", canonical.ok)
+        else:
+            object.__setattr__(
+                self,
+                "status",
+                (ToolStatus.SUCCESS if self.ok else ToolStatus.FAILED).value,
+            )
+
+        # A completed execution is stamped when the creator did not.
+        if not self.completed_at:
+            object.__setattr__(
+                self,
+                "completed_at",
+                datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            )
 
     def __bool__(self) -> bool:
         return self.ok
+
+    @property
+    def status_enum(self) -> ToolStatus:
+
+        return ToolStatus(self.status)
+
+    @property
+    def error_category(self) -> ToolErrorCategory:
+        """
+        The category of this failure, or UNKNOWN for a success.
+
+        Derived from the code when the code is known; a success has no
+        error, and pretending otherwise would be a second fabrication.
+        """
+
+        return category_for_code(self.error_code)
+
+    @property
+    def evidence_summary(self) -> str:
+        """NONE / UNVERIFIED / VERIFIED / CONTRADICTED, one word."""
+
+        return evidence_state(self.evidence)
+
+    @property
+    def retryability(self):
+        """
+        Whether re-issuing this call is safe, derived - never asserted.
+
+        Reads (status, side_effect) through `retryability_of`, so the
+        retry decision lives in exactly one place. An undeclared side
+        effect reads as UNKNOWN, which no auto-retry may treat as a yes.
+        """
+
+        return retryability_of(
+            self.status_enum,
+            SideEffect(self.side_effect or SideEffect.UNKNOWN.value),
+        )
+
+    @property
+    def structured(self) -> dict:
+        """
+        The machine-readable view, for envelopes, traces and --json.
+
+        Present fields only: an execution with no id should not appear
+        to have one, and a reader can tell "not claimed" from "claimed
+        empty" only if the absent case is actually absent.
+        """
+
+        payload: dict = {
+            "ok": self.ok,
+            "status": self.status,
+            "tool": self.tool,
+            "capability": self.capability,
+            "authorization": self.authorization,
+            "execution": self.execution,
+        }
+
+        if self.error:
+            payload["error"] = self.error
+
+        if self.error_code:
+            payload["error_code"] = self.error_code
+            payload["error_category"] = self.error_category.value
+
+        if self.evidence:
+            payload["evidence"] = self.evidence_summary
+            payload["evidence_items"] = [
+                item.as_dict() for item in self.evidence
+            ]
+
+        if self.execution_id:
+            payload["execution_id"] = self.execution_id
+
+        if self.started_at:
+            payload["started_at"] = self.started_at
+            payload["completed_at"] = self.completed_at
+
+        if self.side_effect:
+            payload["side_effect"] = self.side_effect
+
+        payload["retryable"] = self.retryability.value
+
+        if self.data:
+            payload["data"] = self.data
+
+        return payload
 
     def render(self) -> str:
         """One line summary, for prompts and logs."""
@@ -73,10 +215,19 @@ class ToolResult:
         import json
         structured = {
             "success": self.ok,
+            "status": self.status,
             "capability": self.capability,
             "authorization": self.authorization,
             "execution": self.execution,
         }
+        if self.error_code:
+            structured["error_code"] = self.error_code
+            structured["error_category"] = self.error_category.value
+        if self.evidence:
+            structured["evidence"] = self.evidence_summary
+        if self.execution_id:
+            structured["execution_id"] = self.execution_id
+        structured["retryable"] = self.retryability.value
         if self.ok:
             structured["result"] = self.output
         else:
@@ -85,12 +236,115 @@ class ToolResult:
         return json.dumps(structured)
 
 
-def ok(output: str = "", tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "completed") -> ToolResult:
-    return ToolResult(ok=True, output=output, tool=tool, capability=capability, authorization=authorization, execution=execution)
+def ok(output: str = "", tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "completed", status: str = "", side_effect: str = "") -> ToolResult:
+    return ToolResult(ok=True, output=output, tool=tool, capability=capability, authorization=authorization, execution=execution, status=status or ToolStatus.SUCCESS.value, side_effect=side_effect)
 
 
-def fail(error: str, tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "not_attempted") -> ToolResult:
-    return ToolResult(ok=False, error=error, tool=tool, capability=capability, authorization=authorization, execution=execution)
+def fail(error: str, tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "not_attempted", status: str = "", error_code: str = "", side_effect: str = "", evidence: tuple = ()) -> ToolResult:
+    return ToolResult(ok=False, error=error, tool=tool, capability=capability, authorization=authorization, execution=execution, status=status or ToolStatus.FAILED.value, error_code=error_code, side_effect=side_effect, evidence=evidence)
+
+
+# Keys the executor folds into `data` for envelope callers. The model
+# reads these same facts from the serializer's own structured lines, so
+# the DATA line filters them out - no duplicated account, no execution
+# internals in the prompt.
+_CONTRACT_DATA_KEYS = frozenset({
+    "status",
+    "retryable",
+    "evidence",
+    "evidence_items",
+    "side_effect",
+    "execution_id",
+    "error_code",
+    "error_category",
+    "started_at",
+    "completed_at",
+})
+
+
+def serialize_for_model(result: "ToolResult") -> str:
+    """
+    The deterministic serialization layer between ToolResult and the model.
+
+    Fixed keys, fixed order, one line each - the same outcome always
+    renders identically, so a model that learned to read one result can
+    read them all. Status first, because it is the fact every other line
+    is read in the light of; evidence and retry state next, because they
+    are what the response contract branches on; the error with its code
+    and category, so a capability failure never has to be recovered from
+    prose; then the tool's own output or data.
+
+    The OUTCOME line keeps the established success and failure sentences
+    on purpose: models are already calibrated to them, and the structured
+    lines above say the same thing a machine could branch on.
+
+    No secrets and no internals: arguments never appear here (they came
+    from the model in the first place), and diagnostics fields the model
+    cannot act on - timestamps, execution ids - stay out of the prompt.
+    """
+
+    lines = [
+        f"STATUS: {result.status}",
+        f"TOOL: {result.tool or 'unknown'}",
+        f"EVIDENCE: {result.evidence_summary}",
+        f"RETRY: {result.retryability.value}",
+    ]
+
+    if not result.ok:
+
+        category = result.error_category.value
+        reason = result.error or "no reason given"
+
+        lines.append(f"OUTCOME: {result.tool or 'tool'} FAILED: {reason}")
+        lines.append(
+            f"ERROR: {result.error_code or 'UNKNOWN'}/{category}: {reason}"
+        )
+
+        if result.status_enum is ToolStatus.UNKNOWN:
+            lines.append(
+                "OUTCOME UNVERIFIED: the runtime cannot establish whether "
+                "this happened. Say so; do not claim it succeeded."
+            )
+        else:
+            lines.append(
+                "This did not happen. Tell the user it failed, and why."
+            )
+
+    else:
+
+        output = result.output or "(nothing)"
+
+        lines.append(
+            f"OUTCOME: {result.tool or 'tool'} ran successfully. "
+            f"It returned: {output}"
+        )
+
+        if result.data:
+            import json
+
+            # The executor folds the contract keys into `data` for
+            # envelope callers; the model already reads them from the
+            # structured lines above, so the DATA line carries only what
+            # the tool itself produced - and never execution internals.
+            payload = {
+                key: value
+                for key, value in result.data.items()
+                if key not in _CONTRACT_DATA_KEYS
+            }
+
+            if payload:
+                try:
+                    lines.append(f"DATA: {json.dumps(payload, default=str)}")
+                except (TypeError, ValueError):
+                    lines.append("DATA: (unserializable)")
+
+        if result.evidence_summary in ("UNVERIFIED", "NONE"):
+            lines.append(
+                "NOTE: success is unverified - the call returned but "
+                "nothing confirmed the result. Do not overstate it."
+            )
+
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -203,6 +457,20 @@ class Tool(ABC):
     description: str = ""
     risk: ToolRisk = ToolRisk.DANGEROUS
     capability: str = None
+
+    # The retry question, distinct from `risk` (the permission question).
+    # UNKNOWN is the honest default and is treated as unsafe to repeat:
+    # an unlabelled tool gets the strictest reading that still runs, the
+    # same rule `risk` follows.
+    side_effect: SideEffect = SideEffect.UNKNOWN
+
+    # The declared shape of a successful result's `data`, as JSON Schema.
+    # None (the default) means undeclared, and output validation is
+    # skipped - the executor will not invent a schema a tool never stated.
+    output_schema: dict | None = None
+
+    # Version of this tool's contract, for registry and MCP-style export.
+    version: str = "1.0"
 
     # A tuple, not a list: this is a class attribute shared by every
     # instance, and an immutable default cannot be appended to by

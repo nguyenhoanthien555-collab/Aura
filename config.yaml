@@ -81,6 +81,49 @@ memory:
   # target - what reaches the prompt is still `max_recalled`.
   retrieval_scope: 500
 
+  # Semantic recall (AURA 2.0 Phase 2). OFF, and off is a complete,
+  # working configuration: memory runs exactly as before, lexical only.
+  #
+  # Enabling it adds a second retrieval mechanism BESIDE the lexical
+  # one. The two are fused deterministically (reciprocal rank fusion);
+  # if the embedding provider is unavailable, fails, or its model has
+  # changed since indexing, recall silently degrades to lexical-only -
+  # never an error, never a lost memory, never fabricated results.
+  #
+  #   provider: hashing  local, dependency-free, deterministic n-gram
+  #                      hashing. Honest about its limit: it generalizes
+  #                      token overlap, it does NOT understand paraphrase.
+  #           ollama     a local model server - set base_url and model.
+  #                      Nothing leaves the machine.
+  #           remote     an OpenAI-compatible /embeddings endpoint. This
+  #                      sends memory content OFF this machine, so it
+  #                      stays inert until allow_remote is true. The
+  #                      consent gate is in the provider, not the caller.
+  #
+  # After changing provider or model, run a reindex
+  # (MemoryPipeline.semantic_indexer.reindex()) - until then the old
+  # vectors are reported stale and semantic recall stays unavailable.
+  semantic:
+    enabled: false
+    provider: "hashing"
+    model: ""
+    base_url: ""
+    api_key_env: ""
+    allow_remote: false
+    top_k: 6
+    # Semantic's share of the fused score (lexical takes 1 - weight).
+    # 0.5 is an equal split and orders results exactly as unweighted
+    # fusion does, so this default changes nothing.
+    weight: 0.5
+    # Cosine floor for a semantic match. Empty means "use the
+    # provider's own measured floor" (hashing: 0.24, measured by
+    # scripts/benchmark_semantic.py; model-backed providers: 0.05,
+    # deliberately conservative and unmeasured). Only override this
+    # from a sweep on your own provider.
+    min_similarity: null
+    timeout: 5.0
+    batch_size: 32
+
 # What time Aura thinks it is.
 #
 # Empty means this machine's timezone. Set it explicitly for a server in
@@ -89,6 +132,44 @@ memory:
 # the `tzdata` package installed on Windows; UTC does not.
 temporal:
   timezone: ""
+
+# The claim -> evidence boundary on the finished reply.
+#
+# Before this existed, nothing checked what Aura said against what Aura
+# had actually done. A tool could fail and the reply could still say "I
+# sent it", because the only thing standing between the two was a prompt
+# instruction - and section 13 of the contract is explicit that prompt
+# instructions alone are insufficient. This is the consequence.
+#
+# What it does: splits the finished reply into sentences, classifies the
+# ones that claim something about the world, and checks each against the
+# evidence this turn actually gathered - tool outcomes with their Phase 3
+# status and evidence, recalled memory lines with their provenance, and
+# the live capability registry. A claim the evidence contradicts is
+# replaced with what the evidence said. A claim nothing supports is
+# hedged. Everything else is left exactly as written.
+#
+# What it cannot do: add a fact, raise a confidence, invent a reason, or
+# make a reply claim MORE than the model wrote. Every rule moves in one
+# direction only. There is no second model call - it is a table lookup,
+# and it costs well under a millisecond.
+#
+# Ordinary conversation is deliberately out of scope. "Python is
+# dynamically typed" and "you have three options" are not checked against
+# anything, because there is nothing to check them against and hedging
+# them would be noise. A sentence is only held to evidence when it claims
+# Aura did something, claims Aura can do something, or names something in
+# your world - your email, your calendar, your files, your phone.
+#
+#   enabled  turn the whole boundary off to get the pre-Phase-4 reply.
+#   repair   false is observe-only: the text is delivered exactly as
+#            generated and the findings are still counted in
+#            logs/diagnostics.jsonl. Use it to see what this would have
+#            changed before letting it change anything.
+response:
+  verify:
+    enabled: true
+    repair: true
 
 # Speaking first.
 #

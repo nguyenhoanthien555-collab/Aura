@@ -1,0 +1,1144 @@
+﻿{
+    "conftest.py":  {
+                        "functions":  {
+
+                                      },
+                        "lines":  15,
+                        "classes":  {
+
+                                    }
+                    },
+    "launcher.py":  {
+                        "functions":  [
+                                          "parse_arguments",
+                                          "apply_overrides",
+                                          "run_server",
+                                          "main"
+                                      ],
+                        "lines":  215,
+                        "classes":  {
+
+                                    }
+                    },
+    "main.py":  {
+                    "functions":  "main",
+                    "lines":  20,
+                    "classes":  {
+
+                                }
+                },
+    "test.py":  {
+                    "functions":  {
+
+                                  },
+                    "lines":  1,
+                    "classes":  {
+
+                                }
+                },
+    "dependency_groups.py":  {
+                                 "functions":  [
+                                                   "__dir__",
+                                                   "__init__",
+                                                   "__reduce__",
+                                                   "__init__",
+                                                   "__repr__",
+                                                   "__init__",
+                                                   "lookup",
+                                                   "resolve",
+                                                   "_resolve",
+                                                   "_parse_group",
+                                                   "resolve_dependency_groups",
+                                                   "_normalize_name",
+                                                   "_normalize_group_names"
+                                               ],
+                                 "lines":  335,
+                                 "classes":  [
+                                                 "DuplicateGroupNames",
+                                                 "CyclicDependencyGroup",
+                                                 "InvalidDependencyGroupObject",
+                                                 "DependencyGroupInclude",
+                                                 "DependencyGroupResolver",
+                                                 "handles"
+                                             ]
+                             },
+    "direct_url.py":  {
+                          "functions":  [
+                                            "__dir__",
+                                            "_from_dict",
+                                            "_json_dict_factory",
+                                            "_get",
+                                            "_get_required",
+                                            "_get_object",
+                                            "_strip_auth_from_netloc",
+                                            "_strip_url",
+                                            "_file_url_has_absolute_path",
+                                            "__init__",
+                                            "__str__",
+                                            "__init__",
+                                            "__init__",
+                                            "_from_dict",
+                                            "__init__",
+                                            "_from_dict",
+                                            "__init__",
+                                            "_from_dict",
+                                            "__init__",
+                                            "_from_dict",
+                                            "from_dict",
+                                            "to_dict",
+                                            "validate"
+                                        ],
+                          "lines":  349,
+                          "classes":  [
+                                          "_FromMappingProtocol",
+                                          "DirectUrlValidationError",
+                                          "_DirectUrlRequiredKeyError",
+                                          "VcsInfo",
+                                          "ArchiveInfo",
+                                          "DirInfo",
+                                          "DirectUrl",
+                                          "representing"
+                                      ]
+                      },
+    "errors.py":  {
+                      "functions":  [
+                                        "__dir__",
+                                        "__init__",
+                                        "__repr__",
+                                        "finalize",
+                                        "on_exit",
+                                        "collect",
+                                        "error"
+                                    ],
+                      "lines":  94,
+                      "classes":  [
+                                      "ExceptionGroup",
+                                      "_ErrorCollector"
+                                  ]
+                  },
+    "markers.py":  {
+                       "functions":  [
+                                         "__dir__",
+                                         "_normalize_extras",
+                                         "_normalize_extra_values",
+                                         "_format_marker",
+                                         "_eval_op",
+                                         "_normalize",
+                                         "_lookup_environment",
+                                         "_evaluate_markers",
+                                         "_format_full_version",
+                                         "_cached_default_environment",
+                                         "default_environment",
+                                         "__init__",
+                                         "_from_markers",
+                                         "__str__",
+                                         "__repr__",
+                                         "__hash__",
+                                         "__eq__",
+                                         "__getstate__",
+                                         "__setstate__",
+                                         "__and__",
+                                         "__or__",
+                                         "evaluate",
+                                         "_pep440_python_full_version",
+                                         "_repair_python_full_version"
+                                     ],
+                       "lines":  576,
+                       "classes":  [
+                                       "InvalidMarker",
+                                       "UndefinedComparison",
+                                       "UndefinedEnvironmentName",
+                                       "Environment",
+                                       "Marker"
+                                   ]
+                   },
+    "metadata.py":  {
+                        "functions":  [
+                                          "__dir__",
+                                          "__init__",
+                                          "__reduce__",
+                                          "_parse_keywords",
+                                          "_parse_project_urls",
+                                          "_get_payload",
+                                          "header_store_parse",
+                                          "__init__",
+                                          "as_bytes",
+                                          "parse_email",
+                                          "__init__",
+                                          "__set_name__",
+                                          "__get__",
+                                          "_invalid_metadata",
+                                          "_process_metadata_version",
+                                          "_process_name",
+                                          "_process_version",
+                                          "_process_summary",
+                                          "_process_description_content_type",
+                                          "_process_dynamic",
+                                          "_process_provides_extra",
+                                          "_process_requires_python",
+                                          "_process_requires_dist",
+                                          "_process_license_expression",
+                                          "_process_license_files",
+                                          "_process_import_names",
+                                          "from_raw",
+                                          "from_email",
+                                          "as_rfc822",
+                                          "_write_metadata"
+                                      ],
+                        "lines":  1054,
+                        "classes":  [
+                                        "InvalidMetadata",
+                                        "attempts",
+                                        "RawMetadata",
+                                        "is",
+                                        "RFC822Policy",
+                                        "is",
+                                        "RFC822Message",
+                                        "_Validator",
+                                        "Metadata",
+                                        "provides"
+                                    ]
+                    },
+    "pylock.py":  {
+                      "functions":  [
+                                        "__dir__",
+                                        "_from_dict",
+                                        "is_valid_pylock_path",
+                                        "_toml_key",
+                                        "_toml_value",
+                                        "_toml_dict_factory",
+                                        "_get",
+                                        "_get_required",
+                                        "_get_sequence",
+                                        "_get_as",
+                                        "_get_required_as",
+                                        "_get_sequence_as",
+                                        "_get_object",
+                                        "_get_sequence_of_objects",
+                                        "_get_required_sequence_of_objects",
+                                        "_validate_normalized_name",
+                                        "_validate_path_url",
+                                        "_path_name",
+                                        "_url_name",
+                                        "_validate_hashes",
+                                        "__init__",
+                                        "__str__",
+                                        "__init__",
+                                        "__init__",
+                                        "_from_dict",
+                                        "__init__",
+                                        "_from_dict",
+                                        "__init__",
+                                        "_from_dict",
+                                        "__init__",
+                                        "_from_dict",
+                                        "filename",
+                                        "__init__",
+                                        "_from_dict",
+                                        "filename",
+                                        "__init__",
+                                        "_from_dict",
+                                        "is_direct",
+                                        "__init__",
+                                        "_from_dict",
+                                        "from_dict",
+                                        "to_dict",
+                                        "validate",
+                                        "select"
+                                    ],
+                      "lines":  943,
+                      "classes":  [
+                                      "_FromMappingProtocol",
+                                      "of",
+                                      "PylockValidationError",
+                                      "_PylockRequiredKeyError",
+                                      "PylockUnsupportedVersionError",
+                                      "PylockSelectError",
+                                      "PackageVcs",
+                                      "kw_only",
+                                      "PackageDirectory",
+                                      "kw_only",
+                                      "PackageArchive",
+                                      "kw_only",
+                                      "PackageSdist",
+                                      "kw_only",
+                                      "PackageWheel",
+                                      "kw_only",
+                                      "Package",
+                                      "kw_only",
+                                      "Pylock",
+                                      "representing",
+                                      "kw_only"
+                                  ]
+                  },
+    "ranges.py":  {
+                      "functions":  [
+                                        "__dir__",
+                                        "_union_ranges",
+                                        "_complement_ranges",
+                                        "_canonical_floor",
+                                        "_predecessor_boundary",
+                                        "_canonicalize",
+                                        "_struct_admits",
+                                        "_bound_version_str",
+                                        "_format_lower",
+                                        "_format_upper",
+                                        "_format_intervals",
+                                        "_is_dev0_version",
+                                        "_clean_lower",
+                                        "_epoch_floor_lower",
+                                        "_dev_family_anchor",
+                                        "_encode_lower",
+                                        "_encode_upper",
+                                        "_detect_equal_wildcard",
+                                        "_encode_interval",
+                                        "_detect_not_equal",
+                                        "_decompose_dev0_gap",
+                                        "_encode_gap",
+                                        "_encode_gaps",
+                                        "_tighten_no_prereleases",
+                                        "__new__",
+                                        "_build",
+                                        "_has_literals",
+                                        "_arbitrary_active",
+                                        "_is_plain",
+                                        "_check_policy_compat",
+                                        "_merged_region",
+                                        "_with_policy",
+                                        "empty",
+                                        "full",
+                                        "singleton",
+                                        "intersection",
+                                        "union",
+                                        "complement",
+                                        "difference",
+                                        "_combine_literals",
+                                        "_matches_literal",
+                                        "__and__",
+                                        "__or__",
+                                        "__invert__",
+                                        "__sub__",
+                                        "is_subset",
+                                        "is_superset",
+                                        "is_disjoint",
+                                        "_same_releases",
+                                        "filter",
+                                        "filter",
+                                        "filter",
+                                        "_filter_with_admission",
+                                        "admit",
+                                        "_from_specifier_set",
+                                        "to_specifier_set",
+                                        "is_empty",
+                                        "contains",
+                                        "__contains__",
+                                        "__eq__",
+                                        "__hash__",
+                                        "__repr__"
+                                    ],
+                      "lines":  2067,
+                      "classes":  [
+                                      "_SetOp",
+                                      "VersionRange",
+                                      "methods"
+                                  ]
+                  },
+    "requirements.py":  {
+                            "functions":  [
+                                              "__dir__",
+                                              "__init__",
+                                              "_iter_parts",
+                                              "__getstate__",
+                                              "__setstate__",
+                                              "__str__",
+                                              "__repr__",
+                                              "__hash__",
+                                              "__eq__"
+                                          ],
+                            "lines":  192,
+                            "classes":  [
+                                            "InvalidRequirement",
+                                            "Requirement"
+                                        ]
+                        },
+    "specifiers.py":  {
+                          "functions":  [
+                                            "__dir__",
+                                            "_validate_spec",
+                                            "_validate_pre",
+                                            "_fast_match",
+                                            "_str",
+                                            "__str__",
+                                            "__hash__",
+                                            "__eq__",
+                                            "prereleases",
+                                            "prereleases",
+                                            "contains",
+                                            "filter",
+                                            "filter",
+                                            "filter",
+                                            "__init__",
+                                            "_get_spec_version",
+                                            "_require_spec_version",
+                                            "_to_ranges",
+                                            "prereleases",
+                                            "prereleases",
+                                            "__getstate__",
+                                            "__setstate__",
+                                            "operator",
+                                            "version",
+                                            "__repr__",
+                                            "__str__",
+                                            "_canonical_spec",
+                                            "__hash__",
+                                            "__eq__",
+                                            "__contains__",
+                                            "contains",
+                                            "filter",
+                                            "filter",
+                                            "filter",
+                                            "_apply_prereleases_filter",
+                                            "__init__",
+                                            "_canonical_specs",
+                                            "prereleases",
+                                            "prereleases",
+                                            "__getstate__",
+                                            "__setstate__",
+                                            "__repr__",
+                                            "__str__",
+                                            "__hash__",
+                                            "__and__",
+                                            "__eq__",
+                                            "__len__",
+                                            "__iter__",
+                                            "_get_ranges",
+                                            "is_unsatisfiable",
+                                            "_check_arbitrary_unsatisfiable",
+                                            "to_range",
+                                            "_check_relation_operand",
+                                            "is_subset",
+                                            "is_superset",
+                                            "is_disjoint",
+                                            "__contains__",
+                                            "contains",
+                                            "filter",
+                                            "filter",
+                                            "filter",
+                                            "_pep440_filter_prereleases"
+                                        ],
+                          "lines":  1457,
+                          "classes":  [
+                                          "InvalidSpecifier",
+                                          "BaseSpecifier",
+                                          "for",
+                                          "Specifier",
+                                          "abstracts",
+                                          "SpecifierSet",
+                                          "abstracts"
+                                      ]
+                      },
+    "tags.py":  {
+                    "functions":  [
+                                      "__dir__",
+                                      "_compute_32_bit_interpreter",
+                                      "__init__",
+                                      "interpreter",
+                                      "abi",
+                                      "platform",
+                                      "__eq__",
+                                      "__hash__",
+                                      "__str__",
+                                      "__repr__",
+                                      "__getstate__",
+                                      "__setstate__",
+                                      "parse_tag",
+                                      "_get_config_var",
+                                      "_normalize_string",
+                                      "_is_threaded_cpython",
+                                      "_abi3_applies",
+                                      "_abi3t_applies",
+                                      "_cpython_abis",
+                                      "cpython_tags",
+                                      "_generic_abi",
+                                      "generic_tags",
+                                      "_py_interpreter_range",
+                                      "pure_python_tags",
+                                      "compatible_tags",
+                                      "_mac_arch",
+                                      "_mac_binary_formats",
+                                      "mac_platforms",
+                                      "ios_platforms",
+                                      "android_platforms",
+                                      "_linux_platforms",
+                                      "_emscripten_platforms",
+                                      "_generic_platforms",
+                                      "platform_tags",
+                                      "interpreter_name",
+                                      "interpreter_version",
+                                      "_version_nodot",
+                                      "sys_tags",
+                                      "create_compatible_tags_selector",
+                                      "selector"
+                                  ],
+                    "lines":  1053,
+                    "classes":  [
+                                    "UnsortedTagsError",
+                                    "InvalidTag",
+                                    "TooManyTagsError",
+                                    "Tag"
+                                ]
+                },
+    "utils.py":  {
+                     "functions":  [
+                                       "__dir__",
+                                       "canonicalize_name",
+                                       "is_normalized_name",
+                                       "canonicalize_version",
+                                       "parse_wheel_filename",
+                                       "parse_sdist_filename"
+                                   ],
+                     "lines":  370,
+                     "classes":  [
+                                     "InvalidName",
+                                     "InvalidWheelFilename",
+                                     "InvalidSdistFilename"
+                                 ]
+                 },
+    "version.py":  {
+                       "functions":  [
+                                         "_deprecated",
+                                         "decorator",
+                                         "wrapper",
+                                         "__dir__",
+                                         "normalize_pre",
+                                         "parse",
+                                         "_key",
+                                         "__hash__",
+                                         "__lt__",
+                                         "__le__",
+                                         "__eq__",
+                                         "__ge__",
+                                         "__gt__",
+                                         "__ne__",
+                                         "_validate_epoch",
+                                         "_validate_release",
+                                         "_validate_pre",
+                                         "_validate_post",
+                                         "_validate_dev",
+                                         "_validate_local",
+                                         "__init__",
+                                         "from_parts",
+                                         "__replace__",
+                                         "_key",
+                                         "__hash__",
+                                         "__lt__",
+                                         "__le__",
+                                         "__eq__",
+                                         "__ge__",
+                                         "__gt__",
+                                         "__ne__",
+                                         "__getstate__",
+                                         "__setstate__",
+                                         "_version",
+                                         "_version",
+                                         "__repr__",
+                                         "__str__",
+                                         "_str",
+                                         "epoch",
+                                         "release",
+                                         "pre",
+                                         "post",
+                                         "dev",
+                                         "local",
+                                         "public",
+                                         "base_version",
+                                         "is_prerelease",
+                                         "is_postrelease",
+                                         "is_devrelease",
+                                         "major",
+                                         "minor",
+                                         "micro",
+                                         "__init__",
+                                         "release",
+                                         "_parse_letter_version",
+                                         "_parse_local_version",
+                                         "_cmpkey"
+                                     ],
+                       "lines":  1252,
+                       "classes":  [
+                                       "_VersionReplace",
+                                       "InvalidVersion",
+                                       "_BaseVersion",
+                                       "_Version",
+                                       "Version",
+                                       "abstracts",
+                                       "_TrimmedRelease"
+                                   ]
+                   },
+    "_elffile.py":  {
+                        "functions":  [
+                                          "__init__",
+                                          "_read",
+                                          "interpreter"
+                                      ],
+                        "lines":  108,
+                        "classes":  [
+                                        "ELFInvalid",
+                                        "EIClass",
+                                        "EIData",
+                                        "EMachine",
+                                        "ELFFile"
+                                    ]
+                    },
+    "_manylinux.py":  {
+                          "functions":  [
+                                            "_parse_elf",
+                                            "_is_linux_armhf",
+                                            "_is_linux_i686",
+                                            "_have_compatible_abi",
+                                            "_glibc_version_string_confstr",
+                                            "_glibc_version_string_ctypes",
+                                            "_glibc_version_string",
+                                            "_parse_glibc_version",
+                                            "_get_glibc_version",
+                                            "_get_manylinux_module",
+                                            "_is_compatible",
+                                            "platform_tags"
+                                        ],
+                          "lines":  278,
+                          "classes":  "_GLibCVersion"
+                      },
+    "_musllinux.py":  {
+                          "functions":  [
+                                            "_parse_musl_version",
+                                            "_get_musl_version",
+                                            "platform_tags"
+                                        ],
+                          "lines":  88,
+                          "classes":  "_MuslVersion"
+                      },
+    "_parser.py":  {
+                       "functions":  [
+                                         "__init__",
+                                         "__str__",
+                                         "__repr__",
+                                         "serialize",
+                                         "__getstate__",
+                                         "_restore_value",
+                                         "__setstate__",
+                                         "serialize",
+                                         "serialize",
+                                         "serialize",
+                                         "parse_requirement",
+                                         "_parse_requirement",
+                                         "_parse_requirement_details",
+                                         "_parse_requirement_marker",
+                                         "_parse_extras",
+                                         "_parse_extras_list",
+                                         "_parse_specifier",
+                                         "_parse_version_many",
+                                         "parse_marker",
+                                         "_parse_full_marker",
+                                         "_parse_marker",
+                                         "_parse_marker_atom",
+                                         "_parse_marker_item",
+                                         "_parse_marker_var",
+                                         "process_env_var",
+                                         "process_python_str",
+                                         "_parse_marker_op"
+                                     ],
+                       "lines":  418,
+                       "classes":  [
+                                       "Node",
+                                       "Variable",
+                                       "Value",
+                                       "Op",
+                                       "ParsedRequirement"
+                                   ]
+                   },
+    "_ranges.py":  {
+                       "functions":  [
+                                         "__init__",
+                                         "_is_family",
+                                         "_order_key",
+                                         "__eq__",
+                                         "__lt__",
+                                         "__gt__",
+                                         "__hash__",
+                                         "__repr__",
+                                         "__init__",
+                                         "__eq__",
+                                         "__lt__",
+                                         "__hash__",
+                                         "__repr__",
+                                         "__init__",
+                                         "__eq__",
+                                         "__lt__",
+                                         "__hash__",
+                                         "__repr__",
+                                         "trim_release",
+                                         "_next_prefix_dev0",
+                                         "_base_dev0",
+                                         "coerce_version",
+                                         "_make_above_after_posts",
+                                         "above",
+                                         "_make_above_after_locals",
+                                         "above",
+                                         "_make_below_after_locals",
+                                         "below",
+                                         "least_version_above",
+                                         "range_is_empty",
+                                         "intersect_ranges",
+                                         "filter_by_ranges",
+                                         "_nearest_release_above_prerelease",
+                                         "_lowest_release_at_or_above",
+                                         "ranges_are_prerelease_only",
+                                         "wildcard_ranges",
+                                         "standard_ranges",
+                                         "bounds_for_spec",
+                                         "intersect_specifier_bounds",
+                                         "matches_bounds_only",
+                                         "resolve_prereleases"
+                                     ],
+                       "lines":  836,
+                       "classes":  [
+                                       "BoundaryKind",
+                                       "BoundaryVersion",
+                                       "LowerBound",
+                                       "UpperBound"
+                                   ]
+                   },
+    "_structures.py":  {
+                           "functions":  [
+                                             "__repr__",
+                                             "__repr__"
+                                         ],
+                           "lines":  33,
+                           "classes":  [
+                                           "InfinityType",
+                                           "NegativeInfinityType"
+                                       ]
+                       },
+    "_tokenizer.py":  {
+                          "functions":  [
+                                            "__init__",
+                                            "__str__",
+                                            "__init__",
+                                            "consume",
+                                            "check",
+                                            "expect",
+                                            "read",
+                                            "raise_syntax_error",
+                                            "enclosing_tokens"
+                                        ],
+                          "lines":  200,
+                          "classes":  [
+                                          "Token",
+                                          "ParserSyntaxError",
+                                          "Tokenizer"
+                                      ]
+                      },
+    "__init__.py":  {
+                        "functions":  [
+                                          "__dir__",
+                                          "canonicalize_license_expression"
+                                      ],
+                        "lines":  198,
+                        "classes":  "InvalidLicenseExpression"
+                    },
+    "_spdx.py":  {
+                     "functions":  {
+
+                                   },
+                     "lines":  799,
+                     "classes":  [
+                                     "SPDXLicense",
+                                     "SPDXException"
+                                 ]
+                 },
+    "AvifImagePlugin.py":  {
+                               "functions":  [
+                                                 "get_codec_version",
+                                                 "_accept",
+                                                 "_get_default_max_threads",
+                                                 "_open",
+                                                 "seek",
+                                                 "load",
+                                                 "load_seek",
+                                                 "tell",
+                                                 "_save_all",
+                                                 "_save"
+                                             ],
+                               "lines":  295,
+                               "classes":  "AvifImageFile"
+                           },
+    "BdfFontFile.py":  {
+                           "functions":  [
+                                             "bdf_char",
+                                             "__init__"
+                                         ],
+                           "lines":  124,
+                           "classes":  "BdfFontFile"
+                       },
+    "BlpImagePlugin.py":  {
+                              "functions":  [
+                                                "unpack_565",
+                                                "decode_dxt1",
+                                                "decode_dxt3",
+                                                "decode_dxt5",
+                                                "_accept",
+                                                "_open",
+                                                "decode",
+                                                "_load",
+                                                "_read_header",
+                                                "_safe_read",
+                                                "_read_palette",
+                                                "_read_bgra",
+                                                "_load",
+                                                "_decode_jpeg_stream",
+                                                "_load",
+                                                "_write_palette",
+                                                "encode",
+                                                "_save"
+                                            ],
+                              "lines":  498,
+                              "classes":  [
+                                              "Format",
+                                              "Encoding",
+                                              "AlphaEncoding",
+                                              "BLPFormatError",
+                                              "BlpImageFile",
+                                              "_BLPBaseDecoder",
+                                              "BLP1Decoder",
+                                              "BLP2Decoder",
+                                              "BLPEncoder"
+                                          ]
+                          },
+    "BmpImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_dib_accept",
+                                                "_bitmap",
+                                                "_open",
+                                                "decode",
+                                                "_open",
+                                                "_dib_save",
+                                                "_save"
+                                            ],
+                              "lines":  514,
+                              "classes":  [
+                                              "BmpImageFile",
+                                              "BmpRleDecoder",
+                                              "DibImageFile"
+                                          ]
+                          },
+    "BufrStubImagePlugin.py":  {
+                                   "functions":  [
+                                                     "register_handler",
+                                                     "_accept",
+                                                     "_open",
+                                                     "_load",
+                                                     "_save"
+                                                 ],
+                                   "lines":  72,
+                                   "classes":  "BufrStubImageFile"
+                               },
+    "ContainerIO.py":  {
+                           "functions":  [
+                                             "__init__",
+                                             "isatty",
+                                             "seekable",
+                                             "seek",
+                                             "tell",
+                                             "readable",
+                                             "read",
+                                             "readline",
+                                             "readlines",
+                                             "writable",
+                                             "write",
+                                             "writelines",
+                                             "truncate",
+                                             "__enter__",
+                                             "__exit__",
+                                             "__iter__",
+                                             "__next__",
+                                             "fileno",
+                                             "flush",
+                                             "close"
+                                         ],
+                           "lines":  173,
+                           "classes":  [
+                                           "to",
+                                           "ContainerIO"
+                                       ]
+                       },
+    "CurImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_open",
+                                                "load_prepare",
+                                                "load_end"
+                                            ],
+                              "lines":  103,
+                              "classes":  "CurImageFile"
+                          },
+    "DcxImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_open",
+                                                "seek",
+                                                "tell"
+                                            ],
+                              "lines":  84,
+                              "classes":  "DcxImageFile"
+                          },
+    "DdsImagePlugin.py":  {
+                              "functions":  [
+                                                "_open",
+                                                "load_seek",
+                                                "decode",
+                                                "_save",
+                                                "_accept"
+                                            ],
+                              "lines":  632,
+                              "classes":  [
+                                              "DDSD",
+                                              "DDSCAPS",
+                                              "DDSCAPS2",
+                                              "DDPF",
+                                              "DXGI_FORMAT",
+                                              "D3DFMT",
+                                              "DdsImageFile",
+                                              "DdsRgbDecoder"
+                                          ]
+                          },
+    "EpsImagePlugin.py":  {
+                              "functions":  [
+                                                "has_ghostscript",
+                                                "Ghostscript",
+                                                "_accept",
+                                                "_open",
+                                                "check_required_header_comments",
+                                                "read_comment",
+                                                "_find_offset",
+                                                "load",
+                                                "load_seek",
+                                                "_save"
+                                            ],
+                              "lines":  484,
+                              "classes":  "EpsImageFile"
+                          },
+    "ExifTags.py":  {
+                        "functions":  {
+
+                                      },
+                        "lines":  384,
+                        "classes":  [
+                                        "Base",
+                                        "GPS",
+                                        "Interop",
+                                        "IFD",
+                                        "LightSource"
+                                    ]
+                    },
+    "features.py":  {
+                        "functions":  [
+                                          "check_module",
+                                          "version_module",
+                                          "get_supported_modules",
+                                          "check_codec",
+                                          "version_codec",
+                                          "get_supported_codecs",
+                                          "check_feature",
+                                          "version_feature",
+                                          "get_supported_features",
+                                          "check",
+                                          "version",
+                                          "get_supported",
+                                          "pilinfo"
+                                      ],
+                        "lines":  343,
+                        "classes":  {
+
+                                    }
+                    },
+    "FitsImagePlugin.py":  {
+                               "functions":  [
+                                                 "_accept",
+                                                 "_open",
+                                                 "_get_size",
+                                                 "_parse_headers",
+                                                 "decode"
+                                             ],
+                               "lines":  153,
+                               "classes":  [
+                                               "FitsImageFile",
+                                               "FitsGzipDecoder"
+                                           ]
+                           },
+    "FliImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_open",
+                                                "_palette",
+                                                "seek",
+                                                "_seek",
+                                                "tell"
+                                            ],
+                              "lines":  184,
+                              "classes":  "FliImageFile"
+                          },
+    "FontFile.py":  {
+                        "functions":  [
+                                          "puti16",
+                                          "__init__",
+                                          "__getitem__",
+                                          "compile",
+                                          "_encode_metrics",
+                                          "save",
+                                          "to_imagefont"
+                                      ],
+                        "lines":  160,
+                        "classes":  [
+                                        "for",
+                                        "FontFile",
+                                        "for"
+                                    ]
+                    },
+    "FpxImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_open",
+                                                "_open_index",
+                                                "_open_subimage",
+                                                "load",
+                                                "close",
+                                                "__exit__"
+                                            ],
+                              "lines":  262,
+                              "classes":  "FpxImageFile"
+                          },
+    "FtexImagePlugin.py":  {
+                               "functions":  [
+                                                 "_open",
+                                                 "load_seek",
+                                                 "_accept"
+                                             ],
+                               "lines":  115,
+                               "classes":  [
+                                               "Format",
+                                               "FtexImageFile"
+                                           ]
+                           },
+    "GbrImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "_open",
+                                                "load"
+                                            ],
+                              "lines":  103,
+                              "classes":  "GbrImageFile"
+                          },
+    "GdImageFile.py":  {
+                           "functions":  [
+                                             "_open",
+                                             "open"
+                                         ],
+                           "lines":  104,
+                           "classes":  [
+                                           "is",
+                                           "GdImageFile"
+                                       ]
+                       },
+    "GifImagePlugin.py":  {
+                              "functions":  [
+                                                "_accept",
+                                                "data",
+                                                "_is_palette_needed",
+                                                "_open",
+                                                "n_frames",
+                                                "is_animated",
+                                                "seek",
+                                                "_seek",
+                                                "_rgb",
+                                                "load_prepare",
+                                                "load_end",
+                                                "tell",
+                                                "_normalize_mode",
+                                                "_normalize_palette",
+                                                "_write_single_frame",
+                                                "_getbbox",
+                                                "_write_multiple_frames",
+                                                "_save_all",
+                                                "_save",
+                                                "get_interlace",
+                                                "_write_local_header",
+                                                "_save_netpbm",
+                                                "_get_optimize",
+                                                "_get_color_table_size",
+                                                "_get_header_palette",
+                                                "_get_palette_bytes",
+                                                "_get_background",
+                                                "_get_global_header",
+                                                "_write_frame_data",
+                                                "getheader",
+                                                "getdata",
+                                                "write"
+                                            ],
+                              "lines":  1223,
+                              "classes":  [
+                                              "LoadingStrategy",
+                                              "GifImageFile",
+                                              "_Frame",
+                                              "Collector"
+                                          ]
+                          },
+    "GimpGradientFile.py":  {
+                                "functions":  [
+                                                  "linear",
+                                                  "curved",
+                                                  "sine",
+                                                  "sphere_increasing",
+                                                  "sphere_decreasing",
+                                                  "getpalette",
+                                                  "__init__"
+                                              ],
+                                "lines":  154,
+                                "classes":  [
+                                                "GradientFile",
+                                                "GimpGradientFile"
+                                            ]
+                            },
+    "GimpPaletteFile.py":  {
+                               "functions":  [
+                                                 "_read",
+                                                 "__init__",
+                                                 "frombytes",
+                                                 "getpalette"
+                                             ],
+                               "lines":  75,
+                               "classes":  "GimpPaletteFile"
+                           },
+    "GribStubImagePlugin.py":  {
+                                   "functions":  [
+                                                     "register_handler",
+                                                     "_accept",
+                                                     "_open",
+                                                     "_load",
+                                                     "_save"
+                                                 ],
+                                   "lines":  72,
+                                   "classes":  "GribStubImageFile"
+                               },
+    "Hdf5StubImagePlugin.py":  {
+                                   "functions":  [
+                                                     "register_handler",
+                                                     "_accept",
+                                                     "_open",
+                                                     "_load",
+                                                     "_save"
+                                                 ],
+                                   "lines":  72,
+                                   "classes":  "HDF5StubImageFile"
+                               }
+}

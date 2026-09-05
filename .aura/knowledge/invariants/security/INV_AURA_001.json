@@ -1,0 +1,7 @@
+﻿{
+    "created_at":  "2026-08-28T07:42:46.7037357+07:00",
+    "category":  "security",
+    "description":  "Cloud inference blocked; local endpoint 127.0.0.1:8080/v1 enforced",
+    "id":  "INV_AURA_001",
+    "enforcement":  "HARD_BLOCK"
+}

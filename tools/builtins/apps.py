@@ -42,7 +42,7 @@ import subprocess
 import tempfile
 
 from core.logger import logger
-from tools.base import Parameter, Tool, ToolResult, ToolRisk, fail, ok
+from tools.base import Parameter, SideEffect, Tool, ToolResult, ToolRisk, fail, ok
 
 
 # How long to watch a freshly spawned process before calling it launched.
@@ -61,6 +61,7 @@ class OpenApplicationTool(Tool):
     name = "open_application"
     description = "Launch one of the applications the user has allowed"
     risk = ToolRisk.DANGEROUS
+    side_effect = SideEffect.IDEMPOTENT
     capability = 'desktop.applications'
 
     parameters = (

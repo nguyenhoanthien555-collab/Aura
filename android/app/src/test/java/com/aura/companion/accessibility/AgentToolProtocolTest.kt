@@ -27,7 +27,7 @@ class AgentToolProtocolTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun the_catalogue_declares_the_same_fourteen_capabilities_the_server_mirrors() {
+    fun the_catalogue_declares_the_same_capabilities_the_server_mirrors() {
         val expected = setOf(
             "android.get_foreground_app",
             "android.get_ui_tree",
@@ -43,6 +43,12 @@ class AgentToolProtocolTest {
             "android.launch_app",
             "android.wait_for",
             "android.verify",
+            // Phase 5A. The count is deliberately not in this test's name
+            // any more: it was "fourteen", and a name that has to change
+            // every time a capability lands is a name that stops being
+            // read. The set is the contract; the server's AndroidProvider
+            // mirrors exactly this.
+            "android.list_apps",
         )
 
         assertEquals(expected, DeviceToolCatalog.TOOLS.keys)

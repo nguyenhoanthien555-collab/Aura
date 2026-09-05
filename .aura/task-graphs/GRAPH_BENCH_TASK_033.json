@@ -1,0 +1,35 @@
+﻿{
+    "created_at":  "2026-08-28T07:47:58.7878960+07:00",
+    "updated_at":  "2026-08-28T07:47:58.7898990+07:00",
+    "id":  "GRAPH_BENCH_TASK_033",
+    "goal":  "Multi-step implementation",
+    "status":  "ACTIVE",
+    "target_dir":  "D:\\AURA",
+    "nodes":  {
+                  "N1":  {
+                             "id":  "N1",
+                             "description":  "Step 1",
+                             "dependencies":  [
+
+                                              ],
+                             "status":  "READY",
+                             "assigned_agent":  "implementer",
+                             "risk":  "LOW",
+                             "inputs":  [
+
+                                        ],
+                             "outputs":  [
+
+                                         ],
+                             "evidence":  [
+
+                                          ],
+                             "tests":  [
+
+                                       ],
+                             "retry_count":  0,
+                             "created_at":  "2026-08-28T07:47:58.7898990+07:00",
+                             "updated_at":  "2026-08-28T07:47:58.7898990+07:00"
+                         }
+              }
+}

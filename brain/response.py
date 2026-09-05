@@ -9,10 +9,13 @@ defaults - e.g. emotion, audio, tool_calls, metadata - so that existing
 callers constructing Response(text=...) keep working unchanged.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Response:
 
     text: str
+    # Phase 4: the verifier's summary (decision + counts) when one ran,
+    # or None when no verifier is wired up. Never the claim text.
+    verifier: dict | None = None

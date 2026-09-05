@@ -3,7 +3,7 @@ Tool for inspecting AURA's live runtime capabilities and permission states.
 """
 
 from core.capabilities.introspection import get_introspection_service
-from tools.base import Parameter, Tool, ToolRisk
+from tools.base import Parameter, SideEffect, Tool, ToolRisk
 
 
 class CheckCapabilitiesTool(Tool):
@@ -15,6 +15,7 @@ class CheckCapabilitiesTool(Tool):
         "do right now, including Android connectivity, device permissions, and exact blocking reasons."
     )
     risk = ToolRisk.SAFE
+    side_effect = SideEffect.READ_ONLY
 
     parameters = (
         Parameter(

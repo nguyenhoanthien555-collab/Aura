@@ -1,0 +1,32 @@
+{
+    "id": "ADR-008",
+    "title": "Structured Tool Output Contract",
+    "status": "ACCEPTED",
+    "recorded_at": "2026-08-29T22:45:00+07:00",
+    "context": "The AURA 2.0 contract Phase 3 requires the tool system to be machine-readable end to end. Tool results were previously a bool plus free-form prose, so the reasoning layer could not distinguish capability absence from a crash or a timeout from a definite no-op. Provider-level function-calling failures collapsed into generic task-aborted messages that invited failover retries against incapable providers.",
+    "decision": "tools/outcome.py defines four separate vocabularies - ToolStatus (SUCCESS/FAILED/PARTIAL/DENIED/UNAVAILABLE/INVALID_ARGUMENTS/TIMEOUT/CANCELLED/UNKNOWN), ToolError with a category derived from its code (CAPABILITY distinct from PROVIDER), Evidence with a tri-state verified flag, and SideEffect (READ_ONLY/IDEMPOTENT/NON_IDEMPOTENT/UNKNOWN). ToolResult gains status/error_code/evidence/execution identity and derives retryability from (status, side_effect); UNKNOWN is never truthy; malformed output is downgraded to UNKNOWN, not accepted; serialize_for_model renders fixed STATUS/TOOL/EVIDENCE/RETRY lines into the prompt; the registry exposes definitions() and MCP-adapted export_mcp() without making MCP a runtime dependency.",
+    "alternatives": [
+        "A static YAML/JSON registry file",
+        "A full JSON Schema library for validation",
+        "Making a real MCP server a runtime dependency"
+    ],
+    "rejected_alternatives": [
+        "Letting each tool write its own status/error prose",
+        "Auto-retrying on UNKNOWN outcomes",
+        "Reusing ToolRisk for retry safety (conflating permission with retry, the phantom-verification bug)",
+        "A single generic failed taxonomy without PARTIAL/DENIED/UNAVAILABLE/UNKNOWN"
+    ],
+    "consequences": "The reasoning layer can branch on status, error_category, evidence_state and retryability without parsing prose. Tool authors declare output_schema and side_effect on the class; the honest default is undeclared/UNKNOWN. Human-confirmation, permission and capability gates are untouched. Existing string-returning tools still work through the preserved legacy fields. One new per-execution diagnostics line carries identity/status/duration/retryability/evidence state, never arguments or content, and trace failure never breaks execution.",
+    "affected_components": [
+        "tools/outcome.py",
+        "tools/base.py",
+        "tools/schema.py",
+        "tools/executor.py",
+        "tools/registry.py",
+        "tools/builtins/*",
+        "brain/conversation.py",
+        "core/trace.py consumers",
+        "tests/test_tool_output_contract.py",
+        "tests/test_diagnostics_trace.py"
+    ]
+}

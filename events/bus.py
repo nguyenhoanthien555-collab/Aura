@@ -108,6 +108,18 @@ class EventBus:
             targets: list[Handler] = list(self._wildcard)
 
             for event_type, handlers in self._handlers.items():
+
+                # `subscribe` stores whatever key it is given, so a caller
+                # that passes a topic string instead of an event class ends
+                # up here. Skipping it keeps that mistake local to the bad
+                # subscription: without the guard `isinstance` raises, and
+                # because it raises during the snapshot rather than during
+                # dispatch, *no* subscriber receives the event - one bad
+                # subscription would silently disable the whole bus for the
+                # rest of the process.
+                if not isinstance(event_type, type):
+                    continue
+
                 if isinstance(event, event_type):
                     targets.extend(handlers)
 

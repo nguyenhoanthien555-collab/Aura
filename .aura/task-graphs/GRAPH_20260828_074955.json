@@ -1,0 +1,85 @@
+﻿{
+    "created_at":  "2026-08-28T07:49:55.6462613+07:00",
+    "updated_at":  "2026-08-28T07:49:55.6978977+07:00",
+    "id":  "GRAPH_20260828_074955",
+    "goal":  "Async memory pipeline refactor",
+    "status":  "ACTIVE",
+    "target_dir":  "D:\\AURA",
+    "nodes":  {
+                  "N1":  {
+                             "id":  "N1",
+                             "description":  "Audit",
+                             "dependencies":  [
+
+                                              ],
+                             "status":  "READY",
+                             "assigned_agent":  "implementer",
+                             "risk":  "LOW",
+                             "inputs":  [
+
+                                        ],
+                             "outputs":  [
+
+                                         ],
+                             "evidence":  [
+
+                                          ],
+                             "tests":  [
+
+                                       ],
+                             "retry_count":  0,
+                             "created_at":  "2026-08-28T07:49:55.6896264+07:00",
+                             "updated_at":  "2026-08-28T07:49:55.6896264+07:00"
+                         },
+                  "N2":  {
+                             "id":  "N2",
+                             "description":  "Implement",
+                             "dependencies":  [
+                                                  "N1"
+                                              ],
+                             "status":  "PENDING",
+                             "assigned_agent":  "implementer",
+                             "risk":  "LOW",
+                             "inputs":  [
+
+                                        ],
+                             "outputs":  [
+
+                                         ],
+                             "evidence":  [
+
+                                          ],
+                             "tests":  [
+
+                                       ],
+                             "retry_count":  0,
+                             "created_at":  "2026-08-28T07:49:55.6968818+07:00",
+                             "updated_at":  "2026-08-28T07:49:55.6968818+07:00"
+                         },
+                  "N3":  {
+                             "id":  "N3",
+                             "description":  "Verify",
+                             "dependencies":  [
+                                                  "N2"
+                                              ],
+                             "status":  "PENDING",
+                             "assigned_agent":  "implementer",
+                             "risk":  "LOW",
+                             "inputs":  [
+
+                                        ],
+                             "outputs":  [
+
+                                         ],
+                             "evidence":  [
+
+                                          ],
+                             "tests":  [
+
+                                       ],
+                             "retry_count":  0,
+                             "created_at":  "2026-08-28T07:49:55.6978977+07:00",
+                             "updated_at":  "2026-08-28T07:49:55.6978977+07:00"
+                         }
+              }
+}

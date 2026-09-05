@@ -162,6 +162,17 @@ class StreamFinishedEvent(Event):
     text: str = ""
     ok: bool = True
     chunks: int = 0
+    # Phase 4: the verifier's summary (decision + counts) when one ran.
+    # Fragments stream raw; this is the metadata of the finished,
+    # authoritative text. Never the claim text.
+    verifier: dict | None = None
+    # Which session this stream belonged to.
+    #
+    # One ConversationManager serves every session, so a subscriber that
+    # cannot tell whose stream finished cannot safely act on this event -
+    # it would occasionally hand one client another client's reply. Empty
+    # for callers that never had a session id.
+    session_id: str = ""
 
 
 @dataclass(frozen=True)

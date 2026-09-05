@@ -122,6 +122,12 @@ class _Turn:
     # all, so its persona is None and `validate` returns its JSON verbatim.
     persona: PersonaState | None = None
 
+    # Phase 4: the request-scoped evidence ledger. Built when a verifier
+    # is wired up, holds every tool outcome and recalled memory line this
+    # turn actually gathered, and travels with the turn so the final text
+    # can be checked against exactly what happened.
+    ledger: "object | None" = None
+
 
 class ConversationManager:
 
@@ -141,6 +147,7 @@ class ConversationManager:
         clock=None,
         pipeline=None,
         cognitive=None,
+        verifier=None,
     ):
 
         self.memory = memory
@@ -166,6 +173,11 @@ class ConversationManager:
         #             ranked lines that go into MEMORY.
         self.clock = clock
         self.pipeline = pipeline
+
+        # Phase 4: a ResponseVerifier, or None for a caller that does not
+        # want the response-grounded layer. Defaults None so every
+        # existing caller builds the pipeline it built before Phase 4.
+        self.verifier = verifier
 
         # A core.cognitive.CognitiveStore, or None for a caller that has
         # no use for one. Deliberately a store keyed by session rather
@@ -216,7 +228,20 @@ class ConversationManager:
 
         text = self._resolve_tools(text, turn)
 
-        response = Response(text=self._voiced(self._styled(text), turn))
+        # Phase 4 runs last, after style and persona, for the reason
+        # `_voiced` gives for running after `_styled`: validating last is
+        # what makes the thing the user reads the thing that was checked.
+        # A verifier that ran before the style filter would be grounding a
+        # draft, and the subtractive style pass could delete the very
+        # clause that carried a hedge.
+        text, verifier_summary = self._verify_final(
+            self._voiced(self._styled(text), turn), turn
+        )
+
+        response = Response(
+            text=text,
+            verifier=verifier_summary,
+        )
 
         self._remember(user_msg, response.text, session_id=session_id)
 
@@ -321,13 +346,26 @@ class ConversationManager:
 
         text = self._voiced(self._styled("".join(pieces)), turn)
 
-        self._remember(user_msg, text, session_id=session_id)
+        # Phase 4: verify at stream completion. Fragments already went
+        # out raw - that is the honest shape of this architecture, and it
+        # is documented as such - so the authoritative final text is the
+        # repaired one, delivered in the finished event a UI replaces its
+        # buffer with.
+        verified, verifier_summary = self._verify_final(text, turn)
+
+        self._remember(user_msg, verified, session_id=session_id)
 
         self._emit(
-            StreamFinishedEvent(text=text, ok=True, chunks=len(pieces))
+            StreamFinishedEvent(
+                text=verified,
+                ok=True,
+                chunks=len(pieces),
+                verifier=verifier_summary,
+                session_id=session_id,
+            )
         )
 
-        self._emit(ResponseEvent(text=text, streamed=True))
+        self._emit(ResponseEvent(text=verified, streamed=True))
 
 
     def sentences(
@@ -421,6 +459,11 @@ class ConversationManager:
 
         history = self.history(session_id=session_id)
 
+        # Phase 4: the request-scoped ledger. Built once per turn, when a
+        # verifier is wired up, so the final reply is checked against the
+        # evidence this exact turn gathered - never a previous turn's.
+        ledger = self._new_ledger(session_id)
+
         turn = _Turn(
             user_msg=user_msg,
             contexts=list(contexts or []),
@@ -435,7 +478,24 @@ class ConversationManager:
                 context,
                 [message.content for message in history],
             ),
+            ledger=ledger,
         )
+
+        # Recalled lines become memory evidence in the ledger. The
+        # knowledge port returns rendered lines, not rows, so no
+        # provenance metadata survives - which means the honest
+        # confidence and recency are the *unknown* values, not guesses.
+        # A line the pipeline did not describe is treated as old and
+        # uncertain, never as recent and verified.
+        if ledger is not None:
+            for line in turn.knowledge:
+                try:
+                    ledger.add_memory(
+                        line=line,
+                        source="recalled",
+                    )
+                except Exception as error:  # noqa: BLE001
+                    logger.debug("Memory evidence skipped: %s", error)
 
         return (
             user_msg,
@@ -567,7 +627,7 @@ class ConversationManager:
 
             else:
                 seen.add(call_key(request))
-                results.append(self._run_tool(request))
+                results.append(self._run_tool(request, turn))
 
             offer = not settled and calls < TOOL_CALL_LIMIT
 
@@ -582,7 +642,7 @@ class ConversationManager:
         return text
 
 
-    def _run_tool(self, call: ToolCall) -> str:
+    def _run_tool(self, call: ToolCall, turn=None) -> str:
         """
         Hand one request to the runner and describe what came back.
 
@@ -602,13 +662,127 @@ class ConversationManager:
                 "Nothing happened. Tell the user it did not work."
             )
 
+        self._record_tool_evidence(call, result, turn)
+
         return self._render_result(call.name, result)
+
+    def _record_tool_evidence(self, call, result, turn) -> None:
+        """
+        Phase 4: capture the outcome into the turn's evidence ledger.
+
+        Only real `tools.base.ToolResult` objects carry Phases 3's
+        status/evidence triplet; anything duck-typed records the bare
+        ok/FAILED fact. The ledger is the verifier's only source of
+        truth about what actually ran - never the rendered prose.
+        """
+
+        ledger = None
+
+        if turn is not None:
+            ledger = getattr(turn, "ledger", None)
+
+        if ledger is None:
+            return
+
+        try:
+            from tools.base import ToolResult
+
+            if isinstance(result, ToolResult):
+                ledger.add_tool(
+                    tool=call.name,
+                    status=str(getattr(result, "status", "") or (
+                        "SUCCESS" if result.ok else "FAILED"
+                    )),
+                    evidence=tuple(result.evidence or ()),
+                    outcome=(getattr(result, "output", "") or "")[:240],
+                    capability=getattr(result, "capability", "") or "",
+                    side_effect=getattr(result, "side_effect", "") or "",
+                )
+            else:
+                ledger.add_tool(
+                    tool=call.name,
+                    status="SUCCESS" if getattr(result, "ok", False)
+                    else "FAILED",
+                    evidence=(),
+                    outcome=str(getattr(result, "output", "") or "")[:240],
+                )
+        except Exception as error:
+            logger.debug("Tool evidence not recorded: %s", error)
+
+    def _new_ledger(self, request_id: str = "") -> object | None:
+        """
+        One request-scoped evidence ledger, or None without a verifier.
+
+        Built lazily so `brain/` never hard-imports `tools/` unless the
+        verifier is actually wired up - the same seam Phase 3's lazy
+        `tools.base` import uses.
+        """
+
+        if self.verifier is None:
+            return None
+
+        try:
+            from brain.verify import EvidenceLedger
+
+            return EvidenceLedger(request_id=request_id or "conversation")
+
+        except Exception as error:
+            logger.debug("Evidence ledger unavailable: %s", error)
+            return None
+
+    def _verify_final(
+        self, text: str, turn,
+    ) -> tuple[str, dict | None]:
+        """
+        Phase 4: the deterministic response-grounding boundary.
+
+        Verification never raises and never blocks: an internal problem
+        passes the text through untouched, because truthfulness must
+        never cost a conversation. Returns (text, summary) where the
+        summary is counts + decision for events, or None when no
+        verifier is wired up.
+        """
+
+        ledger = None
+
+        if turn is not None:
+            ledger = getattr(turn, "ledger", None)
+
+        if self.verifier is None or ledger is None:
+            return text, None
+
+        try:
+            result = self.verifier.verify(text, ledger)
+
+            summary = {
+                "decision": result.decision.value,
+                "claims": int(result.counts.get("claims", 0)),
+                "contradicted": int(result.counts.get("contradicted", 0)),
+                "unsupported": int(result.counts.get("unsupported", 0)),
+                "repairs": len(result.repairs),
+            }
+
+            if result.changed:
+                return result.repaired_text, summary
+
+            return text, summary
+
+        except Exception as error:
+            logger.debug("Verifier bypassed for turn: %s", error)
+            return text, None
 
 
     @staticmethod
     def _render_result(name: str, result: ToolResultLike | None) -> str:
         """
         One outcome, written for the model rather than for a log.
+
+        Phase 3: the rendering is now the deterministic serializer from
+        tools/base.py - fixed STATUS/TOOL/EVIDENCE/RETRY lines, then the
+        outcome sentence the model is already calibrated to. A structured
+        ToolResult gets the full contract; a duck-typed result from an
+        injected runner still gets the legacy prose, because the adapter
+        must not assume fields a foreign object never promised.
 
         Success and failure are worded so they cannot be mistaken for each
         other, and the failure line says outright what Aura must do about
@@ -621,6 +795,11 @@ class ConversationManager:
                 f"{name} FAILED: the tool layer returned nothing.\n"
                 "Nothing happened. Tell the user it did not work."
             )
+
+        from tools.base import ToolResult, serialize_for_model
+
+        if isinstance(result, ToolResult):
+            return serialize_for_model(result)
 
         if not getattr(result, "ok", False):
 

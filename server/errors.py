@@ -23,6 +23,7 @@ Two rules govern what may cross the boundary:
 from dataclasses import dataclass
 
 from brain.providers.errors import (
+    CapabilityUnavailableError,
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
@@ -60,6 +61,15 @@ PROVIDER_UNAVAILABLE = Failure(
     message="The language model is temporarily unavailable.",
 )
 
+CAPABILITY_UNAVAILABLE = Failure(
+    status=501,
+    code="capability_unavailable",
+    message=(
+        "No configured provider supports the capability this request "
+        "needs. Add or select a capable provider in settings."
+    ),
+)
+
 
 def classify(error: BaseException) -> Failure:
     """
@@ -87,5 +97,8 @@ def classify(error: BaseException) -> Failure:
 
     if isinstance(error, ProviderUnavailableError):
         return PROVIDER_UNAVAILABLE
+
+    if isinstance(error, CapabilityUnavailableError):
+        return CAPABILITY_UNAVAILABLE
 
     return UNEXPECTED

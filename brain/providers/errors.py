@@ -48,3 +48,20 @@ class ProviderRateLimitError(ProviderUnavailableError):
         super().__init__(message)
         self.retry_after = retry_after
         self.is_account_limit = is_account_limit
+
+
+class CapabilityUnavailableError(RuntimeError):
+    """
+    No configured provider can serve a required capability.
+
+    Distinct from `ProviderUnavailableError` on purpose, and deliberately
+    NOT a subclass of it: unavailability is transient (failover and retry
+    answer it), a capability gap is permanent (no amount of retrying
+    teaches Groq to accept a tool catalogue). Treating the two alike
+    would send a capability failure through failover and surface it as a
+    503 "try again shortly" - advice that can never become true.
+
+    A plain RuntimeError subclass, so every existing handler that treats
+    an unknown provider exception as an internal error keeps working.
+    """
+

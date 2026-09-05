@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Protocol, Sequence
 
 from core.logger import logger
-from tools.base import Parameter, Tool, ToolResult, ToolRisk, fail, ok
+from tools.base import Parameter, SideEffect, Tool, ToolResult, ToolRisk, fail, ok
 from tools.builtins.desktop import WindowSource
 
 import os
@@ -773,6 +773,11 @@ class _InputTool(Tool):
     capability = "desktop.input"
     risk = ToolRisk.DANGEROUS
 
+    # Every one of these pushes input into the world, and a second run
+    # is a second effect - the line typed twice, the click clicked
+    # twice. Declared here rather than assumed harmless.
+    side_effect = SideEffect.NON_IDEMPOTENT
+
     def __init__(
         self,
         synthesizer: InputSynthesizer | None = None,
@@ -910,8 +915,16 @@ class MoveMouseTool(_InputTool):
     description = "Move the mouse pointer to a position on the screen"
 
     parameters = (
-        Parameter(name="x", description="Pixels from the left of the screen"),
-        Parameter(name="y", description="Pixels from the top of the screen"),
+        Parameter(
+            name="x",
+            description="Pixels from the left of the screen",
+            type="integer",
+        ),
+        Parameter(
+            name="y",
+            description="Pixels from the top of the screen",
+            type="integer",
+        ),
     )
 
     def _target(self, x, y) -> tuple[int, int]:
@@ -1017,8 +1030,16 @@ class ClickMouseTool(MoveMouseTool):
     )
 
     parameters = (
-        Parameter(name="x", description="Pixels from the left of the screen"),
-        Parameter(name="y", description="Pixels from the top of the screen"),
+        Parameter(
+            name="x",
+            description="Pixels from the left of the screen",
+            type="integer",
+        ),
+        Parameter(
+            name="y",
+            description="Pixels from the top of the screen",
+            type="integer",
+        ),
         Parameter(
             name="button",
             description="left, right or middle. Left if not given",

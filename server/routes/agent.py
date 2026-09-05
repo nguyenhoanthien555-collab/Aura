@@ -30,6 +30,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from brain.providers.capabilities import (
+    CapabilityStatus,
+    capabilities_for,
+    mark_function_calling_verified,
+)
+from brain.providers.errors import CapabilityUnavailableError
 from core.ids import is_valid_id
 from core.logger import logger
 from core.observations import Observation, ObservationStore
@@ -97,41 +103,69 @@ class RouterToolCallingLLM:
     Adapts whatever LLM the server process already owns to the
     generate_with_tools port.
 
-    Native function calling needs provider support; when the configured
-    chain cannot offer it, the failure names the gap instead of silently
-    degrading to prose parsing - there is no fallback to the old
-    protocol, because a silent fallback would be two architectures alive
-    at once.
+    Selection is capability-first (brain/providers/capabilities.py):
+    candidates the registry marks UNSUPPORTED are skipped before any
+    request is built, and when nothing capable remains the failure is a
+    CapabilityUnavailableError - named for the gap, never silently
+    degraded to prose parsing, because a silent fallback would be two
+    architectures alive at once.
+
+    A real round trip through a provider whose function calling was only
+    UNKNOWN promotes it to VERIFIED on success: evidence, not hope.
     """
 
     def __init__(self, llm):
         self.llm = llm
+
+    def _capable(self, candidate) -> bool:
+        """
+        Structurally and registry-wise able to take a tool catalogue.
+
+        The hasattr check is the structural half (the same evidence the
+        registry rows were written from); the registry check is the
+        declarative half, so a future declaration can rule a provider
+        out even where the method exists.
+        """
+
+        if not hasattr(candidate, "generate_with_tools"):
+            return False
+
+        name = getattr(candidate, "provider_name", type(candidate).__name__)
+
+        return capabilities_for(name).function_calling is not (
+            CapabilityStatus.UNSUPPORTED
+        )
 
     def generate_with_tools(self, system: str, messages: list, tools: list):
         candidate = self.llm
 
         # BrainRouter-style wrappers hold the concrete provider behind
         # them; walk one level of indirection if needed.
-        if not hasattr(candidate, "generate_with_tools"):
+        if not self._capable(candidate):
             if hasattr(candidate, "provider"):
                 candidate = candidate.provider
             elif hasattr(candidate, "providers"):
                 for p in candidate.providers:
-                    if hasattr(p, "generate_with_tools"):
+                    if self._capable(p):
                         candidate = p
                         break
             else:
                 candidate = getattr(candidate, "_provider", None)
 
-            if candidate is None or not hasattr(
-                candidate, "generate_with_tools"
-            ):
-                raise RuntimeError(
-                    "configured LLM provider does not support native "
-                    "function calling (needs generate_with_tools)"
-                )
+        if candidate is None or not self._capable(candidate):
+            raise CapabilityUnavailableError(
+                "no provider in the configured chain supports native "
+                "function calling (needs generate_with_tools and no "
+                "UNSUPPORTED declaration)"
+            )
 
-        return candidate.generate_with_tools(system, messages, tools)
+        turn = candidate.generate_with_tools(system, messages, tools)
+
+        mark_function_calling_verified(
+            getattr(candidate, "provider_name", type(candidate).__name__)
+        )
+
+        return turn
 
 
 def get_agent_runtime():
@@ -351,6 +385,8 @@ async def agent_intent(
             reply = content.strip()
             break
 
+    reply, verifier_summary = _verify_run_reply(reply, run)
+
     return {
         "session_id": session_id,
         "run_id": run.run_id,
@@ -362,10 +398,73 @@ async def agent_intent(
             and run.stop_reason is StopReason.GOAL_VERIFIED
         ),
         "reply": reply,
+        "verifier": verifier_summary,
         "rounds": run.rounds,
         "tool_calls": run.tool_call_count,
         "unverified_count": len(run.unverified),
     }
+
+
+def _verify_run_reply(reply: str, run) -> tuple[str, dict | None]:
+    """
+    Phase 4.5: the claim->evidence boundary for the intent reply.
+
+    This route's `reply` is user-visible prose produced by the model over
+    a transcript the server owns - so it gets the same verification the
+    conversation path gets. The ledger is built from the run's own
+    structured tool envelopes (agent/verify transcript), never from the
+    reply text; the model's wording cannot ground itself here either.
+
+    Behaviour is config-gated (`response.verify.enabled`, default on;
+    `repair` off means observe-only) and never fails a run: any internal
+    problem returns the reply unchanged with no summary, because a
+    grounding outage must not cost the task its answer.
+    """
+
+    if not reply.strip():
+        return reply, None
+
+    try:
+        from core.config import load_config
+
+        settings = (
+            ((load_config() or {}).get("response") or {}).get("verify")
+            or {}
+        )
+    except Exception:  # noqa: BLE001 - config trouble must not break a reply
+        settings = {}
+
+    if not settings.get("enabled", True):
+        return reply, None
+
+    try:
+        from brain.verify import ResponseVerifier, verify_run_reply
+
+        result = verify_run_reply(
+            reply,
+            run.messages,
+            request_id=run.run_id,
+            verifier=ResponseVerifier(
+                repair=bool(settings.get("repair", True))
+            ),
+        )
+
+        summary = {
+            "decision": result.decision.value,
+            "claims": int(result.counts.get("claims", 0)),
+            "contradicted": int(result.counts.get("contradicted", 0)),
+            "unsupported": int(result.counts.get("unsupported", 0)),
+            "repairs": len(result.repairs),
+        }
+
+        if result.changed:
+            return result.repaired_text, summary
+
+        return reply, summary
+
+    except Exception as error:  # noqa: BLE001
+        logger.debug("Intent reply verification skipped: %s", error)
+        return reply, None
 
 
 @router.post("/step")

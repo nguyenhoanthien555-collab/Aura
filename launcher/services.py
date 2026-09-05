@@ -222,6 +222,10 @@ def _build_engine(
         done. Built here rather than inside the engine so that a second
         one cannot exist: two records of completed actions is how an agent
         opens the same app twice.
+      * `verifier` - the Phase 4 claim -> evidence boundary. Built here
+        for the same reason as the rest: it reads `response.verify` from
+        *this* config dict, so a caller-supplied override is honoured
+        instead of silently ignored.
     """
 
     from brain.chat_engine import ChatEngine
@@ -260,7 +264,44 @@ def _build_engine(
         clock=clock,
         pipeline=pipeline,
         cognitive=cognitive,
+        verifier=_build_verifier(config),
     )
+
+
+def _build_verifier(config: dict):
+    """
+    The response verifier, or None when the owner turned it off.
+
+    None is a real configuration, not a degraded one: `ConversationManager`
+    builds no evidence ledger without a verifier, so `enabled: false`
+    produces exactly the pre-Phase-4 pipeline rather than a checked
+    pipeline whose checks are ignored.
+
+    A failure to import or construct it is logged and swallowed. A
+    grounding layer that cannot start must cost its own function, never
+    the whole chat engine - the same rule the verifier itself follows
+    when a single verification fails.
+    """
+
+    settings = ((config.get("response") or {}).get("verify") or {})
+
+    if not settings.get("enabled", True):
+        logger.info("Response verifier disabled by configuration.")
+        return None
+
+    try:
+        from brain.verify import ResponseVerifier
+
+        repair = bool(settings.get("repair", True))
+
+        if not repair:
+            logger.info("Response verifier in observe-only mode (no repair).")
+
+        return ResponseVerifier(repair=repair)
+
+    except Exception as error:  # noqa: BLE001
+        logger.warning("Response verifier unavailable: %s", error)
+        return None
 
 
 def _build_cognitive(clock):

@@ -1,0 +1,29 @@
+{
+    "id":  "ADR-007",
+    "title":  "Hybrid Semantic Memory (lexical preserved)",
+    "status":  "ACCEPTED",
+    "recorded_at":  "2026-08-29T11:20:00+07:00",
+    "context":  "The AURA 2.0 contract Phase 2 asks for vector recall, contradicting a documented lexical-only decision. Human review settled it: semantic recall is added BESIDE lexical retrieval, which is preserved.",
+    "decision":  "Semantic recall at the existing Retriever seam: EmbeddingProvider abstraction (hashing/ollama/remote), one SemanticVector table in the existing SQLite database, Reciprocal Rank Fusion with a configurable weight, a provider-declared similarity floor measured at 0.24 for hashing, fail-closed degradation to lexical-only, and a remote-embedding consent gate enforced in the provider.",
+    "alternatives":  [
+                         "A vector database (FAISS / Chroma / sqlite-vss)",
+                         "Weighted score fusion instead of RRF",
+                         "Replacing lexical retrieval with semantic",
+                         "One shared min_similarity constant across providers"
+                     ],
+    "rejected_alternatives":  [
+                                  "Making semantic retrieval a runtime dependency",
+                                  "Letting an embedding failure fail a turn",
+                                  "Choosing a similarity floor by intuition rather than from a sweep"
+                              ],
+    "consequences":  "Memory operates indefinitely in lexical-only mode by default; a model swap is detectable and non-destructive at the cost of an explicit reindex; the hashing provider's n-gram limit is documented and measured; the shipped floor comes from a ten-memory fixture and is labelled a small measurement.",
+    "affected_components":  [
+                                "memory/embeddings.py",
+                                "memory/semantic.py",
+                                "memory/models.py",
+                                "memory/pipeline.py",
+                                "core/config.py",
+                                "config.yaml",
+                                "scripts/benchmark_semantic.py"
+                            ]
+}

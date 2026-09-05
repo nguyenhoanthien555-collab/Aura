@@ -47,8 +47,16 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 - ✅ `memory/profile.py` - Persistent user facts (SQLite)
 - ✅ `memory/retrieval.py` - Keyword-based recall over old transcript.
   Implemented and tested, but `memory.recall` ships **false** - see the
-  rationale in config.yaml. Lexical token overlap, not semantic: there is
-  no embedding model and no vector store anywhere in this codebase.
+  rationale in config.yaml. Lexical token overlap.
+- ✅ `memory/embeddings.py`, `memory/semantic.py` - semantic recall BESIDE
+  the lexical path (AURA 2.0 Phase 2, ADR-007). Off by default
+  (`memory.semantic.enabled: false`), and off is a complete
+  configuration: with no provider, memory behaves exactly as it did
+  before these modules existed. Vectors live in a `semantic_vectors`
+  table in the same SQLite database - no vector store, still no new
+  dependency. When enabled, lexical and semantic rankings are fused by
+  Reciprocal Rank Fusion and degrade to lexical-only on any embedding
+  failure. Measured on `scripts/benchmark_semantic.py`, not asserted.
 - ✅ `memory/companion.py` - Session-only companion memory
   - Facts, preferences, goals, projects
   - Coding style observations
@@ -113,7 +121,9 @@ on top of it, none of which replaced any of it:
 - ✅ **Memory 2.0** (`memory/pipeline.py`, `memory/user_model.py`) -
   episodic memories, temporary context and a confirmed/inferred user
   model over the same SQLite session as the transcript. Recall is ranked
-  and bounded; still lexical, still no vector store.
+  and bounded. Lexical by default; semantic recall is available beside it
+  and off by default (`memory.semantic.*`, ADR-007) - vectors sit in the
+  same SQLite database rather than a vector store.
 - ✅ **Temporal context** (`core/temporal.py`) - one injected clock, so
   no subsystem reads the wall clock on its own.
 - ✅ **Proactive system** (`proactive/`) - decision engine plus anti-spam
@@ -339,8 +349,16 @@ one was empty. `voice/tts/` is the live implementation.
 4. **Session-only companion memory** - `memory/companion.py` holds
    Protocols plus an in-memory implementation and no schema, so it resets
    on restart. The durable half is `memory/profile.py`.
-5. **Recall is lexical, not semantic** - token overlap over the messages
-   table. No embedding model, no vector store, anywhere in this codebase.
+5. **Recall is lexical by default; semantic recall is opt-in and its
+   default provider is weak** - `memory.semantic.enabled` ships false, so
+   recall is token overlap over the messages table unless enabled. When it
+   is enabled, the default provider (`hashing`) is stdlib n-gram feature
+   hashing: it generalizes token overlap, it does NOT understand
+   paraphrase. The benchmark measures the cost - on its ten-memory
+   fixture the hashing space returns 1.0 memories on average for queries
+   that have no correct answer, where lexical correctly returns none.
+   Real paraphrase recall needs a model-backed provider (`ollama` or
+   `remote`), and neither has been benchmarked here.
 6. **Windows-optimized** - Primary development/testing on Windows
 7. **No desktop execution from the server** - Render cannot touch a
    physical PC, and says so rather than describing the action. See

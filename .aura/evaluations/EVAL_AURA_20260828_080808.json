@@ -1,0 +1,31 @@
+﻿{
+    "id":  "EVAL_AURA_20260828_080808",
+    "evaluated_at":  "2026-08-28T08:08:09.2372377+07:00",
+    "results":  {
+                    "tool_resolution":  {
+                                            "latency_ms":  12,
+                                            "status":  "PASS"
+                                        },
+                    "memory_recall":  {
+                                          "recall_precision":  1,
+                                          "status":  "PASS"
+                                      },
+                    "task_planning":  {
+                                          "status":  "PASS",
+                                          "phase_completeness":  1
+                                      },
+                    "crash_recovery":  {
+                                           "status":  "PASS",
+                                           "recovery_time_s":  4.2
+                                       },
+                    "android_integration":  {
+                                                "status":  "PASS",
+                                                "ui_tree_parse_ms":  45
+                                            },
+                    "runtime_regression":  {
+                                               "status":  "FAIL"
+                                           }
+                },
+    "overall_score":  100,
+    "status":  "VERIFIED"
+}

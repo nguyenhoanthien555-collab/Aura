@@ -24,7 +24,7 @@ place that converts between them, and it converts in one direction only.
 """
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Float, Index, String, Text, UniqueConstraint
+from sqlalchemy import Float, Index, LargeBinary, String, Text, UniqueConstraint
 from datetime import datetime
 
 
@@ -196,3 +196,56 @@ class UserModelEntry(Base):
     valid_until: Mapped[str | None] = mapped_column(
         String(32), default=None, nullable=True
     )
+
+
+class SemanticVector(Base):
+    """
+    One embedding of one episodic memory, beside the memory itself.
+
+    Deliberately the simplest thing that satisfies the contract: a
+    table in the SAME SQLite database, not a vector database. Reasons
+    recorded in .Codex/decisions.md: the candidate pool is already
+    bounded (`retrieval_scope`), so cosine over a few hundred vectors
+    in process is fast; one database keeps backup, deletion and
+    portability honest; and no new dependency enters the tree.
+
+    `provider`, `model`, `dimensions` and `version` travel WITH the
+    vector. Two vectors are comparable only when all four match, so a
+    model change makes the old rows stale (ignored, reported) rather
+    than silently mixed into a search across incompatible spaces.
+
+    `vector` is a float32 blob (stdlib `array`), normalized at write
+    time by the providers that normalize, so cosine is a dot product.
+
+    This row references the episodic memory by id but is NOT a foreign
+    key with a cascade - `EpisodicStore.forget` deletes the memory and
+    leaves this row behind, and the retriever's inner join makes an
+    orphan structurally unreturnable. A deleted memory cannot be
+    resurrected by stale vectors; that invariant is enforced by the
+    query shape, not by hoping a cleanup ran.
+    """
+
+    __tablename__ = "semantic_vectors"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "memory_id", "provider", "model", "version",
+            name="uq_semantic_vector_memory_space",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    memory_id: Mapped[int] = mapped_column(index=True)
+
+    provider: Mapped[str] = mapped_column(String(32))
+
+    model: Mapped[str] = mapped_column(String(96))
+
+    dimensions: Mapped[int] = mapped_column()
+
+    version: Mapped[str] = mapped_column(String(16), default="1")
+
+    vector: Mapped[bytes] = mapped_column(LargeBinary())
+
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)

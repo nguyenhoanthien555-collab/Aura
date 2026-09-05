@@ -129,12 +129,21 @@ class LoopbackDeviceBridge:
     # forgot to wait would observe the pre-settle state.
     SETTLE_S = 0.05
 
+    # The inventory reported when no caller overrides `installed_apps`.
+    DEFAULT_APPS = (
+        {"package": "com.aura.companion", "label": "Aura",
+         "launchable": True, "enabled": True},
+        {"package": "com.android.chrome", "label": "Chrome",
+         "launchable": True, "enabled": True},
+    )
+
     def __init__(self, clock=time.time):
         self._clock = clock
         self._pending_launch: tuple[str, float] | None = None
         self.foreground_package = "com.aura.companion"
         self.nodes: dict[str, dict] = {}
         self.invocations: list[tuple[str, dict]] = []
+        self.installed_apps: list[dict] | None = None
 
     def status(self) -> dict:
         return {
@@ -204,13 +213,24 @@ class LoopbackDeviceBridge:
                 str(error),
             )
 
-        observation = {
-            "kind": "foreground_app",
-            "data": {
-                "package": self.foreground_package,
-                "node_count": len(self.nodes),
-            },
-        }
+        observation = (
+            {
+                "kind": "app_inventory",
+                "data": {
+                    "count": len((result or {}).get("packages", [])),
+                    "observed_at": (result or {}).get("observed_at", ""),
+                    "device_id": (result or {}).get("device_id", ""),
+                },
+            }
+            if tool == "android.list_apps"
+            else {
+                "kind": "foreground_app",
+                "data": {
+                    "package": self.foreground_package,
+                    "node_count": len(self.nodes),
+                },
+            }
+        )
 
         report = {
             "ok": True,
@@ -239,6 +259,22 @@ class LoopbackDeviceBridge:
     def _do_get_ui_tree(self):
 
         return ({"nodes": list(self.nodes.values())}, None)
+
+    def _do_list_apps(self):
+
+        apps = self.installed_apps if self.installed_apps is not None \
+            else list(self.DEFAULT_APPS)
+
+        return (
+            {
+                "packages": [dict(app) for app in apps],
+                "count": len(apps),
+                "observed_at": str(self._clock()),
+                "device_id": "loopback-device",
+                "source": "android.package_manager",
+            },
+            None,
+        )
 
     def _do_find_node(self, text: str = "", **_):
 
@@ -489,6 +525,19 @@ def normalise_device_report(report: dict, tool: str) -> dict:
         if isinstance(postcondition, dict):
             normalised["verified"] = bool(postcondition.get("verified", False))
 
+        if tool == "android.list_apps":
+            # An inventory report must carry the shape the tool declares -
+            # a packages list and an observation timestamp. Malformed
+            # inventory is never success: it becomes EXECUTION_FAILED so
+            # the failure class propagates instead of an empty-ish result
+            # the model would read as "done". UNKNOWN stays UNKNOWN.
+            if not _valid_inventory(normalised):
+                return failure(
+                    tool, "EXECUTION_FAILED",
+                    "inventory report is malformed "
+                    "(packages list or observed_at missing)",
+                )
+
         return normalised
 
     error = normalised.get("error")
@@ -505,3 +554,23 @@ def normalise_device_report(report: dict, tool: str) -> dict:
     }
 
     return normalised
+
+
+def _valid_inventory(report: dict) -> bool:
+    """Whether a report has the structure android.list_apps declares.
+
+    Only shape, never content: packages must be a list and observed_at
+    must be present. Individual package objects and field values are the
+    device's responsibility; their correctness as facts is exactly what
+    the response verifier grades, not this transport check.
+    """
+
+    result = report.get("result")
+
+    if not isinstance(result, dict):
+        return False
+
+    if not isinstance(result.get("packages"), list):
+        return False
+
+    return bool(result.get("observed_at"))

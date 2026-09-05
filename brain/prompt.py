@@ -14,4 +14,4 @@ class Prompt:
 
     def render(self):
 
-        return "\n\n".join(self.sections)
+        return "\n\n".join(self.sections)   

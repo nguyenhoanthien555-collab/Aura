@@ -1,0 +1,16 @@
+﻿{
+    "benchmark_id":  "EOS3_BENCH_20260828_074758",
+    "total_tasks":  50,
+    "passed_tasks":  50,
+    "failed_tasks":  0,
+    "task_success_rate":  "100%",
+    "first_pass_success":  "98.0%",
+    "regression_rate":  "0.0%",
+    "root_cause_accuracy":  "100.0%",
+    "acceptance_criteria_cov":  "100.0%",
+    "architecture_quality":  "HIGH",
+    "recovery_success":  "100.0%",
+    "token_efficiency":  "OPTIMAL (16K Managed)",
+    "human_intervention_rate":  "0.0%",
+    "evaluated_at":  "2026-08-28T07:47:58.9653058+07:00"
+}

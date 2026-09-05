@@ -1,0 +1,30 @@
+{
+    "id": "ADR-009",
+    "title": "Response-Level Claim to Evidence Verification (Phase 4)",
+    "status": "ACCEPTED",
+    "recorded_at": "2026-08-30T22:00:00+07:00",
+    "context": "Phase 3 typed tool results, but nothing verified the generated reply against what the runtime established this turn; a model could claim success after a FAILED tool result or assert stale memory as current state. The AURA 2.0 contract Phase 4 requires a deterministic, no-second-model verification boundary over free-form chat that does not make ordinary knowledge conversation unusable.",
+    "decision": "brain/verify adds ClaimState (VERIFIED/SUPPORTED/INFERRED/UNKNOWN/CONTRADICTED), VerifierDecision (PASS/REPAIR/MARK_UNCERTAIN/ASK_CLARIFICATION/REFUSE_UNSUPPORTED_CLAIM), deterministic claim extraction scoped by a closed world-object vocabulary, a request-scoped EvidenceLedger reusing the canonical Phase 3 Evidence, rules that make SUCCESS+postcondition the only path to a verified action claim while FAILED/DENIED/UNAVAILABLE/UNKNOWN contradict or leave ungrounded success language, and minimal per-sentence repair that only moves claims downward in certainty. ConversationManager builds the ledger per turn, captures tool and memory evidence, and verifies the final text on both chat and chat_stream (repaired text in StreamFinishedEvent; fragments stream raw and this is documented, not hidden). The launcher injects the verifier from response.verify config; enabled:false restores the pre-Phase-4 pipeline.",
+    "alternatives": [
+        "A second model call to judge the reply",
+        "Buffering the entire stream before delivery",
+        "Verifying every sentence including general knowledge"
+    ],
+    "rejected_alternatives": [
+        "A second model call (non-deterministic, slow, moves the boundary instead of closing it)",
+        "Full stream buffering (retracts latency for a path that runs no tools; finished-event replacement chosen instead)",
+        "Grounding ordinary knowledge (hedging general facts makes normal chat unusable)"
+    ],
+    "consequences": "Action success claims require verified evidence; confident phrasing adds no certainty; memory is attributed rather than asserted and conflicts surface instead of resolving silently; capability claims are checked against the live registry; diagnostics stay metadata-only. Limitations are explicit: deterministic extraction is incomplete by design, streamed fragments reach the UI before verification, and this reduces overclaiming without eliminating hallucinations.",
+    "affected_components": [
+        "brain/verify/",
+        "brain/conversation.py",
+        "brain/chat_engine.py",
+        "launcher/services.py",
+        "events/types.py",
+        "core/trace.py consumers",
+        "tests/test_response_verifier.py",
+        "tests/test_device_boundary.py",
+        "android/app/src/test/resources/live/settings.json"
+    ]
+}

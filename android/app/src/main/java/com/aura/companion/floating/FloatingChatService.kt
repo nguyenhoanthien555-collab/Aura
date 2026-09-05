@@ -16,10 +16,13 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -146,10 +149,26 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
                 AuraTheme {
                     var isExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
+                    var bubbleX by androidx.compose.runtime.remember { mutableStateOf(params.x) }
+                    var bubbleY by androidx.compose.runtime.remember { mutableStateOf(params.y) }
+                    
+                    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                    val offsetX = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(params.x.toFloat()) }
+                    val offsetY = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(params.y.toFloat()) }
+
+                    androidx.compose.runtime.LaunchedEffect(offsetX.value, offsetY.value) {
+                        if (!isExpanded) {
+                            params.x = offsetX.value.toInt()
+                            params.y = offsetY.value.toInt()
+                            windowManager.updateViewLayout(this@apply, params)
+                        }
+                    }
 
                     if (isExpanded) {
                         params.width = WindowManager.LayoutParams.MATCH_PARENT
-                        params.height = (screenHeight * 0.7).toInt() // 70% of screen
+                        params.height = WindowManager.LayoutParams.MATCH_PARENT
+                        params.x = 0
+                        params.y = 0
                         params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
                         windowManager.updateViewLayout(this, params)
                         closeTargetView.visibility = android.view.View.GONE
@@ -160,6 +179,8 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                                 isExpanded = false 
                                 params.width = WindowManager.LayoutParams.WRAP_CONTENT
                                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                                params.x = bubbleX
+                                params.y = bubbleY
                                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                                 windowManager.updateViewLayout(this, params)
                             }
@@ -170,18 +191,49 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                                 closeTargetView.visibility = android.view.View.VISIBLE
                             },
                             onDrag = { dx, dy ->
-                                params.x += dx.toInt()
-                                params.y += dy.toInt()
-                                windowManager.updateViewLayout(this, params)
+                                coroutineScope.launch {
+                                    offsetX.snapTo(offsetX.value + dx)
+                                    offsetY.snapTo(offsetY.value + dy)
+                                }
                             },
                             onDragEnd = {
                                 closeTargetView.visibility = android.view.View.GONE
-                                // Check if close to bottom
-                                if (params.y > screenHeight - 400) {
+                                
+                                val screenWidth = resources.displayMetrics.widthPixels
+                                val screenHeight = resources.displayMetrics.heightPixels
+                                val density = resources.displayMetrics.density
+                                val bubbleWidth = (60 * density).toInt()
+                                
+                                // Check if dropped near the bottom center X
+                                val dropTargetY = screenHeight - (180 * density)
+                                val dropTargetMarginX = (150 * density)
+                                val centerX = screenWidth / 2
+                                val isNearBottom = offsetY.value > dropTargetY
+                                val isNearCenter = offsetX.value > (centerX - dropTargetMarginX) && offsetX.value < (centerX + dropTargetMarginX)
+                                
+                                if (isNearBottom && isNearCenter) { 
                                     stopSelf()
+                                } else {
+                                    coroutineScope.launch {
+                                        // Snap to edge
+                                        val isLeft = offsetX.value < screenWidth / 2
+                                        val targetX = if (isLeft) 0f else (screenWidth - bubbleWidth).toFloat()
+                                        offsetX.animateTo(
+                                            targetValue = targetX,
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                            )
+                                        )
+                                        // Save the new position
+                                        bubbleX = offsetX.value.toInt()
+                                        bubbleY = offsetY.value.toInt()
+                                    }
                                 }
                             },
                             onClick = {
+                                bubbleX = params.x
+                                bubbleY = params.y
                                 isExpanded = true
                             }
                         )
@@ -254,27 +306,35 @@ fun CloseTargetUI() {
 fun MiniChatUI(viewModel: com.aura.companion.ui.chat.ChatViewModel, onClose: () -> Unit) {
     Box(
         modifier = Modifier
-            .padding(8.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color.White)
-            .padding(8.dp)
-            .fillMaxWidth()
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(onClick = onClose), // Dismiss on outside click
+        contentAlignment = Alignment.Center
     ) {
-        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
-            ) {
-                androidx.compose.material3.Text("Aura Mini", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(8.dp))
-                androidx.compose.material3.IconButton(onClick = onClose) {
-                    Icon(androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Close")
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.85f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.background)
+                .clickable(enabled = false, onClick = {}) // Prevent click-through
+        ) {
+            androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+                ) {
+                    androidx.compose.material3.Text("Aura", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+                    androidx.compose.material3.IconButton(onClick = onClose) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Close")
+                    }
                 }
-            }
-            Box(modifier = Modifier.weight(1f, fill = false)) {
-                com.aura.companion.ui.chat.ChatScreen(
-                    viewModel = viewModel,
-                    onOpenSettings = onClose // Or open MainActivity
-                )
+                Box(modifier = Modifier.weight(1f)) {
+                    com.aura.companion.ui.chat.ChatScreen(
+                        viewModel = viewModel,
+                        onOpenSettings = onClose // Or whatever is appropriate
+                    )
+                }
             }
         }
     }

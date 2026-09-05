@@ -46,6 +46,7 @@ from core.observations import ObservationKind, ObservationStore
 from core.capabilities import resolve_capability
 from core.capabilities.discovery import SkillDiscovery
 from core.capabilities.models import CapabilityState
+from core.trace import emit_trace, provider_label
 from tools.schema import openai_tools_payload
 
 
@@ -693,10 +694,23 @@ class AgentRuntime:
         report.setdefault("ok", bool(result.ok))
         report.setdefault("tool", request.name)
         report.setdefault("result", _result_payload(result))
+        # Phase 3: the canonical status travels with the envelope. The
+        # executor already folds it into `data`; the setdefault covers a
+        # duck-typed result that arrived without it. status is the fact
+        # the model branches on; a plain ok flag cannot say whether an
+        # outcome is merely unverified.
+        report.setdefault(
+            "status",
+            getattr(result, "status", "") or ("SUCCESS" if result.ok else "FAILED"),
+        )
 
         if not result.ok:
             report.setdefault(
-                "error", {"code": "TOOL_ERROR", "message": result.error}
+                "error",
+                {
+                    "code": getattr(result, "error_code", "") or "TOOL_ERROR",
+                    "message": result.error,
+                },
             )
 
         return self._build_envelope(call_id, request, report, run=run)
@@ -911,6 +925,27 @@ class AgentRuntime:
             run.run_id,
             reason.value,
             f" ({detail})" if detail else "",
+        )
+
+        # The consolidated per-request trace. One JSON line per run,
+        # identifiers and counts only (the goal is truncated; no
+        # transcript content crosses). Emission is swallowed on failure
+        # by emit_trace, so a diagnostics problem can never cost a run.
+        emit_trace(
+            "agent_run",
+            run_id=run.run_id,
+            task_id=run.task_id,
+            session_id=run.session_id,
+            goal=run.goal[:200],
+            status=run.status.value,
+            stop_reason=run.stop_reason.value,
+            stop_detail=detail[:200] or None,
+            rounds=run.rounds,
+            tool_calls=run.tool_call_count,
+            consecutive_failures=run.consecutive_failures,
+            unverified=len(run.unverified),
+            provider=provider_label(self.llm),
+            duration_s=round(time.time() - run.created_at, 3),
         )
 
     # ------------------------------------------------------------------

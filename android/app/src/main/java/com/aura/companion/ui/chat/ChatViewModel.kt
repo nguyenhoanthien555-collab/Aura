@@ -466,9 +466,8 @@ class ChatViewModel(
     ): Boolean {
 
         val messageId = UUID.randomUUID().toString()
-
         var reply = ""
-
+        var reacted = false
         var failure: AuraError? = null
 
         repository.stream(message, context).collect { event ->
@@ -498,26 +497,53 @@ class ChatViewModel(
                     val first = reply.isEmpty()
 
                     reply += event.text
-
-                    _state.update { current ->
-                        current.copy(
-                            messages = if (first) {
-                                current.messages + ChatMessage(
-                                    id = messageId,
-                                    text = reply,
-                                    author = ChatMessage.Author.AURA,
-                                    streaming = true,
-                                )
-                            } else {
-                                current.messages.map {
-                                    if (it.id == messageId) it.copy(text = reply) else it
+                    
+                    // Parse fallback tag for models that don't support tool calls well
+                    val reactRegex = "\\[REACT:\\s*([^\\]]+)\\]".toRegex()
+                    val match = reactRegex.find(reply)
+                    if (match != null) {
+                        val emoji = match.groupValues[1].trim()
+                        reply = reply.replace(match.value, "").trim()
+                        reacted = true
+                        
+                        _state.update { current ->
+                            current.copy(
+                                messages = current.messages.map {
+                                    if (it.id == outgoingId) {
+                                        val newReactions = it.reactions.toMutableMap()
+                                        newReactions["aura"] = emoji
+                                        it.copy(reactions = newReactions)
+                                    } else it
                                 }
-                            },
-                            connection = ConnectionState.Connected(
-                                (current.connection as? ConnectionState.Connected)
-                                    ?.provider ?: "aura"
-                            ),
-                        )
+                            )
+                        }
+                    }
+
+                    if (reply.isNotEmpty()) {
+                        _state.update { current ->
+                            current.copy(
+                                messages = if (first && !current.messages.any { it.id == messageId }) {
+                                    current.messages + ChatMessage(
+                                        id = messageId,
+                                        author = ChatMessage.Author.AURA,
+                                        text = reply,
+                                        streaming = true,
+                                    )
+                                } else {
+                                    current.messages.map {
+                                        if (it.id == messageId) it.copy(text = reply) else it
+                                    }
+                                },
+                                connection = ConnectionState.Connected(
+                                    (current.connection as? ConnectionState.Connected)?.provider ?: "aura"
+                                )
+                            )
+                        }
+                    } else if (reacted) {
+                        // If all we got was a reaction, clear out the empty bubble if it was created
+                        _state.update { current ->
+                            current.copy(messages = current.messages.filter { it.id != messageId })
+                        }
                     }
                 }
 
@@ -540,8 +566,8 @@ class ChatViewModel(
 
         slowNotice.cancel()
 
-        // Nothing arrived: let the caller try the REST path.
-        if (reply.isEmpty()) return false
+        // Nothing arrived and no reaction was processed: let the caller try the REST path.
+        if (reply.isEmpty() && !reacted) return false
 
         // Text arrived, so this turn is streaming's to finish. Settle the
         // bubble here rather than only in the Complete branch: a socket can

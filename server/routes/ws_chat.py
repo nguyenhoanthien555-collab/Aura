@@ -26,6 +26,8 @@ from fastapi import (
 from starlette.concurrency import iterate_in_threadpool
 
 from core.logger import logger
+from core.trace import emit_trace, provider_label, stream_reconciliation
+from events.types import StreamFinishedEvent
 from server.config import settings
 from server.errors import classify
 from server.runtime import get_runtime
@@ -81,8 +83,16 @@ async def chat_stream(
         "elapsed_seconds": 0.0,         # complete / error
         "first_chunk_seconds": 0.0,     # complete
         "total_chunks": 0,              # complete
+        "text": "...",                  # complete, when known
+        "verifier": {...},              # complete, when a verifier ran
         "error": "..."                  # error
     }
+
+    `text` is the finished reply after styling, persona validation and
+    Phase 4 verification. It is optional and additive: a client that
+    ignores it keeps the raw chunks it printed, which differ only by a
+    deleted filler phrase or a verifier repair. A client that wants what
+    Aura actually stands behind replaces its buffer with it.
     """
     await websocket.accept()
 
@@ -96,6 +106,13 @@ async def chat_stream(
     received_at = time.time()
     first_chunk_at: float | None = None
     chunk_index = 0
+
+    # Stream reconciliation inputs, per the contract's "stream tokens out
+    # == stream tokens returned" requirement: fragments as chat_stream
+    # produced them, and fragments as this transport actually delivered
+    # them. core.trace.stream_reconciliation compares the two.
+    produced_fragments: list[str] = []
+    delivered_fragments: list[str] = []
 
     try:
         raw = await websocket.receive_text()
@@ -147,6 +164,28 @@ async def chat_stream(
             
             runtime.bus.subscribe("chat.reaction", on_reaction)
 
+            # Phase 4: the finished, verified reply.
+            #
+            # Fragments go out raw - ConversationManager.chat_stream
+            # documents why the style filter, the persona validator and
+            # the verifier all need a whole reply - so the authoritative
+            # text and the verifier's summary exist only after the last
+            # fragment, and reach this transport only on the bus.
+            #
+            # The session id is checked because one ConversationManager
+            # serves every socket: a handler that cannot tell whose stream
+            # finished would occasionally hand this client another
+            # client's reply. `ok` is checked because the failure path
+            # publishes a partial reply, which belongs in the error frame
+            # this endpoint already sends, not in a `complete`.
+            finished: list[StreamFinishedEvent] = []
+
+            def on_finished(event: StreamFinishedEvent) -> None:
+                if event.ok and event.session_id == session_id:
+                    finished.append(event)
+
+            runtime.bus.subscribe(StreamFinishedEvent, on_finished)
+
             fragments = runtime.chat_stream(
                 message,
                 session_id=session_id,
@@ -171,6 +210,8 @@ async def chat_stream(
                 if not fragment:
                     continue
 
+                produced_fragments.append(fragment)
+
                 if first_chunk_at is None:
                     first_chunk_at = time.time()
 
@@ -182,6 +223,7 @@ async def chat_stream(
                     "index": chunk_index,
                 })
 
+                delivered_fragments.append(fragment)
                 chunk_index += 1
                 
             # One final drain in case the tool was the last thing to execute
@@ -199,7 +241,48 @@ async def chat_stream(
 
             finished_at = time.time()
 
-            await websocket.send_json({
+            def _stream_provider() -> str | None:
+                """
+                The provider behind this process's conversation, if the
+                runtime exposes one. Tests substitute fake runtimes whose
+                shape is narrower, and a trace must never fail a stream,
+                so any miss resolves to None and is omitted from the line.
+                """
+
+                try:
+                    return provider_label(
+                        runtime.engine.conversation.llm
+                    ) or None
+                except AttributeError:
+                    return None
+
+            reconciliation = stream_reconciliation(
+                produced_fragments, delivered_fragments
+            )
+
+            # The generator publishes its finished event before raising
+            # StopIteration, so it has already arrived by the time the
+            # loop above exits. Nothing is awaited on it.
+            final = finished[-1] if finished else None
+            verifier = final.verifier if final is not None else None
+
+            emit_trace(
+                "chat_stream",
+                message_id=message_id,
+                session_id=session_id,
+                source="ws",
+                provider=_stream_provider(),
+                total_chunks=chunk_index,
+                first_chunk_s=round(first_chunk_at - received_at, 3)
+                if first_chunk_at is not None
+                else None,
+                elapsed_s=round(finished_at - received_at, 3),
+                stream=reconciliation,
+                verifier=verifier,
+                status="complete",
+            )
+
+            frame = {
                 "type": "complete",
                 "session_id": session_id,
                 "message_id": message_id,
@@ -210,7 +293,24 @@ async def chat_stream(
                     else None
                 ),
                 "total_chunks": chunk_index,
-            })
+                "stream": reconciliation,
+            }
+
+            if final is not None and final.text:
+                # Authoritative: styled, persona-checked, verified. A
+                # client that printed chunks should replace its buffer
+                # with this. It is not a new protocol requirement - a
+                # client that ignores the field behaves exactly as before
+                # and keeps the raw chunks it already displayed.
+                frame["text"] = final.text
+
+            if verifier is not None:
+                # Metadata only - decision and counts, never claim text.
+                # A client may surface it, log it, or ignore it; nothing
+                # in the pipeline depends on the client reading it.
+                frame["verifier"] = verifier
+
+            await websocket.send_json(frame)
 
         except Exception as exc:
             failure = classify(exc)
@@ -222,6 +322,20 @@ async def chat_stream(
                 failure.code,
                 type(exc).__name__,
                 exc,
+            )
+
+            emit_trace(
+                "chat_stream",
+                message_id=message_id,
+                session_id=session_id,
+                source="ws",
+                total_chunks=chunk_index,
+                error_code=failure.code,
+                error_type=type(exc).__name__,
+                stream=stream_reconciliation(
+                    produced_fragments, delivered_fragments
+                ),
+                status="error",
             )
 
             frame = {
@@ -249,6 +363,7 @@ async def chat_stream(
             await websocket.send_json(frame)
         finally:
             runtime.bus.unsubscribe("chat.reaction", on_reaction)
+            runtime.bus.unsubscribe(StreamFinishedEvent, on_finished)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected (session=%s)", session_id)

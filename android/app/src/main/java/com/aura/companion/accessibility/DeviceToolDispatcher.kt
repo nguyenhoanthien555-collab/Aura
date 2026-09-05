@@ -38,13 +38,7 @@ class AccessibilityToolDispatcher(
 
     override fun capabilityStatus(): Map<String, DeviceCapabilityStatusDto> {
         val basePermissions = mapOf("android.accessibility" to true)
-        val statuses = listOf(
-            "android.foreground_app", "android.ui_tree", "android.ui_search",
-            "android.tap", "android.long_press", "android.swipe",
-            "android.text_input", "android.key_input", "android.back",
-            "android.home", "android.app_launch", "android.wait_for",
-            "android.verification",
-        ).associateWith {
+        val statuses = ACCESSIBILITY_CAPABILITIES.associateWith {
             DeviceCapabilityStatusDto(
                 state = "AVAILABLE",
                 healthy = true,
@@ -86,7 +80,28 @@ class AccessibilityToolDispatcher(
         const val BLOCKED = "BLOCKED_BY_SAFETY_GUARD"
         const val TIMEOUT = "TIMEOUT"
 
-        private val CAPABILITY_BY_TOOL = mapOf(
+        /**
+         * The capabilities a connected accessibility service reports
+         * AVAILABLE unconditionally - everything whose only requirement
+         * is a bound service. `android.screen_capture` is deliberately
+         * absent: it is computed below from live support and the owner's
+         * switch, not declared.
+         *
+         * Named rather than inlined so a JVM test can pin the invariant
+         * that every capability [CAPABILITY_BY_TOOL] gates on is one this
+         * device actually reports. A capability named in the gate but
+         * missing here reads as "UNKNOWN" and refuses every call - a
+         * silent, device-only failure this test catches offline.
+         */
+        internal val ACCESSIBILITY_CAPABILITIES = listOf(
+            "android.foreground_app", "android.ui_tree", "android.ui_search",
+            "android.tap", "android.long_press", "android.swipe",
+            "android.text_input", "android.key_input", "android.back",
+            "android.home", "android.app_launch", "android.wait_for",
+            "android.verification", "android.app_inventory",
+        )
+
+        internal val CAPABILITY_BY_TOOL = mapOf(
             "android.get_foreground_app" to "android.foreground_app",
             "android.get_ui_tree" to "android.ui_tree",
             "android.find_node" to "android.ui_search",
@@ -101,6 +116,7 @@ class AccessibilityToolDispatcher(
             "android.launch_app" to "android.app_launch",
             "android.wait_for" to "android.wait_for",
             "android.verify" to "android.verification",
+            "android.list_apps" to "android.app_inventory",
         )
     }
 
@@ -173,6 +189,7 @@ class AccessibilityToolDispatcher(
         "android.launch_app" -> mutate(directive)
         "android.wait_for" -> waitFor(directive)
         "android.verify" -> verify(directive)
+        "android.list_apps" -> listApps(directive)
         else -> failure(directive, TOOL_NOT_FOUND,
             "declared but not executable: ${directive.tool}")
     }
@@ -552,6 +569,47 @@ class AccessibilityToolDispatcher(
                     },
                 )
         }
+    }
+
+    /**
+     * PART 12 / Phase 5A: the installed-app inventory.
+     *
+     * A read, so it carries an observation and NO postcondition: nothing
+     * about the world changed, and inventing a `verified: true` here
+     * would hand the response verifier confirmation of an action that
+     * never happened. The observation is what makes an inventory answer
+     * groundable - and it carries counts and a hash only, never the
+     * package list, because the payload is the part that reaches
+     * server-side traces.
+     *
+     * Enumeration lives in [AppInventory], behind [PackageSource], so
+     * every rule about it is covered by a JVM test with no handset.
+     * Nothing is cached: each call re-enumerates and stamps its own
+     * `observed_at`, which is the only way a stale list cannot be served
+     * as current state.
+     */
+    private fun listApps(
+        directive: ToolCallDirective,
+    ): ToolResultReport {
+        val entries = AppInventory.collect(
+            PlatformPackageSource(service.packageManager),
+        )
+
+        val observedAt = ObservationIds.nowEpochSeconds()
+
+        return success(
+            directive,
+            result = AppInventory.result(
+                entries = entries,
+                deviceId = service.currentDeviceId(),
+                observedAt = observedAt,
+            ),
+            observation = observation(
+                kind = AppInventory.KIND,
+                data = AppInventory.observationData(entries),
+                contentHash = AppInventory.contentHash(entries),
+            ),
+        )
     }
 
     private fun targetOf(action: AgentAction): String =

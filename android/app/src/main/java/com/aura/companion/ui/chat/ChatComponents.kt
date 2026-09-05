@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import com.aura.companion.ui.theme.auraGlassBlur
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -98,7 +99,7 @@ fun MessageBubble(
             Box(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
-                    .com.aura.companion.ui.theme.auraGlassBlur(
+                    .auraGlassBlur(
                         shape = bubbleShape,
                         tint = bubbleColor
                     )

@@ -47,6 +47,13 @@ class FallbackProvider:
         self.provider_name = provider_name
         self.active_provider_name = provider_name.split("->", 1)[0]
 
+        # One record per request attempt, in order: (provider, outcome,
+        # error_type). The provider trace the diagnostics file wants -
+        # "which provider was attempted and why it failed" - is exactly
+        # this list, and the caller that owns the request context is the
+        # one that can attach it to a trace line.
+        self.attempts: list[tuple[str, str, str]] = []
+
     @property
     def supports_text(self) -> bool:
         return any(getattr(p, "supports_text", False) for p in self.providers)
@@ -63,11 +70,13 @@ class FallbackProvider:
             try:
                 reply = provider.generate(prompt)
                 self.active_provider_name = p_name
+                self.attempts.append((p_name, "ok", ""))
                 return reply
             except Exception as error:
                 last_error = error
 
                 category = _category_of(error)
+                self.attempts.append((p_name, category, type(error).__name__))
 
                 logger.warning(
                     "Provider failed: %s | Failure category: %s | %s: %s",
@@ -102,10 +111,12 @@ class FallbackProvider:
             try:
                 turn = provider.generate_with_tools(system, messages, tools)
                 self.active_provider_name = p_name
+                self.attempts.append((p_name, "ok", ""))
                 return turn
             except Exception as error:
                 last_error = error
                 category = _category_of(error)
+                self.attempts.append((p_name, category, type(error).__name__))
                 logger.warning(
                     "Provider failed generate_with_tools: %s | Failure category: %s | %s: %s",
                     p_name,

@@ -55,6 +55,7 @@ class ChatEngine:
         clock=None,
         pipeline=None,
         cognitive=None,
+        verifier=None,
     ):
         """
         Create the chat engine with dependency injection.
@@ -76,6 +77,10 @@ class ChatEngine:
         engine, and two records of what the agent has already done is
         precisely the duplication it exists to end. It arrives from the
         composition root or not at all.
+
+        `verifier` (Phase 4) is None by default so a default-built
+        engine keeps behaving exactly as before; the launcher injects a
+        ResponseVerifier so the production server verifies its replies.
         """
 
         if memory is None:
@@ -111,6 +116,7 @@ class ChatEngine:
             clock=clock,
             pipeline=pipeline,
             cognitive=cognitive,
+            verifier=verifier,
         )
 
     @staticmethod

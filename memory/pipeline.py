@@ -29,6 +29,7 @@ down so Phase 7's isolation rule cannot silently erode.
 
 from dataclasses import dataclass, field
 
+from core.logger import logger
 from core.temporal import TemporalClock, local_now
 from memory.episodic import DEFAULT_SCOPE, EpisodicStore
 from memory.retrieval import RankedRetriever
@@ -108,6 +109,12 @@ class MemoryPipeline:
         # the pipeline was constructed.
         self.recall_enabled = True
 
+        # The semantic half, present only when the builder configured
+        # it. None means lexical-only - the state everything was in
+        # before semantic memory existed, and the state it falls back
+        # to whenever the embedding provider cannot serve.
+        self.semantic_indexer = None
+
     # ------------------------------------------------------------------
     # Writing
     # ------------------------------------------------------------------
@@ -150,6 +157,25 @@ class MemoryPipeline:
             return PipelineOutcome(
                 accepted=False, note="nothing to store"
             )
+
+        # Semantic indexing happens AFTER the row is committed, and can
+        # never block or undo it: the memory exists lexically no matter
+        # what the embedding provider does next. A failure is recorded
+        # by the indexer (status + diagnostics) and shows up nowhere
+        # here - this method's contract is "the turn stored the memory",
+        # which stays true.
+        if self.semantic_indexer is not None:
+            try:
+                self.semantic_indexer.index(episode)
+            except Exception as error:  # noqa: BLE001 - belt and braces:
+                # the indexer itself never raises, but the invariant
+                # "indexing cannot break persistence" is worth more
+                # than the cost of this line.
+                logger.warning(
+                    "Semantic indexing raised unexpectedly (%s); the "
+                    "memory is stored and remains lexically retrievable",
+                    type(error).__name__,
+                )
 
         return PipelineOutcome(
             accepted=True,
@@ -306,5 +332,71 @@ def build_memory_pipeline(
     )
 
     pipeline.recall_enabled = bool(settings.get("recall", True))
+
+    # The semantic half, only when asked for AND able to exist. Any
+    # misconfiguration resolves to None and the pipeline keeps the bare
+    # lexical retriever - identical behavior to before this block,
+    # which is what "optional" has to mean in code, not only in prose.
+    semantic_settings = settings.get("semantic") or {}
+
+    from memory.embeddings import build_embedding_provider
+
+    provider = build_embedding_provider({"semantic": semantic_settings})
+
+    if provider is not None and not pipeline.recall_enabled:
+        # Two switches, one of which silently wins. `memory.recall`
+        # gates the whole episodic search, so with it off the vectors
+        # would never be consulted no matter what `semantic.enabled`
+        # says - and the owner turning semantic recall ON would see
+        # nothing happen, with nothing anywhere saying why.
+        #
+        # The indexer is not built either, and that is deliberate
+        # rather than incidental: embedding a memory means sending its
+        # text to the provider, which for a REMOTE provider is the
+        # exfiltration boundary. Someone who switched recall off gets
+        # no embedding calls, not merely no results.
+        logger.warning(
+            "memory.semantic.enabled is true but memory.recall is false "
+            "- semantic recall stays off, and nothing is indexed. "
+            "memory.recall gates every episodic search, lexical and "
+            "semantic alike."
+        )
+
+    if provider is not None and pipeline.recall_enabled:
+
+        from memory.semantic import (
+            DEFAULT_SEMANTIC_WEIGHT,
+            HybridRetriever,
+            SemanticIndexer,
+            SemanticRetriever,
+        )
+
+        indexer = SemanticIndexer(
+            provider,
+            session=pipeline.episodic.session,
+            batch_size=int(semantic_settings.get("batch_size", 32)),
+        )
+
+        hybrid = HybridRetriever(
+            lexical=pipeline.retriever,
+            semantic=SemanticRetriever(
+                pipeline.episodic,
+                indexer,
+                clock=pipeline.clock.now,
+                scope=int(settings.get("retrieval_scope", SCOPE)),
+                # None means "use the provider's own measured floor".
+                min_similarity=(
+                    float(semantic_settings["min_similarity"])
+                    if semantic_settings.get("min_similarity") is not None
+                    else None
+                ),
+            ),
+            weight=float(
+                semantic_settings.get("weight", DEFAULT_SEMANTIC_WEIGHT)
+            ),
+        )
+
+        pipeline.retriever = hybrid
+        pipeline.semantic_indexer = indexer
 
     return pipeline

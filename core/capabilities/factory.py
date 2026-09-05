@@ -27,7 +27,7 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="memory.write", name="Write Memory", description="Remember facts", category="memory", discovery_metadata={"tool": "remember"}))
     registry.register(Capability(capability_id="chat.react", name="Message Reactions", description="React to messages", category="chat", discovery_metadata={"tool": "react_to_message"}))
 
-    # Canonical 14 Android capabilities (synchronized with AndroidProvider)
+    # Canonical Android capabilities (synchronized with AndroidProvider)
     android_caps = [
         ("android.foreground_app", "Android Foreground App", "The app currently in the foreground, from accessibility metadata (package, label). Answers 'what app am I in' without any vision.", ["android.accessibility"], "android.get_foreground_app"),
         ("android.ui_tree", "Android UI Tree", "The current accessibility tree: visible nodes with id, text, bounds and clickability. This is how current UI state is read.", ["android.accessibility"], "android.get_ui_tree"),
@@ -43,6 +43,7 @@ def register_core_capabilities(config=None):
         ("android.app_launch", "Android Application Launch", "Launch an app by package name. Returns while the app settles; follow with android.wait_for('foreground=<package>').", ["android.accessibility"], "android.launch_app"),
         ("android.wait_for", "Android Wait For State", "Wait until a condition holds: foreground=<package>, text_exists=<text>, node_gone=<id>, activity_changed. Bounded timeout; never a fixed sleep.", ["android.accessibility"], "android.wait_for"),
         ("android.verification", "Android State Verification", "Check a claim about current state: package_is=<pkg>, text_visible=<text>, node_exists=<id>. Verification is evidence; task completion requires it rather than the model saying complete.", ["android.accessibility"], "android.verify"),
+        ("android.app_inventory", "Android App Inventory", "Enumerate the apps currently installed on the device (package, label, launchable, enabled, version). A fresh, timestamped observation; re-query for current state.", ["android.accessibility"], "android.list_apps"),
     ]
 
     for cap_id, name, desc, perms, tool_name in android_caps:

@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from core.logger import logger
-from tools.base import Parameter, Tool, ToolResult, ToolRisk, fail, ok
+from tools.base import Parameter, SideEffect, Tool, ToolResult, ToolRisk, fail, ok
 
 
 # How many windows one listing may name. A desktop with eleven visible
@@ -379,6 +379,7 @@ class ListWindowsTool(Tool):
     name = "list_windows"
     description = "List the windows currently open on this computer"
     risk = ToolRisk.SENSITIVE
+    side_effect = SideEffect.READ_ONLY
     capability = 'desktop.windows'
 
     parameters = (
@@ -456,6 +457,7 @@ class FocusWindowTool(Tool):
     name = "focus_window"
     description = "Bring an open window to the front by part of its title"
     risk = ToolRisk.DANGEROUS
+    side_effect = SideEffect.IDEMPOTENT
     capability = 'desktop.windows'
 
     parameters = (

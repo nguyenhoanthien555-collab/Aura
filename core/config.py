@@ -153,6 +153,50 @@ DEFAULT_CONFIG = {
         # How much of the transcript ranked recall may consider. A
         # ceiling, not a target: the ranker still returns `max_recalled`.
         "retrieval_scope": 500,
+
+        # Semantic recall (AURA 2.0 Phase 2). OFF by default, and off is
+        # a complete configuration: with no embedding provider, memory
+        # behaves exactly as it did before this block existed - lexical
+        # retrieval only, nothing sent anywhere, nothing to fail.
+        #
+        # `provider` picks the embedding source:
+        #   hashing  local, dependency-free, deterministic n-gram
+        #            hashing. Generalizes token overlap a little; it is
+        #            NOT paraphrase understanding (documented in
+        #            memory/embeddings.py).
+        #   ollama   local model server (base_url, model). Nothing
+        #            leaves the machine.
+        #   remote   an OpenAI-compatible /embeddings endpoint. Sends
+        #            memory content OFF the machine, so it is inert
+        #            until `allow_remote` is explicitly true - the
+        #            exfiltration boundary, enforced in the provider.
+        # Changing provider or model marks existing vectors stale;
+        # semantic retrieval stays unavailable until a reindex runs
+        # (MemoryPipeline.semantic_indexer.reindex()).
+        "semantic": {
+            "enabled": False,
+            "provider": "hashing",
+            "model": "",
+            "base_url": "",
+            "api_key_env": "",
+            "allow_remote": False,
+            "top_k": 6,
+            # Semantic's share of the fused hybrid score; lexical takes
+            # the rest. 0.5 is an equal split, which orders results
+            # exactly as unweighted fusion does. Raise it to trust
+            # paraphrase more, lower it to trust literal wording more.
+            "weight": 0.5,
+            # Cosine floor below which a semantic match counts as
+            # noise. null means "use the provider's own measured
+            # floor" - the right default, because the useful cutoff
+            # depends on the embedding space (see
+            # `recommended_min_similarity` in memory/embeddings.py and
+            # the sweep in scripts/benchmark_semantic.py). Set a number
+            # only when a sweep on YOUR provider justifies it.
+            "min_similarity": None,
+            "timeout": 5.0,
+            "batch_size": 32,
+        },
     },
 
     # What time Aura thinks it is.
@@ -163,6 +207,36 @@ DEFAULT_CONFIG = {
     # the `tzdata` package on Windows; UTC never does.
     "temporal": {
         "timezone": "",
+    },
+
+    # The claim -> evidence boundary on the finished reply (Phase 4).
+    #
+    #   enabled  whether replies are checked against the evidence this
+    #            turn actually gathered - tool outcomes, recalled memory
+    #            lines, live capability state.
+    #   repair   whether an unsupported claim is rewritten, or only
+    #            counted. False is observe-only: identical text out,
+    #            full diagnostics, so this layer can be measured against
+    #            real traffic before it is allowed to change anything.
+    #
+    # On by default, which is a deliberate departure from how Phase 2's
+    # semantic memory shipped. The difference is what the switch costs.
+    # Semantic memory off meant "no embeddings leave the machine"; this
+    # is local, deterministic, sub-millisecond and sends nothing
+    # anywhere, and its failure mode is that the reply passes through
+    # untouched. What it prevents - Aura telling you it sent a message
+    # that no tool ever sent - is a correctness bug, not a feature, so
+    # the default is the one that fixes it.
+    #
+    # It only ever makes a reply say LESS. Nothing here can add a fact,
+    # raise a confidence, or invent a reason; every rule can only
+    # downgrade an assertion to a hedge or replace it with what the
+    # evidence actually said.
+    "response": {
+        "verify": {
+            "enabled": True,
+            "repair": True,
+        },
     },
 
     # Speaking first.

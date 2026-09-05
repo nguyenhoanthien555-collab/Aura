@@ -14,6 +14,7 @@ tool is far easier to diagnose here than halfway through a call.
 
 from core.logger import logger
 from tools.base import ToolProtocol, ToolRisk, describe_tool
+from tools.schema import mcp_export, tool_definition
 
 
 class ToolRegistry:
@@ -94,6 +95,49 @@ class ToolRegistry:
     def by_risk(self, risk: ToolRisk) -> list[ToolProtocol]:
 
         return [tool for tool in self.all() if tool.risk == risk]
+
+    def by_side_effect(self, side_effect) -> list[ToolProtocol]:
+        """
+        Every tool whose declared side-effect class matches.
+
+        The retry-safety slice of the registry: the runtime asks this
+        when it needs to know what a second run of something would cost,
+        and an undeclared tool answers as UNKNOWN, never as harmless.
+        """
+
+        return [
+            tool
+            for tool in self.all()
+            if getattr(tool, "side_effect", None) == side_effect
+        ]
+
+    def definitions(self) -> list[dict]:
+        """
+        Every tool, as canonical machine-readable definitions.
+
+        Discovery, schema inspection, risk classification and versioning
+        in one payload - the answer to "what can AURA actually do?"
+        without reading source code. Availability is deliberately NOT
+        folded in here: policy and capability state are live facts owned
+        by `ToolExecutor.available()` and the capability registry, and a
+        registry snapshot that pre-joined them would lie the moment
+        either changed. Callers that want the runtime view join it with
+        the executor's `available()` list.
+        """
+
+        return [tool_definition(tool) for tool in self.all()]
+
+    def export_mcp(self) -> list[dict]:
+        """
+        The registry in MCP `tools/list` conceptual form.
+
+        Standards-compatible (name, description, inputSchema) exactly as
+        `tools.schema.mcp_export` renders it; the Aura-specific fields
+        stay in `definitions()`. A registry method rather than a
+        free function so there is one object to ask about the catalogue.
+        """
+
+        return mcp_export(self.all())
 
     def describe(self) -> str:
         """

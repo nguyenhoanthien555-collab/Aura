@@ -31,6 +31,7 @@ EXPECTED_TOOLS = {
     "android.launch_app",
     "android.wait_for",
     "android.verify",
+    "android.list_apps",
 }
 
 

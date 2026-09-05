@@ -31,9 +31,57 @@ from core.logger import logger
 from core.capabilities import health, permissions, registry as capability_registry
 from core.capabilities.models import Capability
 from tools.base import Parameter, Tool, ToolResult, ToolRisk
+from tools.outcome import Evidence, EvidenceKind, SideEffect
 from tools.providers.android_bridge import DeviceBridge
 from tools.providers.base import CapabilityProvider
 from tools.registry import ToolRegistry
+
+
+def _evidence_from_report(report: dict, tool: str) -> tuple[Evidence, ...]:
+    """Device report facts as canonical Phase 3 Evidence.
+
+    A device postcondition is real evidence of the world - but only when
+    the device actually checked and said so. ``verified: true`` becomes a
+    POSTCONDITION that confirms; ``verified: false`` stays a failed check
+    (which the verifier reads as CONTRADICTED, never as success). An
+    absent or malformed postcondition yields nothing: a bare ``{ok: true}``
+    is a return value, never proof of a world change.
+
+    An app inventory observation is a direct, timestamped observation of
+    the device, so it becomes OBSERVATION evidence - current device state,
+    never promoted to persistent memory.
+    """
+
+    evidence: list[Evidence] = []
+
+    postcondition = report.get("postcondition")
+
+    if isinstance(postcondition, dict):
+        verified = postcondition.get("verified")
+        if isinstance(verified, bool):
+            evidence.append(Evidence(
+                kind=EvidenceKind.POSTCONDITION,
+                source="android.postcondition",
+                verified=verified,
+                reference=tool,
+                detail="device postcondition",
+            ))
+
+    observation = report.get("observation")
+
+    if isinstance(observation, dict) and (
+        observation.get("kind") == "app_inventory"
+        or tool == "android.list_apps"
+    ):
+        evidence.append(Evidence(
+            kind=EvidenceKind.OBSERVATION,
+            source="android.package_manager",
+            verified=True,
+            reference=tool,
+            detail="app inventory observed on device",
+        ))
+
+    return tuple(evidence)
 
 
 def tool_result_from_report(report: dict) -> ToolResult:
@@ -55,6 +103,7 @@ def tool_result_from_report(report: dict) -> ToolResult:
             output=json.dumps(result, ensure_ascii=False, default=str),
             tool=tool,
             data=report,
+            evidence=_evidence_from_report(report, tool),
         )
 
     error = report.get("error") or {}
@@ -296,6 +345,28 @@ class Verify(_Read):
     )
 
 
+class AndroidListApps(_Read):
+    """Installed-app enumeration.
+
+    A fresh observation of the device, never a cached or remembered list:
+    the device enumerates installed packages, resolves human labels and
+    launchability, and stamps an observation time. Read-only, so it is
+    SAFE risk and READ_ONLY side effect - but it is privacy-sensitive,
+    and the package inventory must never enter diagnostics (see the
+    Phase 4/5 privacy tests).
+    """
+
+    name = "android.list_apps"
+    capability = "android.app_inventory"
+    side_effect = SideEffect.READ_ONLY
+    description = (
+        "Enumerate the apps currently installed on the device "
+        "(package, label, launchable, enabled, version). A fresh, "
+        "timestamped observation - re-query for current state; never "
+        "treat an old inventory as current."
+    )
+
+
 class AndroidProvider(CapabilityProvider):
     """
     Every Android capability this deployment supports, registered as
@@ -312,7 +383,7 @@ class AndroidProvider(CapabilityProvider):
     TOOLS = (
         GetForegroundApp, GetUITree, FindNode, Screenshot,
         Tap, LongPress, Swipe, TypeText, PressKey,
-        Back, Home, LaunchApp, WaitFor, Verify,
+        Back, Home, LaunchApp, WaitFor, Verify, AndroidListApps,
     )
 
     _CAPABILITY_NAMES = {
@@ -330,6 +401,7 @@ class AndroidProvider(CapabilityProvider):
         "android.app_launch": "Android Application Launch",
         "android.wait_for": "Android Wait For State",
         "android.verification": "Android State Verification",
+        "android.app_inventory": "Android App Inventory",
     }
 
     _CAPABILITY_KEYWORDS = {
@@ -347,6 +419,8 @@ class AndroidProvider(CapabilityProvider):
         "android.app_launch": ["open", "launch", "start", "application", "app"],
         "android.wait_for": ["wait", "settle", "until", "foreground"],
         "android.verification": ["verify", "confirm", "check", "visible"],
+        "android.app_inventory": ["app", "installed", "install", "application",
+                                  "package", "list", "apps", "what"],
     }
 
     def __init__(self, bridge: DeviceBridge | None = None):

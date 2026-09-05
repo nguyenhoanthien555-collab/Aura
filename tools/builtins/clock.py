@@ -8,7 +8,7 @@ what time it is.
 
 from datetime import datetime
 
-from tools.base import Parameter, Tool, ToolRisk
+from tools.base import Parameter, SideEffect, Tool, ToolRisk
 
 
 class CurrentTimeTool(Tool):
@@ -16,6 +16,7 @@ class CurrentTimeTool(Tool):
     name = "current_time"
     description = "Get the current local date and time"
     risk = ToolRisk.SAFE
+    side_effect = SideEffect.READ_ONLY
     capability = 'system.time'
 
     parameters = (

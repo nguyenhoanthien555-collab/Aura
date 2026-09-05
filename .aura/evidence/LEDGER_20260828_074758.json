@@ -1,0 +1,14 @@
+﻿{
+    "id":  "LEDGER_20260828_074758",
+    "claim":  "Zero cloud inference enforced on 127.0.0.1:8080/v1",
+    "status":  "SUPPORTED",
+    "confidence":  1,
+    "confidence_category":  "VERY_HIGH",
+    "evidence":  [
+
+                 ],
+    "source":  "Targeted Probe",
+    "related_task":  "",
+    "related_hypothesis":  "",
+    "recorded_at":  "2026-08-28T07:47:58.9443261+07:00"
+}

@@ -126,6 +126,11 @@ object DeviceToolCatalog {
         ToolSpec("android.wait_for", setOf("condition"),
             setOf("timeout_ms"), false),
         ToolSpec("android.verify", setOf("check"), emptySet(), false),
+        // Phase 5A. No arguments at all: an inventory is the whole
+        // current list or it is nothing. A filter argument would let a
+        // caller ask "is X installed" and receive an empty answer that
+        // reads the same whether X is absent or the query was wrong.
+        ToolSpec("android.list_apps", emptySet(), emptySet(), false),
     ).associateBy { it.name }
 
     sealed interface Validation {

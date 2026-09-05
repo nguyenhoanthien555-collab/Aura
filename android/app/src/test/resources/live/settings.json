@@ -89,7 +89,7 @@
       "groq_model": "llama-3.3-70b-versatile",
       "max_output_tokens": 768,
       "mistral_model": "mistral-small-latest",
-      "model": "gemini-3.6-flash",
+      "model": "gemini-3.5-flash-lite",
       "ollama_model": "qwen3:8b",
       "openai_model": "gpt-5.1",
       "provider": "gemini",
@@ -120,7 +120,20 @@
       "profile": true,
       "recall": false,
       "retrieval_scope": 500,
-      "seed_profile": true
+      "seed_profile": true,
+      "semantic": {
+        "allow_remote": false,
+        "api_key_env": "",
+        "base_url": "",
+        "batch_size": 32,
+        "enabled": false,
+        "min_similarity": null,
+        "model": "",
+        "provider": "hashing",
+        "timeout": 5.0,
+        "top_k": 6,
+        "weight": 0.5
+      }
     },
     "personality": {
       "consistency": {
@@ -164,6 +177,12 @@
       ],
       "similarity_threshold": 0.6
     },
+    "response": {
+      "verify": {
+        "enabled": true,
+        "repair": true
+      }
+    },
     "server": {
       "companion": {
         "cooldown_seconds": 300,
@@ -186,7 +205,9 @@
     },
     "tools": {
       "allowed": [
-        "current_time"
+        "current_time",
+        "remember",
+        "react_to_message"
       ],
       "allowed_paths": [],
       "applications": {},
@@ -247,7 +268,7 @@
       "cerebras": "",
       "custom": "",
       "deepseek": "",
-      "gemini": "",
+      "gemini": "••••••••yiaw",
       "groq": "",
       "mistral": "",
       "openai": "",

@@ -1,0 +1,20 @@
+﻿{
+    "id":  "AC_SET_20260828_074758",
+    "feature_name":  "Feature BENCH_TASK_040",
+    "criteria":  [
+                     {
+                         "id":  "AC-001",
+                         "description":  "Criteria 1",
+                         "status":  "PENDING",
+                         "evidence_id":  ""
+                     },
+                     {
+                         "id":  "AC-002",
+                         "description":  "Criteria 2",
+                         "status":  "PENDING",
+                         "evidence_id":  ""
+                     }
+                 ],
+    "all_passed":  false,
+    "created_at":  "2026-08-28T07:47:58.8735481+07:00"
+}

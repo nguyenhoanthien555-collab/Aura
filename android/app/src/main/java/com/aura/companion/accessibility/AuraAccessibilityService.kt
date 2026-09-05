@@ -498,6 +498,18 @@ class AuraAccessibilityService : AccessibilityService() {
         settings.current.screenObservationEnabled &&
             settings.current.uploadScreenshots
 
+    /**
+     * This handset's identity, as the settings store minted it.
+     *
+     * Asked of the service rather than threaded into the dispatcher's
+     * constructor, exactly like [screenshotToolAllowed]: the dispatcher
+     * asks the service for what only the service knows. Blank - never a
+     * placeholder - before `onCreate` has bound the store, so a report
+     * cannot carry an invented device id.
+     */
+    internal fun currentDeviceId(): String =
+        runCatching { settings.current.deviceId }.getOrDefault("")
+
     private suspend fun executeActionWithRecovery(
         action: AgentAction,
         oldTree: Map<String, AccessibilityNode>
