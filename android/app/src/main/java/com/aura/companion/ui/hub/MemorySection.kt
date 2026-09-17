@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
@@ -98,6 +99,18 @@ fun MemorySection(
                 lockedReason = state.lockedReason("memory.profile"),
                 onCheckedChange = { viewModel.setFlag("memory.profile", it) },
             )
+
+            RowDivider()
+
+            ToggleRow(
+                title = "Semantic memory",
+                subtitle = "Local vector indexing for meaning-based search. Needs a restart to change.",
+                icon = Icons.Filled.Psychology,
+                checked = memory.semantic.enabled,
+                pending = "memory.semantic.enabled" in state.pending,
+                lockedReason = state.lockedReason("memory.semantic.enabled"),
+                onCheckedChange = { viewModel.setFlag("memory.semantic.enabled", it) },
+            )
         }
 
         SettingsSection(
@@ -181,4 +194,5 @@ private val MEMORY_PATHS = listOf(
     "memory.pipeline",
     "memory.history_limit",
     "memory.retrieval_scope",
+    "memory.semantic.enabled",
 )

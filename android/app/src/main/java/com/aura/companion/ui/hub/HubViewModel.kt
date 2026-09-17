@@ -12,6 +12,11 @@ import com.aura.companion.data.remote.ProviderHealthDto
 import com.aura.companion.data.settings.AuraSettings
 import com.aura.companion.data.settings.DeviceSettings
 import com.aura.companion.data.settings.ThemeMode
+import com.aura.companion.sync.CursorStore
+import com.aura.companion.sync.EventInbox
+import com.aura.companion.sync.EventOutbox
+import com.aura.companion.sync.SyncClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -148,7 +153,13 @@ data class HubUiState(
         // failure it was comes from [settingsAccess], not from this `when`:
         // exactly one of its members claims the feature is absent.
         !server.loaded -> settingsAccess.reason.ifBlank { null }
-        !supports(path) -> "This Aura server does not support this setting"
+        !supports(path) -> {
+            if (path == "memory.semantic.enabled" && server.config.memory.semantic.enabled) {
+                "Active on server (configuration locked on this server build)"
+            } else {
+                "This Aura server does not support this setting"
+            }
+        }
         else -> null
     }
 
@@ -261,13 +272,83 @@ data class Notice(val text: String, val kind: Kind) {
     enum class Kind { Info, Warning, Error }
 }
 
+data class SyncUiState(
+    val peerNodeId: String = "RENDER",
+    val localCursor: Long = 0,
+    val pendingOutboxCount: Int = 0,
+    val inboxEventCount: Int = 0,
+    val isSyncing: Boolean = false,
+    val lastSyncTime: Long = 0,
+    val lastSyncResult: String? = null,
+    val lastSyncError: String? = null,
+)
+
 class HubViewModel(
     private val settings: DeviceSettings,
     private val repository: AuraRepository,
+    private val syncClient: SyncClient? = null,
+    private val syncOutbox: EventOutbox? = null,
+    private val syncInbox: EventInbox? = null,
+    private val cursorStore: CursorStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HubUiState(device = settings.current))
     val state: StateFlow<HubUiState> = _state.asStateFlow()
+
+    private val _syncState = MutableStateFlow(
+        SyncUiState(
+            localCursor = cursorStore?.getCursor("RENDER") ?: 0L,
+            pendingOutboxCount = syncOutbox?.pendingCount() ?: 0,
+            inboxEventCount = syncInbox?.processedCount() ?: 0,
+        )
+    )
+    val syncState: StateFlow<SyncUiState> = _syncState.asStateFlow()
+
+    fun refreshSyncState() {
+        val cursor = cursorStore?.getCursor("RENDER") ?: 0L
+        val pending = syncOutbox?.pendingCount() ?: 0
+        val inbox = syncInbox?.processedCount() ?: 0
+        _syncState.update {
+            it.copy(
+                localCursor = cursor,
+                pendingOutboxCount = pending,
+                inboxEventCount = inbox,
+            )
+        }
+    }
+
+    fun triggerSyncNow() {
+        val client = syncClient ?: return
+        if (_syncState.value.isSyncing) return
+        _syncState.update { it.copy(isSyncing = true, lastSyncError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val (pushed, pulled) = client.syncCycle()
+                val cursor = cursorStore?.getCursor("RENDER") ?: 0L
+                val pending = syncOutbox?.pendingCount() ?: 0
+                val inbox = syncInbox?.processedCount() ?: 0
+                _syncState.update {
+                    it.copy(
+                        isSyncing = false,
+                        localCursor = cursor,
+                        pendingOutboxCount = pending,
+                        inboxEventCount = inbox,
+                        lastSyncTime = System.currentTimeMillis(),
+                        lastSyncResult = "Pushed $pushed, Pulled $pulled",
+                        lastSyncError = null,
+                    )
+                }
+            } catch (e: Exception) {
+                _syncState.update {
+                    it.copy(
+                        isSyncing = false,
+                        lastSyncTime = System.currentTimeMillis(),
+                        lastSyncError = e.message ?: "Sync failed",
+                    )
+                }
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -785,6 +866,10 @@ class HubViewModel(
 
     fun setUploadScreenshots(enabled: Boolean) = settings.setUploadScreenshots(enabled)
 
+    fun setSyncEnabled(enabled: Boolean) = settings.setSyncEnabled(enabled)
+
+    fun setDeviceIntegration(enabled: Boolean) = settings.setDeviceIntegration(enabled)
+
     fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
 
     fun setDynamicColour(enabled: Boolean) = settings.setDynamicColour(enabled)
@@ -795,11 +880,22 @@ class HubViewModel(
         fun factory(
             settings: DeviceSettings,
             repository: AuraRepository,
+            syncClient: SyncClient? = null,
+            syncOutbox: EventOutbox? = null,
+            syncInbox: EventInbox? = null,
+            cursorStore: CursorStore? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                HubViewModel(settings, repository) as T
+                HubViewModel(
+                    settings = settings,
+                    repository = repository,
+                    syncClient = syncClient,
+                    syncOutbox = syncOutbox,
+                    syncInbox = syncInbox,
+                    cursorStore = cursorStore,
+                ) as T
         }
     }
 }

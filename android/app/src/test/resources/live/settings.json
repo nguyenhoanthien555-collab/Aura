@@ -28,6 +28,7 @@
     "memory.profile",
     "memory.recall",
     "memory.retrieval_scope",
+    "memory.semantic.enabled",
     "proactive.cooldown_seconds",
     "proactive.duplicate_window_seconds",
     "proactive.enabled",
@@ -87,9 +88,9 @@
         "openrouter"
       ],
       "groq_model": "llama-3.3-70b-versatile",
-      "max_output_tokens": 768,
+      "max_output_tokens": 2048,
       "mistral_model": "mistral-small-latest",
-      "model": "gemini-3.6-flash",
+      "model": "gemini-3.5-flash-lite",
       "ollama_model": "qwen3:8b",
       "openai_model": "gpt-5.1",
       "provider": "gemini",
@@ -101,7 +102,7 @@
         "reasoning": "",
         "tool_planning": ""
       },
-      "temperature": 0.7,
+      "temperature": 0.2,
       "thinking_level": "low",
       "timeout": 120,
       "xai_model": "grok-4"
@@ -118,7 +119,7 @@
       "max_recalled": 2,
       "pipeline": true,
       "profile": true,
-      "recall": false,
+      "recall": true,
       "retrieval_scope": 500,
       "seed_profile": true,
       "semantic": {
@@ -126,7 +127,7 @@
         "api_key_env": "",
         "base_url": "",
         "batch_size": 32,
-        "enabled": false,
+        "enabled": true,
         "min_similarity": null,
         "model": "",
         "provider": "hashing",
@@ -167,7 +168,7 @@
       },
       "cooldown_seconds": 7200,
       "duplicate_window_seconds": 21600,
-      "enabled": false,
+      "enabled": true,
       "max_per_day": 4,
       "quiet_hours": [
         [
@@ -187,7 +188,7 @@
       "companion": {
         "cooldown_seconds": 300,
         "duplicate_window_seconds": 1800,
-        "enabled": false,
+        "enabled": true,
         "max_per_hour": 6,
         "quiet_hours": [],
         "relevance_threshold": 0.7,

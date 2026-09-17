@@ -299,13 +299,26 @@ class HubOverviewTest {
     @Test
     fun `proactive off is not a warning`() {
 
-        // It ships off, and off is the correct state. Colouring the default
-        // amber would train the user to ignore the colour.
-        val tile = hubTiles(state(ServerReach.SettingsAvailable, loaded = true))
-            .first { it.kind == HubTileKind.Proactive }
+        // When off, colour remains neutral rather than warning.
+        val tile = hubTiles(
+            state(
+                ServerReach.SettingsAvailable,
+                loaded = true,
+                proactive = false,
+            )
+        ).first { it.kind == HubTileKind.Proactive }
 
         assertEquals("Off", tile.value)
         assertEquals(StatusTone.Neutral, tile.tone)
+    }
+
+    @Test
+    fun `proactive defaults on with good tone`() {
+        val tile = hubTiles(state(ServerReach.SettingsAvailable, loaded = true))
+            .first { it.kind == HubTileKind.Proactive }
+
+        assertEquals("On", tile.value)
+        assertEquals(StatusTone.Good, tile.tone)
     }
 
     @Test
@@ -430,6 +443,7 @@ class HubOverviewTest {
         screenOnServer: Boolean = false,
         screenOnPhone: Boolean = false,
         llm: LlmConfigDto = LlmConfigDto(),
+        proactive: Boolean = true,
     ) = HubUiState(
         device = AuraSettings(
             serverUrl = if (configured) "https://aura.example/" else "",
@@ -445,7 +459,7 @@ class HubOverviewTest {
                 app = AppConfigDto(version = "0.2.0"),
                 llm = llm,
                 memory = MemoryConfigDto(),
-                proactive = ProactiveConfigDto(),
+                proactive = ProactiveConfigDto(enabled = proactive),
                 server = ServerConfigDto(
                     screen = ScreenConfigDto(enabled = screenOnServer),
                 ),

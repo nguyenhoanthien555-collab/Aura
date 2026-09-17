@@ -47,13 +47,49 @@ class SettingsStore(context: Context) : DeviceSettings {
         )
     }
 
+    init {
+        migrate()
+    }
+
+    private fun migrate() {
+        val currentVersion = prefs.getInt(KEY_VERSION, 0)
+        if (currentVersion < CURRENT_VERSION) {
+            val editor = prefs.edit()
+            if (!prefs.contains(KEY_SCREEN)) {
+                editor.putBoolean(KEY_SCREEN, true)
+            }
+            if (!prefs.contains(KEY_UPLOAD)) {
+                editor.putBoolean(KEY_UPLOAD, true)
+            }
+            if (!prefs.contains(KEY_SYNC)) {
+                editor.putBoolean(KEY_SYNC, true)
+            }
+            if (!prefs.contains(KEY_DEVICE_INTEGRATION)) {
+                editor.putBoolean(KEY_DEVICE_INTEGRATION, true)
+            }
+            if (!prefs.contains(KEY_NOTIFICATIONS)) {
+                editor.putBoolean(KEY_NOTIFICATIONS, true)
+            }
+            if (!prefs.contains(KEY_DYNAMIC)) {
+                editor.putBoolean(KEY_DYNAMIC, true)
+            }
+            if (!prefs.contains(KEY_URL) || prefs.getString(KEY_URL, "").isNullOrBlank()) {
+                editor.putString(KEY_URL, DEFAULT_SERVER_URL)
+            }
+            editor.putInt(KEY_VERSION, CURRENT_VERSION)
+            editor.apply()
+        }
+    }
+
     private fun read(): AuraSettings = AuraSettings(
-        serverUrl = prefs.getString(KEY_URL, "") ?: "",
+        serverUrl = prefs.getString(KEY_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL,
         authToken = prefs.getString(KEY_TOKEN, "") ?: "",
         deviceId = deviceId(),
-        screenObservationEnabled = prefs.getBoolean(KEY_SCREEN, false),
+        screenObservationEnabled = prefs.getBoolean(KEY_SCREEN, true),
         notificationsEnabled = prefs.getBoolean(KEY_NOTIFICATIONS, true),
-        uploadScreenshots = prefs.getBoolean(KEY_UPLOAD, false),
+        uploadScreenshots = prefs.getBoolean(KEY_UPLOAD, true),
+        syncEnabled = prefs.getBoolean(KEY_SYNC, true),
+        deviceIntegrationEnabled = prefs.getBoolean(KEY_DEVICE_INTEGRATION, true),
         themeMode = ThemeMode.from(prefs.getString(KEY_THEME, null)),
         dynamicColour = prefs.getBoolean(KEY_DYNAMIC, true),
     )
@@ -100,6 +136,16 @@ class SettingsStore(context: Context) : DeviceSettings {
         _settings.value = read()
     }
 
+    override fun setSyncEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SYNC, enabled).apply()
+        _settings.value = read()
+    }
+
+    override fun setDeviceIntegration(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DEVICE_INTEGRATION, enabled).apply()
+        _settings.value = read()
+    }
+
     /**
      * Appearance. Device-local by design.
      *
@@ -121,21 +167,25 @@ class SettingsStore(context: Context) : DeviceSettings {
 
     fun clear() {
         prefs.edit()
-            .remove(KEY_URL)
+            .putString(KEY_URL, "")
             .remove(KEY_TOKEN)
-            .putBoolean(KEY_SCREEN, false)
             .apply()
         _settings.value = read()
     }
 
     companion object {
+        const val CURRENT_VERSION = 3
+        const val DEFAULT_SERVER_URL = "https://aura-xwm4.onrender.com/"
         private const val FILE = "aura_secure_settings"
+        private const val KEY_VERSION = "settings_version"
         private const val KEY_URL = "server_url"
         private const val KEY_TOKEN = "auth_token"
         private const val KEY_DEVICE = "device_id"
         private const val KEY_SCREEN = "screen_observation"
         private const val KEY_NOTIFICATIONS = "notifications"
         private const val KEY_UPLOAD = "upload_screenshots"
+        private const val KEY_SYNC = "sync_enabled"
+        private const val KEY_DEVICE_INTEGRATION = "device_integration"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_DYNAMIC = "dynamic_colour"
 
@@ -206,9 +256,11 @@ data class AuraSettings(
     val serverUrl: String = "",
     val authToken: String = "",
     val deviceId: String = "",
-    val screenObservationEnabled: Boolean = false,
+    val screenObservationEnabled: Boolean = true,
     val notificationsEnabled: Boolean = true,
-    val uploadScreenshots: Boolean = false,
+    val uploadScreenshots: Boolean = true,
+    val syncEnabled: Boolean = true,
+    val deviceIntegrationEnabled: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.System,
     val dynamicColour: Boolean = true,
 ) {
@@ -218,5 +270,5 @@ data class AuraSettings(
 
     override fun toString(): String =
         "AuraSettings(serverUrl=$serverUrl, authToken=${if (authToken.isBlank()) "unset" else "***"}, " +
-            "deviceId=$deviceId, screenObservation=$screenObservationEnabled)"
+            "deviceId=$deviceId, screenObservation=$screenObservationEnabled, sync=$syncEnabled, deviceIntegration=$deviceIntegrationEnabled)"
 }

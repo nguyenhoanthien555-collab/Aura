@@ -465,6 +465,7 @@ ALLOWED: dict[str, object] = {
     "memory.pipeline": _boolean,
     "memory.history_limit": _bounded_integer(1, 200),
     "memory.retrieval_scope": _bounded_integer(10, 5000),
+    "memory.semantic.enabled": _boolean,
 
     # Proactive. Phase 8 defaults are conservative and stay the defaults -
     # these bounds allow tuning, not disabling the anti-spam gate. The

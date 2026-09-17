@@ -91,8 +91,8 @@ fun AwarenessSection(
             RowDivider()
 
             ToggleRow(
-                title = "Send screenshots",
-                subtitle = "Images, not just the text Aura reads from the screen",
+                title = "Send phone screen context",
+                subtitle = "Include phone screen images with text observations",
                 icon = Icons.Filled.PhotoCamera,
                 checked = state.device.uploadScreenshots,
                 enabled = state.device.screenObservationEnabled,
@@ -102,6 +102,16 @@ fun AwarenessSection(
                     "Turn on screen observation first"
                 },
                 onCheckedChange = viewModel::setUploadScreenshots,
+            )
+
+            RowDivider()
+
+            ToggleRow(
+                title = "Device integration",
+                subtitle = "Allow Aura to run safe device queries (inventory, battery, network)",
+                icon = Icons.Filled.PhoneAndroid,
+                checked = state.device.deviceIntegrationEnabled,
+                onCheckedChange = viewModel::setDeviceIntegration,
             )
         }
 
@@ -122,7 +132,7 @@ fun AwarenessSection(
                 subtitle = if (permissions.observerServiceEnabled) {
                     "Aura's observer service is enabled"
                 } else {
-                    "Tap to enable it in Android's accessibility settings"
+                    "AURA setting is ON. Tap to grant Accessibility in Android settings."
                 },
                 icon = Icons.Filled.PhoneAndroid,
                 onClick = onOpenAccessibilitySettings,
@@ -136,7 +146,7 @@ fun AwarenessSection(
                 subtitle = if (permissions.agentServiceEnabled) {
                     "Aura can tap and type on your behalf"
                 } else {
-                    "Tap to enable it in Android's accessibility settings"
+                    "Tap to grant Accessibility in Android settings."
                 },
                 icon = Icons.Filled.TouchApp,
                 onClick = onOpenAccessibilitySettings,
@@ -148,9 +158,9 @@ fun AwarenessSection(
         ) {
             Spacer(Modifier.height(12.dp))
             NoticeCard(
-                text = "Screen observation is on in Aura but Android has not " +
-                    "granted the accessibility permission, so nothing is being " +
-                    "sent. Enable Aura's observer service above.",
+                text = "Screen observation is ON in AURA settings, but Android has not " +
+                    "granted the Accessibility permission yet, so nothing is being " +
+                    "sent. Tap above to grant Accessibility in Android settings.",
                 tone = StatusTone.Warning,
             )
         }
@@ -214,5 +224,5 @@ fun AwarenessSection(
     }
 }
 
-/** "Granted" / "Not granted" - the OS's answer, not the app's setting. */
-private fun Boolean.grantLabel(): String = if (this) "Granted" else "Not granted"
+/** "Active" / "Waiting for Android Accessibility access" - the OS's answer, not the app's setting. */
+private fun Boolean.grantLabel(): String = if (this) "Active" else "Waiting for Android Accessibility access"

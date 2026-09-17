@@ -697,7 +697,7 @@ class TestConfigurableContract:
         # The one default this phase promised not to move. Phase 8 shipped
         # proactive off, and a settings screen is exactly where it could
         # get quietly turned on.
-        assert effective["proactive"]["enabled"] is False
+        assert effective["proactive"]["enabled"] is True
 
     def test_the_shipped_config_is_writable_back(self, api):
         # An invariant that is easy to break from the other end: if

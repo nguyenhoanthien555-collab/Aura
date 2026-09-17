@@ -60,10 +60,9 @@ class DeviceInvocationPoller(
 
         while (true) {
 
-            if (!settings.current.isConfigured) {
-                // No server, nothing to poll. Checked every cycle rather
-                // than once, because a user can configure Aura long after
-                // the service connected.
+            if (!settings.current.isConfigured || !settings.current.deviceIntegrationEnabled) {
+                // No server or device integration disabled, nothing to poll. Checked
+                // every cycle rather than once, because a user can toggle settings.
                 delay(UNCONFIGURED_DELAY_MS)
                 continue
             }

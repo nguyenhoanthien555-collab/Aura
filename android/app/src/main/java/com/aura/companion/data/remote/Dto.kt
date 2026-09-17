@@ -115,7 +115,7 @@ data class NotificationDto(
 data class NotificationsResponseDto(
     val notifications: List<NotificationDto> = emptyList(),
     val count: Int = 0,
-    @SerialName("companion_enabled") val companionEnabled: Boolean = false,
+    @SerialName("companion_enabled") val companionEnabled: Boolean = true,
 )
 
 // ---------------------------------------------------------------------------

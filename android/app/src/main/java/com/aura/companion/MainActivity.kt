@@ -33,6 +33,7 @@ import com.aura.companion.ui.hub.ModelsSection
 import com.aura.companion.ui.hub.NotificationsSection
 import com.aura.companion.ui.hub.PrivacySection
 import com.aura.companion.ui.hub.ProactiveSection
+import com.aura.companion.ui.hub.SyncSection
 import com.aura.companion.ui.hub.ToolsSection
 import com.aura.companion.ui.hub.VisionSection
 import com.aura.companion.ui.hub.VoiceSection
@@ -99,6 +100,10 @@ class MainActivity : ComponentActivity() {
                     factory = HubViewModel.factory(
                         container.settings,
                         container.repository,
+                        container.syncClient,
+                        container.syncOutbox,
+                        container.syncInbox,
+                        container.cursorStore,
                     )
                 )
 
@@ -218,6 +223,10 @@ class MainActivity : ComponentActivity() {
 
                     composable(HubRoutes.GENERAL) {
                         GeneralSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.SYNC) {
+                        SyncSection(hubState, hubViewModel, back)
                     }
 
                     composable(HubRoutes.CONNECTION) {

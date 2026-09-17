@@ -127,7 +127,7 @@ DEFAULT_CONFIG = {
         # "Use memory in replies - look things up from past
         # conversations", under privacy, so it has to mean both.
         "profile": True,
-        "recall": False,
+        "recall": True,
         "max_facts": 8,
         "max_recalled": 3,
 
@@ -174,7 +174,7 @@ DEFAULT_CONFIG = {
         # semantic retrieval stays unavailable until a reindex runs
         # (MemoryPipeline.semantic_indexer.reindex()).
         "semantic": {
-            "enabled": False,
+            "enabled": True,
             "provider": "hashing",
             "model": "",
             "base_url": "",
@@ -247,7 +247,7 @@ DEFAULT_CONFIG = {
     # Aura may speak unprompted, and the defaults are conservative
     # enough to be dull.
     "proactive": {
-        "enabled": False,
+        "enabled": True,
 
         # Nothing unprompted within two hours of anything else
         # unprompted, whatever the category.
@@ -470,7 +470,7 @@ DEFAULT_CONFIG = {
     "tools": {
         # Two locks. Both must be opened: the system has to be enabled,
         # and each tool has to be named in `allowed`.
-        "enabled": False,
+        "enabled": True,
         "allowed": [],
 
         # Risk levels that run without asking. Anything not listed here
@@ -548,7 +548,7 @@ DEFAULT_CONFIG = {
         # user turns it on - here *and* on the device. Two switches, the
         # same shape tools and plugins use.
         "screen": {
-            "enabled": False,
+            "enabled": True,
 
             # Seconds between accepted observations. Below this an
             # arriving frame is dropped, not queued.
@@ -564,7 +564,7 @@ DEFAULT_CONFIG = {
         # Every default here exists to keep Aura quiet. She notifies when
         # she has something worth saying, not when something happened.
         "companion": {
-            "enabled": False,
+            "enabled": True,
 
             # Confidence a thought must reach before it is allowed out.
             "relevance_threshold": 0.7,

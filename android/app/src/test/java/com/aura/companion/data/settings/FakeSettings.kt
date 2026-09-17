@@ -31,9 +31,11 @@ class FakeSettings(
     serverUrl: String = "",
     authToken: String = "",
     deviceId: String = "android-test",
-    screenObservationEnabled: Boolean = false,
+    screenObservationEnabled: Boolean = true,
     notificationsEnabled: Boolean = true,
-    uploadScreenshots: Boolean = false,
+    uploadScreenshots: Boolean = true,
+    syncEnabled: Boolean = true,
+    deviceIntegrationEnabled: Boolean = true,
 ) : DeviceSettings {
 
     private val _settings = MutableStateFlow(
@@ -44,6 +46,8 @@ class FakeSettings(
             screenObservationEnabled = screenObservationEnabled,
             notificationsEnabled = notificationsEnabled,
             uploadScreenshots = uploadScreenshots,
+            syncEnabled = syncEnabled,
+            deviceIntegrationEnabled = deviceIntegrationEnabled,
         )
     )
 
@@ -65,6 +69,14 @@ class FakeSettings(
 
     override fun setUploadScreenshots(enabled: Boolean) {
         current = current.copy(uploadScreenshots = enabled)
+    }
+
+    override fun setSyncEnabled(enabled: Boolean) {
+        current = current.copy(syncEnabled = enabled)
+    }
+
+    override fun setDeviceIntegration(enabled: Boolean) {
+        current = current.copy(deviceIntegrationEnabled = enabled)
     }
 
     override fun setThemeMode(mode: ThemeMode) {

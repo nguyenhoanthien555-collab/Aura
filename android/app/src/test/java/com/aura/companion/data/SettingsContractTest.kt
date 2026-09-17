@@ -201,7 +201,7 @@ class SettingsContractTest {
         // wrong provider's setting.
         val llm = body.effective.llm
         assertEquals("gemini", llm.provider)
-        assertEquals("gemini-3.6-flash", llm.model)
+        assertEquals("gemini-3.5-flash-lite", llm.model)
         assertEquals("gpt-5.1", llm.openaiModel)
         assertEquals("claude-sonnet-5", llm.anthropicModel)
         assertEquals("llama-3.3-70b", llm.cerebrasModel)
@@ -213,8 +213,8 @@ class SettingsContractTest {
         assertEquals("qwen3:8b", llm.ollamaModel)
         assertEquals("openrouter/free", llm.fallbackModel)
         assertEquals(listOf("groq", "mistral", "openrouter"), llm.fallbackProviders)
-        assertEquals(0.7, llm.temperature, 0.0001)
-        assertEquals(768, llm.maxOutputTokens)
+        assertEquals(0.2, llm.temperature, 0.0001)
+        assertEquals(2048, llm.maxOutputTokens)
         assertEquals(120.0, llm.timeout, 0.0001)
 
         // Routing lanes. Blank on a stock server, and blank has to survive
@@ -234,15 +234,15 @@ class SettingsContractTest {
 
         assertEquals(10, body.effective.memory.historyLimit)
         assertEquals(500, body.effective.memory.retrievalScope)
-        assertFalse(body.effective.memory.recall)
+        assertTrue(body.effective.memory.recall)
 
-        assertFalse(body.effective.proactive.enabled)
+        assertTrue(body.effective.proactive.enabled)
         assertEquals(listOf(listOf(22, 8)), body.effective.proactive.quietHours)
         assertEquals(4, body.effective.proactive.maxPerDay)
 
         assertTrue(body.effective.server.screen.enabled)
         assertEquals(8.0, body.effective.server.screen.minInterval, 0.0001)
-        assertFalse(body.effective.server.companion.enabled)
+        assertTrue(body.effective.server.companion.enabled)
 
         assertTrue(body.effective.tools.enabled)
         assertEquals(listOf("safe"), body.effective.tools.autoApprove)
@@ -295,7 +295,7 @@ class SettingsContractTest {
 
         // The whole allow-list, not a sample: a path lost in transit renders
         // as a control this server "does not support".
-        assertEquals(59, configurable.size)
+        assertEquals(60, configurable.size)
 
         listOf(
             "llm.provider", "llm.model", "llm.anthropic_model", "llm.qwen_model",
@@ -311,7 +311,7 @@ class SettingsContractTest {
             // be built at all, so a path lost here is a provider the owner
             // can select and never configure.
             "llm.custom_base_url", "llm.custom_model",
-            "memory.recall", "memory.history_limit",
+            "memory.recall", "memory.history_limit", "memory.semantic.enabled",
             "proactive.enabled", "proactive.quiet_hours",
             "server.screen.enabled", "server.screen.min_interval",
             // Every knob on the companion gate, not just its switch. The

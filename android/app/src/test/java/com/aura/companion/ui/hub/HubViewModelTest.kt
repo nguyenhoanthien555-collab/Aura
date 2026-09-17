@@ -2,6 +2,7 @@ package com.aura.companion.ui.hub
 
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
+import com.aura.companion.data.settings.AuraSettings
 import com.aura.companion.data.settings.FakeSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -530,6 +531,52 @@ class HubViewModelTest {
         // settings overlay to do with it, so no PATCH was sent.
         assertTrue(patches.isEmpty())
         assertEquals(SettingsAccess.Available, state.settingsAccess)
+    }
+
+    @Test
+    fun `sync toggle is written to the phone and never to the server`() {
+        val viewModel = hub()
+        await(viewModel, "the settings document") { it.server.loaded }
+
+        viewModel.setSyncEnabled(false)
+        val stateOff = await(viewModel, "sync toggle off") { !it.device.syncEnabled }
+        assertFalse(settings.current.syncEnabled)
+        assertFalse(stateOff.device.syncEnabled)
+
+        viewModel.setSyncEnabled(true)
+        val stateOn = await(viewModel, "sync toggle on") { it.device.syncEnabled }
+        assertTrue(settings.current.syncEnabled)
+        assertTrue(stateOn.device.syncEnabled)
+
+        assertTrue("No PATCH should be sent for device-local sync setting", patches.isEmpty())
+    }
+
+    @Test
+    fun `device integration toggle is written to the phone and never to the server`() {
+        val viewModel = hub()
+        await(viewModel, "the settings document") { it.server.loaded }
+
+        viewModel.setDeviceIntegration(false)
+        val stateOff = await(viewModel, "device integration off") { !it.device.deviceIntegrationEnabled }
+        assertFalse(settings.current.deviceIntegrationEnabled)
+        assertFalse(stateOff.device.deviceIntegrationEnabled)
+
+        viewModel.setDeviceIntegration(true)
+        val stateOn = await(viewModel, "device integration on") { it.device.deviceIntegrationEnabled }
+        assertTrue(settings.current.deviceIntegrationEnabled)
+        assertTrue(stateOn.device.deviceIntegrationEnabled)
+
+        assertTrue("No PATCH should be sent for device integration setting", patches.isEmpty())
+    }
+
+    @Test
+    fun `default settings enable safe capabilities without autonomy bypass`() {
+        val defaults = AuraSettings()
+        assertTrue("Screen observation safe default is true", defaults.screenObservationEnabled)
+        assertTrue("Screenshot upload safe default is true", defaults.uploadScreenshots)
+        assertTrue("Notifications safe default is true", defaults.notificationsEnabled)
+        assertTrue("Sync safe default is true", defaults.syncEnabled)
+        assertTrue("Device integration safe default is true", defaults.deviceIntegrationEnabled)
     }
 
     // ------------------------------------------------------------------

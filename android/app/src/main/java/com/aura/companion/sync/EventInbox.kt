@@ -22,6 +22,7 @@ data class InboxRecord(
 interface EventInbox {
     fun shouldProcess(event: SyncEventDto): InboxApplyResult
     fun recordApplied(event: SyncEventDto)
+    fun processedCount(): Int
 }
 
 class FileEventInbox(private val storageDir: File) : EventInbox {
@@ -29,6 +30,8 @@ class FileEventInbox(private val storageDir: File) : EventInbox {
     private val processed = LinkedHashMap<String, InboxRecord>()
     private val journalFile = File(storageDir, "inbox_journal.jsonl")
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    override fun processedCount(): Int = synchronized(lock) { processed.size }
 
     init {
         if (!storageDir.exists()) {

@@ -27,6 +27,10 @@ interface DeviceSettings : SettingsProvider {
 
     fun setUploadScreenshots(enabled: Boolean)
 
+    fun setSyncEnabled(enabled: Boolean)
+
+    fun setDeviceIntegration(enabled: Boolean)
+
     fun setThemeMode(mode: ThemeMode)
 
     fun setDynamicColour(enabled: Boolean)

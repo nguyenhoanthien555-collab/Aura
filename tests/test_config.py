@@ -140,10 +140,10 @@ def test_screen_pixels_are_not_captured_by_default():
     assert DEFAULT_CONFIG["vision"]["capture_screen"] is False
 
 
-def test_tools_are_off_and_nothing_is_allowed_by_default():
+def test_tools_are_on_and_nothing_is_allowed_by_default():
     tools = DEFAULT_CONFIG["tools"]
 
-    assert tools["enabled"] is False
+    assert tools["enabled"] is True
     assert tools["allowed"] == []
     assert tools["allowed_paths"] == []
     assert tools["applications"] == {}
@@ -193,7 +193,7 @@ def test_defaults_are_serialisable_as_yaml():
 def test_the_default_tool_policy_grants_nothing():
     policy = ToolPolicy.from_config(DEFAULT_CONFIG["tools"])
 
-    assert policy.enabled is False
+    assert policy.enabled is True
     assert policy.allowed == frozenset()
 
 
@@ -247,7 +247,7 @@ def test_a_sprint_four_config_still_starts(config_file):
 
     assert config["llm"]["provider"] == "gemini"
     assert config["vision"]["enabled"] is False
-    assert config["tools"]["enabled"] is False
+    assert config["tools"]["enabled"] is True
     assert config["avatar"]["enabled"] is True
     assert config["voice"]["stt"]["provider"] == "mock"
 
@@ -273,11 +273,11 @@ def test_a_non_mapping_file_falls_back_to_the_defaults(config_file):
 
 
 def test_loading_does_not_mutate_the_defaults(config_file):
-    write(config_file, {"tools": {"enabled": True, "allowed": ["current_time"]}})
+    write(config_file, {"tools": {"enabled": False, "allowed": ["current_time"]}})
 
     load_config()
 
-    assert DEFAULT_CONFIG["tools"]["enabled"] is False
+    assert DEFAULT_CONFIG["tools"]["enabled"] is True
     assert DEFAULT_CONFIG["tools"]["allowed"] == []
 
 
@@ -328,16 +328,16 @@ def test_an_unchanged_state_does_not_reparse_yaml(config_file, monkeypatch):
 def test_a_rewritten_file_is_visible_to_the_next_load(config_file):
     """Editing config.yaml must never be swallowed by the cache."""
 
-    write(config_file, {"tools": {"enabled": True}})
+    write(config_file, {"tools": {"enabled": False}})
 
-    assert load_config()["tools"]["enabled"] is True
+    assert load_config()["tools"]["enabled"] is False
 
     write(config_file, {"personality": {"name": "Renamed"}})
 
     fresh = load_config()
 
     assert fresh["personality"]["name"] == "Renamed"
-    assert fresh["tools"]["enabled"] is False
+    assert fresh["tools"]["enabled"] is True
 
 
 def test_the_returned_dict_is_an_independent_copy(config_file):
@@ -350,12 +350,12 @@ def test_the_returned_dict_is_an_independent_copy(config_file):
     write(config_file, {})
 
     first = load_config()
-    first["tools"]["enabled"] = True
+    first["tools"]["enabled"] = False
     first["llm"]["model"] = "mutated"
 
     second = load_config()
 
-    assert second["tools"]["enabled"] is False
+    assert second["tools"]["enabled"] is True
     assert second["llm"]["model"] == DEFAULT_CONFIG["llm"]["model"]
 
 

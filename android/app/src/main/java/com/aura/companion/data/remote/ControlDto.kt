@@ -164,17 +164,24 @@ data class TaskModelsDto(
 )
 
 @Serializable
+data class MemorySemanticDto(
+    val enabled: Boolean = true,
+    val provider: String = "hashing",
+)
+
+@Serializable
 data class MemoryConfigDto(
-    val recall: Boolean = false,
+    val recall: Boolean = true,
     val profile: Boolean = true,
     val pipeline: Boolean = true,
     @SerialName("history_limit") val historyLimit: Int = 20,
     @SerialName("retrieval_scope") val retrievalScope: Int = 500,
+    val semantic: MemorySemanticDto = MemorySemanticDto(),
 )
 
 @Serializable
 data class ProactiveConfigDto(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     @SerialName("cooldown_seconds") val cooldownSeconds: Double = 7200.0,
     @SerialName("max_per_day") val maxPerDay: Int = 4,
     /** `[[22, 8]]` - windows that may wrap midnight. */
@@ -259,7 +266,7 @@ data class VoiceChannelDto(
  */
 @Serializable
 data class ToolsConfigDto(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val allowed: List<String> = emptyList(),
     /** Risk levels that skip the confirmation prompt: safe/sensitive/dangerous. */
     @SerialName("auto_approve") val autoApprove: List<String> = emptyList(),
@@ -294,13 +301,13 @@ data class ServerConfigDto(
 
 @Serializable
 data class ScreenConfigDto(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     @SerialName("min_interval") val minInterval: Double = 8.0,
 )
 
 @Serializable
 data class CompanionConfigDto(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     /**
      * The six tuning knobs phase 14 made settable and phase 23 made
      * visible. All defaulted, so a server older than any one of them

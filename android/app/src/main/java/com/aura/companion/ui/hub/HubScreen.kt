@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WifiTethering
@@ -610,6 +611,10 @@ private val HUB_GROUPS = listOf(
                 Icons.Filled.Build, HubRoutes.TOOLS,
             ),
             HubEntry(
+                "Sync", "Distributed events, cursors, outbox",
+                Icons.Filled.Sync, HubRoutes.SYNC,
+            ),
+            HubEntry(
                 "Privacy", "What leaves this phone, and API keys",
                 Icons.Filled.Shield, HubRoutes.PRIVACY,
             ),
@@ -750,4 +755,5 @@ object HubRoutes {
     const val DIAGNOSTICS = "hub/diagnostics"
     const val GENERAL = "hub/general"
     const val CONNECTION = "hub/connection"
+    const val SYNC = "hub/sync"
 }

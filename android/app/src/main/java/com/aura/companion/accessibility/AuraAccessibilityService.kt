@@ -69,7 +69,7 @@ class AuraAccessibilityService : AccessibilityService() {
         syncJob?.cancel()
         syncJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                if (settings.current.isConfigured) {
+                if (settings.current.isConfigured && settings.current.syncEnabled) {
                     try {
                         container.syncClient.syncCycle()
                     } catch (e: Exception) {

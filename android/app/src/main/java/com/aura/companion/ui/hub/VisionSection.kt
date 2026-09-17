@@ -88,7 +88,7 @@ fun VisionSection(
         ) {
 
             ToggleRow(
-                title = "Read screen contents",
+                title = "Read desktop screen contents",
                 subtitle = "Off, Aura knows window titles only",
                 icon = Icons.Filled.DesktopWindows,
                 checked = vision.captureScreen,
@@ -116,7 +116,7 @@ fun VisionSection(
         ) {
 
             ToggleRow(
-                title = "Send screen images to cloud",
+                title = "Send desktop screen images to cloud",
                 subtitle = "Off, only the local model ever sees your pixels. " +
                     "Turning this on sends screenshots to the configured provider.",
                 icon = Icons.Filled.CloudUpload,

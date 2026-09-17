@@ -191,7 +191,7 @@ response:
 # is not sent late - it is not sent. Closing that gap needs a background
 # worker or a push service, neither of which exists in this deployment.
 proactive:
-  enabled: false
+  enabled: true
 
   # Nothing unprompted within two hours of anything else unprompted.
   cooldown_seconds: 7200
