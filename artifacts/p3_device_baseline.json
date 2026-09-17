@@ -1,0 +1,29 @@
+{
+  "audit_timestamp": "2026-09-16T12:19:55.426190+00:00",
+  "device": {
+    "serial": "IBCQMB4PTGNZJVTO",
+    "manufacturer": "OPPO",
+    "model": "CPH2251",
+    "market_name": "OPPO Reno6 5G",
+    "android_version": "13",
+    "sdk_version": 33,
+    "cpu_abi": "arm64-v8a",
+    "display_size": "1080x2400",
+    "display_density": 480,
+    "storage_data_free": "55G",
+    "battery_level": 100,
+    "connection_mode": "USB"
+  },
+  "git_baseline": {
+    "head_commit": "42ff3749f3bd7c9ae44bb189922cc13f3636b11b"
+  },
+  "brain_invariants": {
+    "active_production_brain": "brain-AURA-cand-run_59",
+    "active_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+    "rollback_brain": "aura-brain-v1",
+    "rollback_sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+    "state_2_gate_locked": true,
+    "full_autonomy_enabled": false
+  },
+  "audit_status": "VERIFIED"
+}

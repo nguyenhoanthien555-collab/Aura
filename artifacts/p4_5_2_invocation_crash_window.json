@@ -1,0 +1,40 @@
+{
+  "test_name": "Critical Claim A: Crash-After-Side-Effect Invocation Replay Protection",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T18:16:47.800818+00:00",
+  "failure_window": {
+    "sequence": [
+      "1. Invocation received by worker process 1",
+      "2. DurableInvocationLedger records state as RECEIVED",
+      "3. DurableInvocationLedger transitions state to EXECUTING (prior to side-effect)",
+      "4. Tool side effect executed (durable counter file incremented 0 -> 1)",
+      "5. Process 1 terminates immediately (simulating crash) BEFORE record_completed()",
+      "6. Process 2 spawns with new PID, loads same SQLite database",
+      "7. Process 2 receives identical invocation request (same invocation_id / tool_call_id)",
+      "8. Process 2 invokes check_replay(tool_call_id)",
+      "9. Invocation ledger identifies invocation in EXECUTING state",
+      "10. check_replay returns AMBIGUOUS_CRASH_RECOVERY (ok=False) instead of None",
+      "11. Re-execution is refused; side-effect counter remains exactly 1"
+    ],
+    "vulnerability_mitigated": "Blind re-execution of ambiguous in-flight invocations leading to duplicate physical/logical side effects",
+    "resolution_model": "Model 3: Explicit UNKNOWN state (AMBIGUOUS_CRASH_RECOVERY refusal)"
+  },
+  "evidence": {
+    "stage1_pid_boundary": true,
+    "stage2_pid_boundary": true,
+    "process_isolation": "Verified distinct OS PIDs across subprocess invocation",
+    "persisted_state_at_crash": "EXECUTING",
+    "replay_result": {
+      "ok": false,
+      "status": "AMBIGUOUS_CRASH_RECOVERY",
+      "recovery_state": "EXECUTING",
+      "error_code": "CRASH_AFTER_SIDE_EFFECT"
+    },
+    "initial_side_effect_count": 1,
+    "final_side_effect_count": 1,
+    "duplicate_side_effect_prevented": true
+  },
+  "test_file": "tests/test_p4_5_2_critical_audit.py::test_crash_after_side_effect_replay_protection",
+  "worker_file": "scripts/crash_window_worker.py"
+}

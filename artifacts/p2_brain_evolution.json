@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-09-16T18:44:54.593366",
+  "phase": "P2.5",
+  "overall_status": "PASS",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "production_brain_preserved": true,
+  "active_brain_id": "brain-AURA-cand-run_59",
+  "active_brain_checksum": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "test_results": [
+    {
+      "test_name": "multi_generational_lineage",
+      "description": "Verify parent -> child lineage graph from aura-brain-v1 to AURA-cand-run_59",
+      "status": "PASS",
+      "parent_model": "aura-brain-v1",
+      "adapter_hash": "82f13627fcb44cee4169f44398670e4fa42dec29824c030da6c7adbbbcb3ac30",
+      "merged_hash": "218fdc1396f5d45e649869592869b14eb4e7d7e62199e40b57cf5002c5747baa",
+      "gguf_hash": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+      "duration_seconds": 0.006
+    },
+    {
+      "test_name": "brain_package_structural_integrity",
+      "description": "Confirm manifest, GGUF binary, and parameter delta exist and match cryptographic digests",
+      "status": "PASS",
+      "manifest_present": true,
+      "gguf_present": true,
+      "checksum_verified": true,
+      "parameter_delta_present": true,
+      "parameter_delta_summary": {
+        "changed_parameters_count": 44040192,
+        "changed_parameters_pct": 8.9144,
+        "max_abs_delta": 0.00553894
+      },
+      "duration_seconds": 0.6278
+    },
+    {
+      "test_name": "rollback_target_verification",
+      "description": "Verify rollback target package aura-brain-v1 is intact and passes checksum verification",
+      "status": "PASS",
+      "rollback_package_id": "aura-brain-v1",
+      "rollback_checksum": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+      "checksum_valid": true,
+      "duration_seconds": 1.3046
+    },
+    {
+      "test_name": "lifecycle_state_machine_transitions",
+      "description": "Verify state progression CANDIDATE -> VALIDATING -> REJECTED",
+      "status": "PASS",
+      "candidate_state": true,
+      "validating_state": true,
+      "rejected_state": true,
+      "duration_seconds": 0.0265
+    },
+    {
+      "test_name": "cryptographic_promotion_barrier",
+      "description": "Reject candidate promotion when GGUF SHA-256 does not match manifest checksum",
+      "status": "PASS",
+      "checksum_mismatch_detected": true,
+      "production_preserved": true,
+      "duration_seconds": 0.0215
+    },
+    {
+      "test_name": "rollback_pointer_durability",
+      "description": "Ensure rollback target pointer in brain_state.json is durable and points to valid brain",
+      "status": "PASS",
+      "rollback_target": "aura-brain-v1",
+      "state_file_valid": true,
+      "production_preserved": true,
+      "duration_seconds": 0.0
+    }
+  ]
+}

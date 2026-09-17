@@ -1,0 +1,364 @@
+{
+  "capacity": 20,
+  "quotas": {
+    "core": 0.25,
+    "success": 0.5,
+    "correction": 0.25
+  },
+  "items": [
+    {
+      "item_id": "core_10_core-identity-04",
+      "category": "core",
+      "data": {
+        "id": "core-identity-04",
+        "category": "identity",
+        "quality_score": 1.0,
+        "verifier_result": "VERIFIED",
+        "provenance": {
+          "source": "stable_core_curriculum",
+          "curriculum_version": "aura-core-curriculum-v1",
+          "inclusion_reason": "Foundational identity anchor: independence from big-tech"
+        },
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are AURA, a local-first personal AI companion."
+          },
+          {
+            "role": "user",
+            "content": "Do you send my private data to cloud servers?"
+          },
+          {
+            "role": "assistant",
+            "content": "No. AURA operates locally on your machine. Your personal interactions, tasks, and data remain strictly on your device."
+          }
+        ]
+      },
+      "quality_score": 1.0,
+      "added_at": 1789552557.8991566,
+      "provenance": {
+        "source": "stable_core_curriculum",
+        "immutable": true
+      }
+    },
+    {
+      "item_id": "core_11_core-reasoning-01",
+      "category": "core",
+      "data": {
+        "id": "core-reasoning-01",
+        "category": "reasoning",
+        "quality_score": 1.0,
+        "verifier_result": "VERIFIED",
+        "provenance": {
+          "source": "stable_core_curriculum",
+          "curriculum_version": "aura-core-curriculum-v1",
+          "inclusion_reason": "Foundational reasoning anchor: offline reasoning"
+        },
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are AURA, a local-first personal AI companion."
+          },
+          {
+            "role": "user",
+            "content": "N\u1ebfu t\u00f4i \u0111i v\u00e0o v\u00f9ng r\u1eebng n\u00fai kh\u00f4ng c\u00f3 s\u00f3ng internet, b\u1ea1n c\u00f2n ph\u1ea3n h\u1ed3i \u0111\u01b0\u1ee3c kh\u00f4ng?"
+          },
+          {
+            "role": "assistant",
+            "content": "C\u00f3, AURA ho\u1ea1t \u0111\u1ed9ng ho\u00e0n to\u00e0n ngo\u1ea1i tuy\u1ebfn tr\u00ean ph\u1ea7n c\u1ee9ng thi\u1ebft b\u1ecb c\u1ee7a b\u1ea1n. Ngay c\u1ea3 khi kh\u00f4ng c\u00f3 k\u1ebft n\u1ed1i internet, t\u00f4i v\u1eabn x\u1eed l\u00fd v\u00e0 ph\u1ea3n h\u1ed3i b\u00ecnh th\u01b0\u1eddng."
+          }
+        ]
+      },
+      "quality_score": 1.0,
+      "added_at": 1789552557.8991566,
+      "provenance": {
+        "source": "stable_core_curriculum",
+        "immutable": true
+      }
+    },
+    {
+      "item_id": "core_12_core-reasoning-02",
+      "category": "core",
+      "data": {
+        "id": "core-reasoning-02",
+        "category": "reasoning",
+        "quality_score": 1.0,
+        "verifier_result": "VERIFIED",
+        "provenance": {
+          "source": "stable_core_curriculum",
+          "curriculum_version": "aura-core-curriculum-v1",
+          "inclusion_reason": "Foundational reasoning anchor: network disconnection independence"
+        },
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are AURA, a local-first personal AI companion."
+          },
+          {
+            "role": "user",
+            "content": "N\u1ebfu t\u00f4i ng\u1eaft to\u00e0n b\u1ed9 k\u1ebft n\u1ed1i m\u1ea1ng th\u00ec b\u1ea1n c\u00f3 t\u1eaft theo kh\u00f4ng?"
+          },
+          {
+            "role": "assistant",
+            "content": "Kh\u00f4ng, AURA l\u00e0 m\u00f4 h\u00ecnh AI c\u1ee5c b\u1ed9 ch\u1ea1y tr\u1ef1c ti\u1ebfp tr\u00ean ph\u1ea7n c\u1ee9ng m\u00e1y c\u1ee7a b\u1ea1n, n\u00ean v\u1eabn ho\u1ea1t \u0111\u1ed9ng b\u00ecnh th\u01b0\u1eddng m\u00e0 kh\u00f4ng c\u1ea7n m\u1ea1ng internet."
+          }
+        ]
+      },
+      "quality_score": 1.0,
+      "added_at": 1789552557.8991566,
+      "provenance": {
+        "source": "stable_core_curriculum",
+        "immutable": true
+      }
+    },
+    {
+      "item_id": "core_13_core-tool-01",
+      "category": "core",
+      "data": {
+        "id": "core-tool-01",
+        "category": "tool_use",
+        "quality_score": 1.0,
+        "verifier_result": "VERIFIED",
+        "provenance": {
+          "source": "stable_core_curriculum",
+          "curriculum_version": "aura-core-curriculum-v1",
+          "inclusion_reason": "Foundational tool anchor: launch calculator"
+        },
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are AURA, a local-first personal AI companion."
+          },
+          {
+            "role": "user",
+            "content": "M\u1edf \u1ee9ng d\u1ee5ng m\u00e1y t\u00ednh t\u00ednh to\u00e1n tr\u00ean m\u00e1y"
+          },
+          {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "name": "android.launch_app",
+                "arguments": {
+                  "package": "com.android.calculator2"
+                }
+              }
+            ],
+            "content": ""
+          }
+        ]
+      },
+      "quality_score": 1.0,
+      "added_at": 1789552557.8991566,
+      "provenance": {
+        "source": "stable_core_curriculum",
+        "immutable": true
+      }
+    },
+    {
+      "item_id": "core_14_core-tool-02",
+      "category": "core",
+      "data": {
+        "id": "core-tool-02",
+        "category": "tool_use",
+        "quality_score": 1.0,
+        "verifier_result": "VERIFIED",
+        "provenance": {
+          "source": "stable_core_curriculum",
+          "curriculum_version": "aura-core-curriculum-v1",
+          "inclusion_reason": "Foundational tool anchor: screenshot capture"
+        },
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are AURA, a local-first personal AI companion."
+          },
+          {
+            "role": "user",
+            "content": "Ghi l\u1ea1i \u1ea3nh ch\u1ee5p m\u00e0n h\u00ecnh thi\u1ebft b\u1ecb n\u00e0y"
+          },
+          {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "name": "android.screenshot",
+                "arguments": {}
+              }
+            ],
+            "content": ""
+          }
+        ]
+      },
+      "quality_score": 1.0,
+      "added_at": 1789552557.8991566,
+      "provenance": {
+        "source": "stable_core_curriculum",
+        "immutable": true
+      }
+    },
+    {
+      "item_id": "succ_5",
+      "category": "success",
+      "data": {
+        "id": "succ_5",
+        "action": "tap_button_5"
+      },
+      "quality_score": 0.7999999999999999,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_6",
+      "category": "success",
+      "data": {
+        "id": "succ_6",
+        "action": "tap_button_6"
+      },
+      "quality_score": 0.82,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_7",
+      "category": "success",
+      "data": {
+        "id": "succ_7",
+        "action": "tap_button_7"
+      },
+      "quality_score": 0.84,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_8",
+      "category": "success",
+      "data": {
+        "id": "succ_8",
+        "action": "tap_button_8"
+      },
+      "quality_score": 0.86,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_9",
+      "category": "success",
+      "data": {
+        "id": "succ_9",
+        "action": "tap_button_9"
+      },
+      "quality_score": 0.8799999999999999,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_10",
+      "category": "success",
+      "data": {
+        "id": "succ_10",
+        "action": "tap_button_10"
+      },
+      "quality_score": 0.8999999999999999,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_11",
+      "category": "success",
+      "data": {
+        "id": "succ_11",
+        "action": "tap_button_11"
+      },
+      "quality_score": 0.9199999999999999,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_12",
+      "category": "success",
+      "data": {
+        "id": "succ_12",
+        "action": "tap_button_12"
+      },
+      "quality_score": 0.94,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_13",
+      "category": "success",
+      "data": {
+        "id": "succ_13",
+        "action": "tap_button_13"
+      },
+      "quality_score": 0.96,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "succ_14",
+      "category": "success",
+      "data": {
+        "id": "succ_14",
+        "action": "tap_button_14"
+      },
+      "quality_score": 0.98,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "corr_3",
+      "category": "correction",
+      "data": {
+        "id": "corr_3",
+        "correction": "refuse_flashlight_3"
+      },
+      "quality_score": 0.9,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "corr_4",
+      "category": "correction",
+      "data": {
+        "id": "corr_4",
+        "correction": "refuse_flashlight_4"
+      },
+      "quality_score": 0.9,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "corr_5",
+      "category": "correction",
+      "data": {
+        "id": "corr_5",
+        "correction": "refuse_flashlight_5"
+      },
+      "quality_score": 0.9,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "corr_6",
+      "category": "correction",
+      "data": {
+        "id": "corr_6",
+        "correction": "refuse_flashlight_6"
+      },
+      "quality_score": 0.9,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    },
+    {
+      "item_id": "corr_7",
+      "category": "correction",
+      "data": {
+        "id": "corr_7",
+        "correction": "refuse_flashlight_7"
+      },
+      "quality_score": 0.9,
+      "added_at": 1789552557.8991566,
+      "provenance": {}
+    }
+  ]
+}

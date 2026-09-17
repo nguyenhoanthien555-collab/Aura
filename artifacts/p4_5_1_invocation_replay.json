@@ -1,0 +1,39 @@
+{
+  "test_name": "test_durable_tool_invocation_replay_protection_lifecycle",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.422818+00:00",
+  "python_implementation": {
+    "model": "memory.models.ToolInvocationRecord",
+    "table": "tool_invocations",
+    "ledger_class": "core.sync.invocation_ledger.DurableInvocationLedger",
+    "lifecycle_states": [
+      "RECEIVED",
+      "EXECUTING",
+      "COMPLETED",
+      "FAILED"
+    ],
+    "integrated_components": [
+      "server.device_gateway.DeviceGateway.submit",
+      "server.device_gateway.DeviceGateway.complete",
+      "agent.runtime.AgentRuntime._execute_inline",
+      "agent.runtime.AgentRuntime.fold_tool_reports"
+    ],
+    "replay_protection": {
+      "duplicate_submissions_blocked": true,
+      "completed_invocations_return_cached_outcome": true,
+      "idempotency_guaranteed": true
+    }
+  },
+  "kotlin_implementation": {
+    "interface": "com.aura.companion.accessibility.InvocationLedger",
+    "implementations": [
+      "com.aura.companion.accessibility.FileInvocationLedger",
+      "com.aura.companion.accessibility.InMemoryInvocationLedger"
+    ],
+    "integrated_components": [
+      "com.aura.companion.accessibility.AccessibilityToolDispatcher.dispatch"
+    ],
+    "unit_test_status": "414/414 PASSED in testDebugUnitTest"
+  }
+}

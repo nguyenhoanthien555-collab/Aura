@@ -1,0 +1,456 @@
+{
+  "timestamp": "2026-09-16T12:02:27Z",
+  "suite_version": "p2.9-heldout-v3",
+  "suite_sha256": "3f90979d6cadb6219bdafe5f42063c290541a879666928d624bd4b61cc94d517",
+  "total_cases": 102,
+  "total_categories": 16,
+  "contamination_audit": {
+    "all_clean": true,
+    "datasets_checked": 49,
+    "reports": [
+      {
+        "dataset": "aura_learning_dataset.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789495845_run_83.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789495965_run_4c.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789496197_run_b8.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789497210_run_2b.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789497662_run_5a.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789498320_run_60.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789498501_run_28.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789498501_run_c6.jsonl",
+        "train_examples": 44,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789499102_run_07.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789499102_run_42.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789499699_run_26.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789499699_run_f6.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504276_run_27.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504276_run_40.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504385_run_d5.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504385_run_eb.jsonl",
+        "train_examples": 2,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504491_run_76.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504510_run_3b.jsonl",
+        "train_examples": 6,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504510_run_d5.jsonl",
+        "train_examples": 6,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504639_run_9e.jsonl",
+        "train_examples": 6,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504834_run_3c.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504834_run_54.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504870_run_d5.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789504961_run_a8.jsonl",
+        "train_examples": 4,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789505121_run_d7.jsonl",
+        "train_examples": 42,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789505246_run_a8.jsonl",
+        "train_examples": 42,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789505948_run_ec.jsonl",
+        "train_examples": 46,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789539932_run_bb.jsonl",
+        "train_examples": 46,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789542202_run_59.jsonl",
+        "train_examples": 65,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789542485_run_01.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789542485_run_0e.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789552614_run_14.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789552614_run_74.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789552704_run_61.jsonl",
+        "train_examples": 60,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789552721_run_42.jsonl",
+        "train_examples": 60,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789552738_run_86.jsonl",
+        "train_examples": 60,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789553272_run_36.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789553272_run_ba.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789553733_run_9d.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789553733_run_a6.jsonl",
+        "train_examples": 15,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789553889_run_e1.jsonl",
+        "train_examples": 60,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789554583_run_b0.jsonl",
+        "train_examples": 75,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789555158_run_ae.jsonl",
+        "train_examples": 91,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789555564_run_a1.jsonl",
+        "train_examples": 105,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "dataset_cycle_1789555968_run_8f.jsonl",
+        "train_examples": 120,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "p1_7_validation_dataset.jsonl",
+        "train_examples": 60,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "p1_probe_contamination.jsonl",
+        "train_examples": 42,
+        "status": "CLEAN",
+        "overlap_count": 0
+      },
+      {
+        "dataset": "p2_data_gov_test_dataset.jsonl",
+        "train_examples": 50,
+        "status": "CLEAN",
+        "overlap_count": 0
+      }
+    ]
+  },
+  "production_eval": {
+    "brain_id": "brain-AURA-cand-run_59",
+    "sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+    "overall_score": 0.3971,
+    "passed_tests": 30,
+    "duration_seconds": 186.96,
+    "category_scores": {
+      "identity": 0.8571,
+      "vietnamese": 0.5714,
+      "english": 0.1429,
+      "reasoning": 0.2143,
+      "tool_honesty": 0.0714,
+      "schema_correctness": 1.0,
+      "tool_calling": 0.6667,
+      "safety": 0.7143,
+      "memory": 0.3333,
+      "contradiction": 0.3333,
+      "novel_tasks": 0.0833,
+      "failure_handling": 0.0,
+      "uncertain_requests": 0.5833,
+      "verification": 0.0,
+      "refusal": 0.75,
+      "calibration": 0.0
+    }
+  },
+  "baseline_eval": {
+    "brain_id": "aura-brain-v1",
+    "sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+    "overall_score": 0.4657,
+    "passed_tests": 41,
+    "duration_seconds": 381.35,
+    "category_scores": {
+      "identity": 0.9286,
+      "vietnamese": 0.5714,
+      "english": 0.1429,
+      "reasoning": 0.2857,
+      "tool_honesty": 0.0714,
+      "schema_correctness": 1.0,
+      "tool_calling": 1.0,
+      "safety": 0.8571,
+      "memory": 0.5,
+      "contradiction": 0.4167,
+      "novel_tasks": 0.1667,
+      "failure_handling": 0.0,
+      "uncertain_requests": 0.75,
+      "verification": 0.0,
+      "refusal": 0.75,
+      "calibration": 0.0
+    }
+  },
+  "comparison": {
+    "overall_delta": -0.0686,
+    "category_comparison": {
+      "calibration": {
+        "production_score": 0.0,
+        "baseline_score": 0.0,
+        "delta": 0.0
+      },
+      "contradiction": {
+        "production_score": 0.3333,
+        "baseline_score": 0.4167,
+        "delta": -0.0833
+      },
+      "english": {
+        "production_score": 0.1429,
+        "baseline_score": 0.1429,
+        "delta": 0.0
+      },
+      "failure_handling": {
+        "production_score": 0.0,
+        "baseline_score": 0.0,
+        "delta": 0.0
+      },
+      "identity": {
+        "production_score": 0.8571,
+        "baseline_score": 0.9286,
+        "delta": -0.0714
+      },
+      "memory": {
+        "production_score": 0.3333,
+        "baseline_score": 0.5,
+        "delta": -0.1667
+      },
+      "novel_tasks": {
+        "production_score": 0.0833,
+        "baseline_score": 0.1667,
+        "delta": -0.0833
+      },
+      "reasoning": {
+        "production_score": 0.2143,
+        "baseline_score": 0.2857,
+        "delta": -0.0714
+      },
+      "refusal": {
+        "production_score": 0.75,
+        "baseline_score": 0.75,
+        "delta": 0.0
+      },
+      "safety": {
+        "production_score": 0.7143,
+        "baseline_score": 0.8571,
+        "delta": -0.1429
+      },
+      "schema_correctness": {
+        "production_score": 1.0,
+        "baseline_score": 1.0,
+        "delta": 0.0
+      },
+      "tool_calling": {
+        "production_score": 0.6667,
+        "baseline_score": 1.0,
+        "delta": -0.3333
+      },
+      "tool_honesty": {
+        "production_score": 0.0714,
+        "baseline_score": 0.0714,
+        "delta": 0.0
+      },
+      "uncertain_requests": {
+        "production_score": 0.5833,
+        "baseline_score": 0.75,
+        "delta": -0.1667
+      },
+      "verification": {
+        "production_score": 0.0,
+        "baseline_score": 0.0,
+        "delta": 0.0
+      },
+      "vietnamese": {
+        "production_score": 0.5714,
+        "baseline_score": 0.5714,
+        "delta": 0.0
+      }
+    }
+  },
+  "runtime_parity": {
+    "production_format": "GGUF Q8_0 (llama.cpp CUDA native)",
+    "production_size_mb": 948.68,
+    "baseline_format": "GGUF Q4_K_M (llama.cpp CUDA native)",
+    "baseline_size_mb": 1840.5,
+    "hardware_accelerator": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "idle_vram_mb": 0.0,
+    "inference_engine": "llama-completion.exe (CUDA offload: ngl=99)",
+    "timeout_policy_seconds": 90.0,
+    "max_context_tokens": 4096,
+    "temperature": 0.0,
+    "seed": 42
+  },
+  "updated_at": "2026-09-16T12:03:22Z"
+}

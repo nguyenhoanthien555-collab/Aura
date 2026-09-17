@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "evaluation_mode": "REAL_NETWORK_SOCKET_AND_PHYSICAL_HARDWARE_AUDIT",
+  "gates": [
+    {
+      "id": "GATE-P5-01",
+      "name": "Real Network Socket Server Binding",
+      "target": "TCP socket listening on 127.0.0.1 / Wi-Fi IP",
+      "status": "PASS",
+      "evidence": "RealNetworkServer spawned, Uvicorn running on TCP socket, authenticated HTTP client requests verified."
+    },
+    {
+      "id": "GATE-P5-02",
+      "name": "Server Restart & Network Durability Across Socket",
+      "target": "Socket death, process termination, restart on same SQLite DB",
+      "status": "PASS",
+      "evidence": "Socket killed, verified connection refused, restarted server, monotonic event sequence maintained with zero data loss."
+    },
+    {
+      "id": "GATE-P5-03",
+      "name": "Socket-Level Duplicate Idempotency & ACK Drop",
+      "target": "Retransmission after dropped ACK",
+      "status": "PASS",
+      "evidence": "Identical event payload submitted twice over TCP socket; 200 OK returned with zero duplicate storage."
+    },
+    {
+      "id": "GATE-P5-04",
+      "name": "Real Tool Replication Over REST",
+      "target": "Dynamic tool registration and discovery over HTTP",
+      "status": "PASS",
+      "evidence": "Tool registered on laptop node, pushed to relay, pulled by android node, verified in local registry."
+    },
+    {
+      "id": "GATE-P5-05",
+      "name": "Real Experience Replication Over REST",
+      "target": "AuraExperience replication with SHA-256 provenance",
+      "status": "PASS",
+      "evidence": "Experience created on mobile node, pushed to relay, pulled by laptop node, verified with zero corruption."
+    },
+    {
+      "id": "GATE-P5-06",
+      "name": "Concurrent Bidirectional Convergence Over REST",
+      "target": "25 + 25 concurrent events",
+      "status": "PASS",
+      "evidence": "50 unique events pushed and pulled concurrently across two client threads; 100% convergence achieved."
+    },
+    {
+      "id": "GATE-P5-07",
+      "name": "Network Flapping Resilience (10 Cycles)",
+      "target": "10 online/offline cycles over TCP socket",
+      "status": "PASS",
+      "evidence": "50 events queued during offline intervals successfully drained upon reconnection across 10 cycles."
+    },
+    {
+      "id": "GATE-P5-08",
+      "name": "Large Backlog Monotonicity (1,000 Events)",
+      "target": "1,000 events synced in 10 batches",
+      "status": "PASS",
+      "evidence": "All 1,000 events pulled in strict monotonic order with cursor advancing cleanly."
+    },
+    {
+      "id": "GATE-P5-09",
+      "name": "Security Forensics & Credential Leak Check",
+      "target": "Zero live secrets across repo and artifacts",
+      "status": "PASS",
+      "evidence": "0 live API keys or credentials; 20 benign fixtures/placeholders; Bearer auth enforced; tokens redacted."
+    },
+    {
+      "id": "GATE-P5-10",
+      "name": "STATE 3 Autonomy Lock Preservation",
+      "target": "full_autonomy_enabled == False",
+      "status": "PASS",
+      "evidence": "Strictly locked in config.yaml and artifacts/autonomy_gate.json."
+    },
+    {
+      "id": "GATE-P5-11",
+      "name": "Android Companion APK Compilation",
+      "target": "Debug APK generated from source",
+      "status": "PASS",
+      "evidence": "APK generated at D:/AURA/android/app/build/outputs/apk/debug/app-debug.apk (19904830 bytes, SHA256: a3626452ebd59823...)."
+    },
+    {
+      "id": "GATE-P5-12",
+      "name": "Physical Device USB/Wireless ADB Connection",
+      "target": "Actual physical Android phone connected via ADB",
+      "status": "NOT_EXECUTED",
+      "evidence": "NOT EXECUTED \u2014 PHYSICAL PREREQUISITE UNAVAILABLE (adb devices reported 0 attached devices)."
+    },
+    {
+      "id": "GATE-P5-13",
+      "name": "Physical 4G/5G Cellular Cross-Network Sync",
+      "target": "Sync across distinct cellular carriers (e.g. Viettel/Mobifone to home ISP)",
+      "status": "NOT_EXECUTED",
+      "evidence": "NOT EXECUTED \u2014 PHYSICAL PREREQUISITE UNAVAILABLE (Requires physical SIM/eSIM and active mobile hotspot)."
+    },
+    {
+      "id": "GATE-P5-14",
+      "name": "Physical Accessibility Node Gesture Tap On Phone Screen",
+      "target": "Live Android tap/gesture on actual display",
+      "status": "NOT_EXECUTED",
+      "evidence": "NOT EXECUTED \u2014 PHYSICAL PREREQUISITE UNAVAILABLE (Requires physical hardware screen)."
+    }
+  ],
+  "summary": {
+    "total_gates": 14,
+    "passed": 11,
+    "failed": 0,
+    "not_executed_hardware_unavailable": 3,
+    "overall_verdict": "P5 PARTIALLY VERIFIED"
+  }
+}

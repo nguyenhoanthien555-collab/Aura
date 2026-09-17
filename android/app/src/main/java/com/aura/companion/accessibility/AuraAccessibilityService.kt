@@ -16,6 +16,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -36,6 +37,7 @@ class AuraAccessibilityService : AccessibilityService() {
 
     private var agentJob: Job? = null
     private var devicePollerJob: Job? = null
+    private var syncJob: Job? = null
 
     /**
      * The screen the last window-state change named, and the package it
@@ -62,6 +64,20 @@ class AuraAccessibilityService : AccessibilityService() {
         val dispatcher = AccessibilityToolDispatcher(this)
         devicePollerJob = scope.launch {
             DeviceInvocationPoller(repository, settings, dispatcher).pollForever()
+        }
+
+        syncJob?.cancel()
+        syncJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                if (settings.current.isConfigured) {
+                    try {
+                        container.syncClient.syncCycle()
+                    } catch (e: Exception) {
+                        Log.d("AuraAgentService", "Sync error: ${e.message}")
+                    }
+                }
+                delay(5000L)
+            }
         }
 
         Log.d("AuraAgentService", "Aura Accessibility Service Connected")
@@ -103,6 +119,8 @@ class AuraAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         devicePollerJob?.cancel()
         devicePollerJob = null
+        syncJob?.cancel()
+        syncJob = null
         instance.set(null)
         scope.cancel()
         super.onDestroy()

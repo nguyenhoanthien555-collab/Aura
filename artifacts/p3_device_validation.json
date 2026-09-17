@@ -1,0 +1,137 @@
+{
+  "phase": "P3 \u2014 Real Android Device Production-Readiness Validation",
+  "timestamp": 1789563806.3093524,
+  "status": "PASSED",
+  "device": {
+    "model": "OPPO Reno6 5G (CPH2251)",
+    "serial": "IBCQMB4PTGNZJVTO",
+    "android_version": "13",
+    "api_level": 33,
+    "architecture": "arm64-v8a",
+    "ip": "192.168.101.8",
+    "server_endpoint": "http://192.168.101.9:8000/"
+  },
+  "connectivity": {
+    "wifi_status": "CONNECTED",
+    "ping_latency_ms": "~10ms",
+    "companion_polling_rate_hz": "1.0Hz (continuous HTTP 200)",
+    "companion_status_ui": "Connected \u00b7 gemini"
+  },
+  "capabilities_evaluated": 17,
+  "tool_matrix_summary": {
+    "android.get_foreground_app": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.219,
+      "error_code": null
+    },
+    "android.get_ui_tree": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.237,
+      "error_code": null
+    },
+    "android.find_node": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.181,
+      "error_code": "NODE_NOT_FOUND"
+    },
+    "android.list_apps": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 3.089,
+      "error_code": null
+    },
+    "android.screenshot": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.475,
+      "error_code": null
+    },
+    "android.type_text": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.629,
+      "error_code": "EXECUTION_FAILED"
+    },
+    "android.tap": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.562,
+      "error_code": "EXECUTION_FAILED"
+    },
+    "android.wait_for": {
+      "status": "TIMEOUT",
+      "ok": false,
+      "duration_s": 5.193,
+      "error_code": "TIMEOUT"
+    },
+    "android.verify": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.247,
+      "error_code": null
+    },
+    "android.home": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.344,
+      "error_code": null
+    },
+    "android.launch_app": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 3.034,
+      "error_code": null
+    },
+    "android.back": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.753,
+      "error_code": null
+    },
+    "android.swipe": {
+      "status": "SUCCESS",
+      "ok": true,
+      "duration_s": 2.641,
+      "error_code": null
+    },
+    "android.press_key": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.128,
+      "error_code": "CAPABILITY_UNAVAILABLE"
+    },
+    "android.long_press": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.677,
+      "error_code": "EXECUTION_FAILED"
+    },
+    "unregistered_tool_honesty": {
+      "status": "TOOL_NOT_FOUND",
+      "ok": false,
+      "duration_s": 2.901,
+      "error_code": "TOOL_NOT_FOUND"
+    },
+    "invalid_arguments_refusal": {
+      "status": "FAILED",
+      "ok": false,
+      "duration_s": 2.243,
+      "error_code": "INVALID_ARGUMENTS"
+    }
+  },
+  "learning_and_experiences": {
+    "experience_count": 180,
+    "chat_experiences_recorded_live": true
+  },
+  "safety_invariants": {
+    "active_brain_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+    "active_brain_unmodified": true,
+    "rollback_brain_sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+    "rollback_brain_unmodified": true,
+    "autonomy_gate_state": "STATE 2 \u2014 CONDITIONAL CANARY-ONLY AUTONOMOUS SELF-LEARNING",
+    "full_autonomy_enabled": false
+  }
+}

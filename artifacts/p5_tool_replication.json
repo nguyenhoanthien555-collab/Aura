@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_real_tool_replication_over_rest",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "tool_specification": {
+    "name": "custom.calculator",
+    "description": "Calculates cryptographic hashes",
+    "origin_node": "node_author_laptop",
+    "consumer_node": "node_consumer_android",
+    "provenance_hash": "f0b7a112e4cca1af1876103ece1f89cab408f07a6261bf995bca3732f1bc5bbc"
+  },
+  "replication_lifecycle": [
+    {
+      "action": "Register Node A",
+      "status": "200 OK"
+    },
+    {
+      "action": "Node A emits TOOL_DISCOVERED event",
+      "status": "200 OK"
+    },
+    {
+      "action": "Push to Relay over HTTP POST /api/sync/events/push",
+      "status": "200 OK",
+      "acknowledged": 1
+    },
+    {
+      "action": "Register Node B",
+      "status": "200 OK"
+    },
+    {
+      "action": "Node B pulls via HTTP GET /api/sync/events/pull",
+      "status": "200 OK",
+      "events_received": 1
+    },
+    {
+      "action": "Node B validates provenance & installs tool",
+      "status": "REGISTERED_IN_LOCAL_REGISTRY"
+    }
+  ],
+  "verdict": "PASS"
+}

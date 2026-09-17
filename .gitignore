@@ -103,3 +103,19 @@ _dbg_*.py
 
 # Hand-captured device screenshots from companion verification sessions.
 android/screen*.png
+
+# Local fine-tuned model candidates & weights (exceeds GitHub 100MB limit)
+brains/
+*.safetensors
+*.gguf
+
+# Nested upstream repository
+CLI-Anything/
+
+# SQLite runtime backup snapshots
+data/backups/
+
+# Transient scratch dumps & machine-local workspace
+prompt_dump.txt
+scratch_p4_prompt.txt
+.devflow/

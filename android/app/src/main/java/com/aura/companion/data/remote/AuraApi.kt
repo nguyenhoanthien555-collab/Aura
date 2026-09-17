@@ -1,5 +1,6 @@
 package com.aura.companion.data.remote
 
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -132,4 +133,44 @@ interface AuraApi {
     suspend fun deleteProviderKey(
         @Path("provider") provider: String,
     ): Response<ApiKeyResponseDto>
+
+    // ------------------------------------------------------------------
+    // Distributed Sync (Phase 2 / server/routes/sync.py)
+    // ------------------------------------------------------------------
+
+    @POST("api/sync/register")
+    suspend fun registerNode(
+        @Body request: RegisterNodeRequestDto,
+    ): Response<RegisterNodeResponseDto>
+
+    @POST("api/sync/events/push")
+    suspend fun pushEvents(
+        @Body request: PushEventsRequestDto,
+    ): Response<PushEventsResponseDto>
+
+    @GET("api/sync/events/pull")
+    suspend fun pullEvents(
+        @Query("node_id") nodeId: String,
+        @Query("after_sequence") afterSequence: Long = 0,
+        @Query("limit") limit: Int = 100,
+    ): Response<PullEventsResponseDto>
+
+    @POST("api/sync/events/ack")
+    suspend fun ackEvents(
+        @Body request: AckEventsRequestDto,
+    ): Response<AckEventsResponseDto>
+
+    @GET("api/sync/status")
+    suspend fun syncStatus(): Response<SyncStatusResponseDto>
+
+    @GET("api/sync/conflicts")
+    suspend fun listConflicts(
+        @Query("status") status: String = "QUARANTINED",
+    ): Response<JsonObject>
+
+    @POST("api/sync/conflicts/{id}/resolve")
+    suspend fun resolveConflict(
+        @Path("id") conflictId: String,
+        @Body request: ResolveConflictRequestDto,
+    ): Response<JsonObject>
 }

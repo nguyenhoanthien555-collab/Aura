@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_socket_level_ack_drop_and_duplicate_idempotency",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "adversarial_scenario": {
+    "event_id": "evt_replay_test_001",
+    "description": "Simulate network ACK drop where sender retransmits identical payload",
+    "attempts": 2,
+    "first_attempt_status": 200,
+    "second_attempt_status": 200,
+    "relay_deduplication": "IDEMPOTENT_IGNORE",
+    "stored_records_count": 1,
+    "duplicate_mutations_observed": 0
+  },
+  "crash_window_survivability": {
+    "side_effect_occurred": true,
+    "process_died": true,
+    "replay_prevention_on_retry": true,
+    "governance_rule": "EXECUTION_RECORD_REQUIRED_BEFORE_ACTION"
+  },
+  "verdict": "PASS"
+}

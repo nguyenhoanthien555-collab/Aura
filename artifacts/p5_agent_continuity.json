@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "audit_target": "AgentRun Continuity Across Real Subprocess / Socket Boundaries",
+  "source_validation": [
+    "tests/test_p5_real_runtime_sync.py::test_large_backlog_1000_events_over_rest",
+    "tests/test_p4_5_2_critical_audit.py::test_agentrun_real_subprocess_continuity"
+  ],
+  "metrics": {
+    "events_streamed": 1000,
+    "batch_size": 100,
+    "batches_processed": 10,
+    "lost_events": 0,
+    "reordered_events": 0,
+    "monotonic_sequence_verified": true,
+    "subprocess_step_continuation": {
+      "initial_step": 0,
+      "step_at_sigkill": 2,
+      "post_restart_resumption_step": 3,
+      "final_step": 5,
+      "status_on_completion": "COMPLETED"
+    }
+  },
+  "verdict": "PASS"
+}

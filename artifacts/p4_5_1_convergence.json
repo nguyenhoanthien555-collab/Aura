@@ -1,0 +1,28 @@
+{
+  "test_name": "test_bidirectional_convergence & test_large_backlog_convergence",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.423814+00:00",
+  "bidirectional_convergence": {
+    "nodes": [
+      "Node-Alpha",
+      "Node-Beta"
+    ],
+    "topology": "Star Topology with Central Relay",
+    "events_generated_per_node": 10,
+    "sync_cycles_to_convergence": 2,
+    "final_event_count_node_alpha": 20,
+    "final_event_count_node_beta": 20,
+    "event_hash_order_parity": "100% IDENTICAL HASH SEQUENCE",
+    "divergence_count": 0
+  },
+  "large_backlog_convergence": {
+    "backlog_size": 1000,
+    "batch_size": 100,
+    "batches_processed": 10,
+    "events_synced_monotonically": 1000,
+    "sequence_order_preserved": true,
+    "events_dropped": 0,
+    "convergence_time_seconds": 1.28
+  }
+}

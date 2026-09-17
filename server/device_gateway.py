@@ -44,6 +44,9 @@ class PendingInvocation:
     arguments: dict
     run_id: str = ""
     tool_call_id: str = ""
+    task_id: str = ""
+    step_id: str = ""
+    correlation_id: str = ""
     created_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
@@ -51,9 +54,13 @@ class PendingInvocation:
             "invocation_id": self.invocation_id,
             "run_id": self.run_id,
             "tool_call_id": self.tool_call_id,
+            "task_id": self.task_id,
+            "step_id": self.step_id,
+            "correlation_id": self.correlation_id,
             "tool": self.tool,
             "arguments": self.arguments,
         }
+
 
 
 def _failure(invocation: PendingInvocation, code: str, message: str) -> dict:
@@ -76,10 +83,16 @@ class DeviceGateway:
     both queues.
     """
 
-    def __init__(self, clock=time.time, require_heartbeat: bool = False):
+    def __init__(
+        self,
+        clock=time.time,
+        require_heartbeat: bool = False,
+        task_runtime=None,
+    ):
         self._clock = clock
         self._require_heartbeat = require_heartbeat
-        self._condition = threading.Condition(threading.Lock())
+        self._task_runtime = task_runtime
+        self._condition = threading.Condition(threading.RLock())
         self._pending: list[PendingInvocation] = []
         self._results: dict[str, dict] = {}
 
@@ -87,6 +100,18 @@ class DeviceGateway:
         self.completed = 0
         self.timed_out = 0
         self._devices: dict[str, dict] = {}
+        self._timed_out: dict[str, PendingInvocation] = {}
+        self._late_reports: dict[str, dict] = {}
+        self.invocation_ledger = None
+
+    def _get_ledger(self):
+        if self.invocation_ledger is None:
+            try:
+                from core.sync.invocation_ledger import DurableInvocationLedger
+                self.invocation_ledger = DurableInvocationLedger()
+            except Exception:
+                pass
+        return self.invocation_ledger
 
     # ------------------------------------------------------------------
     # Caller side
@@ -98,6 +123,9 @@ class DeviceGateway:
         arguments: dict | None = None,
         run_id: str = "",
         tool_call_id: str = "",
+        task_id: str = "",
+        step_id: str = "",
+        correlation_id: str = "",
         timeout_s: float = 30.0,
     ) -> dict:
         """
@@ -107,6 +135,12 @@ class DeviceGateway:
         TIMEOUT/CANCELLED failure this module authored - never prose,
         never an exception crossing the HTTP boundary.
         """
+        ledger = self._get_ledger()
+        if tool_call_id and ledger:
+            cached = ledger.check_replay(tool_call_id)
+            if cached is not None:
+                logger.info("DeviceGateway: replay detected for %s; returning cached result", tool_call_id)
+                return cached
 
         invocation = PendingInvocation(
             invocation_id=new_invocation_id(),
@@ -114,8 +148,23 @@ class DeviceGateway:
             arguments=dict(arguments or {}),
             run_id=run_id,
             tool_call_id=tool_call_id,
+            task_id=task_id,
+            step_id=step_id,
+            correlation_id=correlation_id,
             created_at=self._clock(),
         )
+
+        if ledger:
+            try:
+                ledger.record_received(
+                    invocation_id=invocation.invocation_id,
+                    tool=tool,
+                    arguments=dict(arguments or {}),
+                    run_id=run_id,
+                    tool_call_id=tool_call_id,
+                )
+            except Exception as e:
+                logger.debug("Failed recording received invocation: %s", e)
 
         with self._condition:
             self._pending.append(invocation)
@@ -129,6 +178,7 @@ class DeviceGateway:
 
                 if remaining <= 0:
                     self.timed_out += 1
+                    self._timed_out[invocation.invocation_id] = invocation
                     self._pending = [
                         item for item in self._pending
                         if item.invocation_id != invocation.invocation_id
@@ -263,7 +313,17 @@ class DeviceGateway:
             if not self._pending and timeout_s > 0:
                 self._condition.wait(timeout=float(timeout_s))
 
-            return self._pending[0] if self._pending else None
+            inv = self._pending[0] if self._pending else None
+            if inv:
+                ledger = self._get_ledger()
+                if ledger:
+                    try:
+                        ledger.record_executing(inv.invocation_id)
+                        if getattr(inv, "tool_call_id", ""):
+                            ledger.record_executing(inv.tool_call_id)
+                    except Exception as e:
+                        logger.debug("Failed recording executing state on device poll: %s", e)
+            return inv
 
     def complete(self, invocation_id: str, report: dict) -> bool:
         """
@@ -277,6 +337,7 @@ class DeviceGateway:
         with self._condition:
             known = (
                 invocation_id in self._results
+                or invocation_id in self._timed_out
                 or any(item.invocation_id == invocation_id
                        for item in self._pending)
             )
@@ -284,15 +345,104 @@ class DeviceGateway:
             if not known:
                 return False
 
-            self._results[invocation_id] = dict(report)
-            self.completed += 1
-            self._pending = [
-                item for item in self._pending
-                if item.invocation_id != invocation_id
-            ]
-            self._condition.notify_all()
+            if invocation_id in self._timed_out:
+                if invocation_id in self._late_reports:
+                    logger.debug("Duplicate late report for invocation %s ignored", invocation_id)
+                    return True
+                inv = self._timed_out[invocation_id]
+                self._late_reports[invocation_id] = dict(report)
+                self.completed += 1
+                task_id = getattr(inv, "task_id", "") if inv else ""
+                step_id = getattr(inv, "step_id", "") if inv else ""
+                logger.info(
+                    "Accepted late report for timed-out invocation %s (task=%s, step=%s)",
+                    invocation_id, task_id, step_id,
+                )
+                should_settle = bool(task_id and step_id)
+
+            else:
+                should_settle = False
+                self._results[invocation_id] = dict(report)
+                self.completed += 1
+                self._pending = [
+                    item for item in self._pending
+                    if item.invocation_id != invocation_id
+                ]
+                self._condition.notify_all()
+
+        if should_settle:
+            try:
+                self.settle_step_from_late_report(invocation_id, task_runtime=self._task_runtime)
+            except Exception as e:
+                logger.warning("Auto-settling step from late report failed: %s", e)
+
+        ledger = self._get_ledger()
+        if ledger:
+            try:
+                ledger.record_completed(invocation_id, report)
+                inv = next((item for item in self._pending if item.invocation_id == invocation_id), None)
+                if not inv:
+                    inv = self._timed_out.get(invocation_id)
+                if inv and inv.tool_call_id:
+                    ledger.record_completed(inv.tool_call_id, report)
+            except Exception as e:
+                logger.debug("Failed recording completed invocation in ledger: %s", e)
 
         return True
+
+    def settle_step_from_late_report(
+        self, invocation_id: str, task_runtime=None
+    ) -> bool:
+        """
+        Settles an ambiguous step in TaskRuntime using its late device report.
+        """
+        with self._condition:
+            report = self._late_reports.get(invocation_id)
+            inv = self._timed_out.get(invocation_id)
+
+        if not report or not inv or not inv.task_id or not inv.step_id:
+            return False
+
+        if task_runtime is None:
+            task_runtime = self._task_runtime
+
+        if task_runtime is None:
+            try:
+                from agent.task_runtime import TaskRuntime
+                task_runtime = TaskRuntime()
+            except Exception as e:
+                logger.warning("Failed to get TaskRuntime for late report settlement: %s", e)
+                return False
+
+        ok = bool(report.get("ok", False))
+        error = ""
+        if not ok:
+            err_dict = report.get("error")
+            error = (
+                err_dict.get("message")
+                if isinstance(err_dict, dict)
+                else str(err_dict or "Late report failed")
+            )
+
+        evidence = report.get("evidence") or []
+        res = report.get("result") or report
+        task_runtime.settle_ambiguous_step(
+            task_id=inv.task_id,
+            step_id=inv.step_id,
+            ok=ok,
+            result=res if isinstance(res, dict) else {"output": res},
+            evidence=evidence if isinstance(evidence, list) else [],
+            error=error,
+        )
+        logger.info(
+            "Settled task %s step %s from late report for invocation %s (ok=%s)",
+            inv.task_id, inv.step_id, invocation_id, ok,
+        )
+        return True
+
+    def get_late_report(self, invocation_id: str) -> dict | None:
+        with self._condition:
+            return self._late_reports.get(invocation_id)
 
     def pending_count(self) -> int:
 

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: aura-cloud-core
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    region: oregon
+    branch: feature/aura-identity
+    healthCheckPath: /api/ready
+    disk:
+      name: aura-data
+      mountPath: /app/data
+      sizeGB: 10
+    envVars:
+      - key: AURA_SERVER_HOST
+        value: 0.0.0.0
+      - key: AURA_SERVER_PORT
+        value: "8000"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: AURA_AUTH_TOKEN
+        generateValue: true

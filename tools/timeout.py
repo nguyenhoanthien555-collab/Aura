@@ -28,6 +28,17 @@ import threading
 from contextvars import copy_context
 
 from core.logger import logger
+from tools.outcome import (
+    TimeoutKind,
+    CODE_TIMEOUT,
+    CODE_INVOCATION_TIMEOUT,
+    CODE_BRIDGE_TIMEOUT,
+    CODE_MODEL_TIMEOUT,
+    CODE_NETWORK_TIMEOUT,
+    CODE_POSTCONDITION_TIMEOUT,
+    CODE_SANDBOX_TIMEOUT,
+    CODE_TASK_DEADLINE,
+)
 
 
 # Long enough for a slow disk or a cold subprocess, short enough that a
@@ -134,6 +145,15 @@ def _pretty(seconds: float) -> str:
 __all__ = [
     "DEFAULT_TOOL_TIMEOUT",
     "ToolTimeout",
+    "TimeoutKind",
+    "CODE_TIMEOUT",
+    "CODE_INVOCATION_TIMEOUT",
+    "CODE_BRIDGE_TIMEOUT",
+    "CODE_MODEL_TIMEOUT",
+    "CODE_NETWORK_TIMEOUT",
+    "CODE_POSTCONDITION_TIMEOUT",
+    "CODE_SANDBOX_TIMEOUT",
+    "CODE_TASK_DEADLINE",
     "call_with_timeout",
     "seconds_or",
 ]

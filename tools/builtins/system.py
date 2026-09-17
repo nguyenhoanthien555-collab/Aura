@@ -418,12 +418,15 @@ class PsutilProcessSource:
             try:
                 info = process.info
 
-                memory = info.get("memory_info")
+                name = str(info.get("name") or "").strip()
+                if not name:
+                    continue
 
+                memory = info.get("memory_info")
                 found.append(
                     ProcessInfo(
                         pid=int(info.get("pid") or 0),
-                        name=str(info.get("name") or ""),
+                        name=name,
                         memory_kb=int(getattr(memory, "rss", 0) or 0) // 1024,
                     )
                 )

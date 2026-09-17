@@ -1,0 +1,19 @@
+{
+  "test_name": "test_data_governance_quarantined_experiences_not_promoted",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.425320+00:00",
+  "quarantine_triggers_verified": [
+    "HASH_MISMATCH (payload tampered in transit)",
+    "MALFORMED_SCHEMA (missing mandatory event fields)",
+    "INVALID_SIGNATURE (signature does not match provenance node identity)"
+  ],
+  "quarantine_isolation": {
+    "quarantine_table": "sync_quarantine",
+    "records_quarantined": 1,
+    "promoted_to_aura_experiences": 0,
+    "promoted_to_tool_registry": 0,
+    "isolation_integrity": "STRICT_CONTAINMENT"
+  },
+  "governance_rule": "Quarantined entities are permanently isolated and never surfaced in agent context or query indexes."
+}

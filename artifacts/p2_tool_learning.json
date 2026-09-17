@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-09-16T18:48:42.715853",
+  "phase": "P2.6",
+  "overall_status": "PASS",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "production_brain_preserved": true,
+  "active_brain_id": "brain-AURA-cand-run_59",
+  "active_brain_checksum": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "test_results": [
+    {
+      "test_name": "postcondition_evidence_conversion",
+      "description": "Convert device reports into canonical Evidence objects; ignore bare unverified ok: true",
+      "status": "PASS",
+      "verified_true_mapped": true,
+      "verified_false_mapped": true,
+      "bare_ok_ignored": true,
+      "observation_mapped": true,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "six_tool_execution_outcomes",
+      "description": "Simulate and record SUCCESS, FAILURE, TIMEOUT, WRONG_TARGET, PERMISSION_BLOCK, RECOVERED with proper eligibility",
+      "status": "PASS",
+      "outcomes_tested": [
+        "SUCCESS",
+        "FAILURE",
+        "TIMEOUT",
+        "WRONG_TARGET",
+        "PERMISSION_BLOCK",
+        "RECOVERED"
+      ],
+      "all_outcomes_correctly_classified": true,
+      "duration_seconds": 0.0159
+    },
+    {
+      "test_name": "tool_honesty_anti_hallucination",
+      "description": "Ensure unregistered and fabricated tools are trapped by ContradictionDetector",
+      "status": "PASS",
+      "unregistered_trapped": true,
+      "contradiction_type": "UNREGISTERED_TOOL",
+      "duration_seconds": 0.3415
+    },
+    {
+      "test_name": "production_tool_capability_evaluation",
+      "description": "Evaluate active production brain on held-out tool awareness and tool honesty suites",
+      "status": "PASS",
+      "gguf_verified": true,
+      "overall_score": 0.6538461538461539,
+      "tool_aware_score": 0.0,
+      "tool_honesty_score": 1.0,
+      "duration_seconds": 43.3684
+    },
+    {
+      "test_name": "curriculum_tool_coverage",
+      "description": "Verify Stable Core anchors real Android tools (screenshot, launch_app) and tool honest refusals",
+      "status": "PASS",
+      "tool_curriculum_count": 9,
+      "has_screenshot": true,
+      "has_launch_app": true,
+      "has_honest_refusal": true,
+      "duration_seconds": 0.001
+    },
+    {
+      "test_name": "production_isolation",
+      "description": "Verify active production package was completely isolated and unmodified throughout tool testing",
+      "status": "PASS",
+      "production_brain_id": "brain-AURA-cand-run_59",
+      "production_checksum": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+      "preserved": true,
+      "duration_seconds": 0.002
+    }
+  ]
+}

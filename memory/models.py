@@ -249,3 +249,345 @@ class SemanticVector(Base):
     vector: Mapped[bytes] = mapped_column(LargeBinary())
 
     created_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class DurableTaskRecord(Base):
+    """
+    One user task spanning multiple steps and runs.
+    Survives reconnect, timeout, and process restart.
+    """
+
+    __tablename__ = "durable_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(128), default="default", index=True)
+    goal: Mapped[str] = mapped_column(Text())
+    status: Mapped[str] = mapped_column(String(32), default="CREATED", index=True)
+    plan_json: Mapped[str] = mapped_column(Text(), default="{}")
+    current_step_id: Mapped[str] = mapped_column(String(64), default="")
+    attempt: Mapped[int] = mapped_column(default=0)
+    last_error: Mapped[str] = mapped_column(Text(), default="")
+    recovery_state: Mapped[str] = mapped_column(Text(), default="")
+    metadata_json: Mapped[str] = mapped_column(Text(), default="{}")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class DurableStepRecord(Base):
+    """
+    One step / checkpoint of a durable task.
+    """
+
+    __tablename__ = "durable_task_steps"
+
+    step_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    step_index: Mapped[int] = mapped_column(default=0)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    tool: Mapped[str] = mapped_column(String(128), default="")
+    arguments_json: Mapped[str] = mapped_column(Text(), default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING")
+    side_effect: Mapped[str] = mapped_column(String(32), default="UNKNOWN")
+    attempt: Mapped[int] = mapped_column(default=0)
+    result_json: Mapped[str] = mapped_column(Text(), default="{}")
+    evidence_json: Mapped[str] = mapped_column(Text(), default="[]")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class ToolProvenanceRecord(Base):
+    """
+    Audit and provenance record for dynamically created or extended tools.
+    """
+
+    __tablename__ = "tool_provenance"
+
+    __table_args__ = (
+        UniqueConstraint("name", "version", name="uq_tool_provenance_name_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    version: Mapped[int] = mapped_column(default=1)
+    gap_id: Mapped[str] = mapped_column(String(64), default="")
+    manifest_json: Mapped[str] = mapped_column(Text(), default="{}")
+    source_code: Mapped[str] = mapped_column(Text(), default="")
+    source_digest: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(32), default="DRAFT", index=True)
+    validation_json: Mapped[str] = mapped_column(Text(), default="{}")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class DurableConfirmationRecord(Base):
+    """
+    Durable human-in-the-loop confirmation request for a dangerous/sensitive step.
+    Binds exact task, step, tool, and argument payload to prevent spoofing or replay.
+    """
+
+    __tablename__ = "durable_confirmations"
+
+    confirmation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    step_id: Mapped[str] = mapped_column(String(64), index=True)
+    tool: Mapped[str] = mapped_column(String(128), default="")
+    risk: Mapped[str] = mapped_column(String(32), default="dangerous")
+    side_effect: Mapped[str] = mapped_column(String(32), default="mutating")
+    description: Mapped[str] = mapped_column(Text(), default="")
+    arguments_json: Mapped[str] = mapped_column(Text(), default="{}")
+    redacted_arguments_json: Mapped[str] = mapped_column(Text(), default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    decision: Mapped[str] = mapped_column(String(32), default="")
+    decision_by: Mapped[str] = mapped_column(String(128), default="")
+    decided_at: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    expires_at: Mapped[str] = mapped_column(String(32), default="")
+    fingerprint: Mapped[str] = mapped_column(String(64), default="")
+
+
+class DurableClarificationRecord(Base):
+    """
+    Durable human-in-the-loop clarification request for an ambiguous goal.
+    Preserves original goal and structured questions without discarding the task.
+    """
+
+    __tablename__ = "durable_clarifications"
+
+    clarification_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    goal: Mapped[str] = mapped_column(Text(), default="")
+    questions_json: Mapped[str] = mapped_column(Text(), default="[]")
+    answers_json: Mapped[str] = mapped_column(Text(), default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    answered_at: Mapped[str] = mapped_column(String(32), default="")
+
+
+class AuraExperienceRecord(Base):
+    """
+    Persisted experience for AURA self-learning and continual improvement.
+    Captures input, decision, tool calls, outcomes, evidence, verification, and privacy classification.
+    """
+
+    __tablename__ = "aura_experiences"
+
+    experience_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(128), default="default", index=True)
+    task_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    run_id: Mapped[str] = mapped_column(String(64), default="")
+    input_text: Mapped[str] = mapped_column(Text(), default="")
+    model_decision: Mapped[str] = mapped_column(String(64), default="ANSWER")
+    selected_tool: Mapped[str] = mapped_column(String(128), default="")
+    arguments_json: Mapped[str] = mapped_column(Text(), default="{}")
+    tool_result_json: Mapped[str] = mapped_column(Text(), default="{}")
+    evidence_json: Mapped[str] = mapped_column(Text(), default="[]")
+    verifier_result: Mapped[str] = mapped_column(String(32), default="UNVERIFIED")
+    final_response: Mapped[str] = mapped_column(Text(), default="")
+    outcome: Mapped[str] = mapped_column(String(32), default="SUCCESS")
+    user_feedback: Mapped[str] = mapped_column(String(64), default="")
+    privacy_class: Mapped[str] = mapped_column(String(32), default="INTERNAL")
+    learning_eligible: Mapped[bool] = mapped_column(default=True)
+    quality_score: Mapped[float] = mapped_column(Float(), default=0.5)
+    category: Mapped[str] = mapped_column(String(64), default="general")
+    taxonomy_tag: Mapped[str] = mapped_column(String(32), default="UNVERIFIED")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class BrainVersionRecord(Base):
+    """
+    Durable record of versioned Brain packages, lifecycle status, and evaluation results.
+    """
+
+    __tablename__ = "brain_versions"
+
+    brain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    version: Mapped[str] = mapped_column(String(32), default="1.0.0")
+    status: Mapped[str] = mapped_column(String(32), default="CANDIDATE", index=True)
+    manifest_json: Mapped[str] = mapped_column(Text(), default="{}")
+    evaluation_json: Mapped[str] = mapped_column(Text(), default="{}")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class TrainingJobRecord(Base):
+    """
+    Durable record of self-learning training jobs executed in process-isolated workers.
+    """
+
+    __tablename__ = "training_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    base_brain_id: Mapped[str] = mapped_column(String(64), default="")
+    output_brain_id: Mapped[str] = mapped_column(String(64), default="")
+    dataset_path: Mapped[str] = mapped_column(Text(), default="")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    metrics_json: Mapped[str] = mapped_column(Text(), default="{}")
+    logs: Mapped[str] = mapped_column(Text(), default="")
+    started_at: Mapped[str] = mapped_column(default=timestamp_now)
+    completed_at: Mapped[str] = mapped_column(String(32), default="")
+
+
+# ---------------------------------------------------------------------------
+# P4 — Distributed Continuity & Always-Sync models
+# ---------------------------------------------------------------------------
+
+class SyncNodeRecord(Base):
+    """
+    Physical or logical node participating in distributed AURA synchronization.
+    """
+    __tablename__ = "sync_nodes"
+
+    node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_type: Mapped[str] = mapped_column(String(32), default="LAPTOP")
+    installation_id: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(32), default="ONLINE")
+    schema_version: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    last_seen: Mapped[str] = mapped_column(default=timestamp_now)
+    metadata_json: Mapped[str] = mapped_column(Text(), default="{}")
+
+
+class SyncEventRecord(Base):
+    """
+    Immutable, event-sourced record for distributed synchronization.
+    Cryptographically authenticated via payload_hash.
+    """
+    __tablename__ = "sync_events"
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    origin_node_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    entity_type: Mapped[str] = mapped_column(String(64), index=True)
+    entity_id: Mapped[str] = mapped_column(String(128), index=True)
+    schema_version: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    logical_sequence: Mapped[int] = mapped_column(default=0, index=True)
+    payload_json: Mapped[str] = mapped_column(Text(), default="{}")
+    payload_hash: Mapped[str] = mapped_column(String(64), index=True)
+    parent_event_id: Mapped[str] = mapped_column(String(64), default="", nullable=True)
+    provenance_json: Mapped[str] = mapped_column(Text(), default="{}")
+    received_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class SyncOutboxRecord(Base):
+    """
+    Outbox buffer ensuring reliable, at-least-once delivery to peers / relay.
+    Events remain PENDING across restarts until durably ACKed.
+    """
+    __tablename__ = "sync_outbox"
+
+    outbox_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    target_node_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    attempts: Mapped[int] = mapped_column(default=0)
+    last_attempt_at: Mapped[str] = mapped_column(String(32), default="")
+    next_retry_at: Mapped[str] = mapped_column(String(32), default="")
+    error_message: Mapped[str] = mapped_column(Text(), default="")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    acknowledged_at: Mapped[str] = mapped_column(String(32), default="")
+
+
+class SyncInboxRecord(Base):
+    """
+    Inbox buffer tracking incoming replication events and idempotency.
+    """
+    __tablename__ = "sync_inbox"
+
+    inbox_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    origin_node_id: Mapped[str] = mapped_column(String(64), index=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    processed_at: Mapped[str] = mapped_column(String(32), default="")
+    error_message: Mapped[str] = mapped_column(Text(), default="")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class SyncCursorRecord(Base):
+    """
+    Tracks the high-watermark cursor for peer-to-peer or relay sync.
+    """
+    __tablename__ = "sync_cursors"
+
+    __table_args__ = (
+        UniqueConstraint("node_id", "peer_node_id", name="uq_sync_cursors_peer"),
+    )
+
+    cursor_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    node_id: Mapped[str] = mapped_column(String(64), index=True)
+    peer_node_id: Mapped[str] = mapped_column(String(64), index=True)
+    last_sequence: Mapped[int] = mapped_column(default=0)
+    last_event_id: Mapped[str] = mapped_column(String(64), default="")
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class SyncConflictRecord(Base):
+    """
+    Quarantine record for hash tampering or concurrent mutation conflicts.
+    """
+    __tablename__ = "sync_conflicts"
+
+    conflict_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(64), index=True)
+    origin_node_id: Mapped[str] = mapped_column(String(64), default="")
+    conflict_type: Mapped[str] = mapped_column(String(32), default="HASH_MISMATCH")
+    existing_hash: Mapped[str] = mapped_column(String(64), default="")
+    incoming_hash: Mapped[str] = mapped_column(String(64), default="")
+    entity_type: Mapped[str] = mapped_column(String(64), default="")
+    entity_id: Mapped[str] = mapped_column(String(128), default="")
+    reason: Mapped[str] = mapped_column(Text(), default="")
+    status: Mapped[str] = mapped_column(String(32), default="QUARANTINED")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    resolved_at: Mapped[str] = mapped_column(String(32), default="")
+
+
+class AgentRunRecord(Base):
+    """
+    Durable storage for AgentRun executions.
+    Preserves loop state across server restarts, network drops, and device reconnects.
+    """
+    __tablename__ = "agent_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    session_id: Mapped[str] = mapped_column(String(128), index=True)
+    goal: Mapped[str] = mapped_column(Text())
+    status: Mapped[str] = mapped_column(String(32), default="running", index=True)
+    stop_reason: Mapped[str] = mapped_column(String(64), default="", nullable=True)
+    stop_detail: Mapped[str] = mapped_column(Text(), default="")
+    rounds: Mapped[int] = mapped_column(default=0)
+    tool_call_count: Mapped[int] = mapped_column(default=0)
+    consecutive_failures: Mapped[int] = mapped_column(default=0)
+    verify_rounds: Mapped[int] = mapped_column(default=0)
+    requires_observation: Mapped[bool] = mapped_column(default=False)
+    observed_ok: Mapped[int] = mapped_column(default=0)
+    unobserved_rounds: Mapped[int] = mapped_column(default=0)
+    messages_json: Mapped[str] = mapped_column(Text(), default="[]")
+    unverified_json: Mapped[str] = mapped_column(Text(), default="[]")
+    created_at: Mapped[float] = mapped_column(Float(), default=0.0)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class ToolInvocationRecord(Base):
+    """
+    Durable invocation ledger for tool executions.
+    Guarantees replay protection and crash/restart recovery across processes.
+    """
+    __tablename__ = "tool_invocations"
+
+    invocation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    tool_call_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    tool: Mapped[str] = mapped_column(String(64), index=True)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), default="RECEIVED", index=True)
+    request_hash: Mapped[str] = mapped_column(String(64), default="")
+    arguments_json: Mapped[str] = mapped_column(Text(), default="{}")
+    result_json: Mapped[str] = mapped_column(Text(), default="")
+    evidence_hash: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+
+

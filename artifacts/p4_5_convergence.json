@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-09-16T14:52:36.535473+00:00",
+  "convergence_test": "test_bidirectional_sync_chaos",
+  "nodes": [
+    "Mobile",
+    "Laptop"
+  ],
+  "total_events_generated": 100,
+  "mobile_known_events": 100,
+  "laptop_known_events": 100,
+  "missing_on_mobile": 0,
+  "missing_on_laptop": 0,
+  "hash_mismatches": 0,
+  "duplicate_ids": 0,
+  "conflicts": 0,
+  "converged": true,
+  "status": "PASS"
+}

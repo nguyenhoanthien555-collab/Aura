@@ -1,0 +1,141 @@
+--------- beginning of main
+09-16 19:21:08.975 11318 11318 I .aura.companion: Late-enabling -Xcheck:jni
+09-16 19:21:09.000 11318 11318 E .aura.companion: Unknown bits set in runtime_flags: 0x40000000
+09-16 19:21:09.000 11318 11318 I .aura.companion: Using generational CollectorTypeCC GC.
+09-16 19:21:09.035 11318 11318 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-16 19:21:09.058 11318 11318 I OneTrace: Mark active for pid=11318? true
+09-16 19:21:09.058 11318 11318 D cutils-dev: otrace_set_tracing_enabled? true
+09-16 19:21:09.061 11318 11344 D cutils-dev: properties changed in otrace_seq_number_changed!
+09-16 19:21:09.135 11318 11318 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10304; state: ENABLED
+09-16 19:21:09.138 11318 11318 I oplus.android.OplusFrameworkFactoryImpl: get feature:IOplusAutoResolutionFeature
+09-16 19:21:09.138 11318 11318 I oplus.android.OplusFrameworkFactoryImpl: getOplusAutoResolutionFeature
+09-16 19:21:09.285 11318 11318 I OplusFeatureCache: Milliseconds spent on init(): 147
+09-16 19:21:09.290 11318 11318 D CompactWindowAppManager: initCompactApplicationInfo CompactMode: , NormalMode: 
+09-16 19:21:09.321 11318 11318 W libc    : Access denied finding property "ro.odm.prev.product.name"
+09-16 19:21:09.322 11318 11318 D LoadedApk: mApplicationInfo overrideDisplayId:null
+09-16 19:21:09.911 11318 11318 D nativeloader: Configuring clns-4 for other apk /data/app/~~igcU6gwyRRrXQHg8Z1vaoA==/com.aura.companion-5lEsH6t-OIjyxUOcyp-V6w==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~igcU6gwyRRrXQHg8Z1vaoA==/com.aura.companion-5lEsH6t-OIjyxUOcyp-V6w==/lib/arm64:/data/app/~~igcU6gwyRRrXQHg8Z1vaoA==/com.aura.companion-5lEsH6t-OIjyxUOcyp-V6w==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.aura.companion
+--------- beginning of system
+09-16 19:21:09.912 11318 11318 I Quality : ActivityThread: createClassLoader delay 589 /data/app/~~igcU6gwyRRrXQHg8Z1vaoA==/com.aura.companion-5lEsH6t-OIjyxUOcyp-V6w==/base.apk 11318
+09-16 19:21:09.914 11318 11318 I Quality : ActivityThread: createOrUpdateClassLoaderLocked delay 592 com.aura.companion 11318
+09-16 19:21:09.922 11318 11318 D nativeloader: Load libframework-connectivity-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity.jar: ok
+09-16 19:21:09.926 11318 11318 V GraphicsEnvironment: ANGLE Developer option for 'com.aura.companion' set to: 'default'
+09-16 19:21:09.927 11318 11318 V GraphicsEnvironment: ANGLE GameManagerService for com.aura.companion: false
+09-16 19:21:09.928 11318 11318 V GraphicsEnvironment: App is not on the allowlist for updatable production driver.
+09-16 19:21:09.944 11318 11318 D NetworkSecurityConfig: Using Network Security Config from resource network_security_config debugBuild: true
+09-16 19:21:09.957 11318 11318 D NetworkSecurityConfig: Using Network Security Config from resource network_security_config debugBuild: true
+09-16 19:21:09.990 11318 11318 D WM-WrkMgrInitializer: Initializing WorkManager with default configuration.
+09-16 19:21:10.041 11318 11318 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemjob.SystemJobService
+09-16 19:21:10.041 11318 11318 D WM-Schedulers: Created SystemJobScheduler and enabled SystemJobService
+09-16 19:21:10.065 11318 11506 D WM-ForceStopRunnable: The default process name was not specified.
+09-16 19:21:10.070 11318 11506 D WM-ForceStopRunnable: Performing cleanup operations.
+09-16 19:21:10.105 11318 11318 D nativeloader: Load libSchedAssistJni.so using system ns (caller=/system/framework/oplus-framework.jar): ok
+09-16 19:21:10.105 11318 11318 D ExtensionsLoader: createInstance(64bit) : createExtendedFactory
+09-16 19:21:10.105 11318 11318 D ExtensionsLoader: Opened libSchedAssistExtImpl.so
+09-16 19:21:10.105 11318 11318 E SchedAssist: ofbOpen failed with error=No such file or directory
+09-16 19:21:10.105 11318 11318 E SchedAssist: sysOpen failed with error=No such file or directory
+09-16 19:21:10.105 11318 11318 E SchedAssist: sharedImFd failed with error=Permission denied
+09-16 19:21:10.112 11318 11318 D OplusGraphicsEvent: OplusGraphicsEventListener create now!
+09-16 19:21:10.113 11318 11318 D OplusGraphicsEvent: addEventListener success!
+09-16 19:21:10.119 11318 11318 D ScrollOptim [ConfigManager]: initOptConfig: pkg= com.aura.companion, mOptEnable= true, mAnimAheadEnable= true, mInsertDefaultNum= 1, mFrameInsertEnableList= {}, mSCEnableList= []
+09-16 19:21:10.128 11318 11318 D OplusActivityManager: get AMS extension: android.os.BinderProxy@2a9546
+09-16 19:21:10.141 11318 11512 D nativeloader: Load libpowerhalwrap_jni.so using system ns (caller=/system/framework/mediatek-framework.jar): ok
+09-16 19:21:10.141 11318 11512 I PowerHalWrapper: PowerHalWrapper.getInstance 
+09-16 19:21:10.141 11318 11318 I PowerHalWrapper: PowerHalWrapper.getInstance 
+09-16 19:21:10.144 11318 11318 I MSYNC3-VariableRefreshRate: Variable refreshrate is disabled
+09-16 19:21:10.167 11318 11318 I DynamicFramerate [FRTCConfigManager]: initFrameRateConfig: 
+09-16 19:21:10.167 11318 11318 I DynamicFramerate [FRTCConfigManager]: 	levels: [120, 60, 40, 30]
+09-16 19:21:10.167 11318 11318 I DynamicFramerate [FRTCConfigManager]: 	thresholds: [400, 80, 30]
+09-16 19:21:10.167 11318 11318 I DynamicFramerate [FRTCConfigManager]: 	scrollbar fade frame rate: 0
+09-16 19:21:10.167 11318 11318 I DynamicFramerate [FRTCConfigManager]: FRTCConfigManager: FRTC_CAPABILITY = 120, package name = com.aura.companion, PACKAGE_ENABLE = false
+09-16 19:21:10.168 11318 11318 I DynamicFramerate [DynamicFrameRateController]: init info: mPackageName = com.aura.companion, mIsEnabled = false
+09-16 19:21:10.171 11318 11506 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10304; state: ENABLED
+09-16 19:21:10.174 11318 11506 D WM-ForceStopRunnable: Application was force-stopped, rescheduling.
+09-16 19:21:10.218 11318 11506 D CompatibilityChangeReporter: Compat change id reported: 194532703; UID 10304; state: ENABLED
+09-16 19:21:10.218 11318 11506 D WM-SystemJobScheduler: Scheduling work ID 2151c762-ff65-4126-ab56-2a6a38612489Job ID 1246
+09-16 19:21:10.287 11318 11506 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemalarm.RescheduleReceiver
+09-16 19:21:10.721 11318 11318 D AuraAgentService: Aura Accessibility Service Connected
+09-16 19:21:12.762 11318 11555 W FeatureFlagsImplExport: java.lang.NoClassDefFoundError: Class not found using the boot class loader; no stack trace available
+09-16 19:21:16.162 11318 11612 D ProfileInstaller: Installing profile for com.aura.companion
+09-16 19:21:16.323 11318 11615 E .aura.companion: Loaded layer handle (17361905756745610921) for layer /my_product/lib64/libcolorx-loader.so
+09-16 19:21:16.323 11318 11615 E .aura.companion: Looking for entrypoint ColorX_Check
+09-16 19:21:16.323 11318 11615 E .aura.companion: Found ColorX_Check for /my_product/lib64/libcolorx-loader.so
+09-16 19:21:16.323 11318 11615 E .aura.companion: Check failed
+09-16 19:21:16.325 11318 11615 D libMEOW : meow new tls: 0xb40000720ee9fe40
+09-16 19:21:16.325 11318 11615 D libMEOW : meow reload base cfg path: na
+09-16 19:21:16.325 11318 11615 D libMEOW : meow reload overlay cfg path: na
+09-16 19:21:16.325 11318 11615 W QT      : qt_process_init() called
+09-16 19:21:16.325 11318 11615 E QT      : [QT]file does not exist
+09-16 19:21:16.325 11318 11615 W QT      : Support!!
+09-16 19:21:16.328 11318 11615 E QT      : [QT]file does not exist
+09-16 19:21:16.329 11318 11615 D libMEOW : applied 1 plugins for [com.aura.companion]:
+09-16 19:21:16.329 11318 11615 D libMEOW :   plugin 1: [libMEOW_gift.so]: 0xb400007275dc3740
+09-16 19:21:16.329 11318 11615 D libMEOW : rebuild call chain: 0xb40000720eeaeb00
+09-16 19:21:16.352 11318 11615 D skia    : GrGLMakeAssembledInterface verStr OpenGL ES 3.2 v1.r32p1-01eac0.b8cf1793b1173c0bb23abcfef1974de4
+09-16 19:21:16.352 11318 11615 D skia    : GrGLMakeAssembledGLESInterface verStr OpenGL ES 3.2 v1.r32p1-01eac0.b8cf1793b1173c0bb23abcfef1974de4
+09-16 19:21:16.353 11318 11615 D skia    : extensions init verString=OpenGL ES 3.2 v1.r32p1-01eac0.b8cf1793b1173c0bb23abcfef1974de4
+09-16 19:21:16.365 11318 11615 D hw-ProcessState: Binder ioctl to enable oneway spam detection failed: Invalid argument
+09-16 19:21:16.375 11318 11615 I mali    : [DebugProp] GPU Debug-Mechanism Disable !
+09-16 19:21:16.481 11318 11551 D ListServiceUtils: mListServiceUtils::init CallingPid 11318
+09-16 19:21:16.482 11318 11551 D ListServiceUtils: mListServiceUtils::init this 0xb400007275ca1800
+09-16 19:21:16.483 11318 11551 V JpegEncoderExtImpl: Resolution: 821 x 1825,support: 0;
+09-16 19:21:23.361 11318 11331 I .aura.companion: Background concurrent copying GC freed 11MB AllocSpace bytes, 33(1316KB) LOS objects, 64% free, 3445KB/9589KB, paused 236us,54us total 208.762ms
+09-16 19:22:07.746 11318 11318 I ConfigurationController: handleConfigurationChanged: true, config: {1.0 ??mcc??mnc [en_VN,vi_VN] ldltr sw360dp w360dp h745dp 480dpi nrml long port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 115 - 1080, 2352) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.1078 fontWeightAdjustment=0mThemeChanged= 0, mThemeChangedFlags= 0, mFlipFont= 0, mAccessibleChanged= -1, mUxIconConfig= 3468921665126674737, mMaterialColor= 0, mUserId= 0, mFontUserId= 0, mFontVariationSettings= 11f4, mFoldingAngle = -1.0, mIconPackName= , mDarkModeBackgroundMaxL= 8.0, mDarkModeDialogBgMaxL= 27.0, mDarkModeForegroundMinL= 100.0, mOplusConfigType= 1, mOplusChangedConfigs= 0, OpSans= 0, mBurmeseFontFlag= 2, mFlag= 0, mPuttDisplayFlag= -1} 
+09-16 19:22:07.746 11318 11318 I ConfigurationController: , curconfig: {1.0 ??mcc??mnc [en_VN,vi_VN] ldltr sw360dp w360dp h745dp 480dpi nrml long port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 115 - 1080, 2352) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.1078 fontWeightAdjustment=0mThemeChanged= 0, mThemeChangedFlags= 0, mFlipFont= 0, mAccessibleChanged= -1, mUxIconConfig= 3468921665126674737, mMaterialColor= 0, mUserId= 0, mFontUserId= 0, mFontVariationSettings= 11f4, mFoldingAngle = -1.0, mIconPackName= , mDarkModeBackgroundMaxL= 8.0, mDarkModeDialogBgMaxL= 27.0, mDarkModeForegroundMinL= 100.0, mOplusConfigType= 1, mOplusChangedConfigs= 0, OpSans= 0, mBurmeseFontFlag= 2, mFlag= 0, mPuttDisplayFlag= -1} 
+09-16 19:22:07.746 11318 11318 I ConfigurationController: android.app.ActivityThread.handleLaunchActivity:3999 android.app.servertransaction.LaunchActivityItem.execute:111 android.app.servertransaction.TransactionExecutor.executeCallbacks:135 android.app.servertransaction.TransactionExecutor.execute:95 android.app.ActivityThread$H.handleMessage:2470 android.os.Handler.dispatchMessage:106 android.os.Looper.loopOnce:240 android.os.Looper.loop:351 android.app.ActivityThread.main:8423 java.lang.reflect.Method.invoke:-2 
+09-16 19:22:07.748 11318 11860 D libMEOW : meow new tls: 0xb4000071e2f26c80
+09-16 19:22:07.748 11318 11860 D libMEOW : applied 1 plugins for [com.aura.companion]:
+09-16 19:22:07.748 11318 11860 D libMEOW :   plugin 1: [libMEOW_gift.so]: 0xb400007275dc3740
+09-16 19:22:07.748 11318 11860 D libMEOW : rebuild call chain: 0xb4000071e2ebd880
+09-16 19:22:07.749 11318 11860 D libMEOW : meow delete tls: 0xb4000071e2f26c80
+09-16 19:22:07.778 11318 11318 I oplus.android.OplusFrameworkFactoryImpl: Unknow feature:IOplusTextViewRTLUtilForUG
+09-16 19:22:07.825 11318 11318 D OplusInputMethodUtil: init sDebug to false, init sDebugIme to false, init sAlwaysOn to false
+09-16 19:22:07.825 11318 11318 D OplusInputMethodUtil: updateDebugToClass InputMethodManager.DEBUG = false
+09-16 19:22:07.825 11318 11318 D OplusInputMethodUtil: updateDebugToClass ImeFocusController.DEBUG = false
+09-16 19:22:07.825 11318 11318 D OplusInputMethodUtil: updateDebugToClass BaseInputConnection.DEBUG = false
+09-16 19:22:07.825 11318 11318 D OplusInputMethodUtil: updateDebugToClass ImeFocusController.sDebugIme = false
+09-16 19:22:07.827 11318 11318 I SurfaceFactory: [static] sSurfaceFactory = com.mediatek.view.impl.SurfaceFactoryImpl@5f4de6b
+09-16 19:22:07.828 11318 11318 D ExtensionsLoader: createInstance(64bit) : createExtendedFactory
+09-16 19:22:07.828 11318 11318 D ExtensionsLoader: Opened libguiextimpl.so
+09-16 19:22:07.828 11318 11318 D nativeloader: Load liboplusgui_jni.so using system ns (caller=/system/framework/oplus-framework.jar): ok
+09-16 19:22:07.833 11318 11318 D WindowManager: Add to mViews: DecorView@6c97dc8[MainActivity],pkg= com.aura.companion
+09-16 19:22:07.834 11318 11615 D ExtensionsLoader: createInstance(64bit) : createExtendedFactory
+09-16 19:22:07.835 11318 11615 D ExtensionsLoader: Opened libhwuiextimpl.so
+09-16 19:22:07.835 11318 11318 D ExtensionsLoader: createInstance(64bit) : createExtendedFactory
+09-16 19:22:07.835 11318 11318 D ExtensionsLoader: Opened libSchedAssistExtImpl.so
+09-16 19:22:07.845 11318 11318 D ViewRootImplExtImpl: onDisplayChanged -1 for VRI android.view.ViewRootImpl@9d5cf9d
+09-16 19:22:07.846 11318 11318 D libMEOW : meow new tls: 0xb4000071e1d2b980
+09-16 19:22:07.846 11318 11318 D libMEOW : applied 1 plugins for [com.aura.companion]:
+09-16 19:22:07.846 11318 11318 D libMEOW :   plugin 1: [libMEOW_gift.so]: 0xb400007275dc3740
+09-16 19:22:07.846 11318 11318 D libMEOW : rebuild call chain: 0xb4000071e1d3aa00
+09-16 19:22:07.846 11318 11318 D InputEventReceiver: Input log is disabled
+09-16 19:22:07.848 11318 11318 D ScrollOptim [SceneManager]: updateCurrentActivity: mCurrentActivityName=com.aura.companion.MainActivity, isOptEnable=true, isAnimAheadEnable=true, isFrameInsertEnable=true, InsertNum=1, isEnabledForScrollChanged=false
+09-16 19:22:07.852 11318 11318 E OplusBracketLog: [OplusViewMirrorManager] updateHostViewRootIfNeeded, not support android.view.ViewRootImpl@9d5cf9d
+09-16 19:22:08.030 11318 11318 W .aura.companion: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+09-16 19:22:08.030 11318 11318 W .aura.companion: Common causes for lock verification issues are non-optimized dex code
+09-16 19:22:08.030 11318 11318 W .aura.companion: and incorrect proguard optimizations.
+09-16 19:22:08.030 11318 11318 W .aura.companion: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+09-16 19:22:08.030 11318 11318 W .aura.companion: Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateList.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+09-16 19:22:08.030 11318 11318 W .aura.companion: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+09-16 19:22:08.030 11318 11318 W .aura.companion: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+09-16 19:22:08.147 11318 11330 I .aura.companion: Compiler allocated 4919KB to compile void android.view.ViewRootImpl.performTraversals()
+09-16 19:22:08.291 11318 11318 D BufferQueueConsumer: [](id:2c3600000000,api:0,p:-1,c:11318) connect: controlledByApp=false
+09-16 19:22:08.292 11318 11318 D ExtensionsLoader: createInstance(64bit) : createExtendedFactory
+09-16 19:22:08.292 11318 11318 D ExtensionsLoader: Opened libSchedAssistExtImpl.so
+09-16 19:22:08.295 11318 11318 D ViewRootImplExtImpl: setUndequeuedBufferCount: 4
+09-16 19:22:08.309 11318 11318 D VRI[MainActivity]: registerCallbacksForSync syncBuffer=false
+09-16 19:22:08.362 11318 11615 D BLASTBufferQueue: [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=1080x2400 mFrameNumber=1 applyTransaction=true mTimestamp=620027958161955(auto) mPendingTransactions.size=0 graphicBufferId=48610439856132 transform=0
+09-16 19:22:08.362 11318 11615 D VRI[MainActivity]: Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true syncBuffer=false
+09-16 19:22:08.364 11318 11615 W Parcel  : Expecting binder but got null!
+09-16 19:22:08.364 11318 11318 D VRI[MainActivity]: draw finished.
+09-16 19:22:08.364 11318 11318 D ViewRootImplExtImpl: setMaxDequeuedBufferCount: 2
+09-16 19:22:08.364 11318 11318 I Quality : ActivityThread: doFrame delay 513 com.aura.companion 11318
+09-16 19:22:08.413 11318 11318 D VRI[MainActivity]: onFocusEvent true
+09-16 19:22:08.413 11318 11318 D VRI[MainActivity]: send msg MSG_WINDOW_FOCUS_CHANGED with caller android.view.ViewRootImplExtImpl.markAndDumpWindowFocusChangeMsg:1007 android.view.ViewRootImpl.windowFocusChanged:9843 android.view.ViewRootImpl$WindowInputEventReceiver.onFocusEvent:9556 android.os.MessageQueue.nativePollOnce:-2 android.os.MessageQueue.next:349 android.os.Looper.loopOnce:186 android.os.Looper.loop:351 android.app.ActivityThread.main:8423 java.lang.reflect.Method.invoke:-2 com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run:584 com.android.internal.os.ZygoteInit.main:1013 <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> <bottom of call stack> 
+09-16 19:22:08.413 11318 11318 I Choreographer: Skipped 32 frames!  The application may be doing too much work on its main thread.
+09-16 19:22:08.413 11318 11318 I Quality : Skipped: false 32 cost 546.93787 refreshRate 16636608 bit true processName com.aura.companion
+09-16 19:22:08.421 11318 11318 D VRI[MainActivity]: handleWindowFocusChanged mWindowFocusChanged true mUpcomingWindowFocus true mAdded true
+09-16 19:22:08.706 11318 11318 I Quality : Skipped: false 1 cost 24.424744 refreshRate 16641038 bit true processName com.aura.companion
+09-16 19:22:09.504 11318 11318 D OplusScrollToTopManager: com.aura.companion/com.aura.companion.MainActivity,This DecorView@6c97dc8[MainActivity] change focus to true
+09-16 19:22:09.580 11318 11318 I Quality : Skipped: true 3 cost 50.092438 refreshRate 16637789 bit true processName com.aura.companion
+09-16 19:22:09.872 11318 11552 V JpegEncoderExtImpl: Resolution: 821 x 1825,support: 0;
+09-16 19:22:23.907 11318 11880 V JpegEncoderExtImpl: Resolution: 821 x 1825,support: 0;

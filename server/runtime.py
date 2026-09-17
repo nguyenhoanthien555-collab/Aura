@@ -126,6 +126,7 @@ class ServerRuntime:
 
         self.screen_source = None
         self.companion_engine = None
+        self.daemon = None
         self.notifications = NotificationOutbox()
 
         # The bus is built here rather than inside `build_services` because
@@ -275,12 +276,76 @@ class ServerRuntime:
 
         logger.info("%s server starting", name)
         logger.info(self.services.summary())
+
+        # Phase 5B: Startup Recovery for Durable Tasks
+        try:
+            from agent.task_runtime import TaskRuntime
+            from server.routes.agent import get_device_registry
+            from tools.base import ToolRisk
+            from tools.executor import ToolExecutor, ToolPolicy
+
+            task_runtime = TaskRuntime(bus=self.services.bus)
+            registry = get_device_registry()
+            executor = ToolExecutor(
+                registry=registry,
+                policy=ToolPolicy(
+                    enabled=True,
+                    allowed=frozenset(registry.names()),
+                    auto_approve=frozenset({
+                        ToolRisk.SAFE, ToolRisk.SENSITIVE, ToolRisk.DANGEROUS,
+                    }),
+                ),
+            )
+            resumed = task_runtime.resume_all_active(executor)
+            if resumed:
+                logger.info(
+                    "Phase 5B Startup Recovery: processed %d active durable tasks",
+                    len(resumed),
+                )
+        except Exception as recovery_err:
+            logger.warning("Phase 5B Startup Recovery warning: %s", recovery_err)
+
+        # Pillar 3: AURA 24/7 Autonomous Daemon
+        try:
+            daemon_cfg = (self.config.get("server") or {}).get("daemon") or self.config.get("daemon") or {}
+            if daemon_cfg.get("enabled", False):
+                from daemon.supervisor import AuraDaemon
+                poll_interval = float(daemon_cfg.get("poll_interval", 1.0))
+                proactive_cfg = self.config.get("proactive") or {}
+                proactive_interval = float(proactive_cfg.get("check_interval_seconds", 60.0))
+                backup_cfg = (self.config.get("server") or {}).get("backup") or self.config.get("backup") or {}
+                backup_interval = float(backup_cfg.get("interval_seconds", 86400.0))
+                pruning_cfg = (self.config.get("server") or {}).get("pruning") or self.config.get("pruning") or {}
+                prune_interval = float(pruning_cfg.get("interval_seconds", 3600.0))
+
+                self.daemon = AuraDaemon(
+                    task_runtime=task_runtime if "task_runtime" in locals() else None,
+                    tool_registry=registry if "registry" in locals() else None,
+                    proactive_engine=getattr(self.services, "proactive", None),
+                    offline=self.config.get("llm", {}).get("offline", True),
+                    poll_interval=poll_interval,
+                    proactive_interval=proactive_interval,
+                    backup_interval=backup_interval,
+                    prune_interval=prune_interval,
+                )
+                self.daemon.start()
+                logger.info("AURA 24/7 Daemon started in ServerRuntime (poll=%.1fs, proactive=%.1fs, backup=%.1fs, prune=%.1fs)", poll_interval, proactive_interval, backup_interval, prune_interval)
+        except Exception as daemon_err:
+            logger.warning("AURA 24/7 Daemon startup warning: %s", daemon_err)
+
         logger.info("%s server ready", name)
 
     def stop(self) -> None:
         """Stop the runtime."""
         if not self.started:
             return
+
+        if self.daemon is not None:
+            try:
+                self.daemon.stop()
+            except Exception as e:
+                logger.warning("AURA 24/7 Daemon shutdown warning: %s", e)
+            self.daemon = None
 
         # Plugins first
         if self.services.plugins is not None:

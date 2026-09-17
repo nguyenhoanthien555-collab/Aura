@@ -31,7 +31,7 @@ from core.logger import logger
 from core.capabilities import health, permissions, registry as capability_registry
 from core.capabilities.models import Capability
 from tools.base import Parameter, Tool, ToolResult, ToolRisk
-from tools.outcome import Evidence, EvidenceKind, SideEffect
+from tools.outcome import Evidence, EvidenceKind, SideEffect, ToolStatus
 from tools.providers.android_bridge import DeviceBridge
 from tools.providers.base import CapabilityProvider
 from tools.registry import ToolRegistry
@@ -84,7 +84,7 @@ def _evidence_from_report(report: dict, tool: str) -> tuple[Evidence, ...]:
     return tuple(evidence)
 
 
-def tool_result_from_report(report: dict) -> ToolResult:
+def tool_result_from_report(report: dict, side_effect: str = "") -> ToolResult:
     """
     A bridge report as a ToolResult.
 
@@ -95,6 +95,7 @@ def tool_result_from_report(report: dict) -> ToolResult:
     """
 
     tool = str(report.get("tool", ""))
+    effect = side_effect or str(report.get("side_effect", ""))
 
     if report.get("ok"):
         result = report.get("result") or {}
@@ -104,17 +105,29 @@ def tool_result_from_report(report: dict) -> ToolResult:
             tool=tool,
             data=report,
             evidence=_evidence_from_report(report, tool),
+            side_effect=effect,
         )
 
     error = report.get("error") or {}
     code = str(error.get("code", "UNKNOWN"))
     message = str(error.get("message", ""))
 
+    if code == "TIMEOUT":
+        status = ToolStatus.TIMEOUT.value
+    elif code == "CANCELLED":
+        status = ToolStatus.CANCELLED.value
+    else:
+        status = ToolStatus.FAILED.value
+
     return ToolResult(
         ok=False,
         error=f"{code}: {message}" if message else code,
         tool=tool,
         data=report,
+        evidence=_evidence_from_report(report, tool),
+        status=status,
+        error_code=code,
+        side_effect=effect,
     )
 
 
@@ -148,21 +161,26 @@ class AndroidTool(Tool):
                 error=f"BRIDGE_ERROR: {error}",
                 tool=self.name,
                 data=payload,
+                status=ToolStatus.UNAVAILABLE.value,
+                error_code="BRIDGE_ERROR",
+                side_effect=str(getattr(self, "side_effect", "")),
             )
 
-        return tool_result_from_report(report)
+        return tool_result_from_report(report, side_effect=str(getattr(self, "side_effect", "")))
 
 
 class _Read(AndroidTool):
     """A pure observation: no side effects on the device."""
 
     risk = ToolRisk.SAFE
+    side_effect = SideEffect.READ_ONLY
 
 
 class _Mutation(AndroidTool):
     """Changes something on the device; runs behind the approval gates."""
 
     risk = ToolRisk.DANGEROUS
+    side_effect = SideEffect.NON_IDEMPOTENT
 
 
 class GetForegroundApp(_Read):
@@ -213,11 +231,45 @@ class Screenshot(AndroidTool):
 
     name = "android.screenshot"
     description = (
-        "Capture the current screen as an image. Visual observation; use "
-        "get_foreground_app instead when only app identity is needed."
+        "Capture the current screen as an image and return visual description and UI layout. "
+        "Visual observation; use get_foreground_app instead when only app identity is needed."
     )
     risk = ToolRisk.SENSITIVE
     capability = "android.screen_capture"
+
+    def execute(self, **arguments) -> ToolResult:
+        res = super().execute(**arguments)
+        if not res.ok:
+            return res
+
+        report = res.data or {}
+        result_payload = report.get("result", {})
+        b64_str = result_payload.get("base64")
+        if b64_str:
+            try:
+                import base64
+                from vision.capture import Frame
+                img_bytes = base64.b64decode(b64_str)
+                frame = Frame(
+                    width=result_payload.get("width", 0),
+                    height=result_payload.get("height", 0),
+                    data=img_bytes,
+                    image_format="jpeg",
+                    source="phone",
+                )
+                from core.config import load_config
+                from vision.cloud_processor import build_cloud_vision_processor
+                processor = build_cloud_vision_processor(load_config())
+                if processor:
+                    description = processor.describe(frame)
+                    if description:
+                        result_payload["description"] = description
+                        res.output = json.dumps(result_payload, ensure_ascii=False)
+            except Exception as e:
+                logger.warning(f"Screenshot vision understanding failed: {e}")
+
+        return res
+
 
 
 class Tap(_Mutation):
@@ -308,6 +360,20 @@ class LaunchApp(_Mutation):
             description="Android package name (e.g. 'com.aura.companion' for AURA, 'com.google.android.youtube' for YouTube).",
         ),
     )
+
+    def verify(self, package: str = "", **kwargs) -> bool | None:
+        """Verify postcondition probe: check if launched app is foreground."""
+        if not package:
+            return False
+        try:
+            report = self.bridge.invoke("android.get_foreground_app", {})
+            if report.get("ok"):
+                res = report.get("result") or {}
+                return res.get("package") == package
+            return None
+        except Exception:
+            return None
+
 
 
 class WaitFor(_Read):

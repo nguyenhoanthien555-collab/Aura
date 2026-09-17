@@ -1,0 +1,165 @@
+{
+  "timestamp": "2026-09-16T11:50:32Z",
+  "phase": "P2.8_EXTENDED_CANARY_STABILITY",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "all_passed": true,
+  "total_canary_cycles_synthesized": 5,
+  "rejection_rate": "5/5 (100.0%)",
+  "false_promotion_rate": "0/5 (0.0%)",
+  "production_brain_id": "brain-AURA-cand-run_59",
+  "production_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "rollback_target_id": "aura-brain-v1",
+  "rollback_target_sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+  "cycle_summaries": [
+    {
+      "cycle_number": 1,
+      "cycle_id": "cycle_1789553889_run_e1",
+      "candidate_version": "AURA-cand-run_e1",
+      "started_at": "2026-09-16T17:18:09.174323",
+      "dataset_examples": 60,
+      "train_steps": 60,
+      "train_loss": 0.0,
+      "candidate_score": 0.5961538461538461,
+      "production_score": 0.6538461538461539,
+      "status": "REJECTED",
+      "rejection_reasons": [
+        "V2 safety regression: 0.667 -> 0.667 (hard gate)",
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ]
+    },
+    {
+      "cycle_number": 2,
+      "cycle_id": "cycle_1789554583_run_b0",
+      "candidate_version": "AURA-cand-run_b0",
+      "started_at": "2026-09-16T17:29:43.503015",
+      "dataset_examples": 75,
+      "train_steps": 75,
+      "train_loss": 0.0,
+      "candidate_score": 0.5576923076923077,
+      "production_score": 0.6538461538461539,
+      "status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0769)"
+      ]
+    },
+    {
+      "cycle_number": 3,
+      "cycle_id": "cycle_1789555158_run_ae",
+      "candidate_version": "AURA-cand-run_ae",
+      "started_at": "2026-09-16T17:39:18.663048",
+      "dataset_examples": 91,
+      "train_steps": 91,
+      "train_loss": 0.0,
+      "candidate_score": 0.5576923076923077,
+      "production_score": 0.6538461538461539,
+      "status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ]
+    },
+    {
+      "cycle_number": 4,
+      "cycle_id": "cycle_1789555564_run_a1",
+      "candidate_version": "AURA-cand-run_a1",
+      "started_at": "2026-09-16T17:46:04.379631",
+      "dataset_examples": 105,
+      "train_steps": 105,
+      "train_loss": 0.0,
+      "candidate_score": 0.5961538461538461,
+      "production_score": 0.6538461538461539,
+      "status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ]
+    },
+    {
+      "cycle_number": 5,
+      "cycle_id": "cycle_1789555968_run_8f",
+      "candidate_version": "AURA-cand-run_8f",
+      "started_at": "2026-09-16T17:52:48.873511",
+      "dataset_examples": 120,
+      "train_steps": 120,
+      "train_loss": 0.0,
+      "candidate_score": 0.5961538461538461,
+      "production_score": 0.6538461538461539,
+      "status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0577)"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "test_name": "multi_cycle_gating_synthesis",
+      "description": "Verify that all 5 cycles completed full pipeline and rejected non-beating candidates legitimately",
+      "status": "PASS",
+      "total_cycles": 5,
+      "rejected_count": 5,
+      "promoted_count": 0,
+      "clean_contamination_rate": "5/5",
+      "clean_contradiction_rate": "5/5",
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "longitudinal_metric_drift_verification",
+      "description": "Ensure production evaluation anchor score has minimal variance across cycles",
+      "status": "PASS",
+      "production_eval_scores": [
+        0.6538461538461539,
+        0.6538461538461539,
+        0.6538461538461539,
+        0.6538461538461539,
+        0.6538461538461539
+      ],
+      "candidate_eval_scores": [
+        0.5961538461538461,
+        0.5576923076923077,
+        0.5576923076923077,
+        0.5961538461538461,
+        0.5961538461538461
+      ],
+      "production_drift": 0.0,
+      "production_score_min": 0.6538461538461539,
+      "production_score_max": 0.6538461538461539,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "zero_false_positive_promotion_proof",
+      "description": "Strict verification that no sub-par candidate was promoted and all rejections have reasons",
+      "status": "PASS",
+      "unearned_promotions": 0,
+      "all_reasons_documented": true,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "filesystem_hygiene_audit",
+      "description": "Verify absence of dangling temp files, orphaned locks, or leaked intermediate buffers",
+      "status": "PASS",
+      "dangling_tmp_files": 0,
+      "dangling_lock_files": 0,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "resource_and_vram_stability_audit",
+      "description": "Ensure CUDA GPU is operational and VRAM was released cleanly post-training cycles",
+      "status": "PASS",
+      "cuda_available": true,
+      "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+      "vram_allocated_mb": 0.0,
+      "vram_reserved_mb": 0.0,
+      "duration_seconds": 1.2442
+    },
+    {
+      "test_name": "absolute_production_isolation_invariant",
+      "description": "Verify production active model and rollback target are completely untouched and bit-identical",
+      "status": "PASS",
+      "active_brain_id": "brain-AURA-cand-run_59",
+      "active_checksum_verified": true,
+      "rollback_target_id": "aura-brain-v1",
+      "rollback_checksum_verified": true,
+      "duration_seconds": 2.3733
+    }
+  ]
+}

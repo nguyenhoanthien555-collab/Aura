@@ -69,7 +69,7 @@ class ProviderCapabilities:
 # the only thing that flips a row to VERIFIED, and it is called only
 # after generate_with_tools returned a real turn.
 _FUNCTION_CAPABLE = frozenset({
-    "gemini", "openai", "cerebras", "custom", "deepseek", "qwen", "xai",
+    "gemini", "openai", "cerebras", "custom", "deepseek", "qwen", "xai", "local", "local_aura",
 })
 
 _REGISTRY: dict[str, ProviderCapabilities] = {}
@@ -77,6 +77,7 @@ _REGISTRY: dict[str, ProviderCapabilities] = {}
 for _name in (
     "gemini", "groq", "mistral", "openrouter", "openai", "anthropic",
     "cerebras", "xai", "deepseek", "qwen", "custom", "ollama", "mock",
+    "local", "local_aura",
 ):
     _REGISTRY[_name] = ProviderCapabilities(
         name=_name,

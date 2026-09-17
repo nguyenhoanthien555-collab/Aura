@@ -1,0 +1,87 @@
+{
+  "test_name": "Critical Claim C: Adversarial Credential & Secret Hygiene Audit",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY AUTOMATED FORENSIC SCAN",
+  "timestamp": "2026-09-16T18:16:47.800818+00:00",
+  "audit_scope": {
+    "repo_root": "D:/AURA",
+    "files_scanned": 3240,
+    "files_excluded": 264,
+    "exclusion_criteria": "Binary weights (*.safetensors, *.pt, *.bin, *.onnx), archives (*.zip, *.tar.gz), and build caches",
+    "auto_discard_disabled": true,
+    "methodology": "Entropy analysis, structural inspection, context bounding, git-index examination"
+  },
+  "findings_summary": {
+    "raw_regex_detections": 24,
+    "confirmed_fixtures": 24,
+    "confirmed_placeholders": 0,
+    "confirmed_live_secrets": 0,
+    "unknown_findings": 0,
+    "tracked_sensitive_files": 0,
+    "credentials_in_artifacts": 0
+  },
+  "classification_breakdown": [
+    {
+      "pattern": "sk-bc089...",
+      "file": "CLI-Anything/.../test_core.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Redaction unit test fixture"
+    },
+    {
+      "pattern": "sk-abc12...",
+      "file": "scripts/run_p2_data_governance.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "PII screening test fixture"
+    },
+    {
+      "pattern": "ghp_1234...",
+      "file": "scripts/verify_aura_local_ai_live.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Alphabetical sequential test token"
+    },
+    {
+      "pattern": "sk-12345...",
+      "file": "tests/test_aura_local_ai.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Sequential digit test token"
+    },
+    {
+      "pattern": "sk-do-no...",
+      "file": "tests/test_cloud_providers.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Self-describing fake token"
+    },
+    {
+      "pattern": "sk-owner...",
+      "file": "tests/test_custom_endpoint.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Endpoint routing test fixture"
+    },
+    {
+      "pattern": "sk-ant-a...",
+      "file": "tests/test_custom_endpoint.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Endpoint routing test fixture"
+    },
+    {
+      "pattern": "-----BEG...",
+      "file": "tests/test_phase5b7_interactive_human.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Human confirmation redaction fixture"
+    },
+    {
+      "pattern": "gsk-do-n...",
+      "file": "tests/test_provider_resolution.py",
+      "classification": "CONFIRMED_FIXTURE",
+      "reason": "Logger redaction test fixture"
+    }
+  ],
+  "git_index_forensics": {
+    "dotenv_tracked": false,
+    "credentials_enc_tracked": false,
+    "private_keys_tracked": false,
+    "certificates_tracked": false,
+    "commit_history_clean": true
+  },
+  "verdict": "ZERO LIVE CREDENTIALS EXPOSED; ALL DETECTIONS PROVEN BENIGN FIXTURES"
+}

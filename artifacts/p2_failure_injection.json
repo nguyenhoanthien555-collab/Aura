@@ -1,0 +1,96 @@
+{
+  "timestamp": "2026-09-16T18:41:34.741150",
+  "phase": "P2.3",
+  "overall_status": "PASS",
+  "total_tests": 8,
+  "passed_tests": 8,
+  "failed_tests": 0,
+  "production_brain_preserved": true,
+  "production_checksum": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "test_results": [
+    {
+      "test_name": "cuda_oom_simulation",
+      "description": "Simulate CUDA OutOfMemoryError during training loop",
+      "status": "PASS",
+      "scheduler_state": "FAILED",
+      "trace_status": "FAILED",
+      "error_message": "Cycle execution failed: OutOfMemoryError: CUDA out of memory: tried to allocate 8.00 GiB (GPU 0; 8.00 GiB total capacity; 7.85 GiB already allocated)",
+      "production_intact": true,
+      "duration_seconds": 5.383
+    },
+    {
+      "test_name": "training_process_crash",
+      "description": "Simulate unexpected worker crash/SIGSEGV during optimizer step",
+      "status": "PASS",
+      "scheduler_state": "FAILED",
+      "trace_status": "FAILED",
+      "error_message": "Cycle execution failed: RuntimeError: Training worker process terminated unexpectedly with SIGSEGV (interrupted training)",
+      "production_intact": true,
+      "duration_seconds": 0.374
+    },
+    {
+      "test_name": "corrupted_checkpoint",
+      "description": "Inject header byte corruption into merged safetensors checkpoint before export",
+      "status": "PASS",
+      "scheduler_state": "FAILED",
+      "trace_status": "FAILED",
+      "error_message": "Cycle execution failed: SafetensorError: Error while deserializing header: header too large",
+      "production_intact": true,
+      "duration_seconds": 20.413
+    },
+    {
+      "test_name": "gguf_corruption_and_hash_mismatch",
+      "description": "Verify GGUF absence and hash mismatch detection halt evaluation and promotion",
+      "status": "PASS",
+      "missing_gguf_detected": true,
+      "hash_mismatch_detected": true,
+      "load_error": "GGUF hash mismatch: expected 000000000000, file is 98a416f85f31",
+      "production_intact": true,
+      "duration_seconds": 34.687
+    },
+    {
+      "test_name": "dataset_contamination_and_contradiction",
+      "description": "Enforce contamination gate against held-out benchmark and contradiction audit against capability catalogue",
+      "status": "PASS",
+      "contamination_blocked": true,
+      "contamination_status": "CONTAMINATED",
+      "overlap_count": 1,
+      "contradiction_blocked": true,
+      "contradiction_count": 1,
+      "production_intact": true,
+      "duration_seconds": 0.015
+    },
+    {
+      "test_name": "registry_write_failure_atomic_durability",
+      "description": "Simulate permission error/disk failure during model registry update; verify atomic durability",
+      "status": "PASS",
+      "scheduler_state": "FAILED",
+      "trace_status": "FAILED",
+      "error_message": "Cycle execution failed: PermissionError: EACCES: permission denied, open 'model_registry.json'",
+      "registry_intact": true,
+      "production_intact": true,
+      "duration_seconds": 37.696
+    },
+    {
+      "test_name": "concurrent_scheduler_trigger_blocking",
+      "description": "Attempt to trigger new cycle while scheduler is active; verify mutual exclusion",
+      "status": "PASS",
+      "check_eligibility_blocked": true,
+      "poll_and_execute_blocked": true,
+      "execute_cycle_rejected_busy": true,
+      "production_intact": true,
+      "duration_seconds": 0.063
+    },
+    {
+      "test_name": "rollback_invocation_and_restoration",
+      "description": "Invoke BrainManager rollback; verify previous brain is safely restored, verified, and re-promotable",
+      "status": "PASS",
+      "rollback_executed": true,
+      "restored_brain_id": "aura-brain-v1",
+      "restored_brain_checksum_valid": true,
+      "production_repromoted": true,
+      "final_active_brain_id": "brain-AURA-cand-run_59",
+      "duration_seconds": 2.082
+    }
+  ]
+}

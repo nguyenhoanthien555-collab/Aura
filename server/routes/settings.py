@@ -148,7 +148,14 @@ async def update_settings(
             except Exception as e:
                 logger.error("Failed to execve: %s", e)
 
-        background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
+        def _schedule_restart():
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_do_restart())
+            except RuntimeError:
+                pass
+
+        background_tasks.add_task(_schedule_restart)
 
     return report
 
@@ -211,7 +218,14 @@ async def reset_settings(
             except Exception as e:
                 logger.error("Failed to execve: %s", e)
 
-        background_tasks.add_task(lambda: asyncio.create_task(_do_restart()))
+        def _schedule_restart():
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_do_restart())
+            except RuntimeError:
+                pass
+
+        background_tasks.add_task(_schedule_restart)
 
     return {
         "reset": removed,

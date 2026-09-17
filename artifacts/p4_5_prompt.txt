@@ -1,0 +1,1842 @@
+<USER_REQUEST>
+# AURA P4.5 — FORENSIC DISTRIBUTED REALITY & CONTINUITY
+
+## MASTER AUTONOMOUS IMPLEMENTATION + VALIDATION PROMPT
+
+You are the primary senior engineer and forensic validation agent for the AURA repository.
+
+Repository:
+
+```text
+D:\AURA
+```
+
+AURA has completed P4 — Distributed Continuity & Always-Sync.
+
+P4 introduced:
+
+* durable event log
+* node identity
+* outbox/inbox
+* idempotent event delivery
+* cursor-based synchronization
+* conflict detection/quarantine
+* tool replication
+* experience replication
+* provenance preservation
+* sync REST endpoints
+* retry/backoff
+* offline durability
+* convergence tests
+
+P4 also fixed the Android Agent transport / multi-tool transcript issue.
+
+Your job now is **NOT to blindly trust the P4 report**.
+
+Your job is to perform a **forensic reality validation of the actual implementation**, repair anything that does not meet the intended contract, and produce evidence that AURA genuinely behaves as a distributed system.
+
+Do not merely write a plan.
+
+Inspect → test → reproduce → diagnose → implement fixes → rebuild → retest → stress → document.
+
+---
+
+# 0. P4.5 CORE OBJECTIVE
+
+The acceptance target is:
+
+> AURA Mobile and AURA Laptop behave as two durable nodes of the same AURA system, capable of operating independently, synchronizing over the Internet across different networks, recovering from temporary connectivity loss, and eventually converging without silently losing data.
+
+The system must satisfy:
+
+```text
+MOBILE
+  │
+  │ Internet
+  ▼
+AURA RELAY / SERVER
+  ▲
+  │ Internet
+  │
+LAPTOP
+```
+
+The Mobile and Laptop must NOT require:
+
+```text
+same Wi-Fi
+same LAN
+same subnet
+static IP
+direct inbound connection
+```
+
+---
+
+# 1. CRITICAL DISTINCTION
+
+Do NOT confuse:
+
+```text
+HTTP timeout
+```
+
+with:
+
+```text
+event loss
+```
+
+Do NOT confuse:
+
+```text
+temporary connectivity failure
+```
+
+with:
+
+```text
+task failure
+```
+
+Do NOT confuse:
+
+```text
+sync delayed
+```
+
+with:
+
+```text
+sync corrupted
+```
+
+Do NOT confuse:
+
+```text
+tool execution timeout
+```
+
+with:
+
+```text
+tool execution failure
+```
+
+These states must remain explicit.
+
+---
+
+# 2. FIRST ACTION — FORENSIC INSPECTION
+
+Before changing code, inspect the actual repository.
+
+Inspect at minimum:
+
+```text
+core/sync/
+server/routes/sync.py
+server/main.py
+memory/
+learning/
+tools/
+agent/
+android/
+tests/
+artifacts/
+```
+
+Inspect:
+
+```text
+git status
+git diff
+git log -1
+```
+
+Do NOT reset, checkout, clean, or discard existing user work.
+
+Determine exactly what P4 implemented.
+
+Do not assume the P4 report is accurate.
+
+Verify claims against source code and executable behavior.
+
+---
+
+# 3. VERIFY P4 CLAIMS
+
+For every major P4 claim, locate:
+
+```text
+implementation
+test
+artifact
+actual execution evidence
+```
+
+Build an evidence matrix:
+
+```text
+CLAIM
+IMPLEMENTATION
+UNIT TEST
+INTEGRATION TEST
+REAL DEVICE TEST
+STATUS
+```
+
+Possible status:
+
+```text
+VERIFIED
+PARTIALLY VERIFIED
+UNVERIFIED
+FAILED
+```
+
+Do not convert "unit tested" into "real-world verified".
+
+---
+
+# 4. REAL NODE IDENTITY
+
+Verify that Laptop and Android use stable logical identities.
+
+Identity must NOT depend on:
+
+```text
+IP address
+Wi-Fi network
+temporary socket
+Android serial
+hostname
+```
+
+Verify:
+
+```text
+restart node
+change network
+restart application
+```
+
+and confirm logical identity remains stable.
+
+If identity changes unexpectedly, fix it.
+
+---
+
+# 5. REAL INTERNET CROSS-NETWORK TEST
+
+This is mandatory if physically possible.
+
+The test MUST use genuinely different network paths.
+
+Target:
+
+```text
+Laptop
+    │
+Network A
+    │
+Internet
+    │
+Network B
+    │
+Mobile
+```
+
+Examples:
+
+```text
+Laptop Wi-Fi
+Mobile 4G/5G
+```
+
+or:
+
+```text
+Laptop Ethernet
+Mobile cellular
+```
+
+Do NOT count this as cross-network:
+
+```text
+Laptop 192.168.x.x
+Mobile 192.168.x.x
+```
+
+Do NOT use LAN-only connectivity and call it Internet validation.
+
+If physical cross-network testing is impossible, create a deterministic transport simulation and clearly mark the result:
+
+```text
+SIMULATED
+```
+
+Never report simulated evidence as physical evidence.
+
+---
+
+# 6. REMOVE LAN ASSUMPTIONS
+
+Search the codebase for synchronization dependencies on:
+
+```text
+192.168.
+10.
+172.16.
+localhost
+127.0.0.1
+```
+
+Distinguish:
+
+```text
+development/test configuration
+```
+
+from:
+
+```text
+runtime sync dependency
+```
+
+The production synchronization path must use a configurable Internet-reachable relay.
+
+Do not hard-code the current laptop IP.
+
+---
+
+# 7. DURABLE EVENT INVARIANT
+
+Establish this invariant:
+
+> Once an event is acknowledged as locally persisted, temporary network failure must never silently destroy it.
+
+Test:
+
+```text
+create event
+persist
+start upload
+force timeout
+restart client
+reconnect
+retry
+```
+
+Expected:
+
+```text
+event still exists
+event still has same event_id
+payload_hash unchanged
+provenance unchanged
+event eventually delivered
+```
+
+---
+
+# 8. TIMEOUT FORENSICS
+
+This is one of the highest-priority checks.
+
+Find every relevant timeout in:
+
+```text
+Android AgentRunDriver
+DeviceGateway
+server agent runtime
+sync client
+sync relay
+HTTP clients
+polling
+tool execution
+```
+
+For every timeout, answer:
+
+```text
+What exactly timed out?
+What state was persisted before timeout?
+Can the operation resume?
+Can it be duplicated safely?
+Can it be falsely reported as failed?
+```
+
+Do NOT simply increase timeout values.
+
+---
+
+# 9. AGENT RUN CONTINUITY
+
+Inspect:
+
+```text
+AgentRunDriver.kt
+AgentRuntime
+agent routes
+run state persistence
+```
+
+Determine whether this sequence is supported:
+
+```text
+User goal
+ ↓
+Agent run created
+ ↓
+Tool executes
+ ↓
+Network disappears
+ ↓
+HTTP request times out
+ ↓
+Mobile remains offline
+ ↓
+Mobile/app/server restarts
+ ↓
+Network returns
+ ↓
+SAME RUN resumes
+```
+
+The intended behavior is:
+
+```text
+RUNNING
+ ↓
+CONNECTIVITY_LOST
+ ↓
+PAUSED / WAITING_FOR_CONNECTIVITY
+ ↓
+RESUME
+ ↓
+CONTINUE
+```
+
+NOT:
+
+```text
+RUNNING
+ ↓
+timeout
+ ↓
+return final answer
+ ↓
+run permanently abandoned
+```
+
+If the current architecture cannot safely resume an agent run, implement durable run state.
+
+At minimum preserve:
+
+```text
+run_id
+goal
+current step
+completed tool calls
+pending tool calls
+tool results
+observations
+verification state
+last server cursor/state
+```
+
+Do not replay already-successful side effects blindly.
+
+---
+
+# 10. EXACTLY-ONCE VS AT-LEAST-ONCE
+
+Do not falsely claim "exactly once" execution merely because the network layer is idempotent.
+
+Separate:
+
+```text
+event delivery semantics
+```
+
+from:
+
+```text
+physical side-effect semantics
+```
+
+For example:
+
+```text
+launch_app
+tap
+type_text
+```
+
+may have side effects.
+
+If a request times out after execution but before response:
+
+```text
+UNKNOWN
+```
+
+The system must not blindly execute the same side effect again unless the tool is explicitly idempotent or the device-side execution layer has a durable execution ID / replay protection.
+
+Audit:
+
+```text
+toolCallId
+run_id
+invocation ID
+execution ID
+completed-report cache
+```
+
+and strengthen them if necessary.
+
+---
+
+# 11. DEVICE TOOL EXECUTION CONTINUITY
+
+For every Android tool execution, determine:
+
+```text
+created
+sent
+received
+executing
+completed
+reported
+acknowledged
+```
+
+Create explicit durable semantics where necessary.
+
+A timeout after execution must not create:
+
+```text
+duplicate tap
+duplicate message
+duplicate form submission
+```
+
+where avoidable.
+
+Use stable invocation IDs.
+
+---
+
+# 12. MOBILE OFFLINE TEST
+
+Perform a real-device test if possible.
+
+Sequence:
+
+```text
+1. Mobile online
+2. Verify registered node
+3. Generate test event
+4. Confirm local persistence
+5. Disconnect Mobile from network
+6. Generate ≥100 synchronizable events
+7. Kill/restart AURA process
+8. Confirm events still exist
+9. Reconnect network
+10. Allow synchronization
+11. Verify all events arrive at Laptop
+```
+
+Expected:
+
+```text
+created = received
+lost = 0
+unexpected duplicates = 0
+hash mismatches = 0
+```
+
+If event count differs, investigate every discrepancy.
+
+---
+
+# 13. LAPTOP OFFLINE TEST
+
+Reverse the direction.
+
+```text
+Laptop offline
+ ↓
+generate events
+ ↓
+restart relevant process
+ ↓
+restore network
+ ↓
+Mobile receives
+```
+
+Verify the same invariants.
+
+---
+
+# 14. BIDIRECTIONAL CONCURRENT TEST
+
+Both nodes must generate events while synchronization is active.
+
+Example:
+
+```text
+Mobile:
+M001 ... M100
+
+Laptop:
+L001 ... L100
+```
+
+Generate concurrently.
+
+Then temporarily disrupt connectivity.
+
+Restore connectivity.
+
+Verify:
+
+```text
+Mobile knows M001...M100
+Mobile knows L001...L100
+
+Laptop knows M001...M100
+Laptop knows L001...L100
+```
+
+No silent overwrite.
+
+No lost event.
+
+---
+
+# 15. DUPLICATE DELIVERY TEST
+
+Force:
+
+```text
+E123
+E123
+E123
+E123
+```
+
+into the relay.
+
+Verify:
+
+```text
+logical event count = 1
+```
+
+Verify the receiver remains idempotent after restart.
+
+---
+
+# 16. ACK-LOSS TEST
+
+This is mandatory.
+
+Simulate:
+
+```text
+client → server
+server persists event
+server → ACK
+ACK gets lost
+client sees timeout
+client retries event
+```
+
+Expected:
+
+```text
+server recognizes same event_id
+server returns idempotent success
+no duplicate logical event
+```
+
+This is a critical real-world failure mode.
+
+---
+
+# 17. SERVER RESTART TEST
+
+Perform:
+
+```text
+client sends event
+server restarts
+client reconnects
+```
+
+Verify:
+
+```text
+durable events survive server restart
+cursor remains valid
+no acknowledged event disappears
+```
+
+If server persistence is currently local SQLite, verify the exact database lifecycle.
+
+---
+
+# 18. MOBILE PROCESS KILL TEST
+
+Force-stop/restart the Android app/process where practical.
+
+Verify:
+
+```text
+node identity survives
+pending events survive
+sync cursor survives
+outbox survives
+```
+
+No manual copying of databases.
+
+---
+
+# 19. LAPTOP PROCESS RESTART TEST
+
+Restart the AURA server/process.
+
+Verify:
+
+```text
+event log survives
+outbox survives
+inbox survives
+node identity survives
+cursor survives
+```
+
+---
+
+# 20. TOOL DISCOVERY → GLOBAL REPLICATION
+
+This is the most important application-level P4.5 test.
+
+Demonstrate the real pipeline:
+
+```text
+MOBILE
+  ↓
+discover capability/tool
+  ↓
+register locally
+  ↓
+execute real test
+  ↓
+observe result
+  ↓
+verify result
+  ↓
+produce Evidence
+  ↓
+produce provenance
+  ↓
+create capability/tool event
+  ↓
+outbox
+  ↓
+Internet
+  ↓
+RELAY
+  ↓
+LAPTOP
+  ↓
+inbox validation
+  ↓
+replication adapter
+  ↓
+Tool Registry
+```
+
+The laptop must receive the tool/capability without manual file copying.
+
+---
+
+# 21. TOOL TRUST BOUNDARY
+
+A mobile-originated tool must NOT automatically become trusted merely because the mobile says:
+
+```text
+PASSED
+```
+
+The laptop must validate:
+
+```text
+schema
+provenance
+source digest
+manifest
+status
+evidence
+origin node
+```
+
+Preserve the existing trust model.
+
+Unverified tools remain:
+
+```text
+UNVERIFIED
+QUARANTINED
+FAILED
+```
+
+as appropriate.
+
+---
+
+# 22. EXPERIENCE REPLICATION
+
+Perform a real mobile action that produces a valid AURA experience.
+
+Then verify:
+
+```text
+Mobile Experience Store
+        ↓
+sync event
+        ↓
+relay
+        ↓
+Laptop
+        ↓
+Laptop Experience Store
+```
+
+Compare:
+
+```text
+experience_id
+origin_node
+run_id
+tool
+input
+output
+taxonomy
+evidence
+verification
+timestamp
+hash
+```
+
+They must remain semantically and cryptographically consistent.
+
+---
+
+# 23. PROVENANCE FORENSICS
+
+For every replicated record:
+
+```text
+Who created it?
+Which node?
+Which run?
+Which tool?
+Which event?
+Which observation?
+Which evidence?
+Which hash?
+```
+
+must remain answerable.
+
+No provenance flattening.
+
+No synthetic "local" origin on the receiving node.
+
+---
+
+# 24. CONFLICT TEST
+
+Create two legitimate concurrent updates.
+
+Also create:
+
+```text
+same event_id + different payload
+```
+
+Verify:
+
+```text
+CONFLICT
+ ↓
+QUARANTINE
+ ↓
+AUDITABLE
+```
+
+No silent:
+
+```text
+last-write-wins
+```
+
+unless explicitly justified for a non-knowledge-bearing field.
+
+---
+
+# 25. HASH TAMPERING TEST
+
+Modify:
+
+```text
+payload
+```
+
+without modifying:
+
+```text
+payload_hash
+```
+
+Push it.
+
+Expected:
+
+```text
+rejected/quarantined
+```
+
+Then test:
+
+```text
+same event_id
+different valid payload hash
+```
+
+Expected:
+
+```text
+conflict/quarantine
+```
+
+No silent overwrite.
+
+---
+
+# 26. NETWORK CHAOS
+
+Run at least:
+
+```text
+100% packet loss
+50% packet loss
+random latency
+random connection reset
+server unavailable
+server restart
+client restart
+duplicate delivery
+out-of-order delivery
+ACK loss
+request timeout
+```
+
+The implementation must preserve durable events.
+
+---
+
+# 27. LONG DISCONNECTION
+
+Simulate or physically perform:
+
+```text
+Mobile offline for extended period
+```
+
+Generate a backlog.
+
+Laptop continues operating.
+
+Then reconnect Mobile.
+
+Verify:
+
+```text
+catch-up
+```
+
+without requiring manual database copying.
+
+---
+
+# 28. LARGE BACKLOG
+
+At minimum:
+
+```text
+1,000 events
+```
+
+Use a mixture of:
+
+```text
+experience
+tool
+capability
+state
+trace
+```
+
+Do not only generate identical dummy events.
+
+Verify:
+
+```text
+1000 created
+1000 durable
+1000 eventually received
+0 lost
+0 corrupt
+0 unexpected logical duplicates
+```
+
+If conflicts are intentionally generated, report them separately.
+
+---
+
+# 29. EVENTUAL CONVERGENCE
+
+After all connectivity is restored:
+
+```text
+Mobile state
+==
+Laptop state
+```
+
+for all conflict-free synchronizable entities.
+
+Compare actual event sets, not merely counters.
+
+Produce:
+
+```text
+missing_on_mobile
+missing_on_laptop
+hash_mismatches
+duplicate_ids
+conflicts
+```
+
+Expected:
+
+```text
+missing = 0
+hash_mismatch = 0
+unexpected_duplicates = 0
+```
+
+---
+
+# 30. SECURITY FORENSICS
+
+Search the entire repository for:
+
+```text
+Bearer
+token
+Authorization
+API_KEY
+SECRET
+PASSWORD
+PRIVATE_KEY
+```
+
+and likely credential patterns.
+
+Inspect:
+
+```text
+source
+tests
+artifacts
+logs
+temporary files
+scratch files
+generated reports
+Git diff
+Git history relevant to P4
+```
+
+Do NOT print discovered credentials.
+
+If a real credential is exposed:
+
+1. stop propagating it
+2. identify affected files
+3. rotate/revoke it if the existing mechanism permits
+4. replace securely
+5. remove it from generated artifacts
+6. verify it is not staged/committed
+7. document that remediation occurred WITHOUT revealing the secret
+
+Never echo the actual secret.
+
+---
+
+# 31. TRANSPORT SECURITY
+
+Verify:
+
+```text
+HTTPS/TLS where applicable
+authentication
+node authorization
+credential separation
+replay protection
+event integrity
+```
+
+Do not invent cryptographic protocols casually.
+
+Reuse established libraries.
+
+Do not store raw credentials in event payloads.
+
+---
+
+# 32. SYNC OBSERVABILITY
+
+Verify that diagnostics distinguish:
+
+```text
+SYNCED
+SYNCING
+PENDING
+OFFLINE
+DEGRADED
+CONFLICT
+QUARANTINED
+ERROR
+```
+
+Check:
+
+```text
+last successful sync
+pending count
+outbox count
+inbox count
+cursor
+retry count
+quarantine count
+peer/node status
+```
+
+No secrets.
+
+---
+
+# 33. ANDROID REAL-DEVICE VALIDATION
+
+If the previously connected Android device is available:
+
+1. Build latest APK.
+2. Install/update it.
+3. Verify package/version.
+4. Start AURA.
+5. Verify AccessibilityService if required.
+6. Verify server connectivity.
+7. Verify node registration.
+8. Verify sync state.
+9. Perform a real tool action.
+10. Create a real validated experience.
+11. Confirm laptop receives it.
+12. Perform a laptop-originated event.
+13. Confirm mobile receives it.
+14. Perform an offline backlog test.
+15. Restore connectivity.
+16. Verify convergence.
+
+Use actual evidence.
+
+---
+
+# 34. AGENT NATURAL-LANGUAGE TEST
+
+Do not test only APIs.
+
+Use real natural-language tasks.
+
+Safe examples:
+
+```text
+"Mở Chrome"
+"Mở YouTube"
+"Về Home"
+"Mở AURA"
+"Liệt kê các app đã cài"
+```
+
+For:
+
+```text
+"Mở Chrome"
+```
+
+the expected conceptual path is:
+
+```text
+natural language
+ ↓
+Brain
+ ↓
+tool selection
+ ↓
+android.list_apps if needed
+ ↓
+identify target
+ ↓
+android.launch_app
+ ↓
+wait_for
+ ↓
+verify foreground/UI
+ ↓
+Evidence
+ ↓
+final response
+```
+
+Do not hard-code package names merely to pass the test.
+
+---
+
+# 35. NO FALSE SUCCESS TEST
+
+Force failures.
+
+Examples:
+
+```text
+unknown app
+network unavailable
+tool unavailable
+invalid arguments
+nonexistent node
+corrupt event
+timeout
+```
+
+Verify AURA says what actually happened.
+
+It must NOT claim:
+
+```text
+"Done"
+```
+
+without evidence.
+
+---
+
+# 36. AGENT TIMEOUT TEST
+
+Create a controlled scenario where:
+
+```text
+Agent step request times out
+```
+
+after the server may already have processed the request.
+
+Verify:
+
+```text
+run state remains recoverable
+tool invocation is not blindly duplicated
+eventual continuation is possible
+```
+
+This is distinct from P4 sync timeout testing.
+
+---
+
+# 37. RECOVERY TEST
+
+Perform:
+
+```text
+run begins
+ ↓
+tool executes
+ ↓
+network disappears
+ ↓
+process restarts
+ ↓
+network returns
+```
+
+Verify the run can either:
+
+```text
+resume safely
+```
+
+or:
+
+```text
+recover to an explicitly persisted terminal/paused state
+```
+
+It must not silently disappear.
+
+---
+
+# 38. DO NOT HIDE LIMITATIONS
+
+If something cannot be physically tested:
+
+write:
+
+```text
+NOT PHYSICALLY VERIFIED
+```
+
+not:
+
+```text
+PASS
+```
+
+If a simulated test passes:
+
+```text
+SIMULATION PASS
+```
+
+not:
+
+```text
+REAL DEVICE PASS
+```
+
+---
+
+# 39. FIX IMPLEMENTATION DEFECTS
+
+If any test exposes a defect:
+
+Do NOT merely document it.
+
+If it is within the P4/P4.5 scope:
+
+```text
+diagnose root cause
+ ↓
+implement fix
+ ↓
+add regression test
+ ↓
+rerun affected test
+ ↓
+rerun full suite
+```
+
+Do not weaken tests.
+
+Do not remove assertions.
+
+Do not skip failing tests.
+
+Do not mark a failure as expected merely to obtain green CI.
+
+---
+
+# 40. PRESERVE EXISTING AURA SAFETY
+
+Do NOT change:
+
+```text
+full_autonomy_enabled
+```
+
+Do NOT unlock STATE 3.
+
+Do NOT remove:
+
+```text
+human confirmation
+rollback
+quarantine
+provenance
+verification
+```
+
+P4.5 is a distributed reliability validation phase.
+
+It is NOT an autonomy-unlock phase.
+
+---
+
+# 41. GIT SAFETY
+
+Before changes:
+
+```text
+git status
+```
+
+After changes:
+
+```text
+git status
+git diff --stat
+git diff --check
+```
+
+Do not:
+
+```text
+git reset --hard
+git clean -fd
+checkout unrelated branch
+discard user work
+```
+
+Do not commit credentials.
+
+Do not automatically push.
+
+---
+
+# 42. REQUIRED AUTOMATED TESTS
+
+Add/maintain tests for:
+
+```text
+test_timeout_preserves_event
+test_ack_loss_idempotency
+test_server_restart_recovery
+test_client_restart_recovery
+test_mobile_offline_backlog
+test_laptop_offline_backlog
+test_bidirectional_convergence
+test_duplicate_delivery
+test_out_of_order_delivery
+test_hash_tampering
+test_same_id_different_payload_conflict
+test_tool_replication
+test_experience_replication
+test_provenance_preservation
+test_agent_run_recovery
+test_tool_invocation_replay_safety
+test_no_false_success
+```
+
+---
+
+# 43. FULL REGRESSION
+
+Run:
+
+```text
+pytest -q
+```
+
+and Android:
+
+```text
+gradlew.bat testDebugUnitTest
+gradlew.bat assembleDebug
+```
+
+where applicable.
+
+Record exact results.
+
+Do not stop after P4 tests pass.
+
+---
+
+# 44. FORENSIC EVENT LEDGER
+
+Create a final machine-readable validation ledger.
+
+Suggested:
+
+```text
+artifacts/p4_5_forensic_ledger.json
+```
+
+Each test should include:
+
+```text
+test_id
+category
+start_time
+end_time
+nodes
+transport
+event_ids
+expected
+actual
+result
+evidence
+physical_or_simulated
+```
+
+Do not include secrets.
+
+---
+
+# 45. REQUIRED REPORTS
+
+Create:
+
+```text
+artifacts/P4_5_FORENSIC_DISTRIBUTED_REALITY_REPORT.md
+artifacts/p4_5_network_validation.json
+artifacts/p4_5_timeout_validation.json
+artifacts/p4_5_agent_recovery.json
+artifacts/p4_5_tool_replication.json
+artifacts/p4_5_convergence.json
+artifacts/p4_5_security_forensics.json
+```
+
+Adapt to existing artifact conventions if necessary.
+
+---
+
+# 46. FINAL ACCEPTANCE GATES
+
+P4.5 may only be declared fully PASS if all applicable mandatory gates are satisfied.
+
+## GATE A — Durable Event
+
+```text
+persist → timeout → restart → reconnect
+```
+
+PASS only if event survives.
+
+## GATE B — ACK Loss
+
+```text
+persist → ACK lost → retry
+```
+
+PASS only if idempotent.
+
+## GATE C — Cross-Network
+
+Two genuinely different networks.
+
+PASS only if Internet synchronization works.
+
+## GATE D — Bidirectional
+
+Mobile ↔ Laptop.
+
+PASS.
+
+## GATE E — Offline
+
+Both nodes independently operate offline.
+
+PASS.
+
+## GATE F — Convergence
+
+Conflict-free state converges.
+
+PASS.
+
+## GATE G — Tool Replication
+
+Mobile validated capability reaches Laptop without manual copying.
+
+PASS.
+
+## GATE H — Experience Replication
+
+Mobile experience reaches Laptop with provenance.
+
+PASS.
+
+## GATE I — Agent Continuity
+
+Agent run survives controlled connectivity interruption safely.
+
+PASS.
+
+## GATE J — Replay Safety
+
+Timeout after possible side effect does not blindly duplicate unsafe operations.
+
+PASS.
+
+## GATE K — Security
+
+No credential leakage and authentication/integrity remain intact.
+
+PASS.
+
+## GATE L — Regression
+
+Existing AURA functionality remains green.
+
+PASS.
+
+---
+
+# 47. IMPORTANT PASS/FAIL RULE
+
+Never calculate a fake overall percentage.
+
+Do not say:
+
+```text
+95% production ready
+```
+
+or:
+
+```text
+99% reliable
+```
+
+unless there is a formally defined metric supporting that exact statement.
+
+Use:
+
+```text
+PASS
+PARTIAL
+FAILED
+BLOCKED
+NOT VERIFIED
+```
+
+per gate.
+
+---
+
+# 48. FINAL REPORT FORMAT
+
+End the report with exactly this structure:
+
+```text
+AURA P4.5 FORENSIC VERDICT
+===========================
+
+P4 implementation audit:
+PASS / PARTIAL / FAILED
+
+Cross-network physical validation:
+PASS / PARTIAL / NOT VERIFIED
+
+Offline durability:
+PASS / PARTIAL / FAILED
+
+Timeout durability:
+PASS / PARTIAL / FAILED
+
+ACK-loss recovery:
+PASS / PARTIAL / FAILED
+
+Client restart recovery:
+PASS / PARTIAL / FAILED
+
+Server restart recovery:
+PASS / PARTIAL / FAILED
+
+Bidirectional synchronization:
+PASS / PARTIAL / FAILED
+
+Eventual convergence:
+PASS / PARTIAL / FAILED
+
+Tool replication:
+PASS / PARTIAL / FAILED
+
+Experience replication:
+PASS / PARTIAL / FAILED
+
+Agent run continuity:
+PASS / PARTIAL / FAILED
+
+Tool replay safety:
+PASS / PARTIAL / FAILED
+
+Conflict safety:
+PASS / PARTIAL / FAILED
+
+Security:
+PASS / PARTIAL / FAILED
+
+Android real-device:
+PASS / PARTIAL / NOT AVAILABLE
+
+Full regression:
+X passed / Y failed / Z skipped
+
+Physical tests:
+...
+
+Simulated tests:
+...
+
+Remaining defects:
+...
+
+Remaining external blockers:
+...
+
+Artifacts:
+...
+
+FINAL VERDICT:
+P4.5 VERIFIED
+or
+P4.5 PARTIALLY VERIFIED
+or
+P4.5 FAILED
+or
+P4.5 BLOCKED
+```
+
+---
+
+# 49. FINAL ENGINEERING PRINCIPLE
+
+The final system must behave according to this model:
+
+```text
+                    INTERNET
+                       │
+                DURABLE RELAY
+                 /           \
+                /             \
+               ▼               ▼
+          AURA MOBILE      AURA LAPTOP
+               │               │
+          local state      local state
+          local events     local events
+          local tools      local brain
+               │               │
+               └───── SYNC ────┘
+```
+
+If the Internet disappears:
+
+```text
+Mobile → continues
+Laptop → continues
+```
+
+If the server disappears:
+
+```text
+Mobile → continues
+Laptop → continues
+```
+
+If the app restarts:
+
+```text
+pending state → survives
+```
+
+If an HTTP request times out:
+
+```text
+event/run → survives
+```
+
+If an ACK is lost:
+
+```text
+retry → idempotent
+```
+
+If a tool is discovered on Mobile:
+
+```text
+discover
+ ↓
+test
+ ↓
+verify
+ ↓
+provenance
+ ↓
+sync
+ ↓
+Laptop validates
+ ↓
+global availability
+```
+
+If a tool is discovered on Laptop:
+
+```text
+discover
+ ↓
+test
+ ↓
+verify
+ ↓
+sync
+ ↓
+Mobile validates/receives
+```
+
+If the nodes reconnect after a long outage:
+
+```text
+eventual convergence
+```
+
+is the expected behavior.
+
+---
+
+# 50. START NOW
+
+Do not ask me what to do next.
+
+Start by inspecting the actual repository and current P4 implementation.
+
+Then execute the complete P4.5 validation.
+
+If defects are found, fix them.
+
+If a real Android device is available, use it.
+
+If cross-network testing requires a human-only OS/security confirmation, do everything else automatically and stop only for that specific unavoidable interaction.
+
+Do not expose credentials.
+
+Do not weaken existing safety controls.
+
+Do not unlock STATE 3.
+
+Do not declare success without evidence.
+
+**The goal is not to make a convincing report.**
+
+**The goal is to make the report true.**
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-16T21:17:09+07:00.
+</ADDITIONAL_METADATA>

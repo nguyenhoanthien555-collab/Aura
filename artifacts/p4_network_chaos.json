@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-09-16T21:06:27",
+  "simulated_drop_rate": 0.5,
+  "total_events": 10,
+  "packets_dropped": 11,
+  "packets_delivered": 10,
+  "data_loss": 0,
+  "duplicates": 0,
+  "eventual_ack_rate": 1.0,
+  "outbox_quarantine_rate": 0.0,
+  "status": "PASS"
+}

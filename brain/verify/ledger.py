@@ -137,12 +137,47 @@ class EvidenceLedger:
     run_id or session id the caller owns.
     """
 
-    def __init__(self, request_id: str = ""):
+    def __init__(self, request_id: str = "", task_id: str = ""):
         self.request_id = request_id or f"req_{uuid.uuid4().hex[:12]}"
+        self.task_id = task_id
         self.tools: list[ToolEvidence] = []
         self.memories: list[MemoryEvidence] = []
         self.capabilities: list[CapabilityEvidence] = []
         self.claims: list = []
+
+    def rehydrate_tools(self, tool_dicts: list[dict]) -> None:
+        """Restore tool evidence records from durable storage."""
+        for td in tool_dicts:
+            raw_ev = td.get("evidence") or ()
+            parsed_ev = []
+            for item in raw_ev:
+                if isinstance(item, dict):
+                    try:
+                        kind_val = item.get("kind", "")
+                        parsed_ev.append(
+                            Evidence(
+                                kind=EvidenceKind(kind_val) if kind_val in EvidenceKind._value2member_map_ else EvidenceKind.OBSERVATION,
+                                verified=item.get("verified"),
+                                reference=str(item.get("reference", "")),
+                                detail=str(item.get("detail", "")),
+                            )
+                        )
+                    except Exception:
+                        pass
+                elif isinstance(item, Evidence):
+                    parsed_ev.append(item)
+
+            self.tools.append(
+                ToolEvidence(
+                    evidence_id=str(td.get("evidence_id") or f"ev_{len(self.tools) + 1}"),
+                    tool=str(td.get("tool", "")),
+                    status=str(td.get("status", "")),
+                    evidence=tuple(parsed_ev),
+                    outcome=str(td.get("outcome", "")),
+                    capability=str(td.get("capability", "")),
+                    side_effect=str(td.get("side_effect", "")),
+                )
+            )
 
     # -- recording ----------------------------------------------------
 

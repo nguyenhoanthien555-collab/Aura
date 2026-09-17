@@ -1,0 +1,13 @@
+{
+  "dataset_id": "ds_p1_probe_contamination",
+  "num_examples": 42,
+  "categories": {},
+  "file_path": "D:\\AURA\\data\\aura\\p1_probe_contamination.jsonl",
+  "checksum": "f244bc577cc75f2b8677efb7f14d50a23bbbe976be4ebd3f91a1cefa9c1c3cb9",
+  "created_at": "2026-09-16T03:34:52",
+  "metadata": {
+    "version": "p1_probe_contamination",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true
+  }
+}

@@ -643,3 +643,88 @@ def test_device_reports_fold_back_into_the_transcript():
     # Verification bookkeeping applies identically off-device: launch
     # reported unmet until something proves the foreground changed.
     assert run.unverified
+
+
+def test_multiple_device_reports_fold_cleanly_into_transcript():
+    """Verifies that compound tasks (multiple tool calls in one round) fold each envelope into a matching tool message."""
+    runtime, bridge = make_deferred_runtime([
+        ModelTurn(tool_calls=(
+            ToolCallRequest(call_id="call_yt", name="android.launch_app", arguments={"package": "com.google.android.youtube"}),
+            ToolCallRequest(call_id="call_txt", name="android.type_text", arguments={"text": "minecraft"}),
+        )),
+        text_turn("both actions executed."),
+    ])
+
+    run = runtime.start_run("open youtube then search minecraft", "session_test_multi")
+    directive = runtime.advance(run)
+
+    assert directive.kind == "tool_calls"
+    assert len(directive.tool_calls) == 2
+
+    # Simulate device executing both tools and sending back two envelopes
+    envelopes = []
+    for call_id, request in directive.tool_calls:
+        report = bridge.invoke(request.name, request.arguments)
+        envelopes.append({
+            "tool_call_id": call_id,
+            "call_id": request.call_id,
+            "tool": request.name,
+            "arguments": request.arguments,
+            "ok": bool(report.get("ok")),
+            "result": report.get("result", {}),
+            "postcondition": report.get("postcondition"),
+        })
+
+    runtime.fold_tool_reports(run, envelopes)
+
+    # Next model round proceeds without error
+    next_directive = runtime.advance(run)
+    assert next_directive.kind == "final"
+
+    # Verify run messages have a distinct tool message for each tool call
+    assistant_calls = [m for m in run.messages if m.get("role") == "assistant" and "tool_calls" in m][0]["tool_calls"]
+    expected_ids = {c["id"] for c in assistant_calls}
+    tool_messages = [m for m in run.messages if m.get("role") == "tool"]
+    assert len(tool_messages) == 2
+    assert {m["tool_call_id"] for m in tool_messages} == expected_ids
+
+
+def test_agent_run_survives_restart_and_recovers_from_db():
+    runtime1, bridge = make_deferred_runtime([
+        tool_call("android.launch_app", package="com.google.android.youtube"),
+    ])
+
+    run = runtime1.start_run("open youtube", "session_restart_test")
+    directive = runtime1.advance(run)
+    assert directive.kind == "tool_calls"
+    run_id = run.run_id
+
+    # Simulate server crash/restart: create a brand new runtime instance with empty memory
+    runtime2, _ = make_deferred_runtime([
+        text_turn("youtube is now open"),
+    ])
+    # Memory cache is completely empty in runtime2
+    assert run_id not in runtime2._runs
+
+    # get_run restores the run from SQLite
+    restored = runtime2.get_run(run_id)
+    assert restored is not None
+    assert restored.run_id == run_id
+    assert restored.goal == "open youtube"
+    assert restored.session_id == "session_restart_test"
+    assert restored.status.value == "running"
+    assert restored.rounds == 1
+    assert len(restored.messages) >= 2
+
+    # Verify restored run can continue to receive reports and advance
+    runtime2.fold_tool_reports(restored, [{
+        "tool_call_id": directive.tool_calls[0][0],
+        "tool": "android.launch_app",
+        "ok": True,
+        "result": {"status": "ok"},
+        "postcondition": {"target": "com.google.android.youtube", "verified": True},
+    }])
+    final_dir = runtime2.advance(restored)
+    assert final_dir.kind == "final"
+    assert restored.status.value == "completed"
+    assert restored.stop_reason.value == "goal_verified"

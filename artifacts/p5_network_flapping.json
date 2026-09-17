@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_network_flapping_10_cycles",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "parameters": {
+    "cycles": 10,
+    "events_per_cycle": 5,
+    "total_events": 50,
+    "flapping_simulation": "Socket kill (offline) -> Outbox buffering -> Socket restart (online) -> Push & Pull"
+  },
+  "results": {
+    "cycles_completed": 10,
+    "events_generated": 50,
+    "events_delivered": 50,
+    "events_dropped": 0,
+    "outbox_backlog_drained": true,
+    "final_sequence": 50
+  },
+  "verdict": "PASS"
+}

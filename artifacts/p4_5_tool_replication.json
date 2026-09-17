@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-09-16T14:52:36.535473+00:00",
+  "replicated_entities": [
+    "ToolProvenanceRecord"
+  ],
+  "trust_boundary_enforced": true,
+  "status": "PASS"
+}

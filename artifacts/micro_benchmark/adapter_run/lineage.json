@@ -1,0 +1,58 @@
+{
+  "model_id": "micro_diag_001",
+  "parent_model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+  "parent_artifact_hash": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe",
+  "base_model_format": "safetensors",
+  "base_model_files": [
+    {
+      "path": "config.json",
+      "size_bytes": 659,
+      "sha256": "18e18afcaccafade98daf13a54092927904649e1dd4eba8299ab717d5d94ff45"
+    },
+    {
+      "path": "generation_config.json",
+      "size_bytes": 242,
+      "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6"
+    },
+    {
+      "path": "merges.txt",
+      "size_bytes": 1671839,
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
+    },
+    {
+      "path": "model.safetensors",
+      "size_bytes": 988097824,
+      "sha256": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe"
+    },
+    {
+      "path": "tokenizer.json",
+      "size_bytes": 7031645,
+      "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size_bytes": 7305,
+      "sha256": "5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583"
+    },
+    {
+      "path": "vocab.json",
+      "size_bytes": 2776833,
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    }
+  ],
+  "base_model_total_bytes": 999586347,
+  "base_model_parameter_count": 495114112,
+  "training_dataset_hash": "a6bc3c1c56d44060727ff89c99be574e1950df5cf3cb8abc1c7f64bc6a72f800",
+  "training_config_hash": "ce46bbec846e3a6cd3782c06d0d615790b511988f9baf09587ebfc3bc5351d0a",
+  "adapter_hash": "157a559636ac20a8ff9175d3f72ac2780509dd2d1bc6251fb15d16a056c0f038",
+  "merged_checkpoint_hash": "",
+  "gguf_hash": "",
+  "created_at": "2026-09-16T14:00:20",
+  "metadata": {
+    "steps": 30,
+    "initial_loss": 2.3554632663726807,
+    "final_loss": 3.0667905807495117,
+    "loss_delta": -0.7113,
+    "peak_vram_mb": 2236.8
+  }
+}

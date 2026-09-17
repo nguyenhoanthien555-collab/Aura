@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-09-16T17:09:37",
+  "git": {
+    "branch": "feature/aura-identity",
+    "head": "42ff3749f3bd7c9ae44bb189922cc13f3636b11b",
+    "modified_files_count": 32,
+    "untracked_files_count": 80
+  },
+  "production": {
+    "active_model_name": "AURA-cand-run_59",
+    "active_brain_id": "brain-AURA-cand-run_59",
+    "active_brain_version": "AURA-cand-run_59",
+    "active_brain_status": "ACTIVE",
+    "active_model_hash": "218fdc1396f5d45e649869592869b14eb4e7d7e62199e40b57cf5002c5747baa",
+    "active_model_gguf_hash": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+    "foundation_model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "rollback_target": "aura-brain-v1"
+  },
+  "benchmarks": {
+    "heldout_v1": {
+      "version": "p1-heldout-v1",
+      "hash": "bb253de2a836117c1ac34d6e26c881c33b3d35f015d315b42e63ec3f721453cd",
+      "case_count": 26,
+      "immutable_verified": true
+    },
+    "heldout_v2": {
+      "version": "p1.8-heldout-v2",
+      "hash": "6f0132b89e0f2da4f99b6b532b609981348e03bf2c5761a2bdbdbe5022ca9a1b",
+      "case_count": 20,
+      "immutable_verified": true
+    }
+  },
+  "experiences": {
+    "total_records": 70,
+    "eligible_records": 70,
+    "min_quality_threshold": 0.6
+  },
+  "scheduler": {
+    "default_min_eligible": 5,
+    "default_min_new": 3,
+    "canary_min_eligible": 50,
+    "canary_min_new": 20,
+    "max_steps": 120
+  },
+  "autonomy_gate": {
+    "status": "PASSED",
+    "current_phase": "PRE_FULL_AUTONOMY_GATE",
+    "full_autonomy_enabled": false,
+    "passed_gates_count": 20,
+    "total_gates_count": 20
+  },
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "vram_free_mb": 7106.0,
+    "vram_total_mb": 8187.5,
+    "ram_available_mb": 1441.5,
+    "ram_total_mb": 16087.5
+  },
+  "test_baseline": {
+    "tests_executed": 47,
+    "tests_passed": 47,
+    "tests_failed": 0,
+    "tests_skipped": 0
+  }
+}

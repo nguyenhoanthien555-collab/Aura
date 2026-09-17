@@ -1,0 +1,30 @@
+{
+  "test_name": "test_experience_replication_end_to_end",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.423814+00:00",
+  "flow": "Node A -> Experience Store -> Outbox -> Relay -> Node B -> Inbox -> Experience Store",
+  "source_node": "node-exp-src",
+  "relay_node": "relay-exp-hub",
+  "target_node": "node-exp-dst",
+  "experience_details": {
+    "experience_id": "exp_distributed_success_451",
+    "task_type": "ui_automation",
+    "domain": "settings",
+    "action_sequence": [
+      "open_settings",
+      "toggle_wifi"
+    ],
+    "reward": 1.0,
+    "privacy_level": "PUBLIC"
+  },
+  "verification_checks": {
+    "node_a_persisted": true,
+    "outbox_dispatched": true,
+    "relay_cursor_paginated": true,
+    "node_b_inbox_ingested": true,
+    "node_b_experience_store_projected": true,
+    "node_b_reward_and_metadata_preserved": true,
+    "replay_duplicate_delivery_duplicates_count": 0
+  }
+}

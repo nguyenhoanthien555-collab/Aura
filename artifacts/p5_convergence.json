@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_concurrent_bidirectional_convergence_over_rest",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "topology": "Node A (Laptop) <-> Relay Server (REST/TCP) <-> Node B (Android)",
+  "events_generated": {
+    "node_laptop": 25,
+    "node_android": 25,
+    "total_unique": 50
+  },
+  "execution": {
+    "threads": 2,
+    "concurrency": "SIMULTANEOUS_HTTPX_PUSH",
+    "latency_injection_ms": 5,
+    "push_results": {
+      "node_laptop_acked": 25,
+      "node_android_acked": 25
+    }
+  },
+  "pull_convergence": {
+    "node_laptop_pulled_from_android": 25,
+    "node_android_pulled_from_laptop": 25,
+    "total_converged_events": 50,
+    "divergent_events": 0,
+    "hash_conflicts": 0
+  },
+  "verdict": "PASS"
+}

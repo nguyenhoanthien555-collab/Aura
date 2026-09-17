@@ -7,6 +7,14 @@ import android.os.Build
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.chat.TranscriptStore
 import com.aura.companion.data.settings.SettingsStore
+import com.aura.companion.sync.CursorStore
+import com.aura.companion.sync.EventInbox
+import com.aura.companion.sync.EventOutbox
+import com.aura.companion.sync.FileCursorStore
+import com.aura.companion.sync.FileEventInbox
+import com.aura.companion.sync.FileEventOutbox
+import com.aura.companion.sync.SyncClient
+import java.io.File
 
 /**
  * The object graph.
@@ -77,4 +85,23 @@ class AppContainer(application: Application) {
     val transcript: TranscriptStore by lazy { TranscriptStore(application) }
 
     val repository: AuraRepository by lazy { AuraRepository(settings, transcript) }
+
+    val syncOutbox: EventOutbox by lazy {
+        FileEventOutbox(File(application.filesDir, "sync/outbox"))
+    }
+    val syncInbox: EventInbox by lazy {
+        FileEventInbox(File(application.filesDir, "sync/inbox"))
+    }
+    val cursorStore: CursorStore by lazy {
+        FileCursorStore(File(application.filesDir, "sync/cursor"))
+    }
+    val syncClient: SyncClient by lazy {
+        SyncClient(
+            api = { repository.api() ?: throw IllegalStateException("Server not configured") },
+            settings = settings,
+            outbox = syncOutbox,
+            inbox = syncInbox,
+            cursorStore = cursorStore,
+        )
+    }
 }

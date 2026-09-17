@@ -1,0 +1,152 @@
+{
+  "dataset_id": "ds_dataset_cycle_1789557466_run_63",
+  "num_examples": 120,
+  "categories": {
+    "tool_use": 36,
+    "conversation": 37,
+    "confirmation": 18,
+    "clarification": 16,
+    "tool_honesty": 5,
+    "safety": 2,
+    "identity": 4,
+    "reasoning": 2
+  },
+  "file_path": "D:\\AURA\\artifacts\\datasets\\dataset_cycle_1789557466_run_63.jsonl",
+  "checksum": "221bab9a039d22c773bf25a6c54de2d135853a9b329b3058e8d0eb83e61c4f09",
+  "created_at": "2026-09-16T18:17:46",
+  "metadata": {
+    "version": "dataset_cycle_1789557466_run_63",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true,
+    "core_curriculum_included": true,
+    "core_curriculum_examples": 15,
+    "quarantined_contradictions": 25,
+    "quarantine_log": [
+      {
+        "id": "exp_run_130e5ad027f2",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_08690338569f",
+        "reason": "Selected tool 'desktop.commands' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_f129532d1044",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_671c5fb7c45b",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_a1217590966d",
+        "reason": "Selected tool 'memory.write' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_7d3b37722356",
+        "reason": "Selected tool 'system.processes' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_66cafafb9960",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_ad3e990d28a4",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_f44d30d2d737",
+        "reason": "Selected tool 'memory.write' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_2ba2b0e2760a",
+        "reason": "Selected tool 'desktop.commands' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_a4cbbb833a1d",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_e5520720987e",
+        "reason": "Selected tool 'desktop.commands' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_49f88adff179",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_3277b76e5f04",
+        "reason": "Selected tool 'desktop.windows' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_d70235b04895",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_1c9d7bc55763",
+        "reason": "Selected tool 'system.time' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_cba6257f8362",
+        "reason": "Selected tool 'system.processes' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_8d85d2c880c5",
+        "reason": "Selected tool 'system.info' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_cdc2d8b7d929",
+        "reason": "Selected tool 'memory.write' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_00692b6cd24f",
+        "reason": "Request targets unsupported hardware (\\b(camera tr\u01b0\u1edbc|front camera|m\u1edf camera \u0111i\u1ec7n tho\u1ea1i)\\b), but experience records positive TOOL_CALL",
+        "type": "CORE"
+      },
+      {
+        "id": "exp_run_f82ae8b96fd2",
+        "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_eb6c3a888f78",
+        "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_13286ff71191",
+        "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_a825b838b06c",
+        "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_56f7aba94868",
+        "reason": "Selected tool 'system.battery' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_real_experience_replication_over_rest",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "experience_specification": {
+    "experience_id": "exp_sync_001",
+    "session_id": "sess_phone_01",
+    "task_id": "task_wifi_toggle",
+    "selected_tool": "android.tap",
+    "outcome": "SUCCESS",
+    "verifier_result": "VERIFIED",
+    "origin_node": "node_android_client",
+    "receiver_node": "node_laptop_receiver",
+    "provenance_hash": "fca8ccf58c3d32a4de25ff0a1d23d3dd7bbf11e68fd01b26a2ea4ef2ddc943c2"
+  },
+  "replication_lifecycle": [
+    {
+      "action": "Node B registers on Relay",
+      "status": "200 OK"
+    },
+    {
+      "action": "Node B pushes EXPERIENCE_CREATED event via REST",
+      "status": "200 OK"
+    },
+    {
+      "action": "Node A pulls from Relay via REST",
+      "status": "200 OK",
+      "events_received": 1
+    },
+    {
+      "action": "Node A verifies experience_id and provenance",
+      "status": "INTEGRITY_VERIFIED"
+    }
+  ],
+  "verdict": "PASS"
+}

@@ -65,3 +65,8 @@ class CapabilityUnavailableError(RuntimeError):
     an unknown provider exception as an internal error keeps working.
     """
 
+
+class ProviderTimeoutError(ProviderUnavailableError):
+    """A model inference request timed out before receiving a response."""
+
+

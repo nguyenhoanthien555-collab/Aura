@@ -1,5 +1,42 @@
 # Progress
 
+## 2026-09-14 — Phase 5B.3 DELIVERED: Autonomous Capability Gap → Self-Extension Runtime Wiring & Live Laptop E2E Verification
+
+The true autonomous self-extension pipeline is fully wired into `AgentRuntime` and verified on live Windows laptop hardware:
+`Real User Request -> AgentRuntime (advance Round 0) -> CapabilityGapEngine -> AutonomousSynthesisPolicy -> ToolSynthesisEngine -> Live Gemini LLM -> AST Validation -> Subprocess Sandbox -> Approval -> ToolBuilder.promote() -> Dynamic ToolRegistry -> ToolExecutor -> Evidence -> Grounded Answer in Single Turn`.
+
+- Implemented `AutonomousSynthesisPolicy` in `tools/builder/policy.py` (runtime platform gates, risk controls, lexical security token filters, and concurrency deduplication).
+- Wired `_maybe_synthesize_gap` into `agent/runtime.py:advance` on Round 0 prior to `_model_round()`. Newly promoted tools immediately update `_tools_payload` for native function calling in the same turn without requiring re-prompting or secondary calls.
+- Wired `ToolSynthesisEngine` and `AutonomousSynthesisPolicy` into `server/routes/agent.py:get_intent_runtime()`.
+- Added startup dynamic tool rehydration to `tools/factory.py:build_registry()`.
+- Dual-registered tool capability identifiers in `tools/builder/builder.py` and `rehydrate.py` to ensure capability discovery matches both requested gap IDs and declared tool capability attributes.
+- Fixed Python truthiness bug in `ToolExecutor` and `CapabilityGapEngine` where an empty `ToolRegistry` (`len=0`) was misconstrued as `False`.
+- Authored 22-scenario dedicated test suite `tests/test_phase5b3_agent_synthesis.py`: 22/22 PASSED (100%).
+- Full regression matrix: 83/83 PASSED (100%) (`test_phase5b3_agent_synthesis.py`, `test_phase5b_synthesis.py`, `test_phase5b_dynamic_integration.py`, `test_phase5b_runtime.py`).
+- Live laptop E2E verification `scripts/verify_phase5b3_live.py`: All 8 live scenarios PASSED (100%) with live Gemini 3.5 Flash Lite provider.
+
+---
+
+## 2026-09-14 — Phase 5B.2 DELIVERED: Autonomous Tool Synthesis & Live Laptop E2E Verification
+
+Autonomous tool self-extension is fully operational end-to-end:
+`User Intent -> CapabilityGapEngine -> ToolSynthesisEngine -> Live LLM (Gemini 3.5 Flash Lite) -> AST Validation -> Subprocess Sandbox Unit Tests -> Approval Gate -> ToolBuilder.promote() -> ToolRegistry -> ToolExecutor -> Evidence -> Grounded Response`.
+
+- Full synthesis lifecycle implemented in `tools/builder/synthesis.py` (`ToolSynthesisRequest`, `ToolSynthesisResult`, `ToolSynthesisEngine`).
+- Iterative refinement loop with compiler/sandbox feedback retry implemented.
+- Lexical security defense (`FORBIDDEN_SYNTHESIS_TOKENS`) prevents recursive self-modification.
+- Static AST validation in `ToolValidator` rejects disallowed imports (`subprocess`, `os`, `socket`), banned calls (`os.system`, `eval`), and reflection.
+- Subprocess sandbox isolation in `SandboxRunner` executes candidate test code in an isolated child process.
+- Approval gate in `ToolBuilder.promote()` enforces human/policy authorization before activation.
+- Startup rehydration in `tools/builder/rehydrate.py` validates SHA-256 digests against SQLite provenance records; tampered records are rejected.
+- Dynamic authorization seamlessly recognized by `ToolExecutor` without compromising the static allowlist policy.
+- `POST /api/capabilities/synthesize` API endpoint added in `server/routes/capabilities.py`.
+- Dedicated suite `tests/test_phase5b_synthesis.py`: 16/16 PASSED.
+- Combined regression matrix: 245/245 PASSED (100%).
+- Live laptop E2E verification script `scripts/verify_phase5b2_live.py`: All 10 live scenarios PASSED with live Gemini 3.5 Flash Lite inference.
+
+---
+
 ## 2026-09-05 (final) — Phase 5A LIVE-CLOSED: mutating-action chain proven
 
 The last open link is closed with live device evidence. `IBCQMB4PTGNZJVTO`,
@@ -846,3 +883,51 @@ NOT verified / remaining: no static registry file (deliberate - availability
 is a live fact joined at runtime, ADR-008); Android task tools remain Phase
 5 and blocked on the disconnected device; the response-level claim verifier
 remains Phase 4 work.
+
+## Phase 5B forensic audit — 2026-09-05 (audit only, no product code)
+
+`PHASE_5B_FORENSIC_AUDIT.md` written: 20 sections per brief §34 + a 26-row gap
+matrix (4 exists / 18 partial / 4 missing). Every load-bearing claim carries a
+`path:line` citation and a [V] first-hand-verification marker; no fan-out
+(workflows/subagents) was used, per the owner's instruction.
+
+Verified this session, first-hand, and new to the record:
+
+- `core/capabilities/discovery.py:237-301` `explain()` has **zero callers**
+  (`git grep 'explain(' -- core/ brain/ server/ tools/ launcher/ agent/` returns
+  only the definition). Capability-gap detection is written and unwired.
+- `server/routes/agent.py:370` calls `run_in_threadpool` with **no import** in the
+  file (no top-level, no local) → `POST /api/agent/intent` raises `NameError` at
+  HEAD. Separately `:545` calls the synchronous `runtime.advance(run)` directly in
+  an `async def`, unlike `chat.py:51` / `device.py:162,283`.
+- `brain/providers/capabilities.py:71-73` `_FUNCTION_CAPABLE` omits `ollama`;
+  `brain/providers/ollama.py` has only `generate`/`stream`. `custom` IS in the set
+  and `brain/providers/custom.py` names llama.cpp / vLLM / LM Studio explicitly →
+  a fully local tool-capable AURA is a configuration change, not a code change.
+  `brain/providers/http_chat.py:262-268` makes the API key mandatory (placeholder
+  required for a keyless local server); `errors.py` has no `ProviderTimeoutError`.
+- `android/app/src/main/res/xml/network_security_config.xml` — the **release**
+  policy already permits cleartext to `10.0.2.2`/`localhost`/`127.0.0.1` and grants
+  no user CA trust. An on-device host needs no policy change. On-device CPython is
+  explicitly NOT claimed feasible.
+- `core/capabilities/factory.py:14` registers `desktop.input` unconditionally while
+  `tools/factory.py:276-286` registers the input tools only when a synthesizer
+  exists → a false-AVAILABLE capability with no tool behind it. The 15 Android
+  capabilities do not have this bug (they carry `required_dependencies` + health).
+- `server/routes/settings.py:147,210` `os.execve` confirmed as the source of the
+  5 pre-existing suite failures. Not to be touched.
+- `plugins/base.py:73-104` `PluginContext` (bus/tools/config, `with_config` copies)
+  is the right shape for a generated-tool grant; `plugins/discovery.py`'s
+  in-process `importlib` is explicitly NOT the model for generated code (brief §13).
+
+Recommended first PR (5B.0 + 5B.1, "status truthfulness"): fix the missing
+`run_in_threadpool` import and wrap `advance()`; then stop dropping `status=` /
+`error_code=` / `side_effect=` at `android_provider.py:87-118`,
+`commands.py:607-615`, `device.py:225-275`, `agent/runtime.py:780-788`,
+`executor.py:414-421` and `_normalise`; add a TIMEOUT→observe branch to
+`_verified` (which today returns early on `not result.ok` at `:536-537`, so a
+timed-out call is never postcondition-checked). No schema, no dependency, no new
+module. Baseline to hold: `3489 passed / 2 skipped / 1 deselected / 5 failed`.
+
+Blocked on owner approval: brief §34 forbids implementation until the audit is
+accepted.

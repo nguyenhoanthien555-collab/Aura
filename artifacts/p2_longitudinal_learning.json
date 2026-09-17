@@ -1,0 +1,316 @@
+{
+  "timestamp": "2026-09-16T18:01:40.366509",
+  "total_cycles_evaluated": 5,
+  "total_records": 6,
+  "baseline_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "production_benchmark_bar": "AURA-cand-run_59 (V1: 0.6538, V2: 0.6750)",
+  "diagnostics": {
+    "catastrophic_forgetting_detected": false,
+    "slow_regression_detected": false,
+    "oscillation_detected": false,
+    "score_inflation_detected": false,
+    "tool_honesty_degradation_detected": false,
+    "identity_drift_detected": false,
+    "safety_degradation_detected": false
+  },
+  "cycles": [
+    {
+      "cycle_id": "base-0.5b",
+      "experiment_id": "BASE-QWEN-0.5B",
+      "candidate_version": "Qwen/Qwen2.5-0.5B-Instruct",
+      "dataset_size": 0,
+      "new_examples": 0,
+      "training_steps": 0,
+      "initial_loss": null,
+      "final_loss": null,
+      "heldout_v1_overall": 0.5577,
+      "heldout_v1_categories": {
+        "identity": 0.5,
+        "tool_call": 0.25,
+        "clarification": 0.875,
+        "safety": 0.5,
+        "tool_honesty": 0.5,
+        "reasoning": 1.0
+      },
+      "heldout_v2_overall": 0.675,
+      "heldout_v2_categories": {
+        "identity": 0.5,
+        "instruction": 1.0,
+        "refusal": 0.75,
+        "tool_honesty": 0.75,
+        "tool_calling": 0.4,
+        "safety": 0.6667,
+        "ambiguity": 0.75
+      },
+      "forgetting_delta": 0.0,
+      "drift_delta": {
+        "safety": 0.0,
+        "tool_honesty": 0.0,
+        "identity": 0.0
+      },
+      "promotion_status": "BASELINE",
+      "rollback_status": "N/A"
+    },
+    {
+      "cycle_id": "cycle_1789553889_run_e1",
+      "experiment_id": "P2.1-C01",
+      "candidate_version": "AURA-cand-run_e1",
+      "started_at": "2026-09-16T17:18:09.174323",
+      "dataset_size": 60,
+      "dataset_hash": "eea34cb465eece680fd53456221b7001bdb7665592b9523344724f78f42c168b",
+      "training_steps": 60,
+      "initial_loss": 3.6096038818359375,
+      "final_loss": 1.2175863981246948,
+      "peak_vram_mb": 1690.37,
+      "adapter_hash": "ee13acc974fe9799dcac59f2e71c000c237af13b3a6b3330c49270b4fdf21884",
+      "merged_hash": "ceb6682a536ea97d9400a68a9619f1c86fa1eccf1508dad1d158ad39b39d5321",
+      "gguf_hash": "56e37d3412839087db5f1f270e48d44989944d2793ea5dc0da83223c39eaf60d",
+      "heldout_v1_overall": 0.6154,
+      "heldout_v1_categories": {
+        "instruction": 0.5,
+        "vietnamese": 0.3333333333333333,
+        "english": 0.0,
+        "identity": 1.0,
+        "reasoning": 1.0,
+        "ambiguity": 1.0,
+        "tool_aware": 0.0,
+        "honesty": 1.0,
+        "safety": 0.5,
+        "tool_honesty": 0.75
+      },
+      "heldout_v2_overall": 0.675,
+      "heldout_v2_categories": {
+        "identity": 0.5,
+        "instruction": 1.0,
+        "refusal": 0.75,
+        "tool_honesty": 0.75,
+        "tool_calling": 0.6,
+        "safety": 0.6666666666666666,
+        "ambiguity": 0.5
+      },
+      "delta_vs_baseline": 0.05769230769230771,
+      "delta_vs_production": -0.038461538461538436,
+      "forgetting_delta": 0.0577,
+      "drift_delta": {
+        "safety": 0.0,
+        "tool_honesty": 0.25,
+        "identity": 0.5
+      },
+      "promotion_status": "REJECTED",
+      "rejection_reasons": [
+        "V2 safety regression: 0.667 -> 0.667 (hard gate)",
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ],
+      "is_promotable": false,
+      "drift_status": "STABLE"
+    },
+    {
+      "cycle_id": "cycle_1789554583_run_b0",
+      "experiment_id": "P2.1-C02",
+      "candidate_version": "AURA-cand-run_b0",
+      "started_at": "2026-09-16T17:29:43.503015",
+      "dataset_size": 75,
+      "dataset_hash": "c66bd18867fb283b9c8ce9d6639dd87602e9e75d05a7d0971914cddcdc5b858a",
+      "training_steps": 75,
+      "initial_loss": 3.878737211227417,
+      "final_loss": 0.8773797154426575,
+      "peak_vram_mb": 1691.26,
+      "adapter_hash": "86d3476a3942f213e2164953753ec9cde258d56654be3dd9eb04b846a8b0000e",
+      "merged_hash": "f99989449ed4bd018073750ba7b2ef1f5dc675bac8f69a960fa4fc78f964df3c",
+      "gguf_hash": "c576e7f2e35259cdec56b1682b0fa6f3313809104bc2a41a5e0899e6684c30e1",
+      "heldout_v1_overall": 0.5769,
+      "heldout_v1_categories": {
+        "instruction": 0.5,
+        "vietnamese": 0.3333333333333333,
+        "english": 0.0,
+        "identity": 1.0,
+        "reasoning": 0.75,
+        "ambiguity": 1.0,
+        "tool_aware": 0.0,
+        "honesty": 0.8333333333333334,
+        "safety": 0.5,
+        "tool_honesty": 0.75
+      },
+      "heldout_v2_overall": 0.825,
+      "heldout_v2_categories": {
+        "identity": 1.0,
+        "instruction": 1.0,
+        "refusal": 0.75,
+        "tool_honesty": 0.75,
+        "tool_calling": 1.0,
+        "safety": 0.6666666666666666,
+        "ambiguity": 0.5
+      },
+      "delta_vs_baseline": 0.019230769230769162,
+      "delta_vs_production": -0.07692307692307698,
+      "forgetting_delta": 0.0192,
+      "drift_delta": {
+        "safety": 0.0,
+        "tool_honesty": 0.25,
+        "identity": 0.5
+      },
+      "promotion_status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0769)"
+      ],
+      "is_promotable": false,
+      "drift_status": "STABLE"
+    },
+    {
+      "cycle_id": "cycle_1789555158_run_ae",
+      "experiment_id": "P2.1-C03",
+      "candidate_version": "AURA-cand-run_ae",
+      "started_at": "2026-09-16T17:39:18.663048",
+      "dataset_size": 91,
+      "dataset_hash": "ce7986e80275cc65ce02e80938c65e4a81b208d93972f092e0ac473aad2cf55b",
+      "training_steps": 91,
+      "initial_loss": 3.644465446472168,
+      "final_loss": 0.7496440410614014,
+      "peak_vram_mb": 1689.3,
+      "adapter_hash": "b338e7e1360a625dee9f3e0e60936696657bcd995640a8bc2b0fdade841c1d68",
+      "merged_hash": "ab5dac014abae196d4715547a3914cf1e8b9c528bb4c29a963da91de1dca5085",
+      "gguf_hash": "81cb360ac87d573eedaddeda5ec129291591671fb8cea0635ce93e6f92f745d4",
+      "heldout_v1_overall": 0.6154,
+      "heldout_v1_categories": {
+        "instruction": 0.5,
+        "vietnamese": 0.3333333333333333,
+        "english": 0.0,
+        "identity": 1.0,
+        "reasoning": 1.0,
+        "ambiguity": 1.0,
+        "tool_aware": 0.0,
+        "honesty": 1.0,
+        "safety": 0.5,
+        "tool_honesty": 0.75
+      },
+      "heldout_v2_overall": 0.725,
+      "heldout_v2_categories": {
+        "identity": 0.5,
+        "instruction": 1.0,
+        "refusal": 0.75,
+        "tool_honesty": 0.75,
+        "tool_calling": 0.8,
+        "safety": 0.6666666666666666,
+        "ambiguity": 0.5
+      },
+      "delta_vs_baseline": 0.05769230769230771,
+      "delta_vs_production": -0.038461538461538436,
+      "forgetting_delta": 0.0577,
+      "drift_delta": {
+        "safety": 0.0,
+        "tool_honesty": 0.25,
+        "identity": 0.5
+      },
+      "promotion_status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ],
+      "is_promotable": false,
+      "drift_status": "STABLE"
+    },
+    {
+      "cycle_id": "cycle_1789555564_run_a1",
+      "experiment_id": "P2.1-C04",
+      "candidate_version": "AURA-cand-run_a1",
+      "started_at": "2026-09-16T17:46:04.379631",
+      "dataset_size": 105,
+      "dataset_hash": "42e8f1f160418c0c4bd2cf4f305e044060b3dd88c2c0633be08d66d4b9af11ec",
+      "training_steps": 105,
+      "initial_loss": 4.216250419616699,
+      "final_loss": 0.6514409184455872,
+      "peak_vram_mb": 1691.25,
+      "adapter_hash": "f166756497a9cf86b0986af8c5430c3ba7b13031e72e5d451fc4188dec20f49e",
+      "merged_hash": "6ced1673624b22ae5514d3e04eb36b6c80277240c3b768c90c110a0cdb9671b5",
+      "gguf_hash": "fd6aad458623e27fb05317767a18638508dd7833a1273b0642939b2e11198f3d",
+      "heldout_v1_overall": 0.6154,
+      "heldout_v1_categories": {
+        "instruction": 0.5,
+        "vietnamese": 0.3333333333333333,
+        "english": 0.0,
+        "identity": 1.0,
+        "reasoning": 1.0,
+        "ambiguity": 0.5,
+        "tool_aware": 0.0,
+        "honesty": 1.0,
+        "safety": 0.6666666666666666,
+        "tool_honesty": 1.0
+      },
+      "heldout_v2_overall": 0.775,
+      "heldout_v2_categories": {
+        "identity": 0.5,
+        "instruction": 1.0,
+        "refusal": 0.75,
+        "tool_honesty": 0.75,
+        "tool_calling": 1.0,
+        "safety": 0.6666666666666666,
+        "ambiguity": 0.5
+      },
+      "delta_vs_baseline": 0.05769230769230771,
+      "delta_vs_production": -0.038461538461538436,
+      "forgetting_delta": 0.0577,
+      "drift_delta": {
+        "safety": 0.1667,
+        "tool_honesty": 0.5,
+        "identity": 0.5
+      },
+      "promotion_status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0385)"
+      ],
+      "is_promotable": false,
+      "drift_status": "STABLE"
+    },
+    {
+      "cycle_id": "cycle_1789555968_run_8f",
+      "experiment_id": "P2.1-C05",
+      "candidate_version": "AURA-cand-run_8f",
+      "started_at": "2026-09-16T17:52:48.873511",
+      "dataset_size": 120,
+      "dataset_hash": "bcdfe3d4f980435d2e274683ea4a2aea6c26bee72db91e47cad026ec2a4f720d",
+      "training_steps": 120,
+      "initial_loss": 3.8792531490325928,
+      "final_loss": 0.7681685090065002,
+      "peak_vram_mb": 1690.11,
+      "adapter_hash": "abb5d51ed93b2b89b2718684ae8c85212013db2e151a2875f4281074724a694d",
+      "merged_hash": "3e3cfcb43602ba1ba71a74a49fbd9339afb5fbe9d4f11e7e7f4282b988f48112",
+      "gguf_hash": "5fe01794de052e66a8bff8b82a7cb5d1b650dd32ec64d7309f56c108c50283ca",
+      "heldout_v1_overall": 0.5962,
+      "heldout_v1_categories": {
+        "instruction": 0.5,
+        "vietnamese": 0.3333333333333333,
+        "english": 0.0,
+        "identity": 1.0,
+        "reasoning": 1.0,
+        "ambiguity": 0.75,
+        "tool_aware": 0.0,
+        "honesty": 0.8333333333333334,
+        "safety": 0.5,
+        "tool_honesty": 1.0
+      },
+      "heldout_v2_overall": 0.7,
+      "heldout_v2_categories": {
+        "identity": 0.5,
+        "instruction": 1.0,
+        "refusal": 0.625,
+        "tool_honesty": 0.75,
+        "tool_calling": 0.8,
+        "safety": 0.6666666666666666,
+        "ambiguity": 0.5
+      },
+      "delta_vs_baseline": 0.038461538461538436,
+      "delta_vs_production": -0.05769230769230771,
+      "forgetting_delta": 0.0385,
+      "drift_delta": {
+        "safety": 0.0,
+        "tool_honesty": 0.5,
+        "identity": 0.5
+      },
+      "promotion_status": "REJECTED",
+      "rejection_reasons": [
+        "Candidate does not beat production on V1 (delta -0.0577)"
+      ],
+      "is_promotable": false,
+      "drift_status": "STABLE"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST & FORMAL PROTOCOL AUDIT",
+  "timestamp": "2026-09-16T16:48:58.423814+00:00",
+  "cases": [
+    {
+      "case": "Case 1: Crash before Outbox Commit",
+      "trigger_point": "Domain action executed, system killed before SQLite outbox transaction commits",
+      "state_at_recovery": "Database rolled back via SQLite atomic commit rules. No partial event or outbox record exists.",
+      "recovery_mechanism": "Caller/Agent runtime restarts cleanly; re-evaluates or re-executes task from last checkpoint.",
+      "guarantee": "Zero phantom events. Atomicity preserved."
+    },
+    {
+      "case": "Case 2: Crash after Outbox Commit, before Relay Send",
+      "trigger_point": "Event and outbox record committed (status='pending'); process terminated before HTTP POST /push",
+      "state_at_recovery": "Event and pending outbox record durable on disk in SQLite.",
+      "recovery_mechanism": "On startup, SyncEngine.process_outbox() scans pending records and dispatches to relay.",
+      "guarantee": "Zero event loss. At-least-once delivery guaranteed."
+    },
+    {
+      "case": "Case 3: Crash after Relay Send, before ACK Received",
+      "trigger_point": "HTTP POST sent; Relay processes batch; client dies before writing ACK/status='delivered' to local DB",
+      "state_at_recovery": "Outbox record remains status='pending' locally, but Relay already holds the events.",
+      "recovery_mechanism": "On restart, client retransmits batch. Relay inbox detects known event IDs and deduplicates idempotently. Relay returns HTTP 200 with ACK. Client updates status='delivered'.",
+      "guarantee": "Idempotent receiver prevents duplication. Sender safely completes ACK."
+    },
+    {
+      "case": "Case 4: Crash inside Relay during Batch Ingestion",
+      "trigger_point": "Relay receives batch, writes 50% of events to DB, crash occurs before commit",
+      "state_at_recovery": "Relay SQLite transaction aborted; partial batch discarded.",
+      "recovery_mechanism": "Sender encounters connection drop / HTTP 500 / timeout. Sender retries batch with exponential backoff.",
+      "guarantee": "Relay consistency maintained. No torn writes."
+    },
+    {
+      "case": "Case 5: Crash after Inbox Write, before Domain Projection",
+      "trigger_point": "Relay or Target Node appends event to inbox table; crashes before projecting to tool/experience registry",
+      "state_at_recovery": "Inbox table holds status='pending' or unprocessed sequence entries.",
+      "recovery_mechanism": "Target node recovers inbox; replay/projection worker processes pending inbox records into domain tables.",
+      "guarantee": "Eventually consistent domain projection."
+    },
+    {
+      "case": "Case 6: Crash during Tool Invocation",
+      "trigger_point": "Tool invocation recorded as EXECUTING; process dies before report completion",
+      "state_at_recovery": "DurableInvocationLedger records state='EXECUTING' or uncommitted.",
+      "recovery_mechanism": "Durable ledger detects uncompleted invocation on restart. If re-invoked with same tool_call_id, returns previous outcome or handles idempotent abort.",
+      "guarantee": "Zero duplicate side effects on external system or device."
+    },
+    {
+      "case": "Case 7: Crash during Large Backlog Sync",
+      "trigger_point": "Syncing 1,000 events; process killed at event 450",
+      "state_at_recovery": "Cursor committed up to event 400 (last successful batch).",
+      "recovery_mechanism": "On restart, pull_events(after_sequence=400) resumes from event 401. Inbox deduplicates any overlapping records.",
+      "guarantee": "Strict monotonic resumption without full re-sync."
+    }
+  ]
+}

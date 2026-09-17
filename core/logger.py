@@ -20,7 +20,40 @@ This module deliberately does not import core.config: config imports
 
 import logging
 import os
+import re
 from rich.logging import RichHandler
+
+
+# Mask Bearer tokens, API keys, and sensitive credentials in logs
+SENSITIVE_PATTERNS = [
+    (re.compile(r"(Bearer\s+)[A-Za-z0-9_\-\.]{12,}", re.IGNORECASE), r"\1[REDACTED]"),
+    (re.compile(r"([?&](?:api_?key|token|auth|secret)=)[^&\s]+", re.IGNORECASE), r"\1[REDACTED]"),
+    (re.compile(r"(?:AIzaSy[A-Za-z0-9_-]{33}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,})"), "[REDACTED_KEY]"),
+    (re.compile(r"(['\"](?:api_key|auth_token|token|password|secret)['\"]\s*:\s*['\"])[^'\"]+(['\"])", re.IGNORECASE), r"\1[REDACTED]\2"),
+]
+
+
+def redact_secrets(text: str) -> str:
+    """Sanitize sensitive secrets from log strings."""
+    if not isinstance(text, str):
+        return text
+    for pattern, repl in SENSITIVE_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
+
+
+class SecretMaskingFilter(logging.Filter):
+    """Logging filter that scrubs authentication tokens, API keys, and passwords."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = redact_secrets(record.msg)
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {k: redact_secrets(v) if isinstance(v, str) else v for k, v in record.args.items()}
+            elif isinstance(record.args, (list, tuple)):
+                record.args = tuple(redact_secrets(a) if isinstance(a, str) else a for a in record.args)
+        return True
 
 
 # The variable an operator sets to see debug output before config.yaml
@@ -97,6 +130,7 @@ def setup_logger() -> logging.Logger:
     handler.setFormatter(formatter)
 
     logger.addHandler(handler)
+    logger.addFilter(SecretMaskingFilter())
 
     return logger
 

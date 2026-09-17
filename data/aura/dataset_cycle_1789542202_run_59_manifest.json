@@ -1,0 +1,24 @@
+{
+  "dataset_id": "ds_dataset_cycle_1789542202_run_59",
+  "num_examples": 65,
+  "categories": {
+    "tool_use": 28,
+    "conversation": 17,
+    "confirmation": 3,
+    "clarification": 4,
+    "tool_honesty": 5,
+    "safety": 2,
+    "identity": 4,
+    "reasoning": 2
+  },
+  "file_path": "D:\\AURA\\data\\aura\\dataset_cycle_1789542202_run_59.jsonl",
+  "checksum": "31f8d2262a4b7e4fda6c1736bdeaca41bb60298910ae7d348e91289ba3353950",
+  "created_at": "2026-09-16T14:03:22",
+  "metadata": {
+    "version": "dataset_cycle_1789542202_run_59",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true,
+    "core_curriculum_included": true,
+    "core_curriculum_examples": 15
+  }
+}

@@ -200,6 +200,9 @@ class CognitiveSnapshot:
     active_tools: tuple[str, ...] = ()
     actions: tuple[ActionRecord, ...] = ()
     recovering_from: ActionRecord | None = None
+    active_task_id: str = ""
+    capability_gap: dict | None = None
+    tool_synthesis_state: str = ""
     revision: int = 0
 
     @property
@@ -242,8 +245,12 @@ class CognitiveSnapshot:
             "recovering_from": (
                 self.recovering_from.as_dict() if self.recovering_from else None
             ),
+            "active_task_id": self.active_task_id,
+            "capability_gap": self.capability_gap,
+            "tool_synthesis_state": self.tool_synthesis_state,
             "revision": self.revision,
         }
+
 
 
 class CognitiveState:
@@ -289,7 +296,13 @@ class CognitiveState:
         # The one key allowed to reopen finished work.
         self._recovering: tuple[str, str] | None = None
 
+        # Phase 5B: Compound durable task and capability gap state
+        self._active_task_id = ""
+        self._capability_gap: dict | None = None
+        self._tool_synthesis_state = ""
+
         self._revision = 0
+
 
     # ------------------------------------------------------------------
     # Time: borrowed, never kept
@@ -424,6 +437,38 @@ class CognitiveState:
 
         if changed:
             self._bump()
+
+    # ------------------------------------------------------------------
+    # Phase 5B: Compound Tasks and Capability Gaps
+    # ------------------------------------------------------------------
+
+    @property
+    def active_task_id(self) -> str:
+        return self._active_task_id
+
+    def set_active_task(self, task_id: str) -> None:
+        self._assign("_active_task_id", str(task_id or ""))
+
+    def clear_active_task(self) -> None:
+        self._assign("_active_task_id", "")
+
+    @property
+    def capability_gap(self) -> dict | None:
+        return self._capability_gap
+
+    def set_capability_gap(self, gap: dict | None) -> None:
+        self._assign("_capability_gap", dict(gap) if gap else None)
+
+    def clear_capability_gap(self) -> None:
+        self._assign("_capability_gap", None)
+
+    @property
+    def tool_synthesis_state(self) -> str:
+        return self._tool_synthesis_state
+
+    def set_tool_synthesis_state(self, state: str) -> None:
+        self._assign("_tool_synthesis_state", str(state or ""))
+
 
     # ------------------------------------------------------------------
     # What is on screen
@@ -611,7 +656,14 @@ class CognitiveState:
 
         return self._settle(kind, target, ActionState.FAILED, detail)
 
-    def should_retry(self, kind: str, target: str = "", limit: int = 2) -> bool:
+    def should_retry(
+        self,
+        kind: str,
+        target: str = "",
+        limit: int = 2,
+        side_effect: str = "",
+        status: str = "",
+    ) -> bool:
         """
         Whether trying again is allowed. Bounded, never open-ended.
 
@@ -620,15 +672,29 @@ class CognitiveState:
         many times it has already happened - a caller counting its own
         attempts is a caller whose count resets when it does.
 
-        `limit` belongs to the caller because the right number depends on
-        the action: relaunching an app that may still be starting is
-        cheap, re-sending a payment is not.
+        Consults `retryability_of` when side_effect or status is provided:
+        a non-idempotent or unestablished outcome must never be retried
+        automatically.
         """
 
         record = self._actions.get((kind, target))
 
         if record is not None and record.state is ActionState.SUCCEEDED:
             return False
+
+        if side_effect or status:
+            try:
+                from tools.outcome import SideEffect, ToolStatus, retryability_of
+
+                s_enum = ToolStatus(status) if status else ToolStatus.FAILED
+                se_str = side_effect
+                if isinstance(se_str, str) and se_str.startswith("SideEffect."):
+                    se_str = se_str.split(".", 1)[1]
+                se_enum = SideEffect(se_str) if se_str else SideEffect.UNKNOWN
+                if not retryability_of(s_enum, se_enum).may_retry:
+                    return False
+            except Exception:
+                pass
 
         return self.attempts_for(kind, target) < max(0, int(limit))
 
@@ -679,6 +745,9 @@ class CognitiveState:
             active_tools=tuple(self._tools),
             actions=tuple(self._actions.values()),
             recovering_from=self.recovering_from,
+            active_task_id=self._active_task_id,
+            capability_gap=self._capability_gap,
+            tool_synthesis_state=self._tool_synthesis_state,
             revision=self._revision,
         )
 

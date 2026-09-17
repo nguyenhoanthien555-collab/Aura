@@ -56,6 +56,7 @@ class ChatEngine:
         pipeline=None,
         cognitive=None,
         verifier=None,
+        invocation_ledger=None,
     ):
         """
         Create the chat engine with dependency injection.
@@ -117,6 +118,7 @@ class ChatEngine:
             pipeline=pipeline,
             cognitive=cognitive,
             verifier=verifier,
+            invocation_ledger=invocation_ledger,
         )
 
     @staticmethod

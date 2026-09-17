@@ -59,8 +59,24 @@ def new_observation_id() -> str:
     return new_id("obs")
 
 
+def new_step_id() -> str:
+    return new_id("step")
+
+
+def new_gap_id() -> str:
+    return new_id("gap")
+
+
 def new_session_id() -> str:
     return new_id("session")
+
+
+def new_confirmation_id() -> str:
+    return new_id("conf")
+
+
+def new_clarification_id() -> str:
+    return new_id("clar")
 
 
 def is_valid_id(value: object) -> bool:

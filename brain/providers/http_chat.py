@@ -47,6 +47,7 @@ from brain.providers.errors import (
     ProviderAuthError,
     ProviderParameterError,
     ProviderRateLimitError,
+    ProviderTimeoutError,
     ProviderUnavailableError,
 )
 from core.logger import logger
@@ -261,6 +262,12 @@ class HttpChatProvider(BaseProvider):
 
         self.api_key = (os.getenv(self.api_key_env) or "").strip()
 
+        # Local loopback endpoints (custom local LLM) do not require a cloud key
+        effective_url = str(base_url or getattr(self, "default_url", "") or "")
+        is_local = any(h in effective_url for h in ("127.0.0.1", "localhost", "0.0.0.0", "10.0.2.2"))
+        if not self.api_key and is_local:
+            self.api_key = "local"
+
         if not self.api_key:
             # Same shape as every other provider here, and the router's
             # `_skip_reason` names the same variable, so a missing key is
@@ -377,7 +384,13 @@ class HttpChatProvider(BaseProvider):
                 parameters=self._optional_parameters(payload),
             ) from error
 
-        except (URLError, TimeoutError) as error:
+        except TimeoutError as error:
+            raise ProviderTimeoutError(f"{self.label} timed out") from error
+
+        except URLError as error:
+            reason_str = str(getattr(error, "reason", "")).lower()
+            if isinstance(getattr(error, "reason", None), TimeoutError) or "timed out" in reason_str:
+                raise ProviderTimeoutError(f"{self.label} timed out") from error
             raise ProviderUnavailableError(f"{self.label} is unreachable") from error
 
     def _post(self, payload: dict) -> dict:

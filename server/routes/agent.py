@@ -29,6 +29,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from brain.providers.capabilities import (
     CapabilityStatus,
@@ -86,6 +87,13 @@ def get_device_registry():
     # but `/api/device/invoke` does - and PART 5 forbids advertising an
     # android tool the real provider cannot execute.
     AndroidProvider(GatewayDeviceBridge()).register_into(registry)
+
+    # Rehydrate active dynamic tools from SQLite
+    try:
+        from tools.builder.rehydrate import rehydrate_active_tools
+        rehydrate_active_tools(registry)
+    except Exception as exc:
+        logger.warning("Dynamic tool startup rehydration encountered error: %s", exc)
 
     _device_registry = registry
     return _device_registry
@@ -222,16 +230,22 @@ def _resolve_llm():
 
 def _system_prompt() -> str:
     return (
-        "You are Aura's device agent. You complete the user's goal by "
-        "calling tools. Before any state-dependent action, ensure a "
-        "fresh observation exists (the device sends one each step). "
-        "After actions that change the screen, wait_for or verify the "
-        "expected state before continuing. Finish only when the goal is "
-        "achieved AND verified. Answer questions about current device "
-        "state strictly from what your observations returned - never "
-        "from assumption - and if nothing observable supports you, say "
-        "exactly what blocked you."
+        "You are Aura's autonomous device agent. You fulfill the user's goals by "
+        "calling device tools. You have full vision and control capabilities on the device.\n\n"
+        "Guidelines:\n"
+        "1. Compound & Multi-Step Actions: For complex requests like 'mở youtube rồi search minecraft', "
+        "execute the complete flow: launch the appropriate app, wait for it or inspect UI state, find the search "
+        "field/button, tap it, type the requested text, and submit with enter or search button. "
+        "You can plan and execute multiple necessary tool calls.\n"
+        "2. Vision & Screen Inspection: Use `android.screenshot` whenever you need visual verification "
+        "or when UI elements lack clear text in the accessibility tree. The screenshot returns an automated visual "
+        "description of everything on screen.\n"
+        "3. Verification: Ensure actions take effect before claiming completion. Finish when the requested goal "
+        "is achieved.\n"
+        "4. Language & Tone: When concluding, answer helpfully in the user's language (e.g. Vietnamese when addressed in Vietnamese) "
+        "confirming what was done."
     )
+
 
 
 # ----------------------------------------------------------------------
@@ -280,6 +294,7 @@ class IntentRequest(BaseModel):
 
     session_id: str = ""
     intent: str
+    durable: bool = False
 
 
 # ----------------------------------------------------------------------
@@ -287,6 +302,12 @@ class IntentRequest(BaseModel):
 # ----------------------------------------------------------------------
 
 _intent_runtime = None
+
+
+def configure_intent_runtime(runtime) -> None:
+    """Install an intent runtime explicitly (tests, custom deployments)."""
+    global _intent_runtime
+    _intent_runtime = runtime
 
 
 def get_intent_runtime():
@@ -325,6 +346,21 @@ def get_intent_runtime():
         ),
     )
 
+    synthesis_engine = None
+    synthesis_policy = None
+    try:
+        from brain.router import BrainRouter
+        from tools.builder.builder import ToolBuilder
+        from tools.builder.policy import AutonomousSynthesisPolicy
+        from tools.builder.synthesis import ToolSynthesisEngine
+
+        synthesis_llm = BrainRouter()
+        builder = ToolBuilder(registry=registry)
+        synthesis_engine = ToolSynthesisEngine(llm=synthesis_llm, builder=builder)
+        synthesis_policy = AutonomousSynthesisPolicy()
+    except Exception as exc:
+        logger.warning("Autonomous synthesis initialization skipped: %s", exc)
+
     _intent_runtime = AgentRuntime(
         llm=_resolve_llm(),
         executor=executor,
@@ -333,6 +369,8 @@ def get_intent_runtime():
         system_prompt=_system_prompt(),
         deferred=False,
         max_steps=8,
+        synthesis_engine=synthesis_engine,
+        synthesis_policy=synthesis_policy,
     )
 
     logger.info(
@@ -363,9 +401,31 @@ async def agent_intent(
     from agent.runtime import RunStatus, StopReason
     from core.ids import new_session_id
 
-    runtime = get_intent_runtime()
-
     session_id = request.session_id or new_session_id()
+
+    if request.durable:
+        from agent.task_runtime import TaskStatus
+        task_req = CreateTaskRequest(
+            goal=request.intent,
+            session_id=session_id,
+            steps=None,
+            run_async=False,
+        )
+        task_dict = await create_durable_task(task_req, token=token)
+        u_resp = task_dict.get("user_response") or {}
+        return {
+            "session_id": session_id,
+            "run_id": task_dict.get("task_id", ""),
+            "task_id": task_dict.get("task_id", ""),
+            "status": task_dict.get("status", ""),
+            "status_detail": task_dict.get("status_detail", ""),
+            "grounded": task_dict.get("status") == TaskStatus.COMPLETED.value and u_resp.get("verified", False),
+            "reply": u_resp.get("text", ""),
+            "user_response": u_resp,
+            "task": task_dict,
+        }
+
+    runtime = get_intent_runtime()
 
     run = await run_in_threadpool(
         lambda: runtime.run_to_completion(
@@ -543,7 +603,7 @@ async def agent_step(
 
     if run.status.value == "running":
         try:
-            directive = runtime.advance(run)
+            directive = await run_in_threadpool(runtime.advance, run)
             directive_dict = directive.to_dict()
         except RuntimeError:
             pass          # stopped mid-round by cancel; report as-is
@@ -596,3 +656,617 @@ async def cancel_run(run_id: str, token: str = Depends(verify_token)):
         "run_id": run_id,
         "device_invocations_cancelled": orphaned,
     }
+
+
+# ----------------------------------------------------------------------
+# Phase 5B: Durable Tasks & Dynamic Tool APIs
+# ----------------------------------------------------------------------
+
+class CreateTaskRequest(BaseModel):
+    goal: str
+    session_id: str = "default"
+    steps: Optional[list[dict]] = None
+    metadata: dict = Field(default_factory=dict)
+    run_async: bool = True
+    durable_clarification: bool = False
+
+
+class ConfirmTaskRequest(BaseModel):
+    confirmation_id: Optional[str] = None
+    decision: str = "APPROVED"  # APPROVED or REJECTED
+    decision_by: str = "human_operator"
+    reason: Optional[str] = None
+
+
+class ClarifyTaskRequest(BaseModel):
+    clarification_id: Optional[str] = None
+    answers: dict = Field(default_factory=dict)
+    clarified_goal: Optional[str] = None
+
+
+class SettleStepRequest(BaseModel):
+    step_id: str
+    ok: bool
+    evidence: list[dict] = Field(default_factory=list)
+    result: dict = Field(default_factory=dict)
+    error: str = ""
+
+
+_task_runtime_instance = None
+
+
+def configure_task_runtime(runtime) -> None:
+    """Install a TaskRuntime explicitly (tests, custom deployments)."""
+    global _task_runtime_instance
+    _task_runtime_instance = runtime
+
+
+def get_task_runtime():
+    global _task_runtime_instance
+    if _task_runtime_instance is None:
+        from agent.task_runtime import TaskRuntime
+        try:
+            from server.runtime import get_runtime
+            bus = get_runtime().bus
+        except Exception:
+            bus = None
+
+        synthesis_engine = None
+        synthesis_policy = None
+        try:
+            from brain.router import BrainRouter
+            from tools.builder.builder import ToolBuilder
+            from tools.builder.policy import AutonomousSynthesisPolicy
+            from tools.builder.synthesis import ToolSynthesisEngine
+
+            registry = get_device_registry()
+            synthesis_llm = BrainRouter()
+            builder = ToolBuilder(registry=registry)
+            synthesis_engine = ToolSynthesisEngine(llm=synthesis_llm, builder=builder)
+            synthesis_policy = AutonomousSynthesisPolicy()
+        except Exception as exc:
+            logger.warning("TaskRuntime synthesis initialization skipped: %s", exc)
+
+        _task_runtime_instance = TaskRuntime(
+            bus=bus,
+            synthesis_engine=synthesis_engine,
+            synthesis_policy=synthesis_policy,
+        )
+    return _task_runtime_instance
+
+
+@router.post("/tasks")
+async def create_durable_task(
+    request: CreateTaskRequest,
+    token: str = Depends(verify_token),
+):
+    """
+    Creates and optionally triggers a compound durable task.
+    When run_async=True, runs in background and survives connection drop.
+    """
+    if not request.goal.strip():
+        raise HTTPException(422, "goal is required")
+
+    task_runtime = get_task_runtime()
+    steps = list(request.steps) if request.steps else []
+
+    if request.steps is None:
+        try:
+            from brain.router import BrainRouter
+            from tools.schema import to_json_schema
+            llm = BrainRouter()
+            registry = get_device_registry()
+            catalogue = []
+            for t in registry.all():
+                if not registry.is_active(getattr(t, "name", "")):
+                    continue
+                try:
+                    p_schema = to_json_schema(t)
+                except Exception:
+                    p_schema = getattr(t, "parameters", {})
+                    if not isinstance(p_schema, dict):
+                        p_schema = {}
+                risk_val = getattr(t, "risk", "safe")
+                if hasattr(risk_val, "value"):
+                    risk_val = risk_val.value
+                side_val = getattr(t, "side_effect", "unknown")
+                if hasattr(side_val, "value"):
+                    side_val = side_val.value
+                catalogue.append({
+                    "name": getattr(t, "name", ""),
+                    "description": getattr(t, "description", ""),
+                    "capability": getattr(t, "capability", getattr(t, "name", "")),
+                    "parameters": p_schema,
+                    "risk": str(risk_val).lower(),
+                    "side_effect": str(side_val).lower(),
+                    "verification_supported": bool(hasattr(t, "verify") and callable(t.verify)),
+                })
+            plan = task_runtime.planner.plan_from_goal(
+                goal=request.goal.strip(),
+                llm=llm,
+                tools_catalogue=catalogue,
+                metadata=request.metadata or {},
+            )
+            if getattr(plan, "needs_clarification", False) or getattr(plan, "status", "") == "NEEDS_CLARIFICATION":
+                is_durable = request.durable_clarification or bool(
+                    request.metadata.get("durable_clarification", False)
+                )
+                if not is_durable:
+                    return {
+                        "status": "NEEDS_CLARIFICATION",
+                        "status_detail": "WAITING_FOR_CLARIFICATION",
+                        "goal": request.goal.strip(),
+                        "questions": plan.questions,
+                        "user_response": {
+                            "state": "WAITING_FOR_CLARIFICATION",
+                            "text": f"Clarification needed: {' '.join(plan.questions)}",
+                            "verified": False,
+                            "questions": plan.questions,
+                        },
+                    }
+                else:
+                    from agent.task_runtime import TaskStatus
+                    task = task_runtime.create_task(
+                        goal=request.goal.strip(),
+                        session_id=request.session_id,
+                        metadata=request.metadata,
+                        steps=[],
+                    )
+                    task_runtime.update_task_status(
+                        task.task_id,
+                        TaskStatus.WAITING.value,
+                        error="Waiting for clarification",
+                        recovery_state="WAITING_FOR_CLARIFICATION",
+                    )
+                    clar_req = task_runtime.create_clarification_request(
+                        task_id=task.task_id,
+                        goal=request.goal.strip(),
+                        questions=plan.questions,
+                    )
+                    t_dict = task_runtime.get_task(task.task_id).to_dict()
+                    t_dict.update({
+                        "status_detail": "WAITING_FOR_CLARIFICATION",
+                        "clarification_id": clar_req.clarification_id,
+                        "questions": plan.questions,
+                    })
+                    return t_dict
+            steps = plan.steps
+        except ValueError as e:
+            raise HTTPException(400, f"Plan decomposition/validation failed: {e}")
+        except Exception as e:
+            logger.error("Planner failed for goal '%s': %s", request.goal, e)
+            raise HTTPException(500, f"Plan decomposition failed: {e}")
+
+    task = task_runtime.create_task(
+        goal=request.goal.strip(),
+        session_id=request.session_id,
+        metadata=request.metadata,
+        steps=steps,
+    )
+
+    if steps:
+        from tools.base import ToolRisk
+        from tools.executor import ToolExecutor, ToolPolicy
+        registry = get_device_registry()
+        executor = ToolExecutor(
+            registry=registry,
+            policy=ToolPolicy(
+                enabled=True,
+                allowed=frozenset(registry.names()),
+                auto_approve=frozenset({
+                    ToolRisk.SAFE, ToolRisk.SENSITIVE,
+                }),
+            ),
+        )
+        if request.run_async:
+            task_runtime.execute_compound_task_async(task.task_id, executor)
+        else:
+            task = await run_in_threadpool(
+                lambda: task_runtime.execute_compound_task(task.task_id, executor)
+            )
+
+    return task.to_dict()
+
+
+@router.get("/tasks")
+async def list_durable_tasks(
+    status: Optional[str] = None,
+    limit: int = 50,
+    token: str = Depends(verify_token),
+):
+    """Lists durable tasks."""
+    task_runtime = get_task_runtime()
+    tasks = task_runtime.list_tasks(status=status, limit=limit)
+    return [t.to_dict() for t in tasks]
+
+
+@router.get("/tasks/{task_id}")
+async def get_durable_task(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    """Inspects a durable task, its steps, and its recovery state."""
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+    return task.to_dict()
+
+
+@router.post("/tasks/{task_id}/pause")
+async def pause_durable_task(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    if not task_runtime.pause_task(task_id):
+        raise HTTPException(409, f"task {task_id} not running or cannot be paused")
+    return {"paused": True, "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/resume")
+async def resume_durable_task(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    task, steps = task_runtime.resume_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+
+    from tools.base import ToolRisk
+    from tools.executor import ToolExecutor, ToolPolicy
+    registry = get_device_registry()
+    executor = ToolExecutor(
+        registry=registry,
+        policy=ToolPolicy(
+            enabled=True,
+            allowed=frozenset(registry.names()),
+            auto_approve=frozenset({
+                ToolRisk.SAFE, ToolRisk.SENSITIVE,
+            }),
+        ),
+    )
+    task_runtime.execute_compound_task_async(task_id, executor)
+    return {"resumed": True, "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_durable_task(
+    task_id: str,
+    reason: str = "User requested cancellation",
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    if not task_runtime.cancel_task(task_id, reason=reason):
+        raise HTTPException(409, f"task {task_id} already terminal or unknown")
+    return {"cancelled": True, "task_id": task_id}
+
+
+@router.post("/tasks/{task_id}/settle")
+async def settle_durable_step(
+    task_id: str,
+    request: SettleStepRequest,
+    token: str = Depends(verify_token),
+):
+    """
+    Settle an ambiguous mutation step using verified late evidence or postcondition.
+    """
+    task_runtime = get_task_runtime()
+    step = task_runtime.settle_ambiguous_step(
+        task_id=task_id,
+        step_id=request.step_id,
+        ok=request.ok,
+        result=request.result,
+        evidence=request.evidence,
+        error=request.error,
+    )
+    if not step:
+        raise HTTPException(404, f"unknown step {request.step_id}")
+    return step.to_dict()
+
+
+@router.post("/tasks/{task_id}/confirm")
+async def confirm_durable_task(
+    task_id: str,
+    request: ConfirmTaskRequest,
+    token: str = Depends(verify_token),
+):
+    """
+    Approves or rejects a pending human confirmation for a dangerous/sensitive step.
+    If approved, resumes task execution from the confirmed step.
+    If rejected, marks step and task as failed/rejected without executing the tool.
+    """
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+
+    try:
+        conf = task_runtime.resolve_confirmation(
+            task_id=task_id,
+            decision=request.decision,
+            confirmation_id=request.confirmation_id,
+            decision_by=request.decision_by,
+            reason=request.reason,
+        )
+    except ValueError as val_err:
+        raise HTTPException(409, str(val_err))
+
+    if conf.status == "APPROVED":
+        from tools.base import ToolRisk
+        from tools.executor import ToolExecutor, ToolPolicy
+        registry = get_device_registry()
+        executor = ToolExecutor(
+            registry=registry,
+            policy=ToolPolicy(
+                enabled=True,
+                allowed=frozenset(registry.names()),
+                auto_approve=frozenset({
+                    ToolRisk.SAFE, ToolRisk.SENSITIVE,
+                }),
+            ),
+        )
+        task_runtime.execute_compound_task_async(task_id, executor)
+        return {
+            "confirmed": True,
+            "task_id": task_id,
+            "confirmation_id": conf.confirmation_id,
+            "decision": "APPROVED",
+            "status": "RESUMING",
+        }
+    else:
+        return {
+            "confirmed": False,
+            "task_id": task_id,
+            "confirmation_id": conf.confirmation_id,
+            "decision": conf.decision,
+            "status": "REJECTED",
+        }
+
+
+@router.post("/tasks/{task_id}/clarify")
+async def clarify_durable_task(
+    task_id: str,
+    request: ClarifyTaskRequest,
+    token: str = Depends(verify_token),
+):
+    """
+    Answers an ambiguous goal clarification request, updating the durable task
+    and resuming planning / execution with the provided answers.
+    """
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+
+    try:
+        resolved_clar = task_runtime.resolve_clarification(
+            task_id=task_id,
+            clarification_id=request.clarification_id,
+            answers=request.answers,
+            clarified_goal=request.clarified_goal,
+        )
+    except ValueError as val_err:
+        raise HTTPException(409, str(val_err))
+
+    from brain.router import BrainRouter
+    from tools.schema import to_json_schema
+    from tools.base import ToolRisk
+    from tools.executor import ToolExecutor, ToolPolicy
+    from tools.outcome import SideEffect
+    from agent.task_runtime import TaskStatus
+
+    llm = BrainRouter()
+    registry = get_device_registry()
+    catalogue = []
+    for t in registry.all():
+        if not registry.is_active(getattr(t, "name", "")):
+            continue
+        try:
+            p_schema = to_json_schema(t)
+        except Exception:
+            p_schema = getattr(t, "parameters", {})
+            if not isinstance(p_schema, dict):
+                p_schema = {}
+        risk_val = getattr(t, "risk", "safe")
+        if hasattr(risk_val, "value"):
+            risk_val = risk_val.value
+        side_val = getattr(t, "side_effect", "unknown")
+        if hasattr(side_val, "value"):
+            side_val = side_val.value
+        catalogue.append({
+            "name": getattr(t, "name", ""),
+            "description": getattr(t, "description", ""),
+            "capability": getattr(t, "capability", getattr(t, "name", "")),
+            "parameters": p_schema,
+            "risk": str(risk_val).lower(),
+            "side_effect": str(side_val).lower(),
+            "verification_supported": bool(hasattr(t, "verify") and callable(t.verify)),
+        })
+
+    if request.clarified_goal:
+        combined_goal = request.clarified_goal.strip()
+    else:
+        ans_parts = [f"{k}: {v}" for k, v in request.answers.items()]
+        combined_goal = f"{task.goal} ({'; '.join(ans_parts)})"
+
+    plan = task_runtime.planner.plan_from_goal(
+        goal=combined_goal,
+        llm=llm,
+        tools_catalogue=catalogue,
+        metadata=task.metadata,
+    )
+
+    if getattr(plan, "needs_clarification", False) or getattr(plan, "status", "") == "NEEDS_CLARIFICATION":
+        new_clar = task_runtime.create_clarification_request(
+            task_id=task_id,
+            goal=combined_goal,
+            questions=plan.questions,
+        )
+        task_runtime.update_task_status(task_id, TaskStatus.WAITING.value, error="Further clarification required")
+        return {
+            "task_id": task_id,
+            "status": "WAITING_FOR_CLARIFICATION",
+            "goal": combined_goal,
+            "clarification_id": new_clar.clarification_id,
+            "questions": plan.questions,
+        }
+
+    for idx, s in enumerate(plan.steps):
+        task_runtime.add_step(
+            task_id=task_id,
+            name=s.get("name", s.get("tool", f"step_{idx + 1}")),
+            tool=s.get("tool", ""),
+            arguments=s.get("arguments", {}),
+            side_effect=s.get("side_effect", SideEffect.UNKNOWN.value),
+            step_id=s.get("step_id"),
+            step_index=idx,
+            capability=s.get("capability", ""),
+            timeout_seconds=float(s.get("timeout_seconds", 30.0)),
+            retry_policy=s.get("retry_policy"),
+            idempotent=s.get("idempotent", False),
+            depends_on=s.get("depends_on"),
+            verification_required=s.get("verification_required", False),
+        )
+
+    task_runtime.update_task_status(task_id, TaskStatus.READY.value)
+    executor = ToolExecutor(
+        registry=registry,
+        policy=ToolPolicy(
+            enabled=True,
+            allowed=frozenset(registry.names()),
+            auto_approve=frozenset({
+                ToolRisk.SAFE, ToolRisk.SENSITIVE,
+            }),
+        ),
+    )
+    task_runtime.execute_compound_task_async(task_id, executor)
+    return {
+        "clarified": True,
+        "task_id": task_id,
+        "clarification_id": resolved_clar.clarification_id,
+        "status": "READY",
+        "steps_count": len(plan.steps),
+    }
+
+
+@router.get("/tasks/{task_id}/confirmations")
+async def list_task_confirmations(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+    confs = task_runtime.list_confirmations_for_task(task_id)
+    return [c.to_dict() for c in confs]
+
+
+@router.get("/tasks/{task_id}/clarifications")
+async def list_task_clarifications(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+    clars = task_runtime.list_clarifications_for_task(task_id)
+    return [c.to_dict() for c in clars]
+
+
+@router.get("/tasks/{task_id}/steps")
+async def list_task_steps(
+    task_id: str,
+    token: str = Depends(verify_token),
+):
+    task_runtime = get_task_runtime()
+    task = task_runtime.get_task(task_id)
+    if not task:
+        raise HTTPException(404, f"unknown task {task_id}")
+    steps = task_runtime.list_steps(task_id)
+    return [s.to_dict() for s in steps]
+
+
+# --- Dynamic Tools Endpoints ---
+
+@router.get("/tools/dynamic")
+async def list_dynamic_tools_endpoint(
+    token: str = Depends(verify_token),
+):
+    registry = get_device_registry()
+    tools = []
+    for name in registry.names():
+        tool = registry.get(name)
+        provenance = registry.get_provenance(name) or {}
+        if provenance or getattr(tool, "is_dynamic", False):
+            tools.append({
+                "name": name,
+                "version": registry.get_version(name),
+                "is_active": registry.is_active(name),
+                "is_revoked": registry.is_revoked(name),
+                "provenance": provenance,
+            })
+    return {"tools": tools}
+
+
+@router.get("/tools/dynamic/{tool_name}")
+async def get_dynamic_tool_endpoint(
+    tool_name: str,
+    token: str = Depends(verify_token),
+):
+    registry = get_device_registry()
+    tool = registry.get(tool_name)
+    if not tool:
+        raise HTTPException(404, f"unknown tool {tool_name}")
+    return {
+        "name": tool_name,
+        "version": registry.get_version(tool_name),
+        "is_active": registry.is_active(tool_name),
+        "is_revoked": registry.is_revoked(tool_name),
+        "provenance": registry.get_provenance(tool_name) or {},
+        "risk": getattr(tool, "risk", "safe"),
+    }
+
+
+@router.post("/tools/dynamic/{tool_name}/approve")
+async def approve_dynamic_tool_endpoint(
+    tool_name: str,
+    approver: str = "operator",
+    token: str = Depends(verify_token),
+):
+    registry = get_device_registry()
+    tool = registry.get(tool_name)
+    if not tool:
+        raise HTTPException(404, f"unknown tool {tool_name}")
+    provenance = registry.get_provenance(tool_name) or {}
+    provenance["approved_by"] = approver
+    provenance["approved_at"] = time.time()
+    registry.activate(tool_name)
+    return {"approved": True, "tool_name": tool_name, "approver": approver}
+
+
+@router.post("/tools/dynamic/{tool_name}/revoke")
+async def revoke_dynamic_tool_endpoint(
+    tool_name: str,
+    reason: str = "Revoked by operator",
+    token: str = Depends(verify_token),
+):
+    registry = get_device_registry()
+    if not registry.revoke(tool_name, reason=reason):
+        raise HTTPException(404, f"unknown tool {tool_name}")
+    return {"revoked": True, "tool_name": tool_name, "reason": reason}
+
+
+@router.post("/tools/dynamic/{tool_name}/rollback")
+async def rollback_dynamic_tool_endpoint(
+    tool_name: str,
+    target_version: int = 1,
+    token: str = Depends(verify_token),
+):
+    registry = get_device_registry()
+    if not registry.rollback(tool_name):
+        raise HTTPException(409, f"cannot rollback tool {tool_name}")
+    return {"rolled_back": True, "tool_name": tool_name, "current_version": registry.get_version(tool_name)}

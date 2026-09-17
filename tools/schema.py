@@ -274,15 +274,21 @@ def _matches_type(value, expected: str) -> bool:
 
     checks = {
         "string": lambda v: isinstance(v, str),
+        "str": lambda v: isinstance(v, str),
         "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+        "float": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
         "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+        "int": lambda v: isinstance(v, int) and not isinstance(v, bool),
         "boolean": lambda v: isinstance(v, bool),
+        "bool": lambda v: isinstance(v, bool),
         "object": lambda v: isinstance(v, dict),
+        "dict": lambda v: isinstance(v, dict),
         "array": lambda v: isinstance(v, list),
+        "list": lambda v: isinstance(v, list),
         "null": lambda v: v is None,
     }
 
-    check = checks.get(expected)
+    check = checks.get(str(expected).lower())
 
     # An unknown type name cannot be checked here; a schema promising a
     # type this table has never heard of validates nothing.

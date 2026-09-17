@@ -56,6 +56,7 @@ class RunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
 
 
 class StopReason(str, Enum):
@@ -250,6 +251,8 @@ class AgentRuntime:
         max_steps: int = 25,
         deferred: bool = False,
         clock=time.time,
+        synthesis_engine=None,
+        synthesis_policy=None,
     ):
         """
         `llm` is anything with generate_with_tools(system, messages,
@@ -269,10 +272,14 @@ class AgentRuntime:
         self.max_steps = max_steps
         self.deferred = deferred
         self._clock = clock
+        self.synthesis_engine = synthesis_engine
+        self.synthesis_policy = synthesis_policy
 
         self._runs: dict[str, AgentRun] = {}
         self._lock = threading.Lock()
         self.discovery = SkillDiscovery()
+        from core.capabilities.gap import CapabilityGapEngine
+        self.gap_engine = CapabilityGapEngine(discovery=self.discovery, registry=self.registry)
 
         if not deferred and executor is None:
             raise ValueError(
@@ -313,12 +320,295 @@ class AgentRuntime:
         with self._lock:
             self._runs[run.run_id] = run
 
+        self._persist_run(run)
         return run
 
     def get_run(self, run_id: str) -> AgentRun | None:
-
         with self._lock:
-            return self._runs.get(run_id)
+            run = self._runs.get(run_id)
+            if run is not None:
+                return run
+
+        loaded = self._load_run(run_id)
+        if loaded is not None:
+            with self._lock:
+                self._runs[run_id] = loaded
+            return loaded
+        return None
+
+    def _persist_run(self, run: AgentRun) -> None:
+        """Durable persistence for AgentRun to survive server restarts."""
+        try:
+            from memory.sqlite import SessionLocal, init_agent_run_tables, db_lock
+            from memory.models import AgentRunRecord, timestamp_now
+            init_agent_run_tables()
+            with db_lock:
+                with SessionLocal() as session:
+                    rec = session.get(AgentRunRecord, run.run_id)
+                    if rec is None:
+                        rec = AgentRunRecord(
+                            run_id=run.run_id,
+                            task_id=run.task_id,
+                            session_id=run.session_id,
+                            goal=run.goal,
+                            status=run.status.value,
+                            stop_reason=run.stop_reason.value if run.stop_reason else "",
+                            stop_detail=run.stop_detail,
+                            rounds=run.rounds,
+                            tool_call_count=run.tool_call_count,
+                            consecutive_failures=run.consecutive_failures,
+                            verify_rounds=run.verify_rounds,
+                            requires_observation=run.requires_observation,
+                            observed_ok=run.observed_ok,
+                            unobserved_rounds=run.unobserved_rounds,
+                            messages_json=json.dumps(run.messages),
+                            unverified_json=json.dumps(run.unverified),
+                            created_at=run.created_at,
+                            updated_at=timestamp_now(),
+                        )
+                        session.add(rec)
+                    else:
+                        rec.status = run.status.value
+                        rec.stop_reason = run.stop_reason.value if run.stop_reason else ""
+                        rec.stop_detail = run.stop_detail
+                        rec.rounds = run.rounds
+                        rec.tool_call_count = run.tool_call_count
+                        rec.consecutive_failures = run.consecutive_failures
+                        rec.verify_rounds = run.verify_rounds
+                        rec.observed_ok = run.observed_ok
+                        rec.unobserved_rounds = run.unobserved_rounds
+                        rec.messages_json = json.dumps(run.messages)
+                        rec.unverified_json = json.dumps(run.unverified)
+                        rec.updated_at = timestamp_now()
+                    session.commit()
+        except Exception as err:
+            logger.debug("Run %s persistence skipped or failed: %s", run.run_id, err)
+
+    def _load_run(self, run_id: str) -> AgentRun | None:
+        """Restore AgentRun from durable SQLite store if not in memory."""
+        try:
+            from memory.sqlite import SessionLocal, db_lock
+            from memory.models import AgentRunRecord
+            with db_lock:
+                with SessionLocal() as session:
+                    rec = session.get(AgentRunRecord, run_id)
+                    if rec is None:
+                        return None
+
+                    status = RunStatus(rec.status) if rec.status in RunStatus._value2member_map_ else RunStatus.FAILED
+                    stop_reason = StopReason(rec.stop_reason) if rec.stop_reason and rec.stop_reason in StopReason._value2member_map_ else None
+
+                    messages = []
+                    try:
+                        messages = json.loads(rec.messages_json)
+                    except Exception:
+                        pass
+
+                    unverified = []
+                    try:
+                        unverified = [tuple(x) for x in json.loads(rec.unverified_json)]
+                    except Exception:
+                        pass
+
+                    run = AgentRun(
+                        run_id=rec.run_id,
+                        task_id=rec.task_id,
+                        session_id=rec.session_id,
+                        goal=rec.goal,
+                        status=status,
+                        stop_reason=stop_reason,
+                        stop_detail=rec.stop_detail,
+                        messages=messages,
+                        rounds=rec.rounds,
+                        tool_call_count=rec.tool_call_count,
+                        consecutive_failures=rec.consecutive_failures,
+                        verify_rounds=rec.verify_rounds,
+                        unverified=unverified,
+                        created_at=rec.created_at,
+                        requires_observation=rec.requires_observation,
+                        observed_ok=rec.observed_ok,
+                        unobserved_rounds=rec.unobserved_rounds,
+                    )
+                    return run
+        except Exception as err:
+            logger.debug("Run %s restoration failed: %s", run_id, err)
+            return None
+
+    # ------------------------------------------------------------------
+    # Interrupted-run recovery (P4.5.2)
+    # ------------------------------------------------------------------
+
+    def list_interrupted_runs(self, session_factory=None) -> list[str]:
+        """
+        Scan SQLite for runs still marked ``running`` — these are candidates
+        that were interrupted by a crash or process termination.
+        """
+        try:
+            from memory.sqlite import SessionLocal, db_lock
+            from memory.models import AgentRunRecord
+            factory = session_factory or SessionLocal
+            with db_lock:
+                with factory() as session:
+                    recs = (
+                        session.query(AgentRunRecord.run_id)
+                        .filter(AgentRunRecord.status == "running")
+                        .all()
+                    )
+                    return [r.run_id for r in recs]
+        except Exception as err:
+            logger.debug("list_interrupted_runs failed: %s", err)
+            return []
+
+    def recover_interrupted_run(
+        self,
+        run_id: str,
+        session_factory=None,
+    ) -> AgentRun | None:
+        """
+        Load a run from durable storage and reconcile its transcript so
+        that ``advance()`` can safely be called on the **same run ID**.
+
+        If the last assistant message contains ``tool_calls`` without
+        matching ``tool`` response messages, synthesize timeout responses
+        so the transcript is valid for the next LLM call.
+
+        Returns the recovered ``AgentRun`` (status either RUNNING or
+        INTERRUPTED) or ``None`` if the run cannot be found.
+        """
+        with self._lock:
+            if session_factory:
+                # Support isolated DBs in tests
+                run = self._load_run_with_factory(run_id, session_factory)
+            else:
+                run = self._load_run(run_id)
+            if run is None:
+                return None
+
+            # Safe validation for corrupted transcripts
+            if not isinstance(run.messages, list):
+                logger.warning("Run %s has corrupted non-list messages transcript; marking failed", run_id)
+                run.messages = []
+                run.status = RunStatus.FAILED
+                run.stop_reason = StopReason.INTERNAL_ERROR
+                run.stop_detail = "Corrupted message transcript in durable storage"
+                self._persist_run(run)
+                self._runs[run_id] = run
+                return run
+
+            # Reconcile transcript: find pending tool_calls without responses
+            pending_tool_call_ids = self._find_pending_tool_calls(run.messages)
+
+            if pending_tool_call_ids:
+                # Synthesize timeout tool responses for each unresolved call
+                for tc_id, tc_name in pending_tool_call_ids:
+                    run.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": json.dumps({
+                            "ok": False,
+                            "status": "TIMEOUT_RECOVERY",
+                            "tool": tc_name,
+                            "error": {
+                                "code": "PROCESS_CRASH_RECOVERY",
+                                "message": (
+                                    f"Tool call {tc_id} ({tc_name}) was interrupted "
+                                    f"by process crash. Result unknown. The system "
+                                    f"has recovered this run for safe continuation."
+                                ),
+                            },
+                        }),
+                    })
+                run.status = RunStatus.INTERRUPTED
+                logger.info(
+                    "Run %s recovered with %d synthesized timeout responses",
+                    run_id,
+                    len(pending_tool_call_ids),
+                )
+            else:
+                # Transcript is clean; run can continue directly
+                if run.status == RunStatus.RUNNING:
+                    logger.info("Run %s recovered cleanly — no pending tool calls", run_id)
+
+            # Re-persist the reconciled state
+            self._persist_run(run)
+
+            self._runs[run_id] = run
+            return run
+
+    def _load_run_with_factory(self, run_id: str, session_factory) -> AgentRun | None:
+        """Load a run using an explicit session factory (for test isolation)."""
+        try:
+            from memory.models import AgentRunRecord
+            with session_factory() as session:
+                rec = session.get(AgentRunRecord, run_id)
+                if rec is None:
+                    return None
+
+                status = RunStatus(rec.status) if rec.status in RunStatus._value2member_map_ else RunStatus.FAILED
+                stop_reason = StopReason(rec.stop_reason) if rec.stop_reason and rec.stop_reason in StopReason._value2member_map_ else None
+
+                messages = []
+                try:
+                    messages = json.loads(rec.messages_json)
+                except Exception:
+                    pass
+
+                unverified = []
+                try:
+                    unverified = [tuple(x) for x in json.loads(rec.unverified_json)]
+                except Exception:
+                    pass
+
+                return AgentRun(
+                    run_id=rec.run_id,
+                    task_id=rec.task_id,
+                    session_id=rec.session_id,
+                    goal=rec.goal,
+                    status=status,
+                    stop_reason=stop_reason,
+                    stop_detail=rec.stop_detail,
+                    messages=messages,
+                    rounds=rec.rounds,
+                    tool_call_count=rec.tool_call_count,
+                    consecutive_failures=rec.consecutive_failures,
+                    verify_rounds=rec.verify_rounds,
+                    unverified=unverified,
+                    created_at=rec.created_at,
+                    requires_observation=rec.requires_observation,
+                    observed_ok=rec.observed_ok,
+                    unobserved_rounds=rec.unobserved_rounds,
+                )
+        except Exception as err:
+            logger.debug("Run %s restoration (factory) failed: %s", run_id, err)
+            return None
+
+    @staticmethod
+    def _find_pending_tool_calls(messages: list[dict]) -> list[tuple[str, str]]:
+        """
+        Walk the message transcript and find assistant tool_calls whose
+        corresponding tool responses have not yet arrived.
+
+        Returns list of ``(tool_call_id, function_name)`` tuples.
+        """
+        # Collect all tool_call_ids that have responses
+        responded_ids: set[str] = set()
+        for msg in messages:
+            if msg.get("role") == "tool" and msg.get("tool_call_id"):
+                responded_ids.add(msg["tool_call_id"])
+
+        # Walk backwards to find the last assistant message with tool_calls
+        pending: list[tuple[str, str]] = []
+        for msg in reversed(messages):
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    tc_id = tc.get("id", "")
+                    tc_name = tc.get("function", {}).get("name", "unknown")
+                    if tc_id and tc_id not in responded_ids:
+                        pending.append((tc_id, tc_name))
+                break  # Only check the last assistant turn with tool_calls
+
+        return pending
+
 
     def cancel(self, run_id: str) -> bool:
         """User-initiated stop. Takes effect at the next round boundary."""
@@ -330,6 +620,92 @@ class AgentRuntime:
 
         self._stop(run, StopReason.CANCELLED, "cancelled by owner")
         return True
+
+    def _maybe_synthesize_gap(self, run: AgentRun) -> None:
+        """
+        Phase 5B.3: Autonomous Capability Gap -> Tool Synthesis and Promotion.
+
+        If a request cannot be fulfilled by registered capabilities, is eligible
+        under AutonomousSynthesisPolicy, and inline execution with a synthesis engine
+        is enabled, autonomously synthesize, validate, test, and promote the required
+        tool into self.registry BEFORE model turn round 0.
+        """
+        if self.deferred or self.synthesis_engine is None:
+            return
+
+        try:
+            match_state, gap = self.gap_engine.evaluate_capability(run.goal)
+            if gap is None:
+                return
+
+            if self.synthesis_policy is not None:
+                eligible, reason = self.synthesis_policy.is_eligible(
+                    gap, depth=0, registry=self.registry
+                )
+                if not eligible:
+                    logger.info(
+                        "Run %s autonomous synthesis not eligible for gap %s: %s",
+                        run.run_id,
+                        gap.gap_id,
+                        reason,
+                    )
+                    return
+
+            cap_name = gap.requested_capability
+            lock_acquired = True
+            wait_event = None
+            if self.synthesis_policy is not None and hasattr(self.synthesis_policy, "acquire_synthesis_lock"):
+                lock_acquired, wait_event = self.synthesis_policy.acquire_synthesis_lock(cap_name)
+
+            if not lock_acquired and wait_event is not None:
+                logger.info("Run %s waiting for concurrent synthesis of %s...", run.run_id, cap_name)
+                wait_event.wait(timeout=45.0)
+                return
+
+            try:
+                target_tool_name = cap_name.replace(".", "_").replace("-", "_").lower()
+                if self.registry and self.registry.has(target_tool_name):
+                    logger.info("Tool '%s' already registered in registry; skipping synthesis", target_tool_name)
+                    return
+
+                logger.info(
+                    "Run %s initiating autonomous synthesis for gap %s: capability='%s', intent='%s'",
+                    run.run_id,
+                    gap.gap_id,
+                    cap_name,
+                    run.goal,
+                )
+                tool, report, synth_res = self.synthesis_engine.synthesize_and_promote(
+                    gap, approver="autonomous_policy"
+                )
+                if tool is not None:
+                    logger.info(
+                        "Run %s autonomous synthesis succeeded: promoted tool '%s' (v%s)",
+                        run.run_id,
+                        tool.name,
+                        getattr(tool, "version", 1),
+                    )
+                    self.discovery = SkillDiscovery()
+                    from core.capabilities.gap import CapabilityGapEngine
+                    self.gap_engine = CapabilityGapEngine(discovery=self.discovery, registry=self.registry)
+                else:
+                    failure_detail = (
+                        synth_res.failure_reason
+                        if synth_res
+                        else (report.errors if report else "unknown")
+                    )
+                    logger.warning(
+                        "Run %s autonomous synthesis failed for '%s': %s",
+                        run.run_id,
+                        cap_name,
+                        failure_detail,
+                    )
+            finally:
+                if lock_acquired and self.synthesis_policy is not None and hasattr(self.synthesis_policy, "release_synthesis_lock"):
+                    self.synthesis_policy.release_synthesis_lock(cap_name)
+
+        except Exception as synth_err:
+            logger.error("Run %s unexpected error in _maybe_synthesize_gap: %s", run.run_id, synth_err)
 
     # ------------------------------------------------------------------
     # The loop
@@ -343,6 +719,9 @@ class AgentRuntime:
 
         if run.status is not RunStatus.RUNNING:
             raise RuntimeError(f"run {run.run_id} is {run.status.value}")
+
+        if run.rounds == 0:
+            self._maybe_synthesize_gap(run)
 
         try:
             turn = self._model_round(run)
@@ -368,9 +747,12 @@ class AgentRuntime:
             return self.advance(run)
 
         if turn.wants_tools:
-            return self._take_tool_calls(run, turn)
+            directive = self._take_tool_calls(run, turn)
+        else:
+            directive = self._consider_completion(run, turn)
 
-        return self._consider_completion(run, turn)
+        self._persist_run(run)
+        return directive
 
     def run_to_completion(self, run: AgentRun) -> AgentRun:
         """
@@ -408,16 +790,77 @@ class AgentRuntime:
         only - verification verdicts are read here just as they are from
         an inline run.
         """
-        call_id = envelopes[0].get("tool_call_id", "") if envelopes else "call_0"
-        raw_id = envelopes[0].get("call_id", "") if envelopes else ""
-        match_id = f"{call_id}|{raw_id}" if raw_id else call_id
-        run.messages.append({
-            "role": "tool",
-            "tool_call_id": match_id,
-            "content": json.dumps(envelopes, ensure_ascii=False, default=str),
-        })
+        last_msg = run.messages[-1] if run.messages else {}
+        expected_calls = last_msg.get("tool_calls", []) if isinstance(last_msg, dict) else []
+        expected_ids = [c.get("id", "") for c in expected_calls if isinstance(c, dict)]
+
+        if len(envelopes) <= 1:
+            call_id = envelopes[0].get("tool_call_id", "") if envelopes else "call_0"
+            raw_id = envelopes[0].get("call_id", "") if envelopes else ""
+            match_id = ""
+            if f"{call_id}|{raw_id}" in expected_ids:
+                match_id = f"{call_id}|{raw_id}"
+            elif call_id in expected_ids:
+                match_id = call_id
+            elif expected_ids:
+                match_id = expected_ids[0]
+            else:
+                match_id = f"{call_id}|{raw_id}" if raw_id else call_id
+
+            run.messages.append({
+                "role": "tool",
+                "tool_call_id": match_id,
+                "content": json.dumps(envelopes, ensure_ascii=False, default=str),
+            })
+        else:
+            for i, env in enumerate(envelopes):
+                call_id = env.get("tool_call_id", "") or "call_0"
+                raw_id = env.get("call_id", "")
+                match_id = ""
+                if f"{call_id}|{raw_id}" in expected_ids:
+                    match_id = f"{call_id}|{raw_id}"
+                elif call_id in expected_ids:
+                    match_id = call_id
+                elif i < len(expected_ids):
+                    match_id = expected_ids[i]
+                else:
+                    match_id = f"{call_id}|{raw_id}" if raw_id else call_id
+
+                run.messages.append({
+                    "role": "tool",
+                    "tool_call_id": match_id,
+                    "content": json.dumps([env], ensure_ascii=False, default=str),
+                })
+
+        # Synthesize fallback response for any pending tool calls that weren't reported
+        if expected_ids:
+            answered_ids = {m.get("tool_call_id") for m in run.messages if isinstance(m, dict) and m.get("role") == "tool"}
+            for exp_id in expected_ids:
+                if exp_id not in answered_ids:
+                    run.messages.append({
+                        "role": "tool",
+                        "tool_call_id": exp_id,
+                        "content": json.dumps([{"ok": False, "error": {"code": "OMITTED", "message": "No report returned for this call"}}]),
+                    })
 
         self._absorb_envelopes(run, envelopes)
+        ledger = getattr(self, "invocation_ledger", None)
+        if ledger is None:
+            try:
+                from core.sync.invocation_ledger import DurableInvocationLedger
+                self.invocation_ledger = DurableInvocationLedger()
+                ledger = self.invocation_ledger
+            except Exception:
+                ledger = None
+        if ledger is not None:
+            for env in envelopes:
+                cid = env.get("tool_call_id") or env.get("call_id")
+                if cid:
+                    try:
+                        ledger.record_completed(cid, env)
+                    except Exception:
+                        pass
+        self._persist_run(run)
 
     # ------------------------------------------------------------------
     # Rounds
@@ -460,7 +903,10 @@ class AgentRuntime:
         if self.registry is None:
             return ""
 
-        ranked = self.discovery.discover(intent)
+        explained = self.discovery.explain(intent)
+        ranked = explained.get("ranked", [])
+        diagnosis = explained.get("diagnosis", {})
+
         lines = [
             "\nLIVE CAPABILITY EVIDENCE (authoritative for this turn):",
             "Only capabilities in AVAILABLE state may be called.",
@@ -470,6 +916,23 @@ class AgentRuntime:
             lines.append(
                 f"- {item['capability_id']}: {item['state']}{reason}"
             )
+
+        if diagnosis.get("no_capability_matched"):
+            lines.append("\nCAPABILITY GAP: No registered capability matches this intent.")
+        elif diagnosis.get("all_candidates_blocked"):
+            top = diagnosis.get("top_candidate", {})
+            lines.append(f"\nCAPABILITY GAP: Matched candidate {top.get('capability_id')} is currently blocked/unhealthy.")
+
+        try:
+            match_state, gap = self.gap_engine.evaluate_capability(intent)
+            if gap is not None:
+                state_str = match_state.value if hasattr(match_state, "value") else str(match_state)
+                lines.append(f"\nCAPABILITY DIAGNOSIS [{state_str}]: {gap.reason}")
+                if gap.candidate_solution:
+                    lines.append(f"Candidate Resolution: {gap.candidate_solution}")
+        except Exception as gap_err:
+            logger.debug("Gap engine evaluation skipped in context: %s", gap_err)
+
         evidence = "\n" + "\n".join(lines)
 
         if re.search(r"what can you|abilities|capabilit", intent.lower()):
@@ -522,7 +985,7 @@ class AgentRuntime:
                 and self.registry.get(request.name) is not None:
             return None
 
-        return {
+        report = {
             "ok": False,
             "tool": request.name,
             "error": {
@@ -535,6 +998,15 @@ class AgentRuntime:
             },
             "execution": "not_attempted",
         }
+        try:
+            match_state, gap = self.gap_engine.evaluate_capability(request.name)
+            if gap is not None:
+                report["gap"] = gap.to_dict()
+                report["gap_state"] = match_state.value if hasattr(match_state, "value") else str(match_state)
+        except Exception:
+            pass
+
+        return report
 
     @staticmethod
     def _requires_observation_goal(goal: str) -> bool:
@@ -669,12 +1141,20 @@ class AgentRuntime:
             for call_id, request in executed
         )
 
-        tool_call_id = wire_calls[0]["id"] if wire_calls else "call_0"
-        run.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": json.dumps(envelopes, ensure_ascii=False, default=str),
-        })
+        if len(envelopes) <= 1:
+            tool_call_id = wire_calls[0]["id"] if wire_calls else "call_0"
+            run.messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": json.dumps(envelopes, ensure_ascii=False, default=str),
+            })
+        else:
+            for wire_call, env in zip(wire_calls, envelopes):
+                run.messages.append({
+                    "role": "tool",
+                    "tool_call_id": wire_call["id"],
+                    "content": json.dumps([env], ensure_ascii=False, default=str),
+                })
 
         self._absorb_envelopes(run, envelopes)
 
@@ -687,6 +1167,43 @@ class AgentRuntime:
         request: ToolCallRequest,
         run: AgentRun | None = None,
     ) -> dict:
+        ledger = getattr(self, "invocation_ledger", None)
+        if ledger is None:
+            try:
+                from core.sync.invocation_ledger import DurableInvocationLedger
+                self.invocation_ledger = DurableInvocationLedger()
+                ledger = self.invocation_ledger
+            except Exception:
+                ledger = None
+
+        if ledger is not None and call_id:
+            cached = ledger.check_replay(call_id)
+            if cached is not None:
+                logger.info("AgentRuntime: replay detected for %s; returning cached report", call_id)
+                return self._build_envelope(call_id, request, cached, run=run)
+
+        # Pre-record the invocation BEFORE executing the side effect.
+        # This ensures a durable EXECUTING record exists in case the process
+        # crashes during executor.execute() — check_replay() will then
+        # return AMBIGUOUS_CRASH_RECOVERY instead of None, preventing
+        # duplicate side effects on restart.
+        if ledger is not None and call_id:
+            try:
+                ledger.record_received(
+                    invocation_id=call_id,
+                    tool=request.name,
+                    arguments=dict(request.arguments or {}),
+                    run_id=run.run_id if run else "",
+                    tool_call_id=call_id,
+                )
+                acquired = ledger.record_executing(call_id)
+                if acquired is False:
+                    cached = ledger.check_replay(call_id)
+                    if cached is not None:
+                        logger.info("AgentRuntime: concurrent race/recovery detected for %s; returning cached report", call_id)
+                        return self._build_envelope(call_id, request, cached, run=run)
+            except Exception:
+                pass
 
         result = self.executor.execute(request.name, request.arguments)
 
@@ -712,6 +1229,12 @@ class AgentRuntime:
                     "message": result.error,
                 },
             )
+
+        if ledger is not None and call_id:
+            try:
+                ledger.record_completed(call_id, report)
+            except Exception:
+                pass
 
         return self._build_envelope(call_id, request, report, run=run)
 
@@ -947,6 +1470,28 @@ class AgentRuntime:
             provider=provider_label(self.llm),
             duration_s=round(time.time() - run.created_at, 3),
         )
+
+        # Wire self-learning experience store with live evidence and verification
+        try:
+            from learning.experience import AuraExperienceStore
+            store = AuraExperienceStore()
+            is_verified = (reason is StopReason.GOAL_VERIFIED)
+            store.record_experience(
+                session_id=run.session_id,
+                input_text=run.goal,
+                model_decision="TOOL_CALL" if run.tool_call_count > 0 else "ANSWER",
+                task_id=run.task_id,
+                run_id=run.run_id,
+                selected_tool=run.messages[-2].get("tool", "") if (run.tool_call_count > 0 and len(run.messages) >= 2) else "",
+                final_response=run.messages[-1].get("content", "") if run.messages else "",
+                outcome="SUCCESS" if run.status is RunStatus.COMPLETED else "FAILED",
+                verifier_result="VERIFIED" if is_verified else ("UNVERIFIED" if reason is StopReason.COMPLETED_UNVERIFIED else "CONTRADICTED"),
+                category="agent_run",
+            )
+        except Exception as exp_err:
+            logger.debug("Agent run experience recording skipped: %s", exp_err)
+
+        self._persist_run(run)
 
     # ------------------------------------------------------------------
     # Context compaction

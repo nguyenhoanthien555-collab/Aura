@@ -30,8 +30,8 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
 
     session_manager.update_activity(session.session_id)
 
-    # Generate message ID
-    message_id = str(uuid.uuid4())
+    # Generate or reuse client-provided message ID
+    message_id = (request.context or {}).get("message_id") or str(uuid.uuid4())
 
     start_time = time.time()
 
@@ -48,15 +48,33 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
         # phone, which is the request most likely to arrive during a turn.
         # `ws_chat.py` already runs its own path through
         # `iterate_in_threadpool` for the same reason.
+        chat_context = dict(request.context or {})
+        chat_context.setdefault("message_id", message_id)
+        chat_context.setdefault("session_id", session.session_id)
         response = await run_in_threadpool(
             runtime.chat,
             request.message,
             session_id=session.session_id,
             source="text",
-            context=request.context,
+            context=chat_context,
         )
 
         elapsed = time.time() - start_time
+
+        # Wire self-learning experience store with PII screening
+        try:
+            from learning.experience import AuraExperienceStore
+            store = AuraExperienceStore()
+            store.record_experience(
+                session_id=session.session_id,
+                input_text=request.message,
+                model_decision="ANSWER",
+                final_response=response.text,
+                outcome="SUCCESS",
+                category="chat",
+            )
+        except Exception as exp_err:
+            logger.debug("Chat experience recording error: %s", exp_err)
 
         return ChatResponse(
             session_id=session.session_id,

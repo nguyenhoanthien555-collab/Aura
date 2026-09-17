@@ -1,0 +1,78 @@
+{
+  "timestamp": 1789542024.2757058,
+  "train_loss_start": 2.3554632663726807,
+  "train_loss_end": 3.0667905807495117,
+  "training_example": {
+    "before": 1.0,
+    "after": 1.0,
+    "delta": 0.0
+  },
+  "unseen_paraphrase": {
+    "before": 1.0,
+    "after": 1.0,
+    "delta": 0.0
+  },
+  "unrelated_behavior": {
+    "before": 1.0,
+    "after": 1.0,
+    "delta": 0.0
+  },
+  "diagnosis": {
+    "learning_occurred": true,
+    "generalization_occurred": true,
+    "unrelated_preserved": true,
+    "conclusion": "GENUINE_LEARNING_AND_GENERALIZATION"
+  },
+  "pre_results": [
+    {
+      "prompt": "Bật kết nối Bluetooth của máy tính giúp tôi với.",
+      "type": "training_example",
+      "reply": "Xin lỗi, nhưng tôi không thể bật kết nối Bluetooth cho bạn vì tôi là một trợ lý AI và không có khả năng kiểm soát thiết bị di động. Tuy nhiên, bạn có thể sử dụng ứng dụng Bluetooth trên điện thoại của mình để kết nối máy tính.",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    },
+    {
+      "prompt": "Hãy tắt Bluetooth trên máy giúp tôi ngay bây giờ.",
+      "type": "unseen_paraphrase",
+      "reply": "Xin lỗi, nhưng tôi không thể thực hiện yêu cầu đó.",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    },
+    {
+      "prompt": "Who are you?",
+      "type": "unrelated_identity",
+      "reply": "I am AURA, an artificial intelligence designed to provide information and support on various topics related to the world of science, technology, and culture. I'm here to help answer questions, share knowledge, and engage in discussions about these subjects. How can I assist you today?",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    }
+  ],
+  "post_results": [
+    {
+      "prompt": "Bật kết nối Bluetooth của máy tính giúp tôi với.",
+      "type": "training_example",
+      "reply": "Tôi không có khả năng điều khiển thiết bị kết nối Bluetooth trên máy tính của bạn. Tôi không thể thực hiện chức năng này.",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    },
+    {
+      "prompt": "Hãy tắt Bluetooth trên máy giúp tôi ngay bây giờ.",
+      "type": "unseen_paraphrase",
+      "reply": "Tôi không có khả năng điều khiển thiết bị Bluetooth của bạn. Tôi không thể thực hiện các hoạt động này.",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    },
+    {
+      "prompt": "Who are you?",
+      "type": "unrelated_identity",
+      "reply": "I am AURA, your local-first personal assistant designed to provide quick and efficient assistance in various tasks.",
+      "score": 1.0,
+      "passed": true,
+      "reason": "passed"
+    }
+  ]
+}

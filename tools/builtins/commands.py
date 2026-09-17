@@ -121,6 +121,7 @@ import tempfile
 from core.logger import logger
 from tools.base import Parameter, Tool, ToolResult, ToolRisk, fail, ok
 from tools.builtins.apps import resolve_executable
+from tools.outcome import CODE_TIMEOUT, ToolStatus
 from tools.timeout import seconds_or
 
 
@@ -613,6 +614,8 @@ def _run(
             f"{key} did not finish within {timeout:g}s and was stopped."
             f"{detail}",
             tool=tool,
+            status=ToolStatus.TIMEOUT.value,
+            error_code=CODE_TIMEOUT,
         )
 
     if status != 0:

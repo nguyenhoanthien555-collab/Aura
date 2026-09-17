@@ -69,10 +69,6 @@ PROVIDER_KEYS = {
 # which is what the phone writes. `_skip_reason` names them.
 OWNER_DEFINED_ENDPOINTS = {"custom": "CUSTOM_BASE_URL"}
 
-# Ollama takes no key, only a reachable host. Listed separately so that
-# `provider: ollama` still resolves through the chain builder (and can
-# therefore carry cloud fallbacks) while _skip_reason knows it needs no
-# secret to explain.
 KEYLESS_PROVIDERS = ("ollama",)
 
 # The providers built on `brain/providers/http_chat.py`, which take an
@@ -151,7 +147,19 @@ class BrainRouter:
 
         config = load_config().get("llm") or {}
 
+        # Offline mode: ensure zero remote cloud calls
+        offline_mode = bool(config.get("offline") or os.getenv("AURA_OFFLINE") in ("1", "true", "True"))
         fallback_names = self._fallback_names(config)
+
+        if offline_mode:
+            allowed_offline = {"local_aura", "local", "ollama", "mock"}
+            if name not in allowed_offline:
+                logger.warning(
+                    "Offline mode active: requested provider %s is external - falling back to local_aura",
+                    name,
+                )
+                name = "local_aura"
+            fallback_names = [fb for fb in fallback_names if fb in allowed_offline]
 
         # The primary is built through the same guarded path as a
         # fallback. It used to be built inline and a `None` raised
@@ -413,6 +421,10 @@ class BrainRouter:
         or whether its key was present.
         """
 
+        if name in ("local_aura", "local"):
+            from brain.providers.local_aura import LocalAuraBrain
+            return LocalAuraBrain()
+
         if name == "ollama":
             # Needs no key, so there is nothing to check first: it is
             # built, and a wrong host surfaces when a request is made.
@@ -525,3 +537,19 @@ class BrainRouter:
         Generate a response using the configured provider.
         """
         return self.provider.generate(prompt)
+
+    def generate_with_tools(self, system: str, messages: list, tools: list):
+        """
+        Generate a structured tool-calling turn using the active provider.
+        """
+        if hasattr(self.provider, "generate_with_tools"):
+            return self.provider.generate_with_tools(system, messages, tools)
+        raise AttributeError(f"Provider {self.active_chain()} does not support generate_with_tools")
+
+    def get_provenance(self):
+        """
+        Returns the BrainProvenance of the active provider.
+        """
+        from brain.provenance import extract_provenance
+        return extract_provenance(self.provider)
+

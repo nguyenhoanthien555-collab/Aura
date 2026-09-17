@@ -7,6 +7,7 @@ import com.aura.companion.data.remote.AgentStepRequestDto
 import com.aura.companion.data.remote.ObservationDto
 import com.aura.companion.data.remote.ToolCallDto
 import com.aura.companion.data.remote.ToolResultEnvelopeDto
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 
@@ -62,11 +63,31 @@ class AgentRunDriver(
             pendingResults = emptyList()
             pendingObservations = emptyList()
 
-            val snapshot = when (val result = repository.agentStep(step)) {
-                is AuraResult.Ok -> result.value
-                is AuraResult.Failed ->
-                    return "Aura could not reach the server, so the task " +
-                        "was stopped before anything was done."
+            var snapshot: AgentRunSnapshotDto? = null
+            var lastErrorMessage: String = ""
+
+            // Up to 3 retries on transient network glitch or momentary timeout
+            for (attempt in 1..3) {
+                when (val result = repository.agentStep(step)) {
+                    is AuraResult.Ok -> {
+                        snapshot = result.value
+                        break
+                    }
+                    is AuraResult.Failed -> {
+                        lastErrorMessage = result.error.userMessage
+                        if (attempt < 3) {
+                            delay(attempt * 1000L)
+                        }
+                    }
+                }
+            }
+
+            if (snapshot == null) {
+                return if (steps > 1 || runId.isNotEmpty()) {
+                    "Aura executed the requested actions on the device, but the connection to the server was interrupted. The task state was preserved."
+                } else {
+                    "Aura could not reach the server to begin the task: $lastErrorMessage. Please check your network connection."
+                }
             }
 
             if (snapshot.runId.isNotEmpty()) runId = snapshot.runId

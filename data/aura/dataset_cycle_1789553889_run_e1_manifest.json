@@ -1,0 +1,52 @@
+{
+  "dataset_id": "ds_dataset_cycle_1789553889_run_e1",
+  "num_examples": 60,
+  "categories": {
+    "tool_use": 23,
+    "conversation": 17,
+    "confirmation": 3,
+    "clarification": 4,
+    "tool_honesty": 5,
+    "safety": 2,
+    "identity": 4,
+    "reasoning": 2
+  },
+  "file_path": "D:\\AURA\\data\\aura\\dataset_cycle_1789553889_run_e1.jsonl",
+  "checksum": "eea34cb465eece680fd53456221b7001bdb7665592b9523344724f78f42c168b",
+  "created_at": "2026-09-16T17:18:09",
+  "metadata": {
+    "version": "dataset_cycle_1789553889_run_e1",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true,
+    "core_curriculum_included": true,
+    "core_curriculum_examples": 15,
+    "quarantined_contradictions": 5,
+    "quarantine_log": [
+      {
+        "id": "exp_run_f82ae8b96fd2",
+        "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_eb6c3a888f78",
+        "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_13286ff71191",
+        "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_a825b838b06c",
+        "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      },
+      {
+        "id": "exp_run_56f7aba94868",
+        "reason": "Selected tool 'system.battery' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      }
+    ]
+  }
+}

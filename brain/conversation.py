@@ -106,6 +106,7 @@ class _Turn:
     user_msg: Message
     contexts: list[str] = field(default_factory=list)
     context: dict | None = None
+    session_id: str = "default"
     history: list[Message] = field(default_factory=list)
     vision: VisionContextLike | None = None
     knowledge: list[str] = field(default_factory=list)
@@ -148,6 +149,7 @@ class ConversationManager:
         pipeline=None,
         cognitive=None,
         verifier=None,
+        invocation_ledger=None,
     ):
 
         self.memory = memory
@@ -161,6 +163,7 @@ class ConversationManager:
         self.identity = identity
         self.persona = persona
         self.tools = tools
+        self.invocation_ledger = invocation_ledger
 
         # Both optional, both defaulting to None so that every existing
         # caller builds the prompt it built before Phase 8.
@@ -468,6 +471,7 @@ class ConversationManager:
             user_msg=user_msg,
             contexts=list(contexts or []),
             context=context,
+            session_id=session_id,
             history=history,
             persona=persona_of(self.persona, history, user_msg),
             vision=self._vision_context(),
@@ -646,22 +650,179 @@ class ConversationManager:
         """
         Hand one request to the runner and describe what came back.
 
-        Never raises and never reports a success it was not given. The
-        executor is documented as not raising, but this is the boundary to
-        an injected object: an unexpected exception is a failed call, not
-        a successful one and not a broken turn.
+        Never raises and never reports a success it was not given.
+        Enforces durable InvocationLedger parity:
+        - Replay detection prevents unsafe duplicate execution.
+        - Pre-records RECEIVED and EXECUTING before side effects.
+        - Detects AMBIGUOUS_CRASH_RECOVERY if a restart interrupted execution.
+        - Records COMPLETED or FAILED after side effect.
+        - Records evidence into turn.ledger for ResponseVerifier.
         """
+        ledger = getattr(self, "invocation_ledger", None)
+        if ledger is None:
+            try:
+                from core.sync.invocation_ledger import DurableInvocationLedger
+                self.invocation_ledger = DurableInvocationLedger()
+                ledger = self.invocation_ledger
+            except Exception:
+                ledger = None
 
+        session_id = getattr(turn, "session_id", "") or "default"
+        msg_id = ""
+        if turn and getattr(turn, "context", None) and isinstance(turn.context, dict):
+            msg_id = str(turn.context.get("message_id", "") or "")
+            if not session_id and "session_id" in turn.context:
+                session_id = str(turn.context.get("session_id", "") or "")
+        if not msg_id:
+            msg_id = getattr(getattr(turn, "user_msg", None), "id", "")
+        if not msg_id:
+            import uuid
+            msg_id = uuid.uuid4().hex[:12]
+
+        call_id = getattr(call, "call_id", None) or f"call_chat_{msg_id}_{call.name}"
+        inv_id = f"invo_chat_{msg_id}_{call.name}"
+
+        # 1. Replay check
+        if ledger is not None and call_id:
+            cached = ledger.check_replay(call_id)
+            if cached is not None:
+                logger.info("ConversationManager: replay detected for %s; returning cached or recovery", call_id)
+                if cached.get("status") == "AMBIGUOUS_CRASH_RECOVERY":
+                    from tools.base import ToolResult
+                    result = ToolResult(
+                        ok=False,
+                        error=(
+                            f"Invocation {call_id} was in EXECUTING state after process restart. "
+                            f"Side effect status is ambiguous; re-execution refused to prevent duplicate side effects."
+                        ),
+                        error_code="AMBIGUOUS_CRASH_RECOVERY",
+                        data=cached,
+                    )
+                    self._record_tool_evidence(call, result, turn)
+                    return (
+                        f"{call.name} RECOVERY: Process restarted while tool was executing. "
+                        "Side effect status is ambiguous; re-execution was prevented to avoid duplicate side effects."
+                    )
+                elif cached.get("ok"):
+                    from tools.base import ToolResult
+                    result = ToolResult(
+                        ok=True,
+                        output=str(cached.get("output", "") or cached.get("result", "")),
+                        data=cached,
+                    )
+                    self._record_tool_evidence(call, result, turn)
+                    return self._render_result(call.name, result)
+                else:
+                    from tools.base import ToolResult
+                    result = ToolResult(
+                        ok=False,
+                        error=str(cached.get("error", {}).get("message", "Cached failure")),
+                        error_code=str(cached.get("error", {}).get("code", "CACHED_FAILURE")),
+                        data=cached,
+                    )
+                    self._record_tool_evidence(call, result, turn)
+                    return self._render_result(call.name, result)
+
+        # 2. Pre-record invocation BEFORE side effect
+        if ledger is not None and call_id:
+            try:
+                ledger.record_received(
+                    invocation_id=inv_id,
+                    tool=call.name,
+                    arguments=dict(call.arguments or {}),
+                    run_id=session_id,
+                    tool_call_id=call_id,
+                )
+                acquired = ledger.record_executing(call_id)
+                if acquired is False:
+                    # Another concurrent request or process already claimed execution!
+                    cached = ledger.check_replay(call_id)
+                    if cached is not None:
+                        logger.info("ConversationManager: concurrent race/recovery detected for %s; refusing duplicate execution", call_id)
+                        if cached.get("status") == "AMBIGUOUS_CRASH_RECOVERY":
+                            from tools.base import ToolResult
+                            result = ToolResult(
+                                ok=False,
+                                error=(
+                                    f"Invocation {call_id} is already executing or was interrupted. "
+                                    f"Concurrent execution refused to prevent duplicate side effects."
+                                ),
+                                error_code="AMBIGUOUS_CRASH_RECOVERY",
+                                data=cached,
+                            )
+                            self._record_tool_evidence(call, result, turn)
+                            return (
+                                f"{call.name} RECOVERY: Tool is already executing or in recovery. "
+                                "Re-execution was prevented to avoid duplicate side effects."
+                            )
+                        elif cached.get("ok"):
+                            from tools.base import ToolResult
+                            result = ToolResult(
+                                ok=True,
+                                output=str(cached.get("output", "") or cached.get("result", "")),
+                                data=cached,
+                            )
+                            self._record_tool_evidence(call, result, turn)
+                            return self._render_result(call.name, result)
+                        else:
+                            from tools.base import ToolResult
+                            result = ToolResult(
+                                ok=False,
+                                error=str(cached.get("error", {}).get("message", "Cached failure")),
+                                error_code=str(cached.get("error", {}).get("code", "CACHED_FAILURE")),
+                                data=cached,
+                            )
+                            self._record_tool_evidence(call, result, turn)
+                            return self._render_result(call.name, result)
+            except Exception as e:
+                logger.warning("ConversationManager failed to pre-record executing for %s: %s", call_id, e)
+
+        # 3. Execute tool
         try:
             result = self.tools.execute(call.name, dict(call.arguments))
 
         except Exception as error:
             logger.debug("Tool runner raised for %s: %s", call.name, error)
+            if ledger is not None and call_id:
+                try:
+                    ledger.record_failed(
+                        call_id,
+                        {"code": type(error).__name__, "message": str(error)},
+                    )
+                except Exception:
+                    pass
             return (
                 f"{call.name} FAILED: {type(error).__name__}: {error}\n"
                 "Nothing happened. Tell the user it did not work."
             )
 
+        # 4. Post-record completion / failure in durable ledger
+        if ledger is not None and call_id:
+            try:
+                report = dict(getattr(result, "data", {}) or {})
+                report.setdefault("ok", bool(result.ok))
+                report.setdefault("tool", call.name)
+                report.setdefault("output", str(getattr(result, "output", "")))
+                report.setdefault(
+                    "status",
+                    getattr(result, "status", "") or ("SUCCESS" if result.ok else "FAILED"),
+                )
+                if not result.ok:
+                    report.setdefault(
+                        "error",
+                        {
+                            "code": getattr(result, "error_code", "") or "TOOL_ERROR",
+                            "message": str(getattr(result, "error", "")),
+                        },
+                    )
+                if result.ok:
+                    ledger.record_completed(call_id, report)
+                else:
+                    ledger.record_failed(call_id, report)
+            except Exception as e:
+                logger.warning("ConversationManager failed to record completed/failed for %s: %s", call_id, e)
+
+        # 5. Capture outcome into turn's evidence ledger for ResponseVerifier
         self._record_tool_evidence(call, result, turn)
 
         return self._render_result(call.name, result)
@@ -688,22 +849,54 @@ class ConversationManager:
             from tools.base import ToolResult
 
             if isinstance(result, ToolResult):
+                ev = list(result.evidence or ())
+                if isinstance(getattr(result, "data", None), dict):
+                    postcondition = result.data.get("postcondition")
+                    if isinstance(postcondition, dict) and isinstance(postcondition.get("verified"), bool):
+                        has_post = any(
+                            getattr(e, "kind", None) == "postcondition"
+                            or str(getattr(e, "kind", "")) == "EvidenceKind.POSTCONDITION"
+                            or getattr(getattr(e, "kind", None), "value", None) == "postcondition"
+                            for e in ev
+                        )
+                        if not has_post:
+                            from tools.outcome import Evidence, EvidenceKind
+                            ev.append(Evidence(
+                                kind=EvidenceKind.POSTCONDITION,
+                                source="postcondition",
+                                verified=postcondition.get("verified"),
+                                reference=call.name,
+                                detail=str(postcondition.get("action", "postcondition")),
+                            ))
                 ledger.add_tool(
                     tool=call.name,
                     status=str(getattr(result, "status", "") or (
                         "SUCCESS" if result.ok else "FAILED"
                     )),
-                    evidence=tuple(result.evidence or ()),
+                    evidence=tuple(ev),
                     outcome=(getattr(result, "output", "") or "")[:240],
                     capability=getattr(result, "capability", "") or "",
                     side_effect=getattr(result, "side_effect", "") or "",
                 )
             else:
+                duck_data = getattr(result, "data", None)
+                duck_ev = ()
+                if isinstance(duck_data, dict):
+                    postcondition = duck_data.get("postcondition")
+                    if isinstance(postcondition, dict) and isinstance(postcondition.get("verified"), bool):
+                        from tools.outcome import Evidence, EvidenceKind
+                        duck_ev = (Evidence(
+                            kind=EvidenceKind.POSTCONDITION,
+                            source="postcondition",
+                            verified=postcondition.get("verified"),
+                            reference=call.name,
+                            detail=str(postcondition.get("action", "postcondition")),
+                        ),)
                 ledger.add_tool(
                     tool=call.name,
                     status="SUCCESS" if getattr(result, "ok", False)
                     else "FAILED",
-                    evidence=(),
+                    evidence=duck_ev,
                     outcome=str(getattr(result, "output", "") or "")[:240],
                 )
         except Exception as error:

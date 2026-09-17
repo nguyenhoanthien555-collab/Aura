@@ -47,11 +47,33 @@ pipeline memory leave the database exactly as it found it.
 
 from threading import RLock
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from core.paths import DATA_DIR
-from memory.models import Base, EpisodicMemory, Message, UserFact, UserModelEntry
+from memory.models import (
+    Base,
+    DurableClarificationRecord,
+    DurableConfirmationRecord,
+    DurableStepRecord,
+    DurableTaskRecord,
+    EpisodicMemory,
+    Message,
+    ToolProvenanceRecord,
+    UserFact,
+    UserModelEntry,
+    AuraExperienceRecord,
+    BrainVersionRecord,
+    TrainingJobRecord,
+    SyncNodeRecord,
+    SyncEventRecord,
+    SyncOutboxRecord,
+    SyncInboxRecord,
+    SyncCursorRecord,
+    SyncConflictRecord,
+    AgentRunRecord,
+    ToolInvocationRecord,
+)
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -135,3 +157,103 @@ def init_pipeline_tables(bind=None):
         bind or engine,
         tables=[EpisodicMemory.__table__, UserModelEntry.__table__],
     )
+
+
+def init_task_tables(bind=None):
+    """
+    Create the durable task and provenance tables, if they are missing.
+
+    Additive and idempotent - `create_all` issues CREATE TABLE IF NOT
+    EXISTS and leaves existing rows alone.
+    """
+
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            DurableTaskRecord.__table__,
+            DurableStepRecord.__table__,
+            ToolProvenanceRecord.__table__,
+            DurableConfirmationRecord.__table__,
+            DurableClarificationRecord.__table__,
+        ],
+    )
+    try:
+        with target.begin() as conn:
+            conn.execute(text("ALTER TABLE durable_confirmations ADD COLUMN fingerprint VARCHAR(64) DEFAULT ''"))
+    except Exception:
+        pass
+
+
+def init_learning_tables(bind=None):
+    """
+    Create the self-learning and brain lifecycle tables, if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            AuraExperienceRecord.__table__,
+            BrainVersionRecord.__table__,
+            TrainingJobRecord.__table__,
+        ],
+    )
+    try:
+        with target.begin() as conn:
+            conn.execute(text("ALTER TABLE aura_experiences ADD COLUMN taxonomy_tag VARCHAR(32) DEFAULT 'UNVERIFIED'"))
+    except Exception:
+        pass
+
+
+def init_sync_tables(bind=None):
+    """
+    Create P4 distributed synchronization tables, if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            SyncNodeRecord.__table__,
+            SyncEventRecord.__table__,
+            SyncOutboxRecord.__table__,
+            SyncInboxRecord.__table__,
+            SyncCursorRecord.__table__,
+            SyncConflictRecord.__table__,
+        ],
+    )
+    init_agent_run_tables(target)
+    init_tool_invocation_tables(target)
+
+
+def init_agent_run_tables(bind=None):
+    """
+    Create durable AgentRun tables, if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            AgentRunRecord.__table__,
+        ],
+    )
+
+
+def init_tool_invocation_tables(bind=None):
+    """
+    Create durable tool invocation ledger tables, if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            ToolInvocationRecord.__table__,
+        ],
+    )
+
+
+
+

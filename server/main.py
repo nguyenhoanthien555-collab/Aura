@@ -1,4 +1,4 @@
-﻿"""
+"""
 Aura API Server - FastAPI application.
 
 Main entry point for the server mode.
@@ -23,6 +23,10 @@ from server.runtime import init_runtime, is_initialized, shutdown_runtime
 from server.routes import capabilities, health, chat, ws_chat, screen, notifications, settings as settings_routes
 from server.routes import agent as agent_routes
 from server.routes import device as device_routes
+from server.routes import brain as brain_routes
+from server.routes import learning as learning_routes
+from server.routes import sync as sync_routes
+from server.routes import system as system_routes
 from core.logger import logger
 
 
@@ -84,6 +88,10 @@ app.include_router(notifications.router)
 app.include_router(settings_routes.router)
 app.include_router(agent_routes.router)
 app.include_router(device_routes.router)
+app.include_router(brain_routes.router)
+app.include_router(learning_routes.router)
+app.include_router(sync_routes.router)
+app.include_router(system_routes.router)
 
 
 @app.get("/")

@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from core.capabilities import registry, permissions
 from core.capabilities.models import Capability
 from core.capabilities.factory import register_core_capabilities
@@ -13,13 +13,42 @@ def _auto_register_test_capabilities():
         "verbose", "which_thread", "structural", "explode", "structured",
         "danger", "take_screenshot", "describe_screen", "dummy", "my_plugin_tool",
         "verify_raises", "verifying", "deliberate", "fails_first", "secret",
-        "nameless"
+        "nameless",
+        "custom.math", "system.format", "security.read_keys",
+        "test.echo", "test.dangerous_wipe", "test.sensitive_read",
+        "test.mock_fib", "test.square", "test.dangerous_op",
+        "test.probe_mutating", "test.no_probe_mutating", "test.counter",
     ]
     for c in test_caps:
         registry.register(Capability(capability_id=c, name=c, description="test", category="test"))
         permissions.grant(c)
+
+    core_perms = [
+        "desktop.observation", "desktop.control", "desktop.commands",
+        "screen.capture", "filesystem.read", "filesystem.write",
+        "android.accessibility", "android.screen_capture",
+    ]
+    for p in core_perms:
+        permissions.grant(p)
     
     yield
+
+
+@pytest.fixture(autouse=True)
+def clean_app_dependency_overrides():
+    """Ensure FastAPI dependency_overrides never leak across tests."""
+    try:
+        from server.main import app
+        app.dependency_overrides.clear()
+    except Exception:
+        pass
+    yield
+    try:
+        from server.main import app
+        app.dependency_overrides.clear()
+    except Exception:
+        pass
+
 
 """
 Suite-wide safety net: the tests never touch `data/memory.db`.
@@ -147,6 +176,13 @@ def never_the_real_settings(tmp_path, monkeypatch):
     # would then be readable by the next run.
     monkeypatch.delenv(credentials.SECRET_ENV_VAR, raising=False)
 
+    try:
+        from server.config import settings as server_settings
+        saved_server_auth = server_settings.auth_token
+    except Exception:
+        server_settings = None
+        saved_server_auth = None
+
     credentials._store = None
     settings_store._settings = None
 
@@ -154,6 +190,9 @@ def never_the_real_settings(tmp_path, monkeypatch):
 
     credentials._store = None
     settings_store._settings = None
+
+    if server_settings is not None and saved_server_auth is not None:
+        server_settings.auth_token = saved_server_auth
 
     # Restore the provider environment variables a test may have set via
     # CredentialStore.set/delete, so the next test sees the environment

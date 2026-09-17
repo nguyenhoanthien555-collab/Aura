@@ -26,7 +26,8 @@ llm:
   ollama_model: qwen3:8b
 
   timeout: 120
-  max_output_tokens: 768
+  max_output_tokens: 2048
+  temperature: 0.2
 
   # How much hidden reasoning a thinking model may do before it writes
   # the answer. Gemini 3 bills those thoughts against
@@ -61,7 +62,7 @@ memory:
   # now silences both. Your value is untouched - but note that it was
   # previously not silencing the episodic half, so turning this to true
   # is what restores what you were actually getting.
-  recall: false
+  recall: true
 
   max_facts: 5
   max_recalled: 2
@@ -104,7 +105,7 @@ memory:
   # (MemoryPipeline.semantic_indexer.reindex()) - until then the old
   # vectors are reported stale and semantic recall stays unavailable.
   semantic:
-    enabled: false
+    enabled: true
     provider: "hashing"
     model: ""
     base_url: ""
@@ -515,6 +516,9 @@ server:
   screen:
     enabled: true
     min_interval: 8.0
+  daemon:
+    enabled: true
+    poll_interval: 2.0
 
 logging:
   level: INFO

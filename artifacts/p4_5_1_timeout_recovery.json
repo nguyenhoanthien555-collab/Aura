@@ -1,0 +1,23 @@
+{
+  "test_name": "test_timeout_preserves_durable_outbox_and_agent_run",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.425320+00:00",
+  "scenario": "Simulated 504 Gateway Timeout and transport connection drop during sync push",
+  "outbox_behavior": {
+    "status_before_timeout": "pending",
+    "status_after_timeout": "pending",
+    "retry_count_incremented": 1,
+    "next_retry_backoff_scheduled": true,
+    "records_dropped": 0
+  },
+  "agent_run_behavior": {
+    "run_id": "run_timeout_preservation_test",
+    "status_before_timeout": "running",
+    "status_after_timeout": "running",
+    "round": 2,
+    "max_rounds": 10,
+    "preserved_intact": true
+  },
+  "guarantee": "Timeout is NOT treated as data loss. Outbox and AgentRun state remain durable and retryable."
+}

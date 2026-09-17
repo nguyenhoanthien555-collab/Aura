@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "evaluation_type": "PHYSICAL_ENVIRONMENT_INSPECTION",
+  "host_machine": {
+    "os": "Windows 11",
+    "primary_ip_wifi": "192.168.101.9/24",
+    "secondary_ip_vpn": "26.163.187.168/8",
+    "ports_inspected": {
+      "8000": {
+        "status": "AVAILABLE",
+        "service": "AURA Laptop FastApi"
+      },
+      "8844": {
+        "status": "AVAILABLE",
+        "service": "AURA Android Polling / Gateway"
+      }
+    }
+  },
+  "adb_device_enumeration": {
+    "command": "adb devices -l",
+    "devices_found": 0,
+    "device_list": [],
+    "status": "NO_PHYSICAL_OR_EMULATOR_DEVICE_ATTACHED"
+  },
+  "android_sdk_inspection": {
+    "sdk_root": "C:/Users/Hoan Thien/AppData/Local/Android/Sdk",
+    "platform_tools": true,
+    "emulator_binary_present": false
+  },
+  "companion_apk_build": {
+    "target": "android:app:assembleDebug",
+    "path": "D:/AURA/android/app/build/outputs/apk/debug/app-debug.apk",
+    "exists": true,
+    "size_bytes": 19904830,
+    "sha256": "a3626452ebd59823e6cbb130e3bc8d33a155f6620ba9281ba3b430cdac622057",
+    "build_status": "SUCCESS"
+  },
+  "physical_gates": {
+    "real_wifi_socket_listening": "PASS",
+    "companion_apk_compilation": "PASS",
+    "usb_adb_device_connection": "NOT_EXECUTED_PHYSICAL_PREREQUISITE_UNAVAILABLE",
+    "wireless_adb_pairing": "NOT_EXECUTED_PHYSICAL_PREREQUISITE_UNAVAILABLE",
+    "physical_cellular_cross_carrier": "NOT_EXECUTED_PHYSICAL_PREREQUISITE_UNAVAILABLE",
+    "physical_device_gesture_execution": "NOT_EXECUTED_PHYSICAL_PREREQUISITE_UNAVAILABLE"
+  },
+  "verdict": "PARTIALLY_VERIFIED"
+}

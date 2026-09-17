@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-09-16T14:52:36.535473+00:00",
+  "durable_table": "agent_runs (SQLite)",
+  "fields_persisted": [
+    "run_id",
+    "task_id",
+    "session_id",
+    "goal",
+    "status",
+    "stop_reason",
+    "stop_detail",
+    "rounds",
+    "tool_call_count",
+    "consecutive_failures",
+    "verify_rounds",
+    "requires_observation",
+    "observed_ok",
+    "unobserved_rounds",
+    "messages_json",
+    "unverified_json",
+    "created_at",
+    "updated_at"
+  ],
+  "restart_recovery_verified": true,
+  "status": "PASS"
+}

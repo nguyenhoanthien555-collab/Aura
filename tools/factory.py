@@ -44,6 +44,13 @@ def build_registry(
         except ValueError as error:
             logger.warning("Could not register tool: %s", error)
 
+    # Rehydrate active dynamic tools from SQLite provenance
+    try:
+        from tools.builder.rehydrate import rehydrate_active_tools
+        rehydrate_active_tools(registry)
+    except Exception as exc:
+        logger.warning("Dynamic tool startup rehydration encountered error: %s", exc)
+
     return registry
 
 

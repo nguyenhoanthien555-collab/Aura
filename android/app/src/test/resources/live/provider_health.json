@@ -1,10 +1,10 @@
 {
-  "active": "gemini",
-  "chain": [
-    "gemini"
-  ],
+  "active": "",
+  "chain": [],
   "in_fallback": false,
-  "problems": [],
+  "problems": [
+    "provider chain unavailable (ValueError)"
+  ],
   "providers": {
     "anthropic": {
       "configured": false,
@@ -31,10 +31,10 @@
       "state": "unconfigured"
     },
     "gemini": {
-      "configured": true,
-      "healthy": true,
-      "in_chain": true,
-      "state": "active"
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
     },
     "groq": {
       "configured": false,
@@ -85,6 +85,6 @@
       "state": "unconfigured"
     }
   },
-  "ready": true,
+  "ready": false,
   "requested": "gemini"
 }

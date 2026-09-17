@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-09-16T19:06:18.779259+00:00",
+  "phase": "P5",
+  "test_name": "test_real_server_restart_durability_across_tcp",
+  "suite": "tests/test_p5_real_runtime_sync.py",
+  "server_config": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "protocol": "HTTP/1.1 over TCP socket",
+    "auth": "Bearer [REDACTED]"
+  },
+  "verification_steps": [
+    {
+      "step": 1,
+      "action": "Start RealNetworkServer on TCP socket",
+      "result": "SUCCESS"
+    },
+    {
+      "step": 2,
+      "action": "Register Node A and push 2 pre-restart events (evt_pre_restart_1, evt_pre_restart_2)",
+      "result": "ACKNOWLEDGED",
+      "server_sequence": 2
+    },
+    {
+      "step": 3,
+      "action": "SIGKILL / terminate uvicorn server process and close TCP socket",
+      "result": "SOCKET_CLOSED",
+      "active_connections": 0
+    },
+    {
+      "step": 4,
+      "action": "Attempt connection to dead socket",
+      "result": "CONNECTION_REFUSED_EXPECTED"
+    },
+    {
+      "step": 5,
+      "action": "Restart RealNetworkServer bound to same SQLite DB",
+      "result": "SOCKET_REBOUND_SUCCESS"
+    },
+    {
+      "step": 6,
+      "action": "Pull events after sequence 0",
+      "result": "SUCCESS",
+      "events_recovered": 2,
+      "event_ids": [
+        "evt_pre_restart_1",
+        "evt_pre_restart_2"
+      ]
+    },
+    {
+      "step": 7,
+      "action": "Push post-restart event (evt_post_restart_3)",
+      "result": "ACKNOWLEDGED",
+      "server_sequence": 3
+    },
+    {
+      "step": 8,
+      "action": "Pull all 3 events sequentially",
+      "result": "SUCCESS",
+      "total_events": 3,
+      "ordering_strictly_monotonic": true
+    }
+  ],
+  "verdict": "PASS"
+}

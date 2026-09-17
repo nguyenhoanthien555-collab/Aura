@@ -33,11 +33,23 @@ class LegacyTool(Tool):
 
 @pytest.fixture()
 def reset_registry():
+    saved_caps = dict(registry._capabilities)
+    saved_perm_checks = dict(permissions._checks)
+    saved_perm_grants = dict(permissions._granted_permissions)
+    saved_health_checks = dict(health._checks)
     registry.clear()
     permissions._granted_permissions.clear()
     permissions._checks.clear()
     health._checks.clear()
     yield
+    registry.clear()
+    registry._capabilities.update(saved_caps)
+    permissions._checks.clear()
+    permissions._checks.update(saved_perm_checks)
+    permissions._granted_permissions.clear()
+    permissions._granted_permissions.update(saved_perm_grants)
+    health._checks.clear()
+    health._checks.update(saved_health_checks)
 
 
 def test_capabilities_tool_without_capability_is_blocked(reset_registry):

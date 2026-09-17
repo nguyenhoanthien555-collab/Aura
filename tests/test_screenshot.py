@@ -501,6 +501,20 @@ class TestTheConfiguredDisplay:
 @WINDOWS_ONLY
 class TestTheGdiBackendAgainstTheRealScreen:
 
+    @pytest.fixture(autouse=True)
+    def require_interactive_display(self, request):
+        live_tests = {
+            "test_the_frame_is_the_size_of_the_display",
+            "test_the_frame_is_raw_rgb_of_exactly_the_right_length",
+            "test_the_frame_is_not_a_blank_image",
+            "test_the_picture_matches_an_independent_capture",
+            "test_repeated_captures_do_not_leak_gdi_handles",
+            "test_the_capture_undoes_its_dpi_awareness_change",
+        }
+        if request.node.name in live_tests:
+            if GdiScreenCapture().capture() is None:
+                pytest.skip("Desktop screen capture requires an unlocked, interactive display session")
+
     def test_it_is_available_here(self):
         assert GdiScreenCapture().is_available() is True
 

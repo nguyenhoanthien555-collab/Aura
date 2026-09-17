@@ -250,19 +250,31 @@ def _execute_scoped(
     if getattr(result, "ok", False):
         return {"ok": True, "result": {"output": getattr(result, "output", "")}}
 
-    error_code = "EXECUTION_FAILED"
+    error_code = getattr(result, "error_code", "") or "EXECUTION_FAILED"
     if getattr(result, "capability", "") and getattr(result, "authorization", "") == "missing":
         error_code = "BLOCKED_PERMISSION"
-    elif getattr(result, "execution", "") == "not_attempted":
+    elif getattr(result, "execution", "") == "not_attempted" and not getattr(result, "error_code", ""):
         error_code = "CAPABILITY_UNAVAILABLE"
 
-    return {
-        "ok": False,
-        "error": {
-            "code": error_code,
-            "message": str(getattr(result, "error", "") or "tool failed"),
-        },
+    error_payload = {
+        "code": error_code,
+        "message": str(getattr(result, "error", "") or "tool failed"),
     }
+    status = getattr(result, "status", "")
+    if status:
+        error_payload["status"] = status
+
+    resp = {
+        "ok": False,
+        "error": error_payload,
+    }
+    side_effect = getattr(result, "side_effect", "")
+    if side_effect:
+        resp["side_effect"] = side_effect
+    evidence = getattr(result, "evidence", ())
+    if evidence:
+        resp["evidence"] = [e.as_dict() if hasattr(e, "as_dict") else dict(e) for e in evidence]
+    return resp
 
 
 @router.post("/poll")

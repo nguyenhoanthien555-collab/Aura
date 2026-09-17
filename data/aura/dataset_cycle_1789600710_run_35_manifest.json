@@ -1,0 +1,30 @@
+{
+  "dataset_id": "ds_dataset_cycle_1789600710_run_35",
+  "num_examples": 31,
+  "categories": {
+    "conversation": 15,
+    "tool_use": 3,
+    "tool_honesty": 5,
+    "safety": 2,
+    "identity": 4,
+    "reasoning": 2
+  },
+  "file_path": "D:\\AURA\\data\\aura\\dataset_cycle_1789600710_run_35.jsonl",
+  "checksum": "0d7123ababeb28d7a1a61634ba52ee1fe44d968b9096a9c858056f4b59ac6ae8",
+  "created_at": "2026-09-17T06:18:30",
+  "metadata": {
+    "version": "dataset_cycle_1789600710_run_35",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true,
+    "core_curriculum_included": true,
+    "core_curriculum_examples": 15,
+    "quarantined_contradictions": 1,
+    "quarantine_log": [
+      {
+        "id": "exp_run_f2f0ccf34528",
+        "reason": "Selected tool 'system.battery' is not in registered capability catalogue",
+        "type": "UNREGISTERED_TOOL"
+      }
+    ]
+  }
+}

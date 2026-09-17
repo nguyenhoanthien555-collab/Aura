@@ -1,5 +1,58 @@
 # Current task
 
+## Phase 5B.3 — Autonomous Capability Gap → Self-Extension Runtime Wiring DELIVERED (2026-09-14)
+
+Deliverable: Real user request autonomous self-extension pipeline in `AgentRuntime`, verified on live Windows laptop with Gemini 3.5 Flash Lite provider.
+
+### Key Deliverables Implemented & Verified:
+1. **Autonomous Synthesis Policy (`tools/builder/policy.py`)**:
+   - `AutonomousSynthesisPolicy` governing runtime platform eligibility (`local`, `python`, `win32`, `linux`), risk levels (`SAFE`), and recursion depth (`max_depth=1`).
+   - Lexical security token filter blocking hazardous requests (`subprocess`, `rm`, `delete`, `kill`, `shell`, `exec`, `eval`, `token`, `password`, `key`, `sms`, `network`, `http`, etc.).
+   - Concurrency deduplication: `acquire_synthesis_lock` / `release_synthesis_lock` prevents redundant concurrent syntheses for the same capability.
+2. **AgentRuntime Inline Wiring (`agent/runtime.py`)**:
+   - Integrated `_maybe_synthesize_gap(run)` at Round 0 in `advance(run)` before `_model_round()`.
+   - On gap detection (`CapabilityGapState.SYNTHESIZABLE`), triggers autonomous synthesis, AST validation, sandbox testing, approval, promotion, and dynamic authorization.
+   - Refreshes `_tools_payload` in-place so newly synthesized tool schema is immediately passed to model for native function calling in the **exact same run/turn**.
+3. **Production API & Startup Rehydration Integration**:
+   - `server/routes/agent.py`: Wired `ToolSynthesisEngine` (with `BrainRouter`) and `AutonomousSynthesisPolicy` into `get_intent_runtime()`.
+   - `tools/factory.py:build_registry()`: Automatically invokes `rehydrate_active_tools(registry)` on startup.
+   - `tools/builder/builder.py` & `rehydrate.py`: Dual-registered tool capability identifiers into `core.capabilities.registry` with keyword metadata.
+4. **Testing & Live Verification**:
+   - `tests/test_phase5b3_agent_synthesis.py`: **22/22 PASSED (100%)**
+   - Full Phase 5B Regression Suite: **83/83 PASSED (100%)** (`test_phase5b3_agent_synthesis.py`, `test_phase5b_synthesis.py`, `test_phase5b_dynamic_integration.py`, `test_phase5b_runtime.py`).
+   - Live Laptop E2E Verification (`scripts/verify_phase5b3_live.py`): **All 8 live scenarios PASSED (100%)** using real Gemini 3.5 Flash Lite model on Windows laptop host.
+
+---
+
+## Phase 5B.2 — Autonomous Tool Synthesis & Capability Gap Wiring DELIVERED (2026-09-14)
+
+Deliverable: Full autonomous tool self-extension lifecycle from intent to grounded response, verified on live Windows laptop with Gemini 3.5 Flash Lite provider.
+
+### Key Deliverables Implemented & Verified:
+1. **Autonomous Tool Synthesis Engine (`tools/builder/synthesis.py`)**:
+   - `ToolSynthesisRequest`, `ToolSynthesisResult`, `ToolSynthesisEngine`
+   - `FORBIDDEN_SYNTHESIS_TOKENS` lexical defense against recursive self-modification
+   - Iterative refinement retry loop feeding validation error feedback back into prompt
+   - Strict architectural contract adherence: `Tool` subclassing, `ToolRisk`, `SideEffect`, `parameters`, `ToolResult` with `Evidence`
+2. **Security & Sandbox Hardening (`tools/builder/builder.py`, `tools/builder/validator.py`)**:
+   - AST validation rejecting unauthorized imports (`subprocess`, `os`, `socket`), banned calls (`os.system`, `eval`), and reflection
+   - Subprocess sandbox isolation for candidate test execution
+   - Operator approval gate enforcement in `ToolBuilder.promote()`
+3. **Capability Gap Integration (`server/routes/capabilities.py`)**:
+   - `POST /api/capabilities/synthesize` endpoint connecting `CapabilityGapEngine` to `ToolSynthesisEngine`
+   - Capability auto-registration in `core.capabilities.registry` on promotion
+4. **Persistence & Lifecycle**:
+   - SQLite `ToolProvenanceRecord` persistence and SHA-256 digest validation on startup rehydration
+   - Disabling/revocation lifecycle enforcement in `ToolExecutor`
+5. **Testing & Live Verification**:
+   - `tests/test_phase5b_synthesis.py`: **16/16 PASSED**
+   - Regression suites (`test_phase5b_dynamic_integration.py`, `test_phase5b_runtime.py`, `test_capabilities.py`, `test_tools.py`, `test_tool_calling.py`): **245/245 PASSED (100%)**
+   - Live Laptop E2E Verification (`scripts/verify_phase5b2_live.py`): **All 10 live scenarios PASSED** using live Gemini 3.5 Flash Lite model
+
+---
+
+# Phase 5A (previous task, closed)
+
 Phase 5A **LIVE-CLOSED** — 2026-09-05. Every item of the Phase 5A.8 brief is
 VERIFIED on real hardware (`IBCQMB4PTGNZJVTO`), including the final mutating-
 action link: one live `android.launch_app` on the stock calculator produced an

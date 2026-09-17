@@ -22,6 +22,12 @@ class ToolRegistry:
     def __init__(self, tools: list[ToolProtocol] | None = None):
 
         self._tools: dict[str, ToolProtocol] = {}
+        self._versions: dict[str, list[ToolProtocol]] = {}
+        self._disabled: set[str] = set()
+        self._revoked: set[str] = set()
+        self._provenance: dict[str, dict] = {}
+        self._provenance_history: dict[str, list[dict]] = {}
+        self._dynamically_authorized: set[str] = set()
 
         for tool in tools or []:
             self.register(tool)
@@ -30,19 +36,19 @@ class ToolRegistry:
     # Registration
     # ------------------------------------------------------------------
 
-    def register(self, tool: ToolProtocol) -> None:
+    def register(
+        self,
+        tool: ToolProtocol,
+        version: int = 1,
+        provenance: dict | None = None,
+        allow_upgrade: bool = False,
+    ) -> None:
         """
         Add a tool.
 
         Rejects unnamed tools and duplicate names rather than silently
         shadowing: a tool that quietly replaces another is how a
         "read_file" ends up meaning something unexpected.
-
-        The shape is checked here rather than trusted, because this is the
-        boundary a plugin arrives through. isinstance against a
-        runtime_checkable Protocol confirms the attributes exist; `risk` is
-        then checked for what it is, since a Protocol cannot check types
-        and an unreadable risk level would bypass the approval gate.
         """
 
         name = (getattr(tool, "name", "") or "").strip()
@@ -63,18 +69,167 @@ class ToolRegistry:
             )
 
         if name in self._tools:
-            raise ValueError(f"Tool already registered: {name}")
+            if not allow_upgrade:
+                raise ValueError(f"Tool already registered: {name}")
+            # Keep previous version for rollback
+            self._versions.setdefault(name, []).append(self._tools[name])
+            if name in self._provenance:
+                self._provenance_history.setdefault(name, []).append(dict(self._provenance[name]))
 
         self._tools[name] = tool
+        self._disabled.discard(name)
+        if provenance is not None:
+            self._provenance[name] = dict(provenance)
 
         logger.debug("Registered tool: %s (%s)", name, tool.risk.value)
 
-    def unregister(self, name: str) -> bool:
+    def disable(self, name: str) -> bool:
+        """Disable a registered tool without deleting it."""
+        if name not in self._tools:
+            return False
+        self._disabled.add(name)
+        logger.info("Disabled tool: %s", name)
+        return True
 
+    def activate(self, name: str) -> bool:
+        """Re-activate a disabled tool."""
+        if name not in self._tools:
+            return False
+        if name in self._revoked:
+            logger.warning("Cannot activate revoked tool: %s", name)
+            return False
+        self._disabled.discard(name)
+        logger.info("Activated tool: %s", name)
+        return True
+
+    def revoke(self, name: str, reason: str = "") -> bool:
+        """
+        Permanently revoke a tool for safety or policy reasons.
+        Revoked tools cannot be activated and cannot execute.
+        """
+        if name not in self._tools:
+            return False
+        self._revoked.add(name)
+        self._disabled.add(name)
+        self._dynamically_authorized.discard(name)
+        logger.warning("Revoked tool %s: %s", name, reason or "no reason given")
+        return True
+
+    def is_revoked(self, name: str) -> bool:
+        """Whether a tool has been revoked."""
+        return name in self._revoked
+
+    def rollback(self, name: str) -> bool:
+        """Roll back a tool to its previous version, if one exists."""
+        history = self._versions.get(name, [])
+        if not history:
+            return False
+        previous = history.pop()
+        self._tools[name] = previous
+        self._disabled.discard(name)
+        self._revoked.discard(name)
+        if self._provenance_history.get(name):
+            self._provenance[name] = self._provenance_history[name].pop()
+        # Check if the rolled-back tool has active provenance
+        prev_prov = self.provenance_for(name)
+        if not prev_prov or prev_prov.get("status") != "ACTIVE":
+            self._dynamically_authorized.discard(name)
+        logger.info("Rolled back tool %s to previous version", name)
+        return True
+
+    def is_active(self, name: str) -> bool:
+        """Whether a tool is registered, active, and not revoked."""
+        return (
+            name in self._tools
+            and name not in self._disabled
+            and name not in self._revoked
+        )
+
+    def authorize_dynamic(self, name: str) -> bool:
+        """
+        Mark a dynamically registered tool as authorized for execution.
+        Requires that the tool exists, is not revoked, and has provenance.
+        """
+        if name not in self._tools or name in self._revoked:
+            return False
+        prov = self.provenance_for(name)
+        if not prov:
+            logger.warning("Cannot authorize dynamic tool '%s' without provenance", name)
+            return False
+        self._dynamically_authorized.add(name)
+        logger.info("Dynamically authorized tool: %s", name)
+        return True
+
+    def deauthorize_dynamic(self, name: str) -> None:
+        """Remove dynamic authorization for a tool."""
+        self._dynamically_authorized.discard(name)
+
+    def is_dynamically_authorized(self, name: str) -> bool:
+        """
+        Whether a tool is an authorized, active dynamic tool.
+        A tool must be in _dynamically_authorized, and is_active() must be True.
+        """
+        if name not in self._dynamically_authorized:
+            return False
+        return self.is_active(name)
+
+    def provenance_for(self, name: str) -> dict | None:
+        """Audit / provenance record for a tool."""
+        return self._provenance.get(name)
+
+    def get_provenance(self, name: str) -> dict | None:
+        """Alias for provenance_for."""
+        return self.provenance_for(name)
+
+    def version_of(self, name: str) -> int:
+        """Return the current version number for the tool."""
+        tool = self._tools.get(name)
+        if tool is not None and getattr(tool, "version", None) is not None:
+            return int(tool.version)
+        prov = self.provenance_for(name) or {}
+        return int(prov.get("version", 1))
+
+    def get_version(self, name: str) -> int:
+        """Alias for version_of."""
+        return self.version_of(name)
+
+    def inspect_tool(self, name: str) -> dict | None:
+        """
+        Full diagnostic inspection of tool registration and lifecycle state.
+        """
+        tool = self.get(name)
+        if tool is None:
+            return None
+        prov = self.provenance_for(name) or {}
+        return {
+            "name": name,
+            "version": self.version_of(name),
+            "is_active": self.is_active(name),
+            "is_disabled": name in self._disabled,
+            "is_revoked": name in self._revoked,
+            "previous_versions_count": len(self._versions.get(name, [])),
+            "risk": getattr(tool, "risk", None).value if getattr(tool, "risk", None) else "unknown",
+            "side_effect": getattr(tool, "side_effect", "UNKNOWN"),
+            "provenance": prov,
+        }
+
+    def unregister(self, name: str) -> bool:
+        self._disabled.discard(name)
+        self._revoked.discard(name)
+        self._dynamically_authorized.discard(name)
+        self._versions.pop(name, None)
+        self._provenance.pop(name, None)
+        self._provenance_history.pop(name, None)
         return self._tools.pop(name, None) is not None
 
     def clear(self) -> None:
         self._tools.clear()
+        self._versions.clear()
+        self._disabled.clear()
+        self._revoked.clear()
+        self._provenance.clear()
+        self._provenance_history.clear()
+        self._dynamically_authorized.clear()
 
     # ------------------------------------------------------------------
     # Lookup

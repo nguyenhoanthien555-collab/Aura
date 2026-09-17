@@ -106,7 +106,7 @@ class AuraRepository(
      * connection pool - which on a mobile link costs a full TLS handshake
      * every message.
      */
-    private fun api(): AuraApi? {
+    internal fun api(): AuraApi? {
 
         val url = settings.current.serverUrl
 

@@ -32,9 +32,138 @@ import kotlinx.serialization.json.put
  * executor tests can script and the phone can satisfy is what makes the
  * driver testable without hardware.
  */
+/**
+ * Contract for persisting tool execution reports to ensure idempotency and replay protection.
+ */
+interface InvocationLedger {
+    fun get(toolCallId: String): ToolResultReport?
+    fun record(toolCallId: String, report: ToolResultReport)
+    fun clear()
+}
+
+class InMemoryInvocationLedger(private val maxEntries: Int = 256) : InvocationLedger {
+    private val cache = LinkedHashMap<String, ToolResultReport>()
+    private val lock = Any()
+
+    override fun get(toolCallId: String): ToolResultReport? {
+        synchronized(lock) {
+            return cache[toolCallId]
+        }
+    }
+
+    override fun record(toolCallId: String, report: ToolResultReport) {
+        synchronized(lock) {
+            if (cache.size >= maxEntries) {
+                val eldest = cache.keys.firstOrNull()
+                if (eldest != null) cache.remove(eldest)
+            }
+            cache[toolCallId] = report
+        }
+    }
+
+    override fun clear() {
+        synchronized(lock) {
+            cache.clear()
+        }
+    }
+}
+
+class FileInvocationLedger(
+    private val storageFile: java.io.File,
+    private val maxEntries: Int = 256,
+) : InvocationLedger {
+    private val memoryMirror = LinkedHashMap<String, ToolResultReport>()
+    private val lock = Any()
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    init {
+        loadFromDisk()
+    }
+
+    private fun loadFromDisk() {
+        synchronized(lock) {
+            try {
+                if (storageFile.exists()) {
+                    val lines = storageFile.readLines()
+                    for (line in lines) {
+                        if (line.isBlank()) continue
+                        val parts = line.split("|||", limit = 2)
+                        if (parts.size == 2) {
+                            val id = parts[0].trim()
+                            val jsonStr = parts[1].trim()
+                            val report = json.decodeFromString(ToolResultReport.serializer(), jsonStr)
+                            memoryMirror[id] = report
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Non-fatal, start fresh
+            }
+        }
+    }
+
+    private fun persistToDisk() {
+        try {
+            val parent = storageFile.parentFile
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs()
+            }
+            val tempFile = java.io.File(storageFile.parentFile, "${storageFile.name}.tmp")
+            tempFile.bufferedWriter().use { writer ->
+                for ((id, report) in memoryMirror) {
+                    val jsonStr = json.encodeToString(ToolResultReport.serializer(), report)
+                    writer.write("$id|||$jsonStr\n")
+                }
+            }
+            if (!tempFile.renameTo(storageFile)) {
+                storageFile.delete()
+                tempFile.renameTo(storageFile)
+            }
+        } catch (e: Exception) {
+            // Non-fatal
+        }
+    }
+
+    override fun get(toolCallId: String): ToolResultReport? {
+        synchronized(lock) {
+            return memoryMirror[toolCallId]
+        }
+    }
+
+    override fun record(toolCallId: String, report: ToolResultReport) {
+        synchronized(lock) {
+            if (memoryMirror.size >= maxEntries) {
+                val eldest = memoryMirror.keys.firstOrNull()
+                if (eldest != null) memoryMirror.remove(eldest)
+            }
+            memoryMirror[toolCallId] = report
+            persistToDisk()
+        }
+    }
+
+    override fun clear() {
+        synchronized(lock) {
+            memoryMirror.clear()
+            try {
+                storageFile.delete()
+            } catch (e: Exception) {
+            }
+        }
+    }
+}
+
 class AccessibilityToolDispatcher(
     private val service: AuraAccessibilityService,
+    private val invocationLedger: InvocationLedger = InMemoryInvocationLedger(),
 ) : DeviceToolExecutor, DeviceCapabilityReporter {
+
+    fun getCachedReport(toolCallId: String): ToolResultReport? {
+        return invocationLedger.get(toolCallId)
+    }
+
+    fun clearExecutionCache() {
+        invocationLedger.clear()
+    }
 
     override fun capabilityStatus(): Map<String, DeviceCapabilityStatusDto> {
         val basePermissions = mapOf("android.accessibility" to true)
@@ -133,6 +262,13 @@ class AccessibilityToolDispatcher(
     override suspend fun execute(
         directive: ToolCallDirective,
     ): ToolResultReport {
+        if (directive.toolCallId.isNotEmpty()) {
+            val cached = invocationLedger.get(directive.toolCallId)
+            if (cached != null) {
+                return cached
+            }
+        }
+
         val capabilityId = CAPABILITY_BY_TOOL[directive.tool]
         if (capabilityId != null) {
             val status = capabilityStatus()[capabilityId]
@@ -153,7 +289,7 @@ class AccessibilityToolDispatcher(
             }
         }
 
-        return when (val validation = DeviceToolCatalog.validate(directive)) {
+        val report = when (val validation = DeviceToolCatalog.validate(directive)) {
             is DeviceToolCatalog.Validation.UnknownTool ->
                 failure(directive, TOOL_NOT_FOUND,
                     "this device has no tool ${directive.tool}")
@@ -170,6 +306,12 @@ class AccessibilityToolDispatcher(
                     error.message ?: "${directive.tool} failed")
             }
         }
+
+        if (directive.toolCallId.isNotEmpty()) {
+            invocationLedger.record(directive.toolCallId, report)
+        }
+
+        return report
     }
 
     // ------------------------------------------------------------------

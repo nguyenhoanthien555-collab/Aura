@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tool base types.
 
 A tool is a capability Aura can be granted: reading a file, opening an
@@ -24,6 +24,8 @@ from typing import Protocol, runtime_checkable
 
 from core.logger import logger
 from tools.outcome import (
+    Evidence,
+    EvidenceKind,
     SideEffect,
     ToolErrorCategory,
     ToolStatus,
@@ -120,6 +122,24 @@ class ToolResult:
                 datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             )
 
+        # Automatic canonical postcondition evidence extraction from data payload
+        if not self.evidence and isinstance(self.data, dict) and "postcondition" in self.data:
+            postcondition = self.data.get("postcondition")
+            if isinstance(postcondition, dict) and isinstance(postcondition.get("verified"), bool):
+                object.__setattr__(
+                    self,
+                    "evidence",
+                    (
+                        Evidence(
+                            kind=EvidenceKind.POSTCONDITION,
+                            source="postcondition",
+                            verified=postcondition.get("verified"),
+                            reference=self.tool,
+                            detail=str(postcondition.get("action", "postcondition")),
+                        ),
+                    ),
+                )
+
     def __bool__(self) -> bool:
         return self.ok
 
@@ -155,9 +175,12 @@ class ToolResult:
         effect reads as UNKNOWN, which no auto-retry may treat as a yes.
         """
 
+        raw = self.side_effect or SideEffect.UNKNOWN.value
+        if isinstance(raw, str) and raw.startswith("SideEffect."):
+            raw = raw.split(".", 1)[1]
         return retryability_of(
             self.status_enum,
-            SideEffect(self.side_effect or SideEffect.UNKNOWN.value),
+            SideEffect(raw),
         )
 
     @property

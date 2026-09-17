@@ -84,6 +84,8 @@ class ToolPolicy:
 
     enabled: bool = False
     allowed: frozenset[str] = frozenset()
+    allow_dynamic: bool = True
+    dynamically_authorized: frozenset[str] = frozenset()
     auto_approve: frozenset[ToolRisk] = field(
         default_factory=lambda: frozenset({ToolRisk.SAFE})
     )
@@ -109,6 +111,12 @@ class ToolPolicy:
                 for name in (config.get("allowed") or [])
                 if str(name).strip()
             ),
+            allow_dynamic=bool(config.get("allow_dynamic", True)),
+            dynamically_authorized=frozenset(
+                str(name).strip()
+                for name in (config.get("dynamically_authorized") or [])
+                if str(name).strip()
+            ),
             auto_approve=frozenset(risks),
             timeout=seconds_or(config.get("timeout"), DEFAULT_TOOL_TIMEOUT),
         )
@@ -126,8 +134,8 @@ class ToolExecutor:
         confirm: Confirm | None = None,
     ):
 
-        self.registry = registry or ToolRegistry()
-        self.policy = policy or ToolPolicy()
+        self.registry = registry if registry is not None else ToolRegistry()
+        self.policy = policy if policy is not None else ToolPolicy()
         self.events = events
         self.confirm = confirm
 
@@ -136,6 +144,23 @@ class ToolExecutor:
     # ------------------------------------------------------------------
     # Permission
     # ------------------------------------------------------------------
+
+    def is_allowed(self, name: str) -> bool:
+        """
+        Whether a tool is permitted by policy:
+        1. Explicitly named in static policy.allowed
+        2. Explicitly named in policy.dynamically_authorized
+        3. Registered and dynamically authorized in registry (when policy.allow_dynamic is True)
+        """
+        if name in self.policy.allowed:
+            return True
+        if name in self.policy.dynamically_authorized:
+            return True
+        if getattr(self.policy, "allow_dynamic", True):
+            if hasattr(self.registry, "is_dynamically_authorized"):
+                if self.registry.is_dynamically_authorized(name):
+                    return True
+        return False
 
     def available(self) -> list[str]:
         """Registered tools that policy would currently allow."""
@@ -146,7 +171,8 @@ class ToolExecutor:
         return [
             name
             for name in self.registry.names()
-            if name in self.policy.allowed
+            if self.registry.is_active(name)
+            and self.is_allowed(name)
             and getattr(self.registry.get(name), "capability", None)
             and resolve_capability(
                 getattr(self.registry.get(name), "capability", None)
@@ -167,7 +193,9 @@ class ToolExecutor:
 
         lines = []
         for name in self.registry.names():
-            if name not in self.policy.allowed:
+            if not self.registry.is_active(name):
+                continue
+            if not self.is_allowed(name):
                 continue
 
             tool = self.registry.get(name)
@@ -205,7 +233,13 @@ class ToolExecutor:
         if tool is None:
             return f"unknown tool: {name}"
 
-        if name not in self.policy.allowed:
+        if getattr(self.registry, "is_revoked", None) and self.registry.is_revoked(name):
+            return f"tool is revoked: {name}"
+
+        if not self.registry.is_active(name):
+            return f"tool is disabled: {name}"
+
+        if not self.is_allowed(name):
             return f"tool not allowed by policy: {name}"
 
         return ""
@@ -418,11 +452,14 @@ class ToolExecutor:
         # completed_at stamp stay intact - rebuilding the dataclass by
         # hand here would have silently dropped every Phase 3 field.
         if isinstance(result, ToolResult):
+            execution = result.execution
+            if execution not in ("not_attempted", "cancelled"):
+                execution = "completed" if result.ok else "failed"
             result = replace(
                 result,
                 capability=capability_id,
                 authorization="granted",
-                execution="completed" if result.ok else "failed",
+                execution=execution,
             )
 
         result = self._verified(tool, arguments, result)
@@ -534,6 +571,56 @@ class ToolExecutor:
         """
 
         if not result.ok:
+            if result.status != ToolStatus.TIMEOUT.value:
+                return result
+
+            # Observe state after TIMEOUT before declaring outcome
+            check = getattr(tool, "verify", None)
+            if not callable(check):
+                return result
+
+            name = getattr(tool, "name", "tool")
+            try:
+                verdict = check(**arguments)
+            except Exception as error:
+                logger.warning("Tool %s timed out and verify raised: %s", name, error)
+                return result
+
+            if verdict is None:
+                return result
+
+            if (verdict is True) or (getattr(verdict, "ok", False) is True):
+                return replace(
+                    result,
+                    ok=True,
+                    status=ToolStatus.SUCCESS.value,
+                    execution="completed",
+                    error="",
+                    evidence=result.evidence
+                    + (
+                        Evidence(
+                            EvidenceKind.POSTCONDITION,
+                            source="verify",
+                            verified=True,
+                            detail="observed after timeout",
+                        ),
+                    ),
+                )
+
+            return replace(
+                result,
+                evidence=result.evidence
+                + (
+                    Evidence(
+                        EvidenceKind.POSTCONDITION,
+                        source="verify",
+                        verified=False,
+                        detail="postcondition not met after timeout",
+                    ),
+                ),
+            )
+
+        if any(e.kind == EvidenceKind.POSTCONDITION for e in result.evidence):
             return result
 
         check = getattr(tool, "verify", None)
@@ -571,12 +658,13 @@ class ToolExecutor:
             # honest "it returned and nobody confirmed anything".
             return result
 
-        if getattr(verdict, "ok", True):
+        is_passed = (verdict is True) or (not isinstance(verdict, bool) and getattr(verdict, "ok", False) is True)
+        if is_passed:
             # A passed postcondition is real evidence, and attaching it
             # is what lets a caller read VERIFIED instead of guessing.
             return replace(
                 result,
-                evidence=result.evidence
+                evidence=tuple(result.evidence)
                 + (
                     Evidence(
                         EvidenceKind.POSTCONDITION,
@@ -627,8 +715,14 @@ class ToolExecutor:
     def _normalise(tool: ToolProtocol, result) -> ToolResult:
         """Accept a ToolResult or a plain string from `execute`."""
 
-        if isinstance(result, ToolResult):
+        raw_side_effect = getattr(tool, "side_effect", "")
+        side_effect = getattr(raw_side_effect, "value", raw_side_effect)
+        side_effect = "" if side_effect is None else str(side_effect)
+        if side_effect.startswith("SideEffect."):
+            side_effect = side_effect.split(".", 1)[1]
 
+        if isinstance(result, ToolResult):
+            effect = result.side_effect or side_effect
             if len(result.output) > MAX_OUTPUT:
                 # `replace`, not a hand-built ToolResult: truncation must
                 # not strip the status, evidence or execution identity.
@@ -636,13 +730,14 @@ class ToolExecutor:
                     result,
                     output=result.output[:MAX_OUTPUT] + " ...(truncated)",
                     tool=tool.name,
+                    side_effect=effect,
                 )
 
-            return replace(result, tool=tool.name or result.tool)
+            return replace(result, tool=tool.name or result.tool, side_effect=effect)
 
         text = "" if result is None else str(result)
 
-        return ok(text[:MAX_OUTPUT], tool=tool.name)
+        return ok(text[:MAX_OUTPUT], tool=tool.name, side_effect=side_effect)
 
     # ------------------------------------------------------------------
     # Argument validation

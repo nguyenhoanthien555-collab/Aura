@@ -1,0 +1,2989 @@
+{
+  "timestamp": 1789563806.3028119,
+  "device": {
+    "model": "OPPO Reno6 5G (CPH2251)",
+    "serial": "IBCQMB4PTGNZJVTO",
+    "android_version": "13",
+    "api_level": 33,
+    "architecture": "arm64-v8a",
+    "ip": "192.168.101.8",
+    "server_url": "http://192.168.101.9:8000/"
+  },
+  "tool_results": {
+    "android.get_foreground_app": {
+      "http_status": 200,
+      "duration_s": 2.219,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.get_foreground_app",
+        "status": "SUCCESS",
+        "retryable": "SAFE",
+        "evidence": "UNVERIFIED",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_5603330f84904334",
+        "ok": true,
+        "result": {
+          "package": "com.android.launcher",
+          "label": "System Launcher",
+          "activity": ""
+        },
+        "error": null,
+        "postcondition": null,
+        "observation_id": "obs_c53c369577db4924",
+        "observation": {
+          "observation_id": "obs_c53c369577db4924",
+          "kind": "foreground_app",
+          "source": "android_device",
+          "observed_at": 1789563808.31,
+          "content_hash": "e7a513a522b86d6673e7116236a954638d358f127249e202e9226c298d477445",
+          "data": {
+            "package": "com.android.launcher",
+            "label": "System Launcher",
+            "activity": ""
+          }
+        }
+      }
+    },
+    "android.get_ui_tree": {
+      "http_status": 200,
+      "duration_s": 2.237,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.get_ui_tree",
+        "status": "SUCCESS",
+        "retryable": "SAFE",
+        "evidence": "UNVERIFIED",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_54a434a138684195",
+        "ok": true,
+        "result": {
+          "node_count": 25,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "nodes": {
+            "node_1": {
+              "id": "node_1",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.ScrollView",
+              "clickable": false,
+              "bounds": [
+                0,
+                0,
+                1080,
+                2400
+              ],
+              "role": "scrollview",
+              "scrollable": true
+            },
+            "node_2": {
+              "id": "node_2",
+              "text": null,
+              "content_description": "Search",
+              "class_name": "com.android.launcher3.widget.CustomLauncherAppWidgetHostView",
+              "clickable": false,
+              "bounds": [
+                36,
+                175,
+                1044,
+                473
+              ],
+              "role": "customlauncherappwidgethostview"
+            },
+            "node_3": {
+              "id": "node_3",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                60,
+                240,
+                204,
+                408
+              ],
+              "role": "framelayout"
+            },
+            "node_4": {
+              "id": "node_4",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                204,
+                240,
+                588,
+                408
+              ],
+              "role": "framelayout"
+            },
+            "node_5": {
+              "id": "node_5",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                588,
+                240,
+                732,
+                408
+              ],
+              "role": "framelayout"
+            },
+            "node_6": {
+              "id": "node_6",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                732,
+                240,
+                876,
+                408
+              ],
+              "role": "framelayout"
+            },
+            "node_7": {
+              "id": "node_7",
+              "text": null,
+              "content_description": null,
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                876,
+                240,
+                1020,
+                408
+              ],
+              "role": "framelayout"
+            },
+            "node_8": {
+              "id": "node_8",
+              "text": null,
+              "content_description": "Google search",
+              "class_name": "android.widget.ImageView",
+              "clickable": false,
+              "bounds": [
+                60,
+                252,
+                1020,
+                396
+              ],
+              "role": "imageview"
+            },
+            "node_9": {
+              "id": "node_9",
+              "text": null,
+              "content_description": "Google app",
+              "class_name": "android.widget.ImageButton",
+              "clickable": true,
+              "bounds": [
+                60,
+                252,
+                204,
+                396
+              ],
+              "role": "imagebutton"
+            },
+            "node_10": {
+              "id": "node_10",
+              "text": null,
+              "content_description": "AI Mode",
+              "class_name": "android.widget.ImageButton",
+              "clickable": true,
+              "bounds": [
+                588,
+                252,
+                732,
+                396
+              ],
+              "role": "imagebutton"
+            },
+            "node_11": {
+              "id": "node_11",
+              "text": null,
+              "content_description": "Voice search",
+              "class_name": "android.widget.ImageButton",
+              "clickable": true,
+              "bounds": [
+                732,
+                252,
+                876,
+                396
+              ],
+              "role": "imagebutton"
+            },
+            "node_12": {
+              "id": "node_12",
+              "text": null,
+              "content_description": "Camera search",
+              "class_name": "android.widget.ImageButton",
+              "clickable": true,
+              "bounds": [
+                876,
+                252,
+                1020,
+                396
+              ],
+              "role": "imagebutton"
+            },
+            "node_13": {
+              "id": "node_13",
+              "text": "Chrome",
+              "content_description": "Chrome has 6 notifications",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                36,
+                473,
+                288,
+                771
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_14": {
+              "id": "node_14",
+              "text": "Play Store",
+              "content_description": "Play Store has 1 notification",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                288,
+                473,
+                540,
+                771
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_15": {
+              "id": "node_15",
+              "text": "Google",
+              "content_description": "Google",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                540,
+                473,
+                792,
+                771
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_16": {
+              "id": "node_16",
+              "text": "Settings",
+              "content_description": "Settings",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                792,
+                473,
+                1044,
+                771
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_17": {
+              "id": "node_17",
+              "text": null,
+              "content_description": "Folder:Tools",
+              "class_name": "android.widget.FrameLayout",
+              "clickable": true,
+              "bounds": [
+                36,
+                771,
+                288,
+                1069
+              ],
+              "role": "framelayout"
+            },
+            "node_18": {
+              "id": "node_18",
+              "text": "Tools",
+              "content_description": null,
+              "class_name": "android.widget.TextView",
+              "clickable": false,
+              "bounds": [
+                42,
+                968,
+                282,
+                1069
+              ],
+              "role": "textview"
+            },
+            "node_19": {
+              "id": "node_19",
+              "text": "YouTube",
+              "content_description": "YouTube has 1 notification",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                288,
+                771,
+                540,
+                1069
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_20": {
+              "id": "node_20",
+              "text": "Gmail",
+              "content_description": "Gmail",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                540,
+                771,
+                792,
+                1069
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_21": {
+              "id": "node_21",
+              "text": "Search",
+              "content_description": null,
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                421,
+                1986,
+                659,
+                2070
+              ],
+              "role": "textview"
+            },
+            "node_22": {
+              "id": "node_22",
+              "text": null,
+              "content_description": "Phone",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                36,
+                2100,
+                288,
+                2352
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_23": {
+              "id": "node_23",
+              "text": null,
+              "content_description": "Facebook",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                288,
+                2100,
+                540,
+                2352
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_24": {
+              "id": "node_24",
+              "text": null,
+              "content_description": "Messenger has 1 notification",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                540,
+                2100,
+                792,
+                2352
+              ],
+              "role": "textview",
+              "long_clickable": true
+            },
+            "node_25": {
+              "id": "node_25",
+              "text": null,
+              "content_description": "Camera",
+              "class_name": "android.widget.TextView",
+              "clickable": true,
+              "bounds": [
+                792,
+                2100,
+                1044,
+                2352
+              ],
+              "role": "textview",
+              "long_clickable": true
+            }
+          }
+        },
+        "error": null,
+        "postcondition": null,
+        "observation_id": "obs_51c06bb0fe2e4742",
+        "observation": {
+          "observation_id": "obs_51c06bb0fe2e4742",
+          "kind": "accessibility_tree",
+          "source": "android_device",
+          "observed_at": 1789563810.49,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "package": "com.android.launcher"
+          }
+        }
+      }
+    },
+    "android.find_node": {
+      "http_status": 200,
+      "duration_s": 2.181,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.find_node",
+        "status": "FAILED",
+        "retryable": "SAFE",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_ef704748a9d3443d",
+        "error_code": "NODE_NOT_FOUND",
+        "error_category": "EXECUTION",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "NODE_NOT_FOUND",
+          "message": "no visible node matching 'Aura'"
+        },
+        "postcondition": null,
+        "observation_id": "obs_04414e62412f4fea",
+        "observation": {
+          "observation_id": "obs_04414e62412f4fea",
+          "kind": "accessibility_tree",
+          "source": "android_device",
+          "observed_at": 1789563812.716,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "package": "com.android.launcher"
+          }
+        }
+      }
+    },
+    "android.list_apps": {
+      "http_status": 200,
+      "duration_s": 3.089,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.list_apps",
+        "status": "SUCCESS",
+        "retryable": "SAFE",
+        "evidence": "VERIFIED",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_ddaad2bd791a44f7",
+        "ok": true,
+        "result": {
+          "packages": [
+            {
+              "package": "ai.x.grok",
+              "label": "Grok",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.2.36-release.00"
+            },
+            {
+              "package": "android",
+              "label": "Android System",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "android.connectivity.base.overlay",
+              "label": "android.connectivity.base.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "android.frameworkres.overlay.Network",
+              "label": "android.frameworkres.overlay.Network",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "android.frameworkres.overlay.defaultmms",
+              "label": "android.frameworkres.overlay.defaultmms",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "android.frameworkres.overlay.display.odm",
+              "label": "android.frameworkres.overlay.display.odm",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "android.frameworkres.overlay.display.product",
+              "label": "android.frameworkres.overlay.display.product",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "33"
+            },
+            {
+              "package": "cn.wps.moffice_eng",
+              "label": "WPS Office",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "26.8.1"
+            },
+            {
+              "package": "com.IedeGirl",
+              "label": "Runaway",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "80"
+            },
+            {
+              "package": "com.android.backupconfirm",
+              "label": "com.android.backupconfirm",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.bluetooth",
+              "label": "Bluetooth",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.0"
+            },
+            {
+              "package": "com.android.bluetooth.oplus.overlay",
+              "label": "com.android.bluetooth.oplus.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.calllogbackup",
+              "label": "Call Log Backup/Restore",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.1"
+            },
+            {
+              "package": "com.android.cameraextensions",
+              "label": "CameraExtensionsProxy",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.carrierconfig",
+              "label": "com.android.carrierconfig",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0.0"
+            },
+            {
+              "package": "com.android.carrierconfig.oplus.overlay",
+              "label": "com.android.carrierconfig.oplus.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.carrierdefaultapp",
+              "label": "CarrierDefaultApp",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.cellbroadcastreceiver",
+              "label": "com.android.cellbroadcastreceiver",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "R-initial"
+            },
+            {
+              "package": "com.android.certinstaller",
+              "label": "Certificate Installer",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.5"
+            },
+            {
+              "package": "com.android.chrome",
+              "label": "Chrome",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "152.0.7977.82"
+            },
+            {
+              "package": "com.android.companiondevicemanager",
+              "label": "Companion Device Manager",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.contacts",
+              "label": "Contacts",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "13.17.21"
+            },
+            {
+              "package": "com.android.dynsystem",
+              "label": "Dynamic System Updates",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.egg",
+              "label": "Android S Easter Egg",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.externalstorage",
+              "label": "External Storage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.incallui",
+              "label": "Phone",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.12.17"
+            },
+            {
+              "package": "com.android.inputdevices",
+              "label": "Input Devices",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.keychain",
+              "label": "Key Chain",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.1"
+            },
+            {
+              "package": "com.android.launcher",
+              "label": "System Launcher",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.46"
+            },
+            {
+              "package": "com.android.localtransport",
+              "label": "com.android.localtransport",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.location.fused",
+              "label": "Fused Location",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.managedprovisioning",
+              "label": "Work Setup",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.mms",
+              "label": "Messages",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "15.160.0"
+            },
+            {
+              "package": "com.android.mms.service",
+              "label": "Information services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.20.0"
+            },
+            {
+              "package": "com.android.mtp",
+              "label": "MTP Host",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.networkstack.inprocess.overlay",
+              "label": "NetworkStackInProcessResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.android.networkstack.overlay",
+              "label": "NetworkStackResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.android.networkstack.tethering.inprocess.overlay",
+              "label": "TetheringResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.android.networkstack.tethering.overlay",
+              "label": "TetheringResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.android.nfc",
+              "label": "NFC Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.17.250812"
+            },
+            {
+              "package": "com.android.ons",
+              "label": "com.android.ons",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.pacprocessor",
+              "label": "PacProcessor",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.phone",
+              "label": "Phone Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.17.0"
+            },
+            {
+              "package": "com.android.providers.blockednumber",
+              "label": "Save Blocked Numbers",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.0"
+            },
+            {
+              "package": "com.android.providers.calendar",
+              "label": "Calendar storage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.10"
+            },
+            {
+              "package": "com.android.providers.contacts",
+              "label": "Contacts Storage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.55"
+            },
+            {
+              "package": "com.android.providers.downloads",
+              "label": "Download Manager",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.2"
+            },
+            {
+              "package": "com.android.providers.downloads.ui",
+              "label": "Downloads",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.providers.media",
+              "label": "com.android.providers.media",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.providers.settings",
+              "label": "Settings Storage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.4"
+            },
+            {
+              "package": "com.android.providers.telephony",
+              "label": "Phone Call/SMS Storage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.120"
+            },
+            {
+              "package": "com.android.providers.userdictionary",
+              "label": "User Dictionary",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.proxyhandler",
+              "label": "ProxyHandler",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.safetycenter.resources.overlay",
+              "label": "com.android.safetycenter.resources.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.00.01"
+            },
+            {
+              "package": "com.android.safetycenter.styles.overlay",
+              "label": "com.android.safetycenter.styles.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.00.01"
+            },
+            {
+              "package": "com.android.se",
+              "label": "SecureElementApplication",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.5"
+            },
+            {
+              "package": "com.android.server.telecom",
+              "label": "Phone calls",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.20.45"
+            },
+            {
+              "package": "com.android.settings",
+              "label": "Settings",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "13.0.5"
+            },
+            {
+              "package": "com.android.settings.intelligence",
+              "label": "Settings Suggestions",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.1"
+            },
+            {
+              "package": "com.android.sharedstoragebackup",
+              "label": "com.android.sharedstoragebackup",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.shell",
+              "label": "Shell",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.statementservice",
+              "label": "Intent Filter Verification Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.1"
+            },
+            {
+              "package": "com.android.stk",
+              "label": "SIM Toolkit",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "13.2.60"
+            },
+            {
+              "package": "com.android.storagemanager",
+              "label": "Storage Manager",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.systemui",
+              "label": "System UI",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.10.21"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.ccyh",
+              "label": "Flare",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.fy",
+              "label": "Stardust",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.jslz",
+              "label": "Sparks",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.none",
+              "label": "None",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.sw",
+              "label": "Bubble",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.xklc",
+              "label": "Ripple",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.overlay.fingerprint.anim.xw",
+              "label": "Swirl",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.systemui.plugin.globalactions.wallet",
+              "label": "com.android.systemui.plugin.globalactions.wallet",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "11.0.0"
+            },
+            {
+              "package": "com.android.traceur",
+              "label": "System Tracing",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.vending",
+              "label": "Google Play Store",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "53.0.27-31 [0] [PR] 973951861"
+            },
+            {
+              "package": "com.android.vendors.bridge.softsim",
+              "label": "com.android.vendors.bridge.softsim",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.0"
+            },
+            {
+              "package": "com.android.vpndialogs",
+              "label": "VpnDialogs",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.000.4"
+            },
+            {
+              "package": "com.android.wallpaper.livepicker",
+              "label": "Live wallpaper selector",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.0"
+            },
+            {
+              "package": "com.android.wallpaperbackup",
+              "label": "com.android.wallpaperbackup",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.android.wifi.mainline.resources.overlay",
+              "label": "com.android.wifi.mainline.resources.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.wifi.resources.overlay",
+              "label": "com.android.wifi.resources.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.wifi.system.mainline.resources.overlay",
+              "label": "com.android.wifi.system.mainline.resources.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.android.wifi.system.resources.overlay",
+              "label": "com.android.wifi.system.resources.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.anthropic.claude",
+              "label": "Claude",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.260911.19"
+            },
+            {
+              "package": "com.aura.companion",
+              "label": "Aura",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "0.1.0"
+            },
+            {
+              "package": "com.bachhoaxanh",
+              "label": "B\u00e1ch H\u00f3a Xanh",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.0.6"
+            },
+            {
+              "package": "com.blockchainvault",
+              "label": "Pi",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.46.1"
+            },
+            {
+              "package": "com.cloudflare.onedotonedotonedotone",
+              "label": "1.1.1.1",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "6.38.9"
+            },
+            {
+              "package": "com.coloros.alarmclock",
+              "label": "Clock",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "14.10.6"
+            },
+            {
+              "package": "com.coloros.assistantscreen",
+              "label": "Shelf",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17.12.21"
+            },
+            {
+              "package": "com.coloros.backuprestore",
+              "label": "Clone Phone",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "15.14.0"
+            },
+            {
+              "package": "com.coloros.calculator",
+              "label": "Calculator",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "15.4.14"
+            },
+            {
+              "package": "com.coloros.childrenspace",
+              "label": "Kid Space",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "13.2.5"
+            },
+            {
+              "package": "com.coloros.compass2",
+              "label": "Compass",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "15.3.6"
+            },
+            {
+              "package": "com.coloros.filemanager",
+              "label": "My Files",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.5.12"
+            },
+            {
+              "package": "com.coloros.gallery3d",
+              "label": "Photos",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.32.38"
+            },
+            {
+              "package": "com.coloros.musiclink",
+              "label": "Music Party",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "14.2.0"
+            },
+            {
+              "package": "com.coloros.note",
+              "label": "Notes",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "13.10.44"
+            },
+            {
+              "package": "com.coloros.onekeylockscreen",
+              "label": "Screen Lock",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "15.0.3"
+            },
+            {
+              "package": "com.coloros.phonemanager",
+              "label": "Phone Manager",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "17.3.15"
+            },
+            {
+              "package": "com.coloros.soundrecorder",
+              "label": "Recorder",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.0.9"
+            },
+            {
+              "package": "com.coloros.systemclone",
+              "label": "System Cloner",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "13.1.8"
+            },
+            {
+              "package": "com.coloros.video",
+              "label": "Videos (System)",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "9.29.1.0"
+            },
+            {
+              "package": "com.coloros.weather2",
+              "label": "Weather",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.42.2"
+            },
+            {
+              "package": "com.daemon.shelper",
+              "label": "Shelper",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.1.363"
+            },
+            {
+              "package": "com.debug.loggerui",
+              "label": "DebugLoggerUI",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "6.2.0"
+            },
+            {
+              "package": "com.discord",
+              "label": "Discord",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "345.9 - Stable"
+            },
+            {
+              "package": "com.facebook.katana",
+              "label": "Facebook",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "579.0.0.40.74"
+            },
+            {
+              "package": "com.facebook.orca",
+              "label": "Messenger",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "579.0.0.33.91"
+            },
+            {
+              "package": "com.familygo.simgame",
+              "label": "Family Go!",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.4.4.0"
+            },
+            {
+              "package": "com.fido.asm",
+              "label": "FIDO UAF1.0 ASM",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "3.18.0"
+            },
+            {
+              "package": "com.fido.fido2client",
+              "label": "asmsdk",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.fido.uafclient",
+              "label": "FIDO UAF1.0 Client",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "3.7.3"
+            },
+            {
+              "package": "com.google.android.adservices.api",
+              "label": "Ad Privacy",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.apps.authenticator2",
+              "label": "Authenticator",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "7.2"
+            },
+            {
+              "package": "com.google.android.apps.bard",
+              "label": "Gemini",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.0.971139365"
+            },
+            {
+              "package": "com.google.android.apps.docs",
+              "label": "Drive",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2.26.365.0.all.alldpi"
+            },
+            {
+              "package": "com.google.android.apps.docs.editors.docs",
+              "label": "Docs",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.26.361.02.90"
+            },
+            {
+              "package": "com.google.android.apps.googleassistant",
+              "label": "Assistant",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "0.1.884448652"
+            },
+            {
+              "package": "com.google.android.apps.labs.language.tailwind",
+              "label": "Notebook",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.57.7.979266931"
+            },
+            {
+              "package": "com.google.android.apps.maps",
+              "label": "Maps",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "26.37.05.977222275"
+            },
+            {
+              "package": "com.google.android.apps.nbu.files",
+              "label": "Files by Google",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.12252.964568919.2-release"
+            },
+            {
+              "package": "com.google.android.apps.photos",
+              "label": "Photos",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "7.90.0.971743778"
+            },
+            {
+              "package": "com.google.android.apps.subscriptions.red",
+              "label": "Google One",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.175.516970471"
+            },
+            {
+              "package": "com.google.android.apps.translate",
+              "label": "Translate",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "10.33.76.972179617.2-release"
+            },
+            {
+              "package": "com.google.android.apps.walletnfcrel",
+              "label": "Google Wallet",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "26.36.978794874"
+            },
+            {
+              "package": "com.google.android.apps.wellbeing",
+              "label": "Digital Wellbeing",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.47.964183037 (874367)"
+            },
+            {
+              "package": "com.google.android.apps.youtube.music",
+              "label": "YouTube Music",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "9.35.54"
+            },
+            {
+              "package": "com.google.android.calendar",
+              "label": "Calendar",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2026.35.2-977582652-release"
+            },
+            {
+              "package": "com.google.android.cellbroadcastreceiver",
+              "label": "Wireless emergency alerts",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "R-initial"
+            },
+            {
+              "package": "com.google.android.cellbroadcastreceiver.overlay",
+              "label": "CellBroadcastReceiverModuleOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0.6"
+            },
+            {
+              "package": "com.google.android.cellbroadcastservice",
+              "label": "Cell Broadcast Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "R-initial"
+            },
+            {
+              "package": "com.google.android.cellbroadcastservice.overlay",
+              "label": "CellBroadcastServiceModuleOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0.5"
+            },
+            {
+              "package": "com.google.android.documentsui",
+              "label": "Files",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.ext.services",
+              "label": "Android Services Library",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "aml_370549340"
+            },
+            {
+              "package": "com.google.android.federatedcompute",
+              "label": "com.google.android.federatedcompute",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.gm",
+              "label": "Gmail",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2026.08.31.977101690.Release"
+            },
+            {
+              "package": "com.google.android.gms",
+              "label": "Google Play services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "26.32.34 (190400-968093310)"
+            },
+            {
+              "package": "com.google.android.gms.supervision",
+              "label": "Family Link parental controls",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "0.1.453788429"
+            },
+            {
+              "package": "com.google.android.googlequicksearchbox",
+              "label": "Google",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "17.54.12.ve.arm64"
+            },
+            {
+              "package": "com.google.android.gsf",
+              "label": "Google Services Framework",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13-8768315"
+            },
+            {
+              "package": "com.google.android.inputmethod.latin",
+              "label": "Gboard",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "18.3.1.977415014-beta-arm64-v8a"
+            },
+            {
+              "package": "com.google.android.keep",
+              "label": "Keep Notes",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "5.26.361.01.90"
+            },
+            {
+              "package": "com.google.android.marvin.talkback",
+              "label": "Android Accessibility Suite",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17.0.1.926549743"
+            },
+            {
+              "package": "com.google.android.modulemetadata",
+              "label": "Main components",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2026-07-01S+"
+            },
+            {
+              "package": "com.google.android.networkstack",
+              "label": "Network manager",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.networkstack.tethering",
+              "label": "Tethering",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.networkstack.tethering.overlay",
+              "label": "TetheringResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.google.android.ondevicepersonalization.services",
+              "label": "com.android.ondevicepersonalization.services.OnDevicePersonalizationApplication",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.overlay.modules.captiveportallogin.forframework",
+              "label": "com.google.android.overlay.modules.captiveportallogin.forframework",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.google.android.overlay.modules.ext.services",
+              "label": "com.google.android.overlay.modules.ext.services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.google.android.overlay.modules.modulemetadata.forframework",
+              "label": "com.google.android.overlay.modules.modulemetadata.forframework",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.google.android.overlay.modules.permissioncontroller.forframework",
+              "label": "com.google.android.overlay.modules.permissioncontroller.forframework",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.google.android.packageinstaller",
+              "label": "Package installer",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13-9592525"
+            },
+            {
+              "package": "com.google.android.permissioncontroller",
+              "label": "Permission controller",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "aml_371017160"
+            },
+            {
+              "package": "com.google.android.permissioncontroller.overlay.oplus",
+              "label": "com.google.android.permissioncontroller.overlay.oplus",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.00.01"
+            },
+            {
+              "package": "com.google.android.play.games",
+              "label": "Google Play Games",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2025.09.66390 (902601108.902601108-190400)"
+            },
+            {
+              "package": "com.google.android.projection.gearhead",
+              "label": "Android Auto",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17.7.663634-release"
+            },
+            {
+              "package": "com.google.android.providers.media.module",
+              "label": "Media picker",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "17"
+            },
+            {
+              "package": "com.google.android.sdksandbox",
+              "label": "com.google.android.sdksandbox",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "T-initial"
+            },
+            {
+              "package": "com.google.android.tts",
+              "label": "Speech Recognition and Synthesis from Google",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "googletts.google-speech-apk_20260817.01_p0.966249458"
+            },
+            {
+              "package": "com.google.android.youtube",
+              "label": "YouTube",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "21.37.42"
+            },
+            {
+              "package": "com.google.ar.lens",
+              "label": "Lens",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.18.250731009"
+            },
+            {
+              "package": "com.google.mainline.adservices",
+              "label": "Main components",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2026-05-01T+"
+            },
+            {
+              "package": "com.google.mainline.telemetry",
+              "label": "Support components",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2026-06-01S+"
+            },
+            {
+              "package": "com.grabtaxi.passenger",
+              "label": "Grab",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "5.427.0"
+            },
+            {
+              "package": "com.heytap.browser",
+              "label": "Internet",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "45.13.6.9"
+            },
+            {
+              "package": "com.heytap.cloud",
+              "label": "HeyTap Cloud",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "6.0.70"
+            },
+            {
+              "package": "com.heytap.market",
+              "label": "App Market",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "16.12.62"
+            },
+            {
+              "package": "com.heytap.mcs",
+              "label": "System Messages",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "5.26.12"
+            },
+            {
+              "package": "com.heytap.music",
+              "label": "Music",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "48.15.1.58.2_651ee1d_260731"
+            },
+            {
+              "package": "com.hrd.vocabulary",
+              "label": "Vocabulary",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "5.7.1"
+            },
+            {
+              "package": "com.instagram.android",
+              "label": "Instagram",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "448.0.0.0.48"
+            },
+            {
+              "package": "com.intsig.camscanner",
+              "label": "CamScanner",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "7.25.5.2609020000"
+            },
+            {
+              "package": "com.kibori.stickers",
+              "label": "Kibori",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.1.2"
+            },
+            {
+              "package": "com.locket.Locket",
+              "label": "Locket",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.239.1"
+            },
+            {
+              "package": "com.mediatek",
+              "label": "com.mediatek",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.mediatek.FrameworkResOverlayExt",
+              "label": "com.mediatek.FrameworkResOverlayExt",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.mediatek.MtkSettingsResOverlay",
+              "label": "com.mediatek.MtkSettingsResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.mediatek.SettingsProviderResOverlay",
+              "label": "com.mediatek.SettingsProviderResOverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.mediatek.atci.service",
+              "label": "Atci_service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.mediatek.cellbroadcastuiresoverlay",
+              "label": "com.mediatek.cellbroadcastuiresoverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.mediatek.engineermode",
+              "label": "EngineerMode",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.mediatek.frameworkresoverlay",
+              "label": "com.mediatek.frameworkresoverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.mediatek.ims",
+              "label": "ImsApp",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.mediatek.lbs.em2.ui",
+              "label": "LocationEM2",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.mediatek.location.lppe.main",
+              "label": "LPPe Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.mediatek.location.mtkgeofence",
+              "label": "Mtk Geofence",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.mediatek.miravision.ui",
+              "label": "MiraVision",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.mediatek.mt6877.gamedriver",
+              "label": "Arm GPU Game Driver",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "5496489d5f2c7adbc894c70fc24f6387"
+            },
+            {
+              "package": "com.mediatek.systemuiresoverlay",
+              "label": "com.mediatek.systemuiresoverlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "12"
+            },
+            {
+              "package": "com.mediatek.telephony",
+              "label": "Telephony Assist",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.mediatek.voicecommand",
+              "label": "VoiceCommand",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.meitu.wink",
+              "label": "Wink",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.15.5"
+            },
+            {
+              "package": "com.microsoft.office.word",
+              "label": "Word",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.0.20430.20032"
+            },
+            {
+              "package": "com.mihoyo.hoyolab",
+              "label": "HoYoLAB",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "4.20.0"
+            },
+            {
+              "package": "com.mservice.momotransfer",
+              "label": "MoMo",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "5.15.0"
+            },
+            {
+              "package": "com.nearme.gamecenter",
+              "label": "Game Center",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "16.2.7"
+            },
+            {
+              "package": "com.netflix.mediaclient",
+              "label": "Netflix",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "1.0.0"
+            },
+            {
+              "package": "com.ninjakiwi.btdadventuretime",
+              "label": "Bloons Adventure Time TD",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.7.7"
+            },
+            {
+              "package": "com.novacore.reader",
+              "label": "WeToon",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2.7"
+            },
+            {
+              "package": "com.openai.chatgpt",
+              "label": "ChatGPT",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.2026.244"
+            },
+            {
+              "package": "com.oplus.appplatform",
+              "label": "App Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.5"
+            },
+            {
+              "package": "com.oplus.athena",
+              "label": "Athena",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "3.7.41"
+            },
+            {
+              "package": "com.oplus.atlas",
+              "label": "atlasService",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.0"
+            },
+            {
+              "package": "com.oplus.audio.effectcenter",
+              "label": "AudioEffectCenter",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.31"
+            },
+            {
+              "package": "com.oplus.battery",
+              "label": "Battery",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.2.1"
+            },
+            {
+              "package": "com.oplus.bttestmode",
+              "label": "BTtestmode",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2.0.20150831"
+            },
+            {
+              "package": "com.oplus.camera",
+              "label": "Camera",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.526.106"
+            },
+            {
+              "package": "com.oplus.cosa",
+              "label": "App Enhancement Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.83"
+            },
+            {
+              "package": "com.oplus.crashbox",
+              "label": "CrashBox",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "14.1.6"
+            },
+            {
+              "package": "com.oplus.customize.coreapp",
+              "label": "CustCoreApp",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.oplus.deepthinker",
+              "label": "Intelligent Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.9.332"
+            },
+            {
+              "package": "com.oplus.eid",
+              "label": "Eid-Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.engineercamera",
+              "label": "EngineerCamera",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "V4.0"
+            },
+            {
+              "package": "com.oplus.engineermode",
+              "label": "EngineerMode",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "V13.0"
+            },
+            {
+              "package": "com.oplus.engineernetwork",
+              "label": "EngineerNetwork",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "V13.3.26"
+            },
+            {
+              "package": "com.oplus.exserviceui",
+              "label": "Gesture_Motion Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.2.0"
+            },
+            {
+              "package": "com.oplus.exsystemservice",
+              "label": "System Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.1.5"
+            },
+            {
+              "package": "com.oplus.eyeprotect",
+              "label": "Eye comfort",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2.1"
+            },
+            {
+              "package": "com.oplus.framework.rro.oppo",
+              "label": "com.oplus.framework.rro.oppo",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.oplus.framework_bluetooth.overlay",
+              "label": "com.oplus.framework_bluetooth.overlay",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.games",
+              "label": "Game Assistant",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "10.39.22"
+            },
+            {
+              "package": "com.oplus.gesture",
+              "label": "Gestures & motions",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "8.1.0"
+            },
+            {
+              "package": "com.oplus.healthservice",
+              "label": "healthservice",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.3"
+            },
+            {
+              "package": "com.oplus.lfeh",
+              "label": "OplusLFEHer",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.1.3"
+            },
+            {
+              "package": "com.oplus.location",
+              "label": "Network Location Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.20.231010"
+            },
+            {
+              "package": "com.oplus.logkit",
+              "label": "Feedback",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.3.14"
+            },
+            {
+              "package": "com.oplus.nas",
+              "label": "Network services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "V13.1.8"
+            },
+            {
+              "package": "com.oplus.nhs",
+              "label": "NetworkHealthService",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.3.42"
+            },
+            {
+              "package": "com.oplus.notificationmanager",
+              "label": "Manage notifications",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.99.12.22"
+            },
+            {
+              "package": "com.oplus.nrMode",
+              "label": "OplusNrModeControl",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.obrain",
+              "label": "OBrain",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.3"
+            },
+            {
+              "package": "com.oplus.ocloud",
+              "label": "com.oplus.ocloud",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.olc",
+              "label": "Olc",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "V13.3.14"
+            },
+            {
+              "package": "com.oplus.onetrace",
+              "label": "OneTrace",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.3.46"
+            },
+            {
+              "package": "com.oplus.ota",
+              "label": "Software update",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "3.17.38"
+            },
+            {
+              "package": "com.oplus.postmanservice",
+              "label": "Diagnostic Tool",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.3.5"
+            },
+            {
+              "package": "com.oplus.powermonitor",
+              "label": "Power Monitor",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.103"
+            },
+            {
+              "package": "com.oplus.qualityprotect",
+              "label": "QualityProtect",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.15"
+            },
+            {
+              "package": "com.oplus.safecenter",
+              "label": "Security Center",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.0.0"
+            },
+            {
+              "package": "com.oplus.sau",
+              "label": "System Upgrade Services",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.3.18"
+            },
+            {
+              "package": "com.oplus.sauhelper",
+              "label": "SAUHelper",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.13.130"
+            },
+            {
+              "package": "com.oplus.securitypermission",
+              "label": "Permission manager",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "3.1.0"
+            },
+            {
+              "package": "com.oplus.stdid",
+              "label": "StdID",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2.1.4"
+            },
+            {
+              "package": "com.oplus.stdsp",
+              "label": "StdSP Core",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "2.1.6_9512d76_231115"
+            },
+            {
+              "package": "com.oplus.subsys",
+              "label": "Subsystem Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.themestore",
+              "label": "Theme Store",
+              "launchable": false,
+              "enabled": false,
+              "version_name": "15.6.5_expt"
+            },
+            {
+              "package": "com.oplus.trafficmonitor",
+              "label": "Data usage",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.5.0"
+            },
+            {
+              "package": "com.oplus.uxdesign",
+              "label": "Wallpapers & style",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.1.2"
+            },
+            {
+              "package": "com.oplus.vdc",
+              "label": "VDC Service",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.2.28"
+            },
+            {
+              "package": "com.oplus.vip",
+              "label": "My OPPO",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "EXP_9.16.0_0db8a16"
+            },
+            {
+              "package": "com.oplus.virtualcomm",
+              "label": "OplusVirtualComm",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.oplus.wifibackuprestore",
+              "label": "WifiBackupRestore",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.2.4"
+            },
+            {
+              "package": "com.oplus.wirelesssettings",
+              "label": "Wireless Settings",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13.8.2"
+            },
+            {
+              "package": "com.pinterest",
+              "label": "Pinterest",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "14.35.0"
+            },
+            {
+              "package": "com.quang2k6.locketwan",
+              "label": "Locket Wan",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.1.1"
+            },
+            {
+              "package": "com.sacombank.ewallet",
+              "label": "SACOMBANK PAY",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2.8.5"
+            },
+            {
+              "package": "com.ses.entitlement.o2",
+              "label": "com.ses.entitlement.o2.EntitlementApp",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.shopee.vn",
+              "label": "Shopee",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.81.32"
+            },
+            {
+              "package": "com.spotify.music",
+              "label": "Spotify",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "9.1.80.2221"
+            },
+            {
+              "package": "com.ss.android.ugc.trill",
+              "label": "TikTok",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "46.8.3"
+            },
+            {
+              "package": "com.taptap.global",
+              "label": "TapTap",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.56.9-full.100000"
+            },
+            {
+              "package": "com.tencent.mm",
+              "label": "WeChat",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "8.0.72"
+            },
+            {
+              "package": "com.tencent.soter.soterserver",
+              "label": "aidlserverdemo",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "1.0"
+            },
+            {
+              "package": "com.truedevelopersstudio.automatictap.autoclicker",
+              "label": "Auto Clicker",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2.3.0"
+            },
+            {
+              "package": "com.twitter.android",
+              "label": "X",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "12.25.2-prod.01"
+            },
+            {
+              "package": "com.vnid",
+              "label": "VNeID",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "2.2.11"
+            },
+            {
+              "package": "com.vnp.myvinaphone",
+              "label": "My VNPT",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "3.4.07.Prd"
+            },
+            {
+              "package": "com.vnptit.vnedu.parent",
+              "label": "vnEdu Connect",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "4.3.0"
+            },
+            {
+              "package": "com.wapi.wapicertmanager",
+              "label": "WAPI certificate",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "13"
+            },
+            {
+              "package": "com.zing.zalo",
+              "label": "Zalo",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "26.08.02"
+            },
+            {
+              "package": "oplus",
+              "label": "Android System",
+              "launchable": false,
+              "enabled": true,
+              "version_name": "8.0"
+            },
+            {
+              "package": "org.telegram.messenger",
+              "label": "Telegram",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "12.10.1"
+            },
+            {
+              "package": "pi.browser",
+              "label": "Pi Browser",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "1.17.1"
+            },
+            {
+              "package": "vn.com.vng.zalopay",
+              "label": "Zalopay",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "11.12.1"
+            },
+            {
+              "package": "vn.sorac",
+              "label": "S\u1ed1 L\u1ea1",
+              "launchable": true,
+              "enabled": true,
+              "version_name": "4.2"
+            }
+          ],
+          "count": 277,
+          "observed_at": 1789563815.667,
+          "device_id": "android-c9874ac1-fb2",
+          "source": "android.package_manager"
+        },
+        "error": null,
+        "postcondition": null,
+        "observation_id": "obs_90f6a87609b54192",
+        "observation": {
+          "observation_id": "obs_90f6a87609b54192",
+          "kind": "app_inventory",
+          "source": "android_device",
+          "observed_at": 1789563815.673,
+          "content_hash": "fed88f65c5dd3fa174743cc27397826bf0b4ac282e6e52b5e3999af51a48452c",
+          "data": {
+            "count": 277,
+            "launchable_count": 88,
+            "source": "android.package_manager"
+          }
+        }
+      }
+    },
+    "android.screenshot": {
+      "http_status": 200,
+      "duration_s": 2.475,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.screenshot",
+        "status": "SUCCESS",
+        "retryable": "UNKNOWN",
+        "evidence": "UNVERIFIED",
+        "side_effect": "SideEffect.UNKNOWN",
+        "execution_id": "exec_2a32e18ff24d4100",
+        "ok": true,
+        "result": {
+          "captured": true,
+          "format": "jpeg",
+          "size_bytes": 102681,
+          "width": 821,
+          "height": 1825,
+          "content_hash": "d18e5d964588a4fbfc4f1166414efe509f04a519a5eca9ed6b4f38818e9d8d76"
+        },
+        "error": null,
+        "postcondition": null,
+        "observation_id": "obs_f8f1eef061b64329",
+        "observation": {
+          "observation_id": "obs_f8f1eef061b64329",
+          "kind": "screenshot",
+          "source": "android_device",
+          "observed_at": 1789563818.307,
+          "content_hash": "d18e5d964588a4fbfc4f1166414efe509f04a519a5eca9ed6b4f38818e9d8d76",
+          "data": {
+            "format": "jpeg",
+            "size_bytes": 102681,
+            "width": 821,
+            "height": 1825,
+            "content_hash": "d18e5d964588a4fbfc4f1166414efe509f04a519a5eca9ed6b4f38818e9d8d76"
+          }
+        }
+      }
+    },
+    "android.type_text": {
+      "http_status": 200,
+      "duration_s": 2.629,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.type_text",
+        "status": "FAILED",
+        "retryable": "UNKNOWN",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_906106fcd3354f9c",
+        "error_code": "EXECUTION_FAILED",
+        "error_category": "UNKNOWN",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "EXECUTION_FAILED",
+          "message": "the action could not be performed"
+        },
+        "postcondition": null,
+        "observation_id": "obs_176d5e4bf9914e1b",
+        "observation": {
+          "observation_id": "obs_176d5e4bf9914e1b",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563820.92,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "tool": "android.type_text",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "screen_changed": false
+          }
+        }
+      }
+    },
+    "android.tap": {
+      "http_status": 200,
+      "duration_s": 2.562,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.tap",
+        "status": "FAILED",
+        "retryable": "UNKNOWN",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_d4a4ea8936d54896",
+        "error_code": "EXECUTION_FAILED",
+        "error_category": "UNKNOWN",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "EXECUTION_FAILED",
+          "message": "the action could not be performed"
+        },
+        "postcondition": null,
+        "observation_id": "obs_c75f2e1e4ca34b4f",
+        "observation": {
+          "observation_id": "obs_c75f2e1e4ca34b4f",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563823.482,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "tool": "android.tap",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "screen_changed": false
+          }
+        }
+      }
+    },
+    "android.wait_for": {
+      "http_status": 504,
+      "duration_s": 5.193,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.wait_for",
+        "status": "TIMEOUT",
+        "retryable": "SAFE",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_5b21f9fe5f8c4abd",
+        "error_code": "TIMEOUT",
+        "error_category": "TIMEOUT",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "TIMEOUT",
+          "message": "condition not met within 3000ms"
+        },
+        "postcondition": null,
+        "observation_id": "obs_d0f0c9be6698456e",
+        "observation": {
+          "observation_id": "obs_d0f0c9be6698456e",
+          "kind": "wait_for",
+          "source": "android_device",
+          "observed_at": 1789563828.676,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "condition": "foreground=com.aura.companion",
+            "met": false,
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 25,
+            "polls": 17
+          }
+        }
+      }
+    },
+    "android.verify": {
+      "http_status": 200,
+      "duration_s": 2.247,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.verify",
+        "status": "SUCCESS",
+        "retryable": "SAFE",
+        "evidence": "CONTRADICTED",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_0f8ef5c0ed074cf5",
+        "ok": true,
+        "result": {
+          "check": "package_is=com.aura.companion",
+          "met": false
+        },
+        "error": null,
+        "postcondition": {
+          "verified": false,
+          "check": "package_is=com.aura.companion",
+          "observation_id": "obs_170d23b78dac4306"
+        },
+        "observation_id": "obs_170d23b78dac4306",
+        "observation": {
+          "observation_id": "obs_170d23b78dac4306",
+          "kind": "verify",
+          "source": "android_device",
+          "observed_at": 1789563830.877,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "check": "package_is=com.aura.companion",
+            "met": false,
+            "package": "com.android.launcher",
+            "node_count": 25
+          }
+        },
+        "verified": false
+      }
+    },
+    "android.home": {
+      "http_status": 200,
+      "duration_s": 2.344,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.home",
+        "status": "SUCCESS",
+        "retryable": "UNSAFE",
+        "evidence": "VERIFIED",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_0b5ac59451b54e1f",
+        "ok": true,
+        "result": {
+          "action": "home",
+          "target": "",
+          "package": "com.android.launcher"
+        },
+        "error": null,
+        "postcondition": {
+          "verified": true,
+          "observation_id": "obs_1791dfbc42584385",
+          "package": "com.android.launcher"
+        },
+        "observation_id": "obs_1791dfbc42584385",
+        "observation": {
+          "observation_id": "obs_1791dfbc42584385",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563833.283,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "tool": "android.home",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "screen_changed": false
+          }
+        },
+        "verified": true
+      }
+    },
+    "android.launch_app": {
+      "http_status": 200,
+      "duration_s": 3.034,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.launch_app",
+        "status": "SUCCESS",
+        "retryable": "UNSAFE",
+        "evidence": "VERIFIED",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_7c93e8cb175c4888",
+        "ok": true,
+        "result": {
+          "action": "launch_app",
+          "target": "com.aura.companion",
+          "package": "com.aura.companion"
+        },
+        "error": null,
+        "postcondition": {
+          "verified": true,
+          "observation_id": "obs_1e55c17062a2473c",
+          "package": "com.aura.companion"
+        },
+        "observation_id": "obs_1e55c17062a2473c",
+        "observation": {
+          "observation_id": "obs_1e55c17062a2473c",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563836.203,
+          "content_hash": "2903fcaac0c526467e859178d2a4d61a0336ab229c67dcae0be0a65596740bfd",
+          "data": {
+            "tool": "android.launch_app",
+            "package": "com.aura.companion",
+            "activity": "",
+            "node_count": 17,
+            "content_hash": "2903fcaac0c526467e859178d2a4d61a0336ab229c67dcae0be0a65596740bfd",
+            "screen_changed": true
+          }
+        },
+        "verified": true
+      }
+    },
+    "android.back": {
+      "http_status": 200,
+      "duration_s": 2.753,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.back",
+        "status": "SUCCESS",
+        "retryable": "UNSAFE",
+        "evidence": "VERIFIED",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_f78219bc1e16460a",
+        "ok": true,
+        "result": {
+          "action": "back",
+          "target": "",
+          "package": "com.android.launcher"
+        },
+        "error": null,
+        "postcondition": {
+          "verified": true,
+          "observation_id": "obs_44fca7dbe79944e5",
+          "package": "com.android.launcher"
+        },
+        "observation_id": "obs_44fca7dbe79944e5",
+        "observation": {
+          "observation_id": "obs_44fca7dbe79944e5",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563839.077,
+          "content_hash": "1783e57b32488c1aa336c437ee89863799c5ba60843a31dc644a080d938204e8",
+          "data": {
+            "tool": "android.back",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 18,
+            "content_hash": "1783e57b32488c1aa336c437ee89863799c5ba60843a31dc644a080d938204e8",
+            "screen_changed": true
+          }
+        },
+        "verified": true
+      }
+    },
+    "android.swipe": {
+      "http_status": 200,
+      "duration_s": 2.641,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.swipe",
+        "status": "SUCCESS",
+        "retryable": "UNSAFE",
+        "evidence": "VERIFIED",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_437ab67577bf4d45",
+        "ok": true,
+        "result": {
+          "action": "swipe",
+          "target": "up",
+          "package": "com.android.launcher"
+        },
+        "error": null,
+        "postcondition": {
+          "verified": true,
+          "observation_id": "obs_72cdb37f397d4034",
+          "package": "com.android.launcher"
+        },
+        "observation_id": "obs_72cdb37f397d4034",
+        "observation": {
+          "observation_id": "obs_72cdb37f397d4034",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563841.687,
+          "content_hash": "10a52dd8bcb52bab15eab46dfe19370ee3bbd7874110393a8fa3eeec501f1274",
+          "data": {
+            "tool": "android.swipe",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 33,
+            "content_hash": "10a52dd8bcb52bab15eab46dfe19370ee3bbd7874110393a8fa3eeec501f1274",
+            "screen_changed": true
+          }
+        },
+        "verified": true
+      }
+    },
+    "android.press_key": {
+      "http_status": 200,
+      "duration_s": 2.128,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.press_key",
+        "status": "FAILED",
+        "retryable": "UNKNOWN",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_b9122d1165764d1e",
+        "error_code": "CAPABILITY_UNAVAILABLE",
+        "error_category": "CAPABILITY",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "CAPABILITY_UNAVAILABLE",
+          "message": "android.press_key is not executable on this device"
+        },
+        "postcondition": null,
+        "observation_id": null,
+        "observation": null
+      }
+    },
+    "android.long_press": {
+      "http_status": 200,
+      "duration_s": 2.677,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.long_press",
+        "status": "FAILED",
+        "retryable": "UNKNOWN",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.NON_IDEMPOTENT",
+        "execution_id": "exec_860da4c025034d11",
+        "error_code": "EXECUTION_FAILED",
+        "error_category": "UNKNOWN",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "EXECUTION_FAILED",
+          "message": "the action could not be performed"
+        },
+        "postcondition": null,
+        "observation_id": "obs_281f94a2ecad44d6",
+        "observation": {
+          "observation_id": "obs_281f94a2ecad44d6",
+          "kind": "post_action",
+          "source": "android_device",
+          "observed_at": 1789563846.503,
+          "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+          "data": {
+            "tool": "android.long_press",
+            "package": "com.android.launcher",
+            "activity": "",
+            "node_count": 25,
+            "content_hash": "5ceea9fd2948d48607dfaaf5c1cb0b9d6e122018837b2316f8eed6a956ab9cd4",
+            "screen_changed": false
+          }
+        }
+      }
+    },
+    "unregistered_tool_honesty": {
+      "http_status": 404,
+      "duration_s": 2.901,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.fake_nonexistent_capability",
+        "ok": false,
+        "error": {
+          "code": "TOOL_NOT_FOUND",
+          "message": "android.fake_nonexistent_capability is not a registered device tool"
+        }
+      }
+    },
+    "invalid_arguments_refusal": {
+      "http_status": 200,
+      "duration_s": 2.243,
+      "response": {
+        "run_id": "",
+        "tool_call_id": "",
+        "tool": "android.wait_for",
+        "status": "FAILED",
+        "retryable": "SAFE",
+        "evidence": "NONE",
+        "side_effect": "SideEffect.READ_ONLY",
+        "execution_id": "exec_82533e0affb34d82",
+        "error_code": "INVALID_ARGUMENTS",
+        "error_category": "VALIDATION",
+        "ok": false,
+        "result": {},
+        "error": {
+          "code": "INVALID_ARGUMENTS",
+          "message": "unrecognised condition: unsupported_condition_syntax!!!"
+        },
+        "postcondition": null,
+        "observation_id": null,
+        "observation": null
+      }
+    }
+  },
+  "experience_store": {
+    "total_count": 180,
+    "recent": [
+      {
+        "experience_id": "exp_run_6b45ee467af2",
+        "session_id": "739a964d-1299-4110-ad52-841a30051200",
+        "input_text": "AURA P3 Full Passed",
+        "model_decision": "ANSWER",
+        "outcome": "SUCCESS",
+        "category": "chat",
+        "created_at": "2026-09-16T20:03:16"
+      },
+      {
+        "experience_id": "exp_run_9bf5b002ea5e",
+        "session_id": "device-agent",
+        "input_text": "Alo Aura test enter",
+        "model_decision": "ANSWER",
+        "outcome": "FAILED",
+        "category": "agent_run",
+        "created_at": "2026-09-16T20:01:43"
+      },
+      {
+        "experience_id": "exp_run_013522bfea7a",
+        "session_id": "739a964d-1299-4110-ad52-841a30051200",
+        "input_text": "Alo Aura test enter",
+        "model_decision": "ANSWER",
+        "outcome": "SUCCESS",
+        "category": "chat",
+        "created_at": "2026-09-16T20:00:42"
+      },
+      {
+        "experience_id": "exp_run_9202b16f2228",
+        "session_id": "45dfdc7e-e83f-454b-829b-7bc51246efb9",
+        "input_text": "AURA P3 Real Handset Validation",
+        "model_decision": "ANSWER",
+        "outcome": "SUCCESS",
+        "category": "chat",
+        "created_at": "2026-09-16T19:56:25"
+      },
+      {
+        "experience_id": "exp_run_a2b322b5058d",
+        "session_id": "8a2ac114-7f6c-4b90-bc09-2438615a39fc",
+        "input_text": "Xin ch\u00e0o Aura",
+        "model_decision": "ANSWER",
+        "outcome": "SUCCESS",
+        "category": "chat",
+        "created_at": "2026-09-16T19:50:54"
+      }
+    ]
+  },
+  "invariants": {
+    "active_brain_preserved": true,
+    "active_brain_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+    "rollback_brain_preserved": true,
+    "rollback_brain_sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+    "autonomy_gate_locked": true,
+    "operational_state": "STATE 2 \u2014 CONDITIONAL CANARY-ONLY AUTONOMOUS SELF-LEARNING"
+  }
+}

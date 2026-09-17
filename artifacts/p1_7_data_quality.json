@@ -1,0 +1,107 @@
+{
+  "phase": "P1.7_DATA_QUALITY",
+  "timestamp": "2026-09-16T16:39:25",
+  "dirty_dataset_audit": {
+    "source_file": "D:\\AURA\\data\\aura\\dataset_cycle_1789542202_run_59.jsonl",
+    "total_examples": 65,
+    "clean_examples": 60,
+    "contradictions_caught": 5,
+    "flagged_items": [
+      {
+        "line": 25,
+        "example_id": "exp_run_f82ae8b96fd2",
+        "verdict": {
+          "is_valid": false,
+          "contradiction_type": "UNREGISTERED_TOOL",
+          "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+          "evidence": {
+            "selected_tool": "android.lock_screen",
+            "registered_tools_count": 32
+          }
+        }
+      },
+      {
+        "line": 26,
+        "example_id": "exp_run_eb6c3a888f78",
+        "verdict": {
+          "is_valid": false,
+          "contradiction_type": "UNREGISTERED_TOOL",
+          "reason": "Selected tool 'android.lock_screen' is not in registered capability catalogue",
+          "evidence": {
+            "selected_tool": "android.lock_screen",
+            "registered_tools_count": 32
+          }
+        }
+      },
+      {
+        "line": 31,
+        "example_id": "exp_run_13286ff71191",
+        "verdict": {
+          "is_valid": false,
+          "contradiction_type": "UNREGISTERED_TOOL",
+          "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+          "evidence": {
+            "selected_tool": "android.input_text",
+            "registered_tools_count": 32
+          }
+        }
+      },
+      {
+        "line": 32,
+        "example_id": "exp_run_a825b838b06c",
+        "verdict": {
+          "is_valid": false,
+          "contradiction_type": "UNREGISTERED_TOOL",
+          "reason": "Selected tool 'android.input_text' is not in registered capability catalogue",
+          "evidence": {
+            "selected_tool": "android.input_text",
+            "registered_tools_count": 32
+          }
+        }
+      },
+      {
+        "line": 48,
+        "example_id": "exp_run_56f7aba94868",
+        "verdict": {
+          "is_valid": false,
+          "contradiction_type": "UNREGISTERED_TOOL",
+          "reason": "Selected tool 'system.battery' is not in registered capability catalogue",
+          "evidence": {
+            "selected_tool": "system.battery",
+            "registered_tools_count": 32
+          }
+        }
+      }
+    ]
+  },
+  "synthetic_invariants_tested": {
+    "identity_invariant": true,
+    "core_capability_invariant": true,
+    "safety_invariant": true,
+    "tool_catalogue_invariant": true
+  },
+  "generated_dataset": {
+    "file_path": "D:\\AURA\\data\\aura\\p1_7_validation_dataset.jsonl",
+    "num_examples": 60,
+    "categories": {
+      "tool_use": 23,
+      "conversation": 17,
+      "confirmation": 3,
+      "clarification": 4,
+      "tool_honesty": 5,
+      "safety": 2,
+      "identity": 4,
+      "reasoning": 2
+    },
+    "manifest_checksum": "86f4f0f1037e3e6e36ce80a2498c5ef10404ec4d2734b30abd10b8a972363b87",
+    "disk_binary_checksum": "86f4f0f1037e3e6e36ce80a2498c5ef10404ec4d2734b30abd10b8a972363b87",
+    "hash_parity_verified": true,
+    "crlf_free": true,
+    "quarantined_contradictions": 5,
+    "audit_status": "CLEAN"
+  },
+  "gates_status": {
+    "provenance": "PASS",
+    "contradiction_protection": "PASS"
+  }
+}

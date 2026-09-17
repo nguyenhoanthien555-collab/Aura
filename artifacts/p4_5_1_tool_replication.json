@@ -1,0 +1,32 @@
+{
+  "test_name": "test_tool_replication_end_to_end",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.423814+00:00",
+  "flow": "Node A -> Outbox -> Relay (Ingest) -> Node B (Pull) -> Inbox -> Project to Tool Registry",
+  "source_node": "node-source-tool-01",
+  "relay_node": "relay-central-01",
+  "target_node": "node-target-tool-02",
+  "payload": {
+    "name": "forensic_diagnostics_tool",
+    "description": "Cross-node verified diagnostic tool",
+    "code_hash": "sha256:d8a5...verified",
+    "provenance_node": "node-source-tool-01",
+    "parameters": {
+      "check_id": {
+        "type": "string",
+        "required": true
+      }
+    }
+  },
+  "verification_checks": {
+    "event_logged_at_source": true,
+    "outbox_queued_and_sent_to_relay": true,
+    "relay_event_log_stored": true,
+    "target_pulled_via_cursor": true,
+    "target_inbox_processed": true,
+    "target_registry_installed": true,
+    "signature_and_hash_validated": true,
+    "duplicate_replay_rejected": true
+  }
+}

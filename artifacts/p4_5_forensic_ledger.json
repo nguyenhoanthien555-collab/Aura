@@ -1,0 +1,683 @@
+{
+  "generated_at": "2026-09-16T14:52:36.535473+00:00",
+  "phase": "P4.5 Forensic Distributed Reality & Continuity",
+  "total_tests": 17,
+  "passed": 17,
+  "failed": 0,
+  "ledger": [
+    {
+      "test_id": "P4.5-GATE-A-001",
+      "name": "test_timeout_preserves_event",
+      "category": "DURABLE_EVENT",
+      "nodes": [
+        "node_mobile_aura",
+        "relay_internet"
+      ],
+      "transport": "HTTP/REST",
+      "event_ids": [
+        "evt_durability_001"
+      ],
+      "expected": "Event survives HTTP 504 timeout intact; retried successfully when network restores",
+      "actual": "Local EventLog retained identical event; payload hash verified; outbox ACK recorded upon retry",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "payload_hash_preserved": true,
+        "loss_count": 0
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-B-001",
+      "name": "test_ack_loss_idempotency",
+      "category": "ACK_LOSS",
+      "nodes": [
+        "node_mobile_aura",
+        "node_laptop_01"
+      ],
+      "transport": "REST Relay",
+      "event_ids": [
+        "evt_ack_loss_001"
+      ],
+      "expected": "Receiver ingests event; client times out waiting for ACK and retries; receiver is idempotent with 0 duplicates",
+      "actual": "Receiver acknowledged retry without duplicate rows; event log count == 1",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "duplicate_rows": 0,
+        "conflicts_recorded": 0
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-C-001",
+      "name": "test_cross_network_deterministic_transport",
+      "category": "CROSS_NETWORK",
+      "nodes": [
+        "node_mobile_4g",
+        "cloud_relay",
+        "laptop_node"
+      ],
+      "transport": "Internet Relay (Non-LAN)",
+      "event_ids": [
+        "evt_cross_net_000",
+        "evt_cross_net_001",
+        "evt_cross_net_002",
+        "evt_cross_net_003",
+        "evt_cross_net_004",
+        "evt_cross_net_005",
+        "evt_cross_net_006",
+        "evt_cross_net_007",
+        "evt_cross_net_008",
+        "evt_cross_net_009"
+      ],
+      "expected": "Cross-network synchronization via durable relay without LAN IP dependency",
+      "actual": "10/10 events routed across independent network SQLite stores; payload hashes matched",
+      "result": "SIMULATION PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "delivered_count": 10,
+        "lan_dependency": false
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-D-001",
+      "name": "test_bidirectional_sync_chaos",
+      "category": "BIDIRECTIONAL_SYNC",
+      "nodes": [
+        "node_mobile",
+        "node_laptop",
+        "chaos_relay"
+      ],
+      "transport": "Relay with 30% Chaos Packet Loss",
+      "event_ids": [
+        "evt_M_000",
+        "evt_M_001",
+        "evt_M_002",
+        "evt_M_003",
+        "evt_M_004",
+        "evt_M_005",
+        "evt_M_006",
+        "evt_M_007",
+        "evt_M_008",
+        "evt_M_009",
+        "evt_M_010",
+        "evt_M_011",
+        "evt_M_012",
+        "evt_M_013",
+        "evt_M_014",
+        "evt_M_015",
+        "evt_M_016",
+        "evt_M_017",
+        "evt_M_018",
+        "evt_M_019",
+        "evt_M_020",
+        "evt_M_021",
+        "evt_M_022",
+        "evt_M_023",
+        "evt_M_024",
+        "evt_M_025",
+        "evt_M_026",
+        "evt_M_027",
+        "evt_M_028",
+        "evt_M_029",
+        "evt_M_030",
+        "evt_M_031",
+        "evt_M_032",
+        "evt_M_033",
+        "evt_M_034",
+        "evt_M_035",
+        "evt_M_036",
+        "evt_M_037",
+        "evt_M_038",
+        "evt_M_039",
+        "evt_M_040",
+        "evt_M_041",
+        "evt_M_042",
+        "evt_M_043",
+        "evt_M_044",
+        "evt_M_045",
+        "evt_M_046",
+        "evt_M_047",
+        "evt_M_048",
+        "evt_M_049",
+        "evt_L_000",
+        "evt_L_001",
+        "evt_L_002",
+        "evt_L_003",
+        "evt_L_004",
+        "evt_L_005",
+        "evt_L_006",
+        "evt_L_007",
+        "evt_L_008",
+        "evt_L_009",
+        "evt_L_010",
+        "evt_L_011",
+        "evt_L_012",
+        "evt_L_013",
+        "evt_L_014",
+        "evt_L_015",
+        "evt_L_016",
+        "evt_L_017",
+        "evt_L_018",
+        "evt_L_019",
+        "evt_L_020",
+        "evt_L_021",
+        "evt_L_022",
+        "evt_L_023",
+        "evt_L_024",
+        "evt_L_025",
+        "evt_L_026",
+        "evt_L_027",
+        "evt_L_028",
+        "evt_L_029",
+        "evt_L_030",
+        "evt_L_031",
+        "evt_L_032",
+        "evt_L_033",
+        "evt_L_034",
+        "evt_L_035",
+        "evt_L_036",
+        "evt_L_037",
+        "evt_L_038",
+        "evt_L_039",
+        "evt_L_040",
+        "evt_L_041",
+        "evt_L_042",
+        "evt_L_043",
+        "evt_L_044",
+        "evt_L_045",
+        "evt_L_046",
+        "evt_L_047",
+        "evt_L_048",
+        "evt_L_049"
+      ],
+      "expected": "100 events generated concurrently under network drops converge to identical state sets",
+      "actual": "Mobile state set == Laptop state set (100 events each, 0 missing, 0 conflicts)",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "mobile_count": 100,
+        "laptop_count": 100,
+        "missing_on_either": 0
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-E-001",
+      "name": "test_mobile_offline_backlog",
+      "category": "OFFLINE_DURABILITY",
+      "nodes": [
+        "node_mobile_offline"
+      ],
+      "transport": "Local SQLite Event Log & Outbox",
+      "event_ids": [
+        "evt_off_mob_000",
+        "evt_off_mob_001",
+        "evt_off_mob_002",
+        "evt_off_mob_003",
+        "evt_off_mob_004",
+        "evt_off_mob_005",
+        "evt_off_mob_006",
+        "evt_off_mob_007",
+        "evt_off_mob_008",
+        "evt_off_mob_009",
+        "evt_off_mob_010",
+        "evt_off_mob_011",
+        "evt_off_mob_012",
+        "evt_off_mob_013",
+        "evt_off_mob_014",
+        "evt_off_mob_015",
+        "evt_off_mob_016",
+        "evt_off_mob_017",
+        "evt_off_mob_018",
+        "evt_off_mob_019",
+        "evt_off_mob_020",
+        "evt_off_mob_021",
+        "evt_off_mob_022",
+        "evt_off_mob_023",
+        "evt_off_mob_024",
+        "evt_off_mob_025",
+        "evt_off_mob_026",
+        "evt_off_mob_027",
+        "evt_off_mob_028",
+        "evt_off_mob_029",
+        "evt_off_mob_030",
+        "evt_off_mob_031",
+        "evt_off_mob_032",
+        "evt_off_mob_033",
+        "evt_off_mob_034",
+        "evt_off_mob_035",
+        "evt_off_mob_036",
+        "evt_off_mob_037",
+        "evt_off_mob_038",
+        "evt_off_mob_039",
+        "evt_off_mob_040",
+        "evt_off_mob_041",
+        "evt_off_mob_042",
+        "evt_off_mob_043",
+        "evt_off_mob_044",
+        "evt_off_mob_045",
+        "evt_off_mob_046",
+        "evt_off_mob_047",
+        "evt_off_mob_048",
+        "evt_off_mob_049",
+        "evt_off_mob_050",
+        "evt_off_mob_051",
+        "evt_off_mob_052",
+        "evt_off_mob_053",
+        "evt_off_mob_054",
+        "evt_off_mob_055",
+        "evt_off_mob_056",
+        "evt_off_mob_057",
+        "evt_off_mob_058",
+        "evt_off_mob_059",
+        "evt_off_mob_060",
+        "evt_off_mob_061",
+        "evt_off_mob_062",
+        "evt_off_mob_063",
+        "evt_off_mob_064",
+        "evt_off_mob_065",
+        "evt_off_mob_066",
+        "evt_off_mob_067",
+        "evt_off_mob_068",
+        "evt_off_mob_069",
+        "evt_off_mob_070",
+        "evt_off_mob_071",
+        "evt_off_mob_072",
+        "evt_off_mob_073",
+        "evt_off_mob_074",
+        "evt_off_mob_075",
+        "evt_off_mob_076",
+        "evt_off_mob_077",
+        "evt_off_mob_078",
+        "evt_off_mob_079",
+        "evt_off_mob_080",
+        "evt_off_mob_081",
+        "evt_off_mob_082",
+        "evt_off_mob_083",
+        "evt_off_mob_084",
+        "evt_off_mob_085",
+        "evt_off_mob_086",
+        "evt_off_mob_087",
+        "evt_off_mob_088",
+        "evt_off_mob_089",
+        "evt_off_mob_090",
+        "evt_off_mob_091",
+        "evt_off_mob_092",
+        "evt_off_mob_093",
+        "evt_off_mob_094",
+        "evt_off_mob_095",
+        "evt_off_mob_096",
+        "evt_off_mob_097",
+        "evt_off_mob_098",
+        "evt_off_mob_099"
+      ],
+      "expected": "100 events created while offline survive in durable outbox and event log",
+      "actual": "100 events persisted locally; pending outbox count == 100",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "persisted_offline": 100
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-E-002",
+      "name": "test_laptop_offline_backlog",
+      "category": "OFFLINE_DURABILITY",
+      "nodes": [
+        "node_laptop_offline"
+      ],
+      "transport": "Local SQLite Event Log & Outbox",
+      "event_ids": [
+        "evt_off_lap_000",
+        "evt_off_lap_001",
+        "evt_off_lap_002",
+        "evt_off_lap_003",
+        "evt_off_lap_004",
+        "evt_off_lap_005",
+        "evt_off_lap_006",
+        "evt_off_lap_007",
+        "evt_off_lap_008",
+        "evt_off_lap_009",
+        "evt_off_lap_010",
+        "evt_off_lap_011",
+        "evt_off_lap_012",
+        "evt_off_lap_013",
+        "evt_off_lap_014",
+        "evt_off_lap_015",
+        "evt_off_lap_016",
+        "evt_off_lap_017",
+        "evt_off_lap_018",
+        "evt_off_lap_019",
+        "evt_off_lap_020",
+        "evt_off_lap_021",
+        "evt_off_lap_022",
+        "evt_off_lap_023",
+        "evt_off_lap_024",
+        "evt_off_lap_025",
+        "evt_off_lap_026",
+        "evt_off_lap_027",
+        "evt_off_lap_028",
+        "evt_off_lap_029",
+        "evt_off_lap_030",
+        "evt_off_lap_031",
+        "evt_off_lap_032",
+        "evt_off_lap_033",
+        "evt_off_lap_034",
+        "evt_off_lap_035",
+        "evt_off_lap_036",
+        "evt_off_lap_037",
+        "evt_off_lap_038",
+        "evt_off_lap_039",
+        "evt_off_lap_040",
+        "evt_off_lap_041",
+        "evt_off_lap_042",
+        "evt_off_lap_043",
+        "evt_off_lap_044",
+        "evt_off_lap_045",
+        "evt_off_lap_046",
+        "evt_off_lap_047",
+        "evt_off_lap_048",
+        "evt_off_lap_049",
+        "evt_off_lap_050",
+        "evt_off_lap_051",
+        "evt_off_lap_052",
+        "evt_off_lap_053",
+        "evt_off_lap_054",
+        "evt_off_lap_055",
+        "evt_off_lap_056",
+        "evt_off_lap_057",
+        "evt_off_lap_058",
+        "evt_off_lap_059",
+        "evt_off_lap_060",
+        "evt_off_lap_061",
+        "evt_off_lap_062",
+        "evt_off_lap_063",
+        "evt_off_lap_064",
+        "evt_off_lap_065",
+        "evt_off_lap_066",
+        "evt_off_lap_067",
+        "evt_off_lap_068",
+        "evt_off_lap_069",
+        "evt_off_lap_070",
+        "evt_off_lap_071",
+        "evt_off_lap_072",
+        "evt_off_lap_073",
+        "evt_off_lap_074",
+        "evt_off_lap_075",
+        "evt_off_lap_076",
+        "evt_off_lap_077",
+        "evt_off_lap_078",
+        "evt_off_lap_079",
+        "evt_off_lap_080",
+        "evt_off_lap_081",
+        "evt_off_lap_082",
+        "evt_off_lap_083",
+        "evt_off_lap_084",
+        "evt_off_lap_085",
+        "evt_off_lap_086",
+        "evt_off_lap_087",
+        "evt_off_lap_088",
+        "evt_off_lap_089",
+        "evt_off_lap_090",
+        "evt_off_lap_091",
+        "evt_off_lap_092",
+        "evt_off_lap_093",
+        "evt_off_lap_094",
+        "evt_off_lap_095",
+        "evt_off_lap_096",
+        "evt_off_lap_097",
+        "evt_off_lap_098",
+        "evt_off_lap_099"
+      ],
+      "expected": "100 events created on laptop while offline survive in durable outbox and event log",
+      "actual": "100 events persisted locally; pending outbox count == 100",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "persisted_offline": 100
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-G-001",
+      "name": "test_server_restart_recovery",
+      "category": "RESTART_RECOVERY",
+      "nodes": [
+        "node_client",
+        "server_restart"
+      ],
+      "transport": "Local SQLite Store",
+      "event_ids": [
+        "evt_srv_000",
+        "evt_srv_001",
+        "evt_srv_002",
+        "evt_srv_003",
+        "evt_srv_004",
+        "evt_srv_005",
+        "evt_srv_006",
+        "evt_srv_007",
+        "evt_srv_008",
+        "evt_srv_009",
+        "evt_srv_010",
+        "evt_srv_011",
+        "evt_srv_012",
+        "evt_srv_013",
+        "evt_srv_014",
+        "evt_srv_015",
+        "evt_srv_016",
+        "evt_srv_017",
+        "evt_srv_018",
+        "evt_srv_019",
+        "evt_srv_020",
+        "evt_srv_021",
+        "evt_srv_022",
+        "evt_srv_023",
+        "evt_srv_024"
+      ],
+      "expected": "Server process dies and restarts; database file re-opened; events intact",
+      "actual": "All 25 events present post-restart; sequence continuous",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "events_post_restart": 25
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-G-002",
+      "name": "test_client_restart_recovery",
+      "category": "RESTART_RECOVERY",
+      "nodes": [
+        "node_client"
+      ],
+      "transport": "Local SQLite Store",
+      "event_ids": [
+        "evt_client_crash_01"
+      ],
+      "expected": "Client crashes with pending outbox; restarts; pending status and payload preserved",
+      "actual": "1 pending event found in outbox post-restart; payload verified",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "pending_post_restart": 1
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-G-003",
+      "name": "test_tool_replication_with_governance",
+      "category": "TOOL_REPLICATION",
+      "nodes": [
+        "node_mobile_01",
+        "node_laptop"
+      ],
+      "transport": "Replication Adapter",
+      "event_ids": [
+        "evt_tool_promoted_01"
+      ],
+      "expected": "Mobile-discovered validated capability replicates into Laptop ToolProvenanceRecord with status=PROMOTED",
+      "actual": "ToolProvenanceRecord registered with source digest and status PROMOTED",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "tool_name": "android.custom_vision_tool",
+        "status": "PROMOTED"
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-H-001",
+      "name": "test_experience_replication_with_provenance",
+      "category": "EXPERIENCE_REPLICATION",
+      "nodes": [
+        "node_mobile_oppo_reno6",
+        "node_laptop"
+      ],
+      "transport": "Experience Replication Adapter",
+      "event_ids": [
+        "evt_exp_001"
+      ],
+      "expected": "Mobile experience replicated to Laptop experience store with intact origin, run_id, verifier_result",
+      "actual": "AuraExperienceRecord created with matching origin_node_id, run_id, and taxonomy_tag",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "verifier_result": "VERIFIED",
+        "taxonomy_tag": "VERIFIED_DEVICE_TASK"
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-H-002",
+      "name": "test_provenance_preservation",
+      "category": "PROVENANCE",
+      "nodes": [
+        "node_mobile_abc"
+      ],
+      "transport": "EventLog",
+      "event_ids": [
+        "evt_prov_001"
+      ],
+      "expected": "Provenance dictionary preserved exactly; no synthetic 'local' flattening",
+      "actual": "Origin node and hardware metadata preserved byte-for-byte",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "origin_node": "node_mobile_abc",
+        "flattened": false
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-I-001",
+      "name": "test_agent_run_recovery_after_network_loss",
+      "category": "AGENT_CONTINUITY",
+      "nodes": [
+        "agent_runtime",
+        "sqlite_agent_runs"
+      ],
+      "transport": "AgentRuntime Loopback",
+      "event_ids": [
+        "run_restart_recovery"
+      ],
+      "expected": "Agent run survives server restart / network outage; recovers from SQLite; completes goal",
+      "actual": "Run restored from agent_runs table; state RUNNING restored; finished to GOAL_VERIFIED",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "stop_reason": "goal_verified",
+        "restored_from_db": true
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-J-001",
+      "name": "test_tool_invocation_replay_safety",
+      "category": "REPLAY_SAFETY",
+      "nodes": [
+        "device_tool_dispatcher"
+      ],
+      "transport": "Dispatcher In-Memory LRU Cache",
+      "event_ids": [
+        "call_id_replay_001"
+      ],
+      "expected": "Duplicate toolCallId returns cached report without re-executing mutating gestures",
+      "actual": "Execution counter remained 1 after duplicate call; side-effect prevented",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "mutations_executed": 1,
+        "replays_blocked": 1
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-K-001",
+      "name": "test_hash_tampering",
+      "category": "SECURITY_INTEGRITY",
+      "nodes": [
+        "node_attacker",
+        "inbox"
+      ],
+      "transport": "Inbox Processor",
+      "event_ids": [
+        "evt_tampered_001"
+      ],
+      "expected": "Tampered payload rejected, quarantined in sync_conflicts, not in sync_events",
+      "actual": "Event quarantined under HASH_MISMATCH; sync_events contains 0 rows for tampered id",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "quarantined": true,
+        "admitted": false
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-K-002",
+      "name": "test_same_id_different_payload_conflict",
+      "category": "SECURITY_INTEGRITY",
+      "nodes": [
+        "node_mobile",
+        "node_laptop"
+      ],
+      "transport": "Inbox Processor",
+      "event_ids": [
+        "evt_conflict_same_id"
+      ],
+      "expected": "Concurrent conflicting update quarantined; no silent last-write-wins overwrite",
+      "actual": "Conflicting event quarantined; original payload preserved intact",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "quarantined": true,
+        "overwritten": false
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-K-003",
+      "name": "test_credential_leak_safety",
+      "category": "SECURITY",
+      "nodes": [
+        "repo_scan"
+      ],
+      "transport": "Static Scan",
+      "event_ids": [],
+      "expected": "Sync payloads never contain raw auth keys or tokens",
+      "actual": "Forbidden key scan passed; zero credentials present in event payloads",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "forbidden_keys_found": 0
+      }
+    },
+    {
+      "test_id": "P4.5-GATE-L-001",
+      "name": "test_no_false_success",
+      "category": "HONEST_REPORTING",
+      "nodes": [
+        "agent_runtime"
+      ],
+      "transport": "AgentRuntime Loopback",
+      "event_ids": [],
+      "expected": "Failure to invoke unknown tool reports explicit UNKNOWN_TOOL, never fake success",
+      "actual": "Runtime reported ok=False with error.code=UNKNOWN_TOOL",
+      "result": "PASS",
+      "physical_or_simulated": "SIMULATED PASS",
+      "evidence": {
+        "error_code": "UNKNOWN_TOOL",
+        "false_success": false
+      }
+    }
+  ]
+}

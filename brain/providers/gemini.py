@@ -220,17 +220,19 @@ class GeminiProvider(BaseProvider):
                 except Exception:
                     content_obj = None
 
+                tool_id = m.get("tool_call_id") or ""
                 if isinstance(content_obj, list):
                     for env in content_obj:
+                        tid = env.get("tool_call_id") or tool_id
                         wire_messages.append({
-                            "role": "function",
-                            "name": env.get("tool", "unknown"),
+                            "role": "tool",
+                            "tool_call_id": tid,
                             "content": json.dumps(env, ensure_ascii=False),
                         })
                 else:
                     wire_messages.append({
-                        "role": "function",
-                        "name": m.get("name", "unknown") if hasattr(m, "get") else "unknown",
+                        "role": "tool",
+                        "tool_call_id": tool_id,
                         "content": content_str,
                     })
             elif role == "assistant" and m.get("tool_calls"):

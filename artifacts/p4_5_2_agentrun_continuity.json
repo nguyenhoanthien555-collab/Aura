@@ -1,0 +1,32 @@
+{
+  "test_name": "Critical Claim B: AgentRun Continuity Beyond Passive Persistence",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T18:16:47.800818+00:00",
+  "recovery_mechanism": {
+    "interrupted_state_enum": "RunStatus.INTERRUPTED",
+    "discovery_api": "AgentRuntime.list_interrupted_runs(session_factory)",
+    "recovery_api": "AgentRuntime.recover_interrupted_run(run_id, session_factory)",
+    "transcript_reconciliation": {
+      "unresolved_tool_calls_detected": 2,
+      "synthesized_tool_responses": 2,
+      "synthesis_status": "TIMEOUT_RECOVERY",
+      "error_code": "PROCESS_CRASH_RECOVERY",
+      "valid_for_continuation": true
+    }
+  },
+  "evidence": {
+    "run_id": "run_continuity_p452",
+    "same_run_id_preserved": true,
+    "pre_crash_status": "running",
+    "post_recovery_status": "interrupted",
+    "rounds_preserved": 3,
+    "tool_call_count_preserved": 5,
+    "unverified_items_preserved": 1,
+    "goal_preserved": "Open Settings and toggle WiFi",
+    "session_id_preserved": "session_continuity_test",
+    "no_silent_run_forking": true
+  },
+  "test_file": "tests/test_p4_5_2_critical_audit.py::test_agentrun_same_run_continuity_after_restart",
+  "worker_file": "scripts/agentrun_continuity_worker.py"
+}

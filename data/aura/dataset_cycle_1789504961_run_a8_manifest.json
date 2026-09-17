@@ -1,0 +1,13 @@
+{
+  "dataset_id": "ds_dataset_cycle_1789504961_run_a8",
+  "num_examples": 4,
+  "categories": {},
+  "file_path": "D:\\AURA\\data\\aura\\dataset_cycle_1789504961_run_a8.jsonl",
+  "checksum": "597bf58b0f8150acc9af49957e884cb8bac8cbff0c6086988b2b36eb50d08bab",
+  "created_at": "2026-09-16T03:42:41",
+  "metadata": {
+    "version": "dataset_cycle_1789504961_run_a8",
+    "min_quality_threshold": 0.6,
+    "provenance_tracked": true
+  }
+}

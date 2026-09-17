@@ -1,0 +1,47 @@
+{
+  "test_name": "test_real_subprocess_restart_durability",
+  "status": "PASSED",
+  "verification_type": "VERIFIED BY SOFTWARE INTEGRATION TEST",
+  "timestamp": "2026-09-16T16:48:58.422818+00:00",
+  "stage_1": {
+    "description": "Process 1 (PID 1) initializes DB, writes event, enqueues outbox, starts AgentRun, initiates tool call, exits abruptly",
+    "events_written": 1,
+    "outbox_status": "pending",
+    "agent_run_state": {
+      "run_id": "run_proc_restart_test",
+      "status": "running",
+      "round": 2,
+      "max_rounds": 10
+    },
+    "tool_invocation": {
+      "invocation_id": "inv_proc_001",
+      "tool_call_id": "call_subprocess_tap_01",
+      "tool": "device_tap",
+      "lifecycle_state": "COMPLETED",
+      "side_effect_count": 1
+    }
+  },
+  "stage_2": {
+    "description": "Process 2 (PID 2 != PID 1) launches fresh, mounts same SQLite DB, recovers all state with zero data loss",
+    "pid_isolation": "CONFIRMED_DIFFERENT_PIDS",
+    "events_recovered": 1,
+    "event_hash_parity": "EXACT_MATCH",
+    "outbox_recovered_status": "pending",
+    "agent_run_recovered": {
+      "run_id": "run_proc_restart_test",
+      "status": "running",
+      "round": 2,
+      "recovered_unharmed": true
+    },
+    "tool_invocation_replay_check": {
+      "tool_call_id": "call_subprocess_tap_01",
+      "replay_detected": true,
+      "cached_result_returned": true,
+      "duplicate_side_effects": 0
+    },
+    "outbox_drain_after_restart": {
+      "drain_success": true,
+      "final_status": "delivered"
+    }
+  }
+}

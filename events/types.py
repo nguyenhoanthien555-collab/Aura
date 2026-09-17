@@ -441,6 +441,8 @@ class TaskStepChangedEvent(Event):
     show progress without holding the plan itself.
     """
 
+    task_id: str = ""
+    run_id: str = ""
     goal: str = ""
     step: str = ""
     index: int = 0
@@ -459,6 +461,8 @@ class TaskFinishedEvent(Event):
     many worked.
     """
 
+    task_id: str = ""
+    run_id: str = ""
     goal: str = ""
     steps: int = 0
 
@@ -474,7 +478,67 @@ class TaskStuckEvent(Event):
     owner's request stopped making progress.
     """
 
+    task_id: str = ""
+    run_id: str = ""
     goal: str = ""
     step: str = ""
 
     log_fields = ("step",)
+
+
+# ----------------------------------------------------------------------
+# Phase 5B: Durable Task & Dynamic Tool Lifecycle Events
+# ----------------------------------------------------------------------
+
+class TaskEventType(str, Enum):
+    TASK_CREATED = "TASK_CREATED"
+    TASK_STARTED = "TASK_STARTED"
+    TASK_STEP_STARTED = "TASK_STEP_STARTED"
+    TASK_STEP_COMPLETED = "TASK_STEP_COMPLETED"
+    TASK_STEP_FAILED = "TASK_STEP_FAILED"
+    TASK_PAUSED = "TASK_PAUSED"
+    TASK_RESUMED = "TASK_RESUMED"
+    TASK_COMPLETED = "TASK_COMPLETED"
+    TASK_CANCELLED = "TASK_CANCELLED"
+    TASK_UNKNOWN = "TASK_UNKNOWN"
+    TASK_RECOVERING = "TASK_RECOVERING"
+
+
+class ToolEventType(str, Enum):
+    TOOL_SYNTHESIS_STARTED = "TOOL_SYNTHESIS_STARTED"
+    TOOL_VALIDATION_STARTED = "TOOL_VALIDATION_STARTED"
+    TOOL_VALIDATION_PASSED = "TOOL_VALIDATION_PASSED"
+    TOOL_VALIDATION_FAILED = "TOOL_VALIDATION_FAILED"
+    TOOL_APPROVAL_REQUESTED = "TOOL_APPROVAL_REQUESTED"
+    TOOL_APPROVED = "TOOL_APPROVED"
+    TOOL_PROMOTED = "TOOL_PROMOTED"
+    TOOL_DISABLED = "TOOL_DISABLED"
+    TOOL_REVOKED = "TOOL_REVOKED"
+    TOOL_ROLLBACK = "TOOL_ROLLBACK"
+
+
+@dataclass(frozen=True)
+class TaskLifecycleEvent(Event):
+    """
+    Authoritative lifecycle transition for a durable task or step.
+    """
+    task_id: str
+    event_type: TaskEventType
+    step_id: str = ""
+    status: str = ""
+    detail: str = ""
+    timestamp: float = 0.0
+
+
+@dataclass(frozen=True)
+class ToolLifecycleEvent(Event):
+    """
+    Authoritative lifecycle transition for a dynamic tool.
+    """
+    tool_name: str
+    event_type: ToolEventType
+    version: int = 1
+    digest: str = ""
+    detail: str = ""
+    timestamp: float = 0.0
+

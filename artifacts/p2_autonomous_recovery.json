@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-09-16T11:50:02Z",
+  "phase": "P2.7_AUTONOMOUS_RECOVERY",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "all_passed": true,
+  "production_brain_id": "brain-AURA-cand-run_59",
+  "production_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "rollback_target_id": "aura-brain-v1",
+  "rollback_target_sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+  "tests": [
+    {
+      "test_name": "corrupted_brain_state_self_healing",
+      "description": "Recover active brain package via disk scan when brain_state.json is corrupted",
+      "status": "PASS",
+      "healed_active_brain": "brain-AURA-cand-run_59",
+      "expected_active_brain": "brain-AURA-cand-run_59",
+      "duration_seconds": 0.0139
+    },
+    {
+      "test_name": "missing_candidate_gguf_graceful_degradation",
+      "description": "Block candidate promotion and mark REJECTED when model.gguf artifact is missing",
+      "status": "PASS",
+      "missing_verification": false,
+      "production_intact": true,
+      "duration_seconds": 0.0197
+    },
+    {
+      "test_name": "automated_rollback_and_restoration",
+      "description": "Execute rollback to aura-brain-v1, verify integrity, then restore to brain-AURA-cand-run_59",
+      "status": "PASS",
+      "rollback_success": true,
+      "rollback_target": "aura-brain-v1",
+      "rollback_sha_verified": true,
+      "restore_success": true,
+      "restored_brain": "brain-AURA-cand-run_59",
+      "restored_sha_verified": true,
+      "duration_seconds": 3.0655
+    },
+    {
+      "test_name": "atomic_write_and_crash_resilience",
+      "description": "Ensure original state is protected during mid-write interruption and tempfiles are swept",
+      "status": "PASS",
+      "original_preserved": true,
+      "dangling_recovered": true,
+      "duration_seconds": 0.01
+    },
+    {
+      "test_name": "bounded_retry_circuit_breaker",
+      "description": "Halt autonomous retry loops when consecutive failure ceiling (3) is reached",
+      "status": "PASS",
+      "attempts_allowed": 3,
+      "attempts_blocked": 2,
+      "circuit_open": true,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "production_state_and_integrity_invariant",
+      "description": "Verify production brain and rollback targets are intact with matching checksums",
+      "status": "PASS",
+      "active_brain_id": "brain-AURA-cand-run_59",
+      "previous_brain_id": "aura-brain-v1",
+      "prod_sha_matches": true,
+      "rollback_sha_matches": true,
+      "duration_seconds": 2.7658
+    }
+  ]
+}

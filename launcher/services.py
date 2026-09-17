@@ -44,6 +44,7 @@ class Services:
     cognitive: Any = None            # core.cognitive.CognitiveStore
     avatar: Any = None               # avatar.controller.AvatarController
     plugins: Any = None              # plugins.manager.PluginManager
+    invocation_ledger: Any = None    # core.sync.invocation_ledger.DurableInvocationLedger
 
     def summary(self) -> str:
         """One line description of what actually came up."""
@@ -136,9 +137,16 @@ def build_services(
     # behind it - or worse, with a second manager of its own.
     tools = _build_tools(config, bus, pipeline, vision)
 
+    try:
+        from core.sync.invocation_ledger import DurableInvocationLedger
+        invocation_ledger = DurableInvocationLedger()
+    except Exception as ledger_err:
+        logger.debug("Invocation ledger build fallback: %s", ledger_err)
+        invocation_ledger = None
+
     engine = _build_engine(
         config, bus, vision, knowledge, memory, tools, clock, pipeline,
-        cognitive,
+        cognitive, invocation_ledger=invocation_ledger,
     )
 
     # After the pipeline, which is where its pending work comes from.
@@ -173,6 +181,7 @@ def build_services(
         cognitive=cognitive,
         avatar=avatar,
         plugins=plugins,
+        invocation_ledger=invocation_ledger,
     )
 
 
@@ -197,6 +206,7 @@ def _build_engine(
     clock=None,
     pipeline=None,
     cognitive=None,
+    invocation_ledger=None,
 ):
     """
     The chat engine, wired to the objects this composition root already
@@ -265,6 +275,7 @@ def _build_engine(
         pipeline=pipeline,
         cognitive=cognitive,
         verifier=_build_verifier(config),
+        invocation_ledger=invocation_ledger,
     )
 
 

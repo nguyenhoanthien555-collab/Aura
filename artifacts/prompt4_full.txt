@@ -1,0 +1,1341 @@
+<USER_REQUEST>
+/goal # AURA — P2.1 → P2.9 COMPLETE AUTONOMOUS LEARNING VALIDATION
+
+## ROLE
+
+You are the senior engineer/researcher responsible for completing the remaining pre-Full-Autonomy validation and hardening of the AURA autonomous learning system.
+
+Repository:
+
+```text
+D:\AURA
+```
+
+Current known state:
+
+```text
+STATE 2 — CONDITIONAL
+CANARY-ONLY AUTONOMOUS SELF-LEARNING
+
+FULL AUTONOMOUS STATE 3 = LOCKED
+```
+
+Your mission is to complete ALL remaining phases:
+
+```text
+P2.1  Real Autonomous Canary Validation
+P2.2  Longitudinal Learning Proof
+P2.3  Adversarial / Failure Validation
+P2.4  Autonomous Data Governance
+P2.5  Brain Evolution / Model Lifecycle
+P2.6  Real-World Tool Learning
+P2.7  Autonomous Recovery
+P2.8  Extended Canary
+P2.9  FINAL FORENSIC AUDIT
+```
+
+Do this as ONE continuous engineering/research task.
+
+Do NOT stop after merely auditing the repository.
+
+Do NOT ask the human to manually perform intermediate steps unless the repository or hardware makes an operation genuinely impossible.
+
+However:
+
+> NEVER fabricate evidence.
+> NEVER manually edit state files to make an autonomy test pass.
+> NEVER claim an autonomous cycle occurred if it required manual intervention.
+> NEVER unlock unrestricted STATE 3 during this task.
+
+---
+
+# 0. ABSOLUTE RULES
+
+These rules override convenience.
+
+## Rule 1 — Preserve production
+
+The current production brain must remain recoverable at all times.
+
+Never directly train over production.
+
+Required conceptual pipeline:
+
+```text
+EXPERIENCE
+    ↓
+FILTER
+    ↓
+DATASET SNAPSHOT
+    ↓
+CANDIDATE TRAINING
+    ↓
+CANDIDATE VALIDATION
+    ↓
+SAFETY GATES
+    ↓
+GENERALIZATION
+    ↓
+REGRESSION
+    ↓
+CANARY
+    ↓
+PROMOTION
+```
+
+Production must never become the experimental workspace.
+
+---
+
+## Rule 2 — No fake autonomy
+
+A cycle only counts as a REAL AUTONOMOUS CYCLE if:
+
+```text
+scheduler triggered it
+        ↓
+dataset assembled automatically
+        ↓
+training started automatically
+        ↓
+candidate generated automatically
+        ↓
+evaluation executed automatically
+        ↓
+promotion/rejection decided automatically
+        ↓
+state persisted automatically
+```
+
+No manual registry edits.
+
+No manual scheduler-state edits.
+
+No manual candidate substitution.
+
+No manually changing scores.
+
+No copying artifacts from another experiment and presenting them as new evidence.
+
+No resetting state to create a successful-looking run.
+
+The existing project specification explicitly says:
+
+```text
+If manual intervention is required,
+AUTONOMY CLAIM = FAILED.
+```
+
+Honor this literally.
+
+---
+
+## Rule 3 — No STATE 3 unlock
+
+During this entire task:
+
+```text
+full_autonomous_learning = FALSE
+```
+
+must remain enforced unless the repository's already-defined final machine gate independently proves every mandatory condition and the task explicitly reaches the final gate.
+
+Even then:
+
+DO NOT silently enable STATE 3.
+
+The final deliverable is a forensic readiness verdict.
+
+---
+
+## Rule 4 — Evidence over documentation
+
+Never treat:
+
+```text
+"implemented"
+"should work"
+"tested previously"
+"probably safe"
+```
+
+as sufficient evidence.
+
+Prefer:
+
+```text
+real execution
+real artifact
+real hash
+real log
+real benchmark
+real state transition
+real runtime observation
+real failure injection
+```
+
+---
+
+# 1. FIRST ACTION — FORENSIC BASELINE
+
+Before modifying anything:
+
+1. Inspect repository state.
+2. Inspect current Git branch and working tree.
+3. Inspect existing autonomy-related code.
+4. Inspect scheduler.
+5. Inspect learning pipeline.
+6. Inspect dataset builders.
+7. Inspect replay buffer.
+8. Inspect candidate/production isolation.
+9. Inspect BrainManager.
+10. Inspect evaluator.
+11. Inspect Held-Out V1.
+12. Inspect Held-Out V2.
+13. Inspect drift tracker.
+14. Inspect rollback implementation.
+15. Inspect model registry.
+16. Inspect brain state.
+17. Inspect existing autonomy gate.
+18. Inspect existing artifacts.
+19. Inspect existing tests.
+20. Inspect current production model identity and hashes.
+
+Do NOT perform a broad destructive refactor.
+
+Preserve the current architecture unless a concrete defect requires a change.
+
+Create a baseline artifact:
+
+```text
+artifacts/p2_master_baseline.json
+```
+
+It must record:
+
+```text
+git branch
+git HEAD
+working tree status
+production brain
+production package
+production hashes
+dataset hashes
+benchmark hashes
+scheduler configuration
+autonomy state
+existing gate status
+test baseline
+hardware/resource baseline
+```
+
+---
+
+# 2. P2.1 — REAL AUTONOMOUS CANARY VALIDATION
+
+The current bounded canary rules are:
+
+```text
+eligible experiences >= 50
+new experiences since previous cycle >= 20
+
+maximum optimizer steps = 120/cycle
+
+candidate must pass:
+    Held-Out V1
+    Held-Out V2
+
+zero tolerance:
+    safety regression
+    tool_honesty regression
+    identity regression
+
+automatic rollback must remain available
+
+drift:
+    >5% hard-gate drift → halt
+    >8% overall drift → halt
+```
+
+Verify these are actually MACHINE ENFORCED.
+
+Do not merely inspect configuration.
+
+Create or strengthen tests that prove:
+
+```text
+below threshold → no cycle
+eligible threshold met but new threshold missing → no cycle
+new threshold met but eligible threshold missing → no cycle
+both thresholds met → cycle eligible
+duplicate trigger → blocked
+cooldown → enforced
+candidate → isolated
+failed candidate → cannot serve
+promotion → requires all gates
+rollback → restores known-good production
+```
+
+Then execute genuine canary cycles.
+
+Target:
+
+```text
+>= 5 REAL AUTONOMOUS CYCLES
+```
+
+Each cycle must have:
+
+```text
+unique experiment_id
+cycle_id
+timestamp
+input dataset snapshot
+dataset hash
+training configuration
+base model hash
+adapter/checkpoint hash
+merged model hash
+GGUF hash if applicable
+benchmark hashes
+evaluation results
+hard-gate results
+promotion/rejection decision
+provenance
+runtime state transition
+```
+
+Do not fabricate promotion or rejection.
+
+If natural data produces rejection, record it.
+
+If natural data produces promotion, record it.
+
+If controlled but valid data is required, make the control explicit and reproducible.
+
+---
+
+# 3. P2.2 — LONGITUDINAL LEARNING PROOF
+
+Build a true longitudinal record:
+
+```text
+BASE
+ ↓
+CYCLE 1
+ ↓
+CYCLE 2
+ ↓
+CYCLE 3
+ ↓
+CYCLE 4
+ ↓
+CYCLE 5
+ ...
+```
+
+Track for every cycle:
+
+```text
+dataset size
+new examples
+replay examples
+Stable Core examples
+corrections
+failures
+training steps
+training loss
+validation loss if available
+
+Held-Out V1
+Held-Out V2
+
+future V3 if implemented
+
+safety
+tool_honesty
+identity
+reasoning
+tool calling
+language
+refusal
+calibration
+
+forgetting_delta
+drift_delta
+promotion status
+rollback status
+```
+
+Produce a machine-readable longitudinal artifact:
+
+```text
+artifacts/p2_longitudinal_learning.json
+```
+
+And a human-readable report:
+
+```text
+artifacts/P2_LONGITUDINAL_LEARNING.md
+```
+
+Explicitly detect:
+
+```text
+catastrophic forgetting
+slow regression
+oscillation
+score inflation
+dataset imbalance
+repeated memorization
+tool-honesty degradation
+identity drift
+safety degradation
+```
+
+A model gaining new behavior while silently losing old behavior is NOT considered successful learning.
+
+---
+
+# 4. P2.3 — ADVERSARIAL / FAILURE VALIDATION
+
+Implement and execute failure injection against the autonomous pipeline.
+
+At minimum test:
+
+```text
+CUDA OOM
+training process crash
+interrupted training
+corrupted checkpoint
+missing checkpoint
+malformed model output
+evaluator crash
+missing model
+missing GGUF
+GGUF corruption
+hash mismatch
+dataset corruption
+benchmark corruption
+registry write failure
+state write failure
+duplicate scheduler trigger
+concurrent scheduler trigger
+stale scheduler state
+runtime failure
+candidate package corruption
+promotion failure
+rollback invocation
+```
+
+For each injected failure verify:
+
+```text
+production remains unchanged
+candidate is rejected/quarantined
+failure is recorded
+state reaches a valid terminal/recoverable state
+scheduler does not silently continue
+rollback remains possible
+no false success is emitted
+```
+
+Create:
+
+```text
+artifacts/p2_failure_injection.json
+artifacts/P2_FAILURE_INJECTION.md
+```
+
+A failure that crashes the process is not automatically a failure of AURA.
+
+A failure becomes a system defect when the system:
+
+```text
+corrupts production
+loses provenance
+claims success
+cannot recover
+silently skips evaluation
+bypasses a gate
+```
+
+---
+
+# 5. P2.4 — AUTONOMOUS DATA GOVERNANCE
+
+Harden the experience → training-data pipeline.
+
+Every training example must have traceable provenance where applicable.
+
+Build/verify:
+
+```text
+raw experience
+    ↓
+quality filter
+    ↓
+provenance check
+    ↓
+deduplication
+    ↓
+contradiction detection
+    ↓
+safety filtering
+    ↓
+tool-result verification
+    ↓
+training eligibility
+```
+
+Training data must NOT automatically inherit trust merely because it came from AURA.
+
+Classify examples such as:
+
+```text
+VERIFIED_SUCCESS
+VERIFIED_FAILURE
+VERIFIED_CORRECTION
+USER_PROVIDED
+SYSTEM_GENERATED
+TOOL_VERIFIED
+UNVERIFIED
+CONTRADICTORY
+QUARANTINED
+```
+
+Prevent:
+
+```text
+unverified hallucination → training truth
+fake tool success → training truth
+stale capability → training truth
+contradiction → automatic overwrite
+duplicate spam → disproportionate training weight
+```
+
+Verify the existing contradiction protection.
+
+Do not remove it.
+
+Create:
+
+```text
+artifacts/p2_data_governance.json
+artifacts/P2_DATA_GOVERNANCE.md
+```
+
+---
+
+# 6. P2.5 — BRAIN EVOLUTION / MODEL LIFECYCLE
+
+Audit and harden the full lifecycle:
+
+```text
+production brain
+      ↓
+experience
+      ↓
+dataset snapshot
+      ↓
+candidate
+      ↓
+evaluation
+      ↓
+canary
+      ↓
+promotion
+      ↓
+new production brain
+```
+
+Every brain generation must have lineage.
+
+For every candidate record:
+
+```text
+parent brain
+experiment id
+dataset hash
+base model hash
+adapter hash
+merged checkpoint hash
+GGUF hash
+configuration
+benchmark hashes
+evaluation result
+promotion/rejection
+reason
+timestamp
+```
+
+Ensure rejected models cannot accidentally become production.
+
+Ensure production can always identify:
+
+```text
+which brain is running
+which artifact produced it
+which dataset trained it
+which experiment produced it
+which evaluation approved it
+```
+
+Create or verify immutable lifecycle records.
+
+---
+
+# 7. P2.6 — REAL-WORLD TOOL LEARNING
+
+Integrate verified tool outcomes into the learning pipeline.
+
+Do NOT train from the assistant's claim.
+
+Train from verified evidence.
+
+Example conceptual record:
+
+```text
+intent
+→ planned action
+→ tool call
+→ actual tool result
+→ postcondition
+→ verification
+→ final outcome
+```
+
+Distinguish:
+
+```text
+claimed success
+observed success
+verified success
+failure
+recovery
+```
+
+A tool call such as:
+
+```text
+android.app_launch
+```
+
+must not become a "successful" training example simply because the model emitted the call.
+
+The postcondition/evidence must support success.
+
+Where Android structured postconditions currently exist in ToolResult data, audit whether they are correctly converted into the canonical Phase 3 Evidence representation on the chat path.
+
+If not, implement the smallest safe bridge.
+
+Do not redesign the Android architecture unnecessarily.
+
+Test:
+
+```text
+tool success
+tool failure
+tool timeout
+wrong target
+permission block
+stale capability
+verification failure
+recovery
+```
+
+Then verify that learning examples accurately represent these outcomes.
+
+---
+
+# 8. P2.7 — AUTONOMOUS RECOVERY
+
+Implement bounded autonomous recovery.
+
+Allowed recovery should be explicit and finite.
+
+Examples:
+
+```text
+training transient failure
+    ↓
+bounded retry
+```
+
+or:
+
+```text
+candidate corruption
+    ↓
+quarantine
+    ↓
+restore previous state
+```
+
+or:
+
+```text
+evaluation failure
+    ↓
+mark evaluation incomplete
+    ↓
+do NOT promote
+```
+
+Recovery MUST NOT become unrestricted self-modification.
+
+Never permit autonomous learning to:
+
+```text
+delete safety rules
+modify evaluator criteria to pass
+modify the autonomy gate
+grant itself permissions
+arbitrarily execute code
+rewrite production architecture
+disable verification
+disable rollback
+```
+
+Every recovery action must be:
+
+```text
+bounded
+logged
+auditable
+reversible
+```
+
+Test recovery paths with real failure injection.
+
+---
+
+# 9. P2.8 — EXTENDED CANARY
+
+After the first minimum five real cycles, continue autonomous validation as far as practical under hardware/time limits.
+
+Do NOT optimize the experiment to make every candidate pass.
+
+A healthy system may produce:
+
+```text
+PASS
+REJECT
+PASS
+REJECT
+PASS
+```
+
+That is acceptable.
+
+What matters is whether the system makes the correct decision.
+
+Track:
+
+```text
+cycle-to-cycle learning
+cycle-to-cycle regressions
+dataset composition
+brain lineage
+promotion frequency
+rejection frequency
+rollback frequency
+resource usage
+runtime stability
+drift
+forgetting
+hard-gate stability
+```
+
+Verify scheduler behavior across repeated cycles.
+
+Do not reset state between cycles.
+
+Do not manually repair state between cycles unless the test itself requires recovery and that intervention is part of the explicitly recorded failure scenario.
+
+If manual intervention is required for an ordinary autonomous cycle:
+
+```text
+AUTONOMY CLAIM = FAILED
+```
+
+---
+
+# 10. EXPANDED GENERALIZATION BENCHMARK
+
+The current V1/V2 suites must remain immutable.
+
+Do not modify them to improve scores.
+
+Create a new independent benchmark:
+
+```text
+Held-Out V3
+```
+
+Target approximately:
+
+```text
+100+ cases
+```
+
+where practical.
+
+Cover:
+
+```text
+AURA identity
+Vietnamese
+English
+reasoning
+tool honesty
+tool schema correctness
+tool calling
+safety
+memory
+contradiction
+novel tasks
+failure handling
+uncertain requests
+verification
+refusal
+calibration
+```
+
+Use multiple surface forms per concept.
+
+Avoid benchmark contamination.
+
+Record:
+
+```text
+benchmark hash
+case count
+categories
+contamination result
+base score
+candidate scores
+production score
+per-category scores
+```
+
+Do NOT cherry-pick cases after seeing model outputs.
+
+---
+
+# 11. RUNTIME PARITY
+
+Verify parity between:
+
+```text
+PyTorch base
+PyTorch LoRA
+PyTorch merged
+GGUF
+production runtime
+```
+
+Use canonical prompts.
+
+Record:
+
+```text
+raw output
+parsed output
+tool calls
+stop reason
+token counts if available
+latency
+errors
+model hash
+runtime identifier
+```
+
+Define a reasonable parity tolerance.
+
+Material unexplained divergence must block promotion.
+
+Do not silently ignore runtime-specific failures.
+
+---
+
+# 12. RESOURCE GOVERNANCE
+
+Because the target machine is:
+
+```text
+RTX 4060 Laptop 8GB VRAM
+16GB system RAM
+```
+
+enforce practical resource budgets.
+
+At minimum track:
+
+```text
+maximum optimizer steps
+training time
+VRAM
+RAM
+disk growth
+dataset growth
+candidate count
+retry count
+cycles/day
+```
+
+If a resource budget is exceeded:
+
+```text
+PAUSE
+```
+
+rather than:
+
+```text
+retry forever
+```
+
+Resource exhaustion must never corrupt production.
+
+---
+
+# 13. MACHINE-ENFORCED AUTONOMY GATE
+
+Create or strengthen:
+
+```text
+artifacts/autonomy_gate.json
+```
+
+It must contain:
+
+```json
+{
+  "current_phase": "...",
+  "status": "...",
+  "full_autonomy_enabled": false,
+  "gates": {},
+  "blocking_reasons": [],
+  "evidence": []
+}
+```
+
+The gate must be software-enforced.
+
+If mandatory gates do not pass:
+
+```text
+full_autonomous_learning MUST remain disabled
+```
+
+Do not rely on documentation.
+
+Do not rely on human memory.
+
+Do not rely on comments.
+
+The runtime itself must enforce the lock.
+
+---
+
+# 14. FINAL FORENSIC AUDIT — P2.9
+
+At the end, independently reconstruct the entire evidence chain.
+
+Do not simply read previous reports and mark them PASS.
+
+For every gate ask:
+
+```text
+WHAT IS THE CLAIM?
+WHAT ARTIFACT PROVES IT?
+CAN THE ARTIFACT BE VERIFIED?
+IS THE ARTIFACT IMMUTABLE?
+WAS THE TEST REAL?
+WAS MANUAL INTERVENTION REQUIRED?
+CAN THE RESULT BE REPRODUCED?
+```
+
+Audit at minimum:
+
+```text
+P1.5 reconstruction
+reproducibility
+benchmark integrity
+statistical honesty
+LoRA/merged/GGUF parity
+independent generalization
+catastrophic forgetting
+tool honesty
+safety
+identity stability
+tool calling
+provenance
+contradiction protection
+crash recovery
+rollback
+scheduler autonomy
+multi-cycle stability
+production isolation
+resource governance
+evaluator integrity
+P2.1 canary
+P2.2 longitudinal learning
+P2.3 failure recovery
+P2.4 data governance
+P2.5 lifecycle integrity
+P2.6 verified tool learning
+P2.7 autonomous recovery
+P2.8 extended canary
+```
+
+Every gate must resolve to exactly one of:
+
+```text
+PASS
+FAIL
+BLOCKED
+INCONCLUSIVE
+```
+
+Never use:
+
+```text
+almost passed
+probably passed
+effectively passed
+should pass
+```
+
+---
+
+# 15. STATISTICAL HONESTY
+
+The existing V1 result has a known sample-size limitation.
+
+Do not describe directional improvement as statistically significant unless the evidence actually supports that claim.
+
+Existing evidence reports:
+
+```text
+P1.5-E001:
++9.62%
+5 wins / 1 loss
+exact two-sided p = 0.2188
+
+P1.6-E001:
++3.85%
+3 wins / 2 losses
+exact two-sided p = 1.0000
+
+N = 26
+```
+
+The previous scientific verdict was:
+
+```text
+INCONCLUSIVE_SAMPLE_SIZE_LIMITED
+```
+
+Preserve this scientific honesty.
+
+A larger V3 benchmark may improve evidence, but do not manufacture statistical significance.
+
+---
+
+# 16. FINAL DELIVERABLES
+
+Produce all relevant artifacts.
+
+At minimum:
+
+```text
+artifacts/p2_master_baseline.json
+artifacts/p2_longitudinal_learning.json
+artifacts/p2_failure_injection.json
+artifacts/p2_data_governance.json
+artifacts/autonomy_gate.json
+```
+
+And:
+
+```text
+artifacts/P2_MASTER_FORENSIC_REPORT.md
+```
+
+The final report must include:
+
+## Executive Summary
+
+## Repository Baseline
+
+## P2.1 Canary Evidence
+
+## P2.2 Longitudinal Evidence
+
+## P2.3 Failure Injection
+
+## P2.4 Data Governance
+
+## P2.5 Brain Lifecycle
+
+## P2.6 Tool Learning
+
+## P2.7 Recovery
+
+## P2.8 Extended Canary
+
+## V1/V2/V3 Benchmark Results
+
+## Runtime Parity
+
+## Resource Governance
+
+## Production Isolation
+
+## Rollback Evidence
+
+## Scheduler Evidence
+
+## Provenance Chain
+
+## Statistical Limitations
+
+## Remaining Risks
+
+## Final Gate Matrix
+
+## Final Autonomy Verdict
+
+---
+
+# 17. FINAL VERDICT RULE
+
+The final result MUST NOT be based on how impressive the results look.
+
+Use evidence.
+
+Possible outcomes:
+
+```text
+STATE 2 — CONDITIONAL
+```
+
+if mandatory evidence remains incomplete.
+
+Or:
+
+```text
+STATE 2 — BLOCKED
+```
+
+if a mandatory safety/integrity gate fails.
+
+Only declare readiness for consideration of:
+
+```text
+STATE 3 — FULL AUTONOMOUS LEARNING
+```
+
+if every mandatory gate has independently passed.
+
+BUT:
+
+Do not automatically enable STATE 3.
+
+The task ends at the forensic gate.
+
+The human must retain final authority over unlocking unrestricted autonomy.
+
+---
+
+# 18. TESTING REQUIREMENT
+
+Run the project's existing regression suite before and after modifications.
+
+Do not delete or weaken tests to obtain green results.
+
+Report:
+
+```text
+before
+after
+new tests
+failed tests
+skipped tests
+pre-existing failures
+new failures
+```
+
+Every newly introduced failure must be investigated.
+
+---
+
+# 19. GIT / CHANGE SAFETY
+
+Do not reset the user's work.
+
+Do not discard unrelated modifications.
+
+Do not rewrite unrelated architecture.
+
+Do not perform destructive cleanup.
+
+Do not commit unless explicitly requested.
+
+At the end report:
+
+```text
+git status
+changed files
+new files
+tests
+artifacts
+production brain
+autonomy state
+```
+
+---
+
+# 20. IMPORTANT IMPLEMENTATION PHILOSOPHY
+
+AURA's autonomous learning must follow:
+
+```text
+LEARN
+    but verify
+
+ADAPT
+    but preserve old capabilities
+
+ACT
+    but observe postconditions
+
+FAIL
+    but recover safely
+
+IMPROVE
+    but never self-authorize
+
+PROMOTE
+    only when evidence permits
+
+REJECT
+    whenever evidence is insufficient
+
+ROLL BACK
+    whenever production integrity is threatened
+```
+
+The objective is NOT:
+
+> "Make AURA pass every benchmark."
+
+The objective is:
+
+> "Prove that AURA can continuously learn, evaluate itself, reject bad learning, recover from failures, preserve production integrity, and maintain trustworthy provenance without human intervention inside the bounded autonomous pipeline."
+
+---
+
+# 21. EXECUTION MODE
+
+Proceed autonomously through:
+
+```text
+FORENSIC BASELINE
+        ↓
+P2.1
+        ↓
+P2.2
+        ↓
+P2.3
+        ↓
+P2.4
+        ↓
+P2.5
+        ↓
+P2.6
+        ↓
+P2.7
+        ↓
+P2.8
+        ↓
+P2.9
+```
+
+Do not stop after identifying missing functionality.
+
+Implement it.
+
+Test it.
+
+Run it.
+
+Collect evidence.
+
+Repair defects.
+
+Re-run affected tests.
+
+Then perform the final forensic audit.
+
+If a phase cannot honestly pass, mark it:
+
+```text
+BLOCKED
+```
+
+or:
+
+```text
+INCONCLUSIVE
+```
+
+and continue auditing the remaining phases where safe.
+
+Never fabricate missing evidence.
+
+Never downgrade a failed gate merely to reach STATE 3.
+
+At completion, print a concise final summary:
+
+```text
+P2.1 = ?
+P2.2 = ?
+P2.3 = ?
+P2.4 = ?
+P2.5 = ?
+P2.6 = ?
+P2.7 = ?
+P2.8 = ?
+P2.9 = ?
+
+Mandatory gates = ?
+Blocking gates = ?
+
+Real autonomous cycles = ?
+Manual interventions = ?
+
+Production integrity = ?
+Rollback verified = ?
+Failure recovery verified = ?
+Data governance verified = ?
+Longitudinal stability = ?
+
+FULL_AUTONOMOUS_LEARNING = LOCKED
+
+FINAL VERDICT = ?
+```
+
+Then provide the complete artifact paths and exact evidence supporting every final verdict.
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-16T17:07:08+07:00.
+
+The user has mentioned some items in the form @[ITEM]. Here is extra information about the items that were mentioned by the user, in the order that they appear:
+
+/goal is a [Slash Command]:
+The user has marked this task with /goal, indicating that this task is intended to run for a long time without user input, e.g. overnight. You should be extra thorough and only stop when you are confident the goal has been completely fulfilled. The system will force you to continue execution, prompting you to audit your work until completion. Once complete, include <!-- GOAL_COMPLETE --> in your response. If the user explicitly asked to stop or cancel this goal, include <!-- GOAL_CANCELLED --> in your response to cancel the goal.
+</ADDITIONAL_METADATA>

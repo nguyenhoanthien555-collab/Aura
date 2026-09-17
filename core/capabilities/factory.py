@@ -73,6 +73,17 @@ def register_core_capabilities(config=None):
     for cap_id, _, _, _, _ in android_caps:
         health.register_check(cap_id, check_android_gateway)
 
+    def check_desktop_input():
+        try:
+            from tools.builtins.input import default_input_synthesizer
+            if default_input_synthesizer() is not None:
+                return {"healthy": True, "reason": "", "state": "AVAILABLE"}
+        except Exception:
+            pass
+        return {"healthy": False, "reason": "Input synthesizer unavailable on host", "state": "UNAVAILABLE"}
+
+    health.register_check("desktop.input", check_desktop_input)
+
     # Permission check for android accessibility
     def check_android_accessibility():
         try:

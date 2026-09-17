@@ -1,0 +1,92 @@
+{
+  "timestamp": "2026-09-16T18:44:06.724517",
+  "phase": "P2.4",
+  "overall_status": "PASS",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "production_brain_preserved": true,
+  "active_brain_id": "brain-AURA-cand-run_59",
+  "active_brain_checksum": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+  "test_results": [
+    {
+      "test_name": "taxonomy_classification_8_tiers",
+      "description": "Verify deterministic mapping across all 8 taxonomy tiers",
+      "status": "PASS",
+      "expected_tiers": [
+        "TOOL_VERIFIED",
+        "VERIFIED_SUCCESS",
+        "VERIFIED_FAILURE",
+        "USER_PROVIDED",
+        "UNVERIFIED",
+        "SYSTEM_GENERATED",
+        "CONTRADICTORY",
+        "QUARANTINED"
+      ],
+      "all_classified_correctly": true,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "privacy_screening_quarantine",
+      "description": "Block OpenAI keys, GitHub tokens, passwords, and sensitive fields from training eligibility",
+      "status": "PASS",
+      "clean_text_eligible": true,
+      "openai_key_quarantined": true,
+      "secret_arg_quarantined": true,
+      "github_token_quarantined": true,
+      "duration_seconds": 0.002
+    },
+    {
+      "test_name": "multi_invariant_contradiction_screening",
+      "description": "Block unsupported hardware requests, unconfirmed destructive actions, foreign identities, and fake tools",
+      "status": "PASS",
+      "unsupported_hardware_blocked": true,
+      "destructive_action_blocked": true,
+      "foreign_identity_blocked": true,
+      "unregistered_tool_blocked": true,
+      "legitimate_tool_admitted": true,
+      "duration_seconds": 0.2896
+    },
+    {
+      "test_name": "quality_scoring_thresholding",
+      "description": "Validate evidence-grounded scoring yields >=0.9 for verified success, 0.95 for user corrections, and <=0.1 for contradicted failures",
+      "status": "PASS",
+      "verified_evidence_score": 1.0,
+      "user_corrected_score": 0.95,
+      "unverified_score": 0.7,
+      "contradicted_score": 0.0,
+      "duration_seconds": 0.0
+    },
+    {
+      "test_name": "experience_deduplication",
+      "description": "Ensure normalized whitespace and identical tool-call arguments produce identical signature for deduplication",
+      "status": "PASS",
+      "signature_1": "2ff949770d0a13ae2ddb8ad164a1d657ab0d0a3f195ea1be157e5c421dab4ccb",
+      "signature_2": "2ff949770d0a13ae2ddb8ad164a1d657ab0d0a3f195ea1be157e5c421dab4ccb",
+      "matched": true,
+      "duration_seconds": 0.004
+    },
+    {
+      "test_name": "end_to_end_dataset_governance",
+      "description": "Generate candidate dataset and verify zero contradictions, complete provenance, and valid SHA-256 manifest",
+      "status": "PASS",
+      "manifest_valid": true,
+      "dataset_examples": 50,
+      "categories": {
+        "tool_use": 9,
+        "conversation": 12,
+        "confirmation": 9,
+        "clarification": 7,
+        "tool_honesty": 5,
+        "safety": 2,
+        "identity": 4,
+        "reasoning": 2
+      },
+      "sha256_checksum": "689d5330a1d8357722422f7920471f2aa06251000b5a763e5c269d5044ee5576",
+      "contradiction_status": "CLEAN",
+      "contradiction_count": 0,
+      "taxonomy_tag_present": true,
+      "duration_seconds": 0.0265
+    }
+  ]
+}

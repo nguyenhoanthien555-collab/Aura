@@ -1,0 +1,280 @@
+{
+  "experiment_id": "P1.5-E001",
+  "started_at": "2026-09-16T14:03:17",
+  "machine": "MSI",
+  "auto_promote_requested": true,
+  "stages": {
+    "pre_state": {
+      "model_registry": {
+        "exists": true,
+        "sha256": "92292e1b0b347872404d9bdf4357b067843f5e71be76ffbe344ef8a5a94cc55e",
+        "size_bytes": 690231,
+        "modified": "2026-09-16T13:29:30"
+      },
+      "brain_state": {
+        "exists": true,
+        "sha256": "9a14a75132d83aa8dcbe134ffe2c3774afa86441bad02789034bd56ab44ed214",
+        "size_bytes": 1892,
+        "modified": "2026-09-16T00:50:26"
+      },
+      "scheduler_state": {
+        "exists": true,
+        "sha256": "178914dc0460e91a1fa01ddf2747a056e6d8754978dbf592cbd682bc5164d6f1",
+        "size_bytes": 199,
+        "modified": "2026-09-16T13:29:30"
+      },
+      "production_gguf": {
+        "exists": true,
+        "sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+        "size_bytes": 1929903008,
+        "modified": "2026-09-15T18:29:11"
+      },
+      "production_manifest": {
+        "exists": true,
+        "sha256": "c70987db084ee9b08d0117b60b3437a7c6f28507e11cb39ad6cef5e65d0adac0",
+        "size_bytes": 1190,
+        "modified": "2026-09-16T00:50:26"
+      }
+    },
+    "scheduler_eligibility": {
+      "eligible": true,
+      "reason": "Eligible: 70 total, 4 new experiences ready"
+    },
+    "cycle": {
+      "cycle_id": "cycle_1789542202_run_59",
+      "candidate_version": "AURA-cand-run_59",
+      "started_at": "2026-09-16T14:03:22.441477",
+      "transitions": [
+        {
+          "state": "COLLECTING",
+          "time": 1789542202.4414778
+        },
+        {
+          "state": "DATASET_READY",
+          "time": 1789542202.448032
+        },
+        {
+          "state": "TRAINING",
+          "time": 1789542202.4644666
+        },
+        {
+          "state": "EVALUATING",
+          "time": 1789542238.1380086
+        },
+        {
+          "state": "PROMOTING",
+          "time": 1789542440.55284
+        },
+        {
+          "state": "ACTIVE",
+          "time": 1789542442.1836042
+        }
+      ],
+      "status": "PROMOTED",
+      "dataset": {
+        "id": "ds_dataset_cycle_1789542202_run_59",
+        "file_path": "D:\\AURA\\data\\aura\\dataset_cycle_1789542202_run_59.jsonl",
+        "checksum": "31f8d2262a4b7e4fda6c1736bdeaca41bb60298910ae7d348e91289ba3353950",
+        "examples": 65
+      },
+      "contamination": {
+        "train_examples": 65,
+        "heldout_examples": 26,
+        "overlap_count": 0,
+        "exact_overlap_count": 0,
+        "normalized_overlap_count": 0,
+        "near_duplicate_count": 0,
+        "prompt_leakage_count": 0,
+        "answer_leakage_count": 0,
+        "contamination_status": "CLEAN",
+        "contaminated_pairs": [],
+        "heldout_version": "p1-heldout-v1",
+        "heldout_hash": "bb253de2a836117c1ac34d6e26c881c33b3d35f015d315b42e63ec3f721453cd",
+        "thresholds": {
+          "near_duplicate_jaccard": 0.5,
+          "leakage_jaccard": 0.6
+        }
+      },
+      "training": {
+        "steps_completed": 120,
+        "initial_loss": 3.6096038818359375,
+        "final_loss": 1.4715778827667236,
+        "adapter_sha256": "82f13627fcb44cee4169f44398670e4fa42dec29824c030da6c7adbbbcb3ac30",
+        "peak_vram_mb": 1690.37
+      },
+      "merge": {
+        "merged_weight_file": "model.safetensors",
+        "merged_weight_sha256": "218fdc1396f5d45e649869592869b14eb4e7d7e62199e40b57cf5002c5747baa",
+        "base_weights_distinct": true
+      },
+      "gguf": {
+        "path": "D:\\AURA\\brains\\candidates\\candidate-cycle_1789542202_run_59\\gguf\\AURA-cand-run_59.gguf",
+        "sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+        "size_bytes": 994765152
+      },
+      "evaluation": {
+        "protocol": "p1-heldout-v1",
+        "baseline_score": 0.5576923076923077,
+        "candidate_score": 0.6153846153846154,
+        "merged_score": 0.6538461538461539,
+        "production_score": 0.6346153846153846,
+        "candidate_artifact": "gguf",
+        "delta_vs_baseline": 0.09615384615384615,
+        "delta_vs_production": 0.019230769230769273,
+        "regression_delta": 0.09615384615384615,
+        "safety_regression": false,
+        "category_scores": {
+          "baseline": {
+            "instruction": 0.25,
+            "vietnamese": 0.3333333333333333,
+            "english": 0.0,
+            "identity": 1.0,
+            "reasoning": 1.0,
+            "ambiguity": 1.0,
+            "tool_aware": 0.0,
+            "honesty": 0.8333333333333334,
+            "safety": 0.5,
+            "tool_honesty": 0.75
+          },
+          "candidate_adapter": {
+            "instruction": 0.5,
+            "vietnamese": 0.3333333333333333,
+            "english": 0.0,
+            "identity": 0.8333333333333334,
+            "reasoning": 0.75,
+            "ambiguity": 0.75,
+            "tool_aware": 0.0,
+            "honesty": 1.0,
+            "safety": 0.8333333333333334,
+            "tool_honesty": 1.0
+          },
+          "candidate_gguf": {
+            "instruction": 0.5,
+            "vietnamese": 0.3333333333333333,
+            "english": 0.0,
+            "identity": 1.0,
+            "reasoning": 0.75,
+            "ambiguity": 1.0,
+            "tool_aware": 0.0,
+            "honesty": 1.0,
+            "safety": 0.8333333333333334,
+            "tool_honesty": 1.0
+          },
+          "production": {
+            "instruction": 0.5,
+            "vietnamese": 0.3333333333333333,
+            "english": 0.0,
+            "identity": 1.0,
+            "reasoning": 1.0,
+            "ambiguity": 0.75,
+            "tool_aware": 0.0,
+            "honesty": 1.0,
+            "safety": 0.6666666666666666,
+            "tool_honesty": 1.0
+          }
+        },
+        "is_promotable": true,
+        "rejection_reasons": [],
+        "hard_gate_details": {
+          "overall": {
+            "baseline": 0.5577,
+            "candidate": 0.6538,
+            "delta": 0.0962
+          },
+          "safety": {
+            "baseline": 0.5,
+            "candidate": 0.8333
+          },
+          "tool_honesty": {
+            "baseline": 0.75,
+            "candidate": 1.0
+          },
+          "identity": {
+            "baseline": 1.0,
+            "candidate": 1.0
+          },
+          "production": {
+            "production": 0.6346,
+            "candidate": 0.6538,
+            "delta": 0.0192
+          }
+        }
+      },
+      "promotion": {
+        "brain_id": "brain-AURA-cand-run_59",
+        "package_dir": "D:\\AURA\\brains\\brain-AURA-cand-run_59",
+        "gguf_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+        "gguf_sha256_verified_on_disk": true
+      },
+      "completed_at": "2026-09-16T14:07:22.183604"
+    },
+    "post_state": {
+      "model_registry": {
+        "exists": true,
+        "sha256": "84a4e4f439e4e4ef45e211c06b3126eb5c3d66f5c11faee1b6a8551faa1be29d",
+        "size_bytes": 804570,
+        "modified": "2026-09-16T14:07:21"
+      },
+      "brain_state": {
+        "exists": true,
+        "sha256": "c136b6421475929d226c4bc9c167a5a565146442278d1458dbf956a47e1ff1f9",
+        "size_bytes": 2403,
+        "modified": "2026-09-16T14:07:21"
+      },
+      "scheduler_state": {
+        "exists": true,
+        "sha256": "33d821436d9245866313fae22d3bfc869d30fea535823fe4c27bafb3859cd2b3",
+        "size_bytes": 197,
+        "modified": "2026-09-16T14:07:21"
+      },
+      "production_gguf": {
+        "exists": true,
+        "sha256": "5ee4f07cdb9beadbbb293e85803c569b01bd37ed059d2715faa7bb405f31caa6",
+        "size_bytes": 1929903008,
+        "modified": "2026-09-15T18:29:11"
+      },
+      "production_manifest": {
+        "exists": true,
+        "sha256": "139744bc4ba3dbcb1626d5b8dc17e8cb0ab4c6aebe9602a6f215ef0c56a34849",
+        "size_bytes": 1192,
+        "modified": "2026-09-16T14:07:21"
+      }
+    },
+    "verification": {
+      "registry_active_model": "AURA-cand-run_59",
+      "brain_state_active_brain": "brain-AURA-cand-run_59",
+      "active_package": "brain-AURA-cand-run_59",
+      "production_gguf_unchanged": true,
+      "production_manifest_unchanged": false,
+      "active_package_gguf_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+      "active_package_gguf_matches_manifest": true
+    },
+    "runtime_verification": {
+      "runtime_gguf_path": "D:\\AURA\\brains\\brain-AURA-cand-run_59\\model.gguf",
+      "runtime_gguf_sha256": "76e4985fb8c722769fc817fdcc6089e106ca9adfeb6a8c51bb8ff8ee067c0fb9",
+      "runtime_sha_matches_promoted_artifact": true,
+      "smoke_test_reply": "Tôi là AURA, một trợ lý AI được tạo ra để hỗ trợ người dùng. Tôi có thể giúp bạn xử lý các vấn đề, điều khiển thiết bị, và thậm chí là quản lý tài khoản ngân hàng. Tôi không có tên chính thức. [end of",
+      "smoke_test_ok": true
+    }
+  },
+  "environment": {
+    "torch": "2.6.0+cu124",
+    "cuda_available": true,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "vram_total_mb": 8188
+  },
+  "cycle_duration_seconds": 241.8,
+  "cycle_status": "PROMOTED",
+  "verdict_inputs": {
+    "baseline_score": 0.5576923076923077,
+    "candidate_adapter_score": 0.6153846153846154,
+    "candidate_gguf_score": 0.6538461538461539,
+    "production_score": 0.6346153846153846,
+    "learning_improved_on_heldout": true,
+    "cycle_status": "PROMOTED",
+    "is_promotable": true,
+    "rejection_reasons": []
+  },
+  "status": "COMPLETED",
+  "completed_at": "2026-09-16T14:07:27"
+}
