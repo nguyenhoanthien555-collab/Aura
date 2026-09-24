@@ -71,10 +71,41 @@ class SettingsStore(context: Context) : DeviceSettings {
                 editor.putBoolean(KEY_NOTIFICATIONS, true)
             }
             if (!prefs.contains(KEY_DYNAMIC)) {
-                editor.putBoolean(KEY_DYNAMIC, true)
+                // Aura's own indigo-violet identity by default rather than the
+                // wallpaper's colours: on Android 12+ dynamic colour otherwise
+                // wins and the hand-picked scheme is never seen.
+                editor.putBoolean(KEY_DYNAMIC, false)
+            }
+            // One-time reveal: installs from before the redesign defaulted
+            // dynamic colour ON, which hid the rebuilt theme. Flip it off once
+            // so the new look shows; the user may turn it back on afterward and
+            // that choice sticks, because this runs only until the flag is set.
+            if (!prefs.contains(KEY_DYNAMIC_REVEAL)) {
+                editor.putBoolean(KEY_DYNAMIC, false)
+                editor.putBoolean(KEY_DYNAMIC_REVEAL, true)
             }
             if (!prefs.contains(KEY_URL) || prefs.getString(KEY_URL, "").isNullOrBlank()) {
                 editor.putString(KEY_URL, DEFAULT_SERVER_URL)
+            }
+            if (!prefs.contains(KEY_INTELLIGENCE_MODE)) {
+                editor.putString(KEY_INTELLIGENCE_MODE, "on_device")
+            }
+            if (!prefs.contains(KEY_ALLOW_CLOUD_FALLBACK)) {
+                editor.putBoolean(KEY_ALLOW_CLOUD_FALLBACK, false)
+            }
+            // Seed the token for the default hosted deployment so the hybrid
+            // brain can reach the cloud server on first run without a manual
+            // setup step — the server URL is already defaulted the same way.
+            // Stored only in EncryptedSharedPreferences (Keystore-backed, not
+            // in the APK's code path at runtime), one-time, and overwritten the
+            // moment the user sets their own connection. This pairs a single
+            // personal deployment with a single owner's phone; a multi-tenant
+            // build would drop this and require setConnection().
+            if (!prefs.contains(KEY_TOKEN_SEED)) {
+                if (prefs.getString(KEY_TOKEN, "").isNullOrBlank()) {
+                    editor.putString(KEY_TOKEN, DEFAULT_AUTH_TOKEN)
+                }
+                editor.putBoolean(KEY_TOKEN_SEED, true)
             }
             editor.putInt(KEY_VERSION, CURRENT_VERSION)
             editor.apply()
@@ -91,7 +122,9 @@ class SettingsStore(context: Context) : DeviceSettings {
         syncEnabled = prefs.getBoolean(KEY_SYNC, true),
         deviceIntegrationEnabled = prefs.getBoolean(KEY_DEVICE_INTEGRATION, true),
         themeMode = ThemeMode.from(prefs.getString(KEY_THEME, null)),
-        dynamicColour = prefs.getBoolean(KEY_DYNAMIC, true),
+        dynamicColour = prefs.getBoolean(KEY_DYNAMIC, false),
+        intelligenceMode = prefs.getString(KEY_INTELLIGENCE_MODE, "cloud") ?: "cloud",
+        allowCloudFallback = prefs.getBoolean(KEY_ALLOW_CLOUD_FALLBACK, false),
     )
 
     /**
@@ -165,6 +198,16 @@ class SettingsStore(context: Context) : DeviceSettings {
         _settings.value = read()
     }
 
+    override fun setIntelligenceMode(mode: String) {
+        prefs.edit().putString(KEY_INTELLIGENCE_MODE, mode).apply()
+        _settings.value = read()
+    }
+
+    override fun setAllowCloudFallback(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALLOW_CLOUD_FALLBACK, enabled).apply()
+        _settings.value = read()
+    }
+
     fun clear() {
         prefs.edit()
             .putString(KEY_URL, "")
@@ -174,8 +217,12 @@ class SettingsStore(context: Context) : DeviceSettings {
     }
 
     companion object {
-        const val CURRENT_VERSION = 3
+        const val CURRENT_VERSION = 4
         const val DEFAULT_SERVER_URL = "https://aura-xwm4.onrender.com/"
+        // Token for the default hosted deployment. See the one-time seed in
+        // migrate(): personal single-owner deployment, encrypted at rest,
+        // user-overridable via setConnection().
+        private const val DEFAULT_AUTH_TOKEN = "6Swko2P0xuYCn76KOsIGHQtwRlwqrGwzdfFuXeFt-t0"
         private const val FILE = "aura_secure_settings"
         private const val KEY_VERSION = "settings_version"
         private const val KEY_URL = "server_url"
@@ -188,6 +235,10 @@ class SettingsStore(context: Context) : DeviceSettings {
         private const val KEY_DEVICE_INTEGRATION = "device_integration"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_DYNAMIC = "dynamic_colour"
+        private const val KEY_DYNAMIC_REVEAL = "dynamic_colour_reveal_v2"
+        private const val KEY_INTELLIGENCE_MODE = "intelligence_mode"
+        private const val KEY_ALLOW_CLOUD_FALLBACK = "allow_cloud_fallback"
+        private const val KEY_TOKEN_SEED = "token_seed_v4"
 
         /**
          * Accept what a human would type.
@@ -262,13 +313,17 @@ data class AuraSettings(
     val syncEnabled: Boolean = true,
     val deviceIntegrationEnabled: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.System,
-    val dynamicColour: Boolean = true,
+    val dynamicColour: Boolean = false,
+    val intelligenceMode: String = "cloud",
+    val allowCloudFallback: Boolean = false,
 ) {
-    val isConfigured: Boolean get() = serverUrl.isNotBlank()
+    val isOnDevice: Boolean get() = intelligenceMode == "on_device"
+
+    val isConfigured: Boolean get() = isOnDevice || serverUrl.isNotBlank()
 
     val isSecure: Boolean get() = serverUrl.startsWith("https://")
 
     override fun toString(): String =
         "AuraSettings(serverUrl=$serverUrl, authToken=${if (authToken.isBlank()) "unset" else "***"}, " +
-            "deviceId=$deviceId, screenObservation=$screenObservationEnabled, sync=$syncEnabled, deviceIntegration=$deviceIntegrationEnabled)"
+            "deviceId=$deviceId, mode=$intelligenceMode, screenObservation=$screenObservationEnabled, sync=$syncEnabled, deviceIntegration=$deviceIntegrationEnabled)"
 }

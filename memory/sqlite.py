@@ -73,6 +73,8 @@ from memory.models import (
     SyncConflictRecord,
     AgentRunRecord,
     ToolInvocationRecord,
+    SemanticVector,
+    CompanionMemoryRecord,
 )
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)

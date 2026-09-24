@@ -37,7 +37,16 @@ class GeminiProvider(BaseProvider):
 
         self.client = genai.Client(api_key=api_key)
 
-        self.model = model or config["llm"]["model"]
+        # The cloud model is its own setting: prefer an explicit override,
+        # then `gemini_model`, then the shared `cloud_model`, and only then
+        # a current, known default.
+        llm = config["llm"]
+        self.model = (
+            model
+            or llm.get("gemini_model")
+            or llm.get("cloud_model")
+            or "gemini-flash-latest"
+        )
         self.max_output_tokens = int(config["llm"].get("max_output_tokens", 768))
         self.temperature = float(config["llm"].get("temperature", 0.7))
 

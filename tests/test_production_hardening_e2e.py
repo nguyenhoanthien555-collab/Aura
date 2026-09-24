@@ -25,7 +25,7 @@ from core.paths import BACKUPS_DIR, DATA_DIR
 from core.sync.inbox import InboxProcessor
 from core.sync.models import InboxStatus, OutboxStatus, SyncEvent
 from core.sync.outbox import OutboxManager
-from learning.autonomy_guard import AutonomyGateManager
+from agent.autonomy_guard import AutonomyGateManager
 from memory.backup import (
     create_database_backup,
     get_backup_history,

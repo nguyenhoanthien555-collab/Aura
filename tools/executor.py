@@ -767,11 +767,17 @@ class ToolExecutor:
         declared = getattr(tool, "parameters", ()) or ()
 
         if declared:
-
-            known = {
-                parameter.name: getattr(parameter, "type", "string")
-                for parameter in declared
-            }
+            known = {}
+            if isinstance(declared, dict):
+                props = declared.get("properties", {}) if "properties" in declared else declared
+                for p_name, p_spec in props.items():
+                    p_type = p_spec.get("type", "string") if isinstance(p_spec, dict) else getattr(p_spec, "type", "string")
+                    known[p_name] = p_type
+            else:
+                for parameter in declared:
+                    p_name = getattr(parameter, "name", str(parameter))
+                    p_type = getattr(parameter, "type", "string")
+                    known[p_name] = p_type
 
             for key, value in arguments.items():
 

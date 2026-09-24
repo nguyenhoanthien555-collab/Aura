@@ -119,3 +119,11 @@ data/backups/
 prompt_dump.txt
 scratch_p4_prompt.txt
 .devflow/
+
+# AutoClaw KDream data
+.autoclaw/
+
+# Temporary artifacts
+system.tmp
+tiny.dat
+data/screenshots/

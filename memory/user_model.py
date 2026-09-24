@@ -405,6 +405,31 @@ class UserModel:
 
         return True
 
+    def forget_matching(self, query: str) -> int:
+        query = (query or "").strip()
+        if not query:
+            return 0
+
+        slug = self._normalise(query)
+        pattern = f"%{query}%"
+
+        with db_lock:
+            entries = (
+                self.session.query(UserModelEntry)
+                .filter(
+                    (UserModelEntry.key == slug)
+                    | (UserModelEntry.key.like(pattern))
+                    | (UserModelEntry.value.like(pattern))
+                )
+                .all()
+            )
+            count = len(entries)
+            for entry in entries:
+                self.session.delete(entry)
+            if count > 0:
+                self.session.commit()
+            return count
+
     def clear(self) -> None:
 
         with db_lock:

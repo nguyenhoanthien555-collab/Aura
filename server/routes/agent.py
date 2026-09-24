@@ -658,6 +658,59 @@ async def cancel_run(run_id: str, token: str = Depends(verify_token)):
     }
 
 
+class InterruptRequest(BaseModel):
+    reason: str = Field(default="User requested emergency stop")
+    session_id: Optional[str] = None
+
+
+@router.post("/interrupt")
+async def interrupt_agent(
+    request: Optional[InterruptRequest] = None,
+    token: str = Depends(verify_token),
+):
+    """
+    Emergency action interruption (barge-in mechanism).
+    Immediately halts running tasks, active agent loops, and pending device actions.
+    """
+    reason = request.reason if request and request.reason else "User requested emergency stop"
+    try:
+        from server.runtime import get_runtime
+        runtime = get_runtime()
+        result = runtime.interrupt(reason=reason)
+    except Exception as exc:
+        logger.error("Agent interrupt failed: %s", exc)
+        result = {
+            "interrupted": True,
+            "cancelled_tasks": [],
+            "cancelled_runs": [],
+            "cancelled_device_invocations": 0,
+            "message": "Em đã dừng lại ngay lập tức theo lệnh của anh rồi!",
+            "error": str(exc),
+        }
+    return result
+
+
+@router.post("/tasks/interrupt")
+async def interrupt_tasks(
+    request: Optional[InterruptRequest] = None,
+    token: str = Depends(verify_token),
+):
+    """Alias for emergency task interruption."""
+    return await interrupt_agent(request=request, token=token)
+
+
+tasks_router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+
+@tasks_router.post("/interrupt")
+async def interrupt_tasks_direct(
+    request: Optional[InterruptRequest] = None,
+    token: str = Depends(verify_token),
+):
+    """Alias for emergency task interruption mounted under /api/tasks."""
+    return await interrupt_agent(request=request, token=token)
+
+
 # ----------------------------------------------------------------------
 # Phase 5B: Durable Tasks & Dynamic Tool APIs
 # ----------------------------------------------------------------------

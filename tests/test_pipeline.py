@@ -396,7 +396,12 @@ def test_router_provider_is_lazy():
     assert isinstance(router.provider, MockProvider)
 
 
-def test_router_rejects_unknown_provider():
+def test_router_rejects_unknown_provider(monkeypatch):
+    # Offline mode rewrites any external/unknown provider to local_aura, so
+    # the rejection this test asserts only exists on the cloud-routing path.
+    # Opt into it explicitly through the authoritative override.
+    monkeypatch.setenv("AURA_OFFLINE", "0")
+
     router = BrainRouter(provider_name="does-not-exist")
 
     with pytest.raises(ValueError):

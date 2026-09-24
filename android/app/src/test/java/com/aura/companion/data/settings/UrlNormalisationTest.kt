@@ -91,9 +91,25 @@ class UrlNormalisationTest {
     }
 
     @Test
-    fun `isConfigured is false until a URL exists`() {
-        assertFalse(AuraSettings().isConfigured)
-        assertTrue(AuraSettings(serverUrl = "https://aura.example.com/").isConfigured)
+    fun `in cloud mode isConfigured is false until a URL exists`() {
+        // Cloud mode talks to a server, so it is not configured until one is
+        // named. On-device mode needs no server - see the next test.
+        assertFalse(AuraSettings(intelligenceMode = "cloud").isConfigured)
+        assertTrue(
+            AuraSettings(
+                intelligenceMode = "cloud",
+                serverUrl = "https://aura.example.com/",
+            ).isConfigured
+        )
+    }
+
+    @Test
+    fun `on-device mode is configured with no server at all`() {
+        // The local brain needs no server address, so a fresh install in the
+        // default on-device mode is ready to chat without one. This is why
+        // the first-run prompt keys off cloud-mode-without-a-URL, not URL
+        // alone.
+        assertTrue(AuraSettings(intelligenceMode = "on_device").isConfigured)
     }
 
     @Test

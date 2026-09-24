@@ -2038,35 +2038,10 @@ class TaskRuntime:
             )
         elif all(s.status == StepStatus.COMPLETED.value for s in all_steps):
             self.update_task_status(task_id, TaskStatus.COMPLETED.value)
-            self._record_task_experience(task_id, "SUCCESS")
         else:
             self.update_task_status(task_id, TaskStatus.RUNNING.value, current_step_id=step_id)
 
         return updated_step
-
-    def _record_task_experience(self, task_id: str, outcome: str = "SUCCESS") -> None:
-        """Records task execution experience with PII screening for self-learning."""
-        try:
-            from learning.experience import AuraExperienceStore
-            task = self.get_task(task_id)
-            if not task:
-                return
-            steps = self.get_steps(task_id)
-            tools = [s.tool for s in steps if s.tool]
-            evidence_ids = [s.evidence_id for s in steps if s.evidence_id]
-            store = AuraExperienceStore()
-            store.record_experience(
-                session_id=task.session_id or f"task_session_{task_id}",
-                input_text=task.goal,
-                model_decision="TOOL_CALL" if tools else "ANSWER",
-                task_id=task_id,
-                selected_tool=tools[0] if tools else "",
-                final_response=f"Task {task_id} completed with {len(steps)} steps.",
-                outcome=outcome,
-                category="agent_task",
-            )
-        except Exception as e:
-            logger.debug("Task experience recording ignored: %s", e)
 
     def checkpoint(
         self, task_id: str, plan: Dict[str, Any], current_step_id: str = ""
@@ -2241,6 +2216,45 @@ class TaskRuntime:
                     session.query(DurableConfirmationRecord)
                     .filter_by(task_id=task_id)
                     .order_by(DurableConfirmationRecord.created_at.asc())
+                    .all()
+                )
+                return [
+                    DurableConfirmation(
+                        confirmation_id=r.confirmation_id,
+                        task_id=r.task_id,
+                        step_id=r.step_id,
+                        tool=r.tool,
+                        risk=r.risk,
+                        side_effect=r.side_effect,
+                        description=r.description,
+                        arguments=json.loads(r.arguments_json or "{}"),
+                        redacted_arguments=json.loads(r.redacted_arguments_json or "{}"),
+                        status=r.status,
+                        decision=r.decision,
+                        decision_by=r.decision_by,
+                        decided_at=r.decided_at,
+                        created_at=r.created_at,
+                        expires_at=r.expires_at,
+                        fingerprint=getattr(r, "fingerprint", "") or "",
+                    )
+                    for r in recs
+                ]
+
+    def list_pending_confirmations(self, limit: int = 20) -> List[DurableConfirmation]:
+        """
+        Every PENDING confirmation across all tasks, oldest first.
+
+        This is what the confirmation channel polls: a dangerous tool call
+        the agent paused on and is waiting for a human yes/no on. Oldest
+        first so the thing that has been waiting longest is asked first.
+        """
+        with db_lock:
+            with self._session_factory() as session:
+                recs = (
+                    session.query(DurableConfirmationRecord)
+                    .filter_by(status="PENDING")
+                    .order_by(DurableConfirmationRecord.created_at.asc())
+                    .limit(max(1, int(limit)))
                     .all()
                 )
                 return [
@@ -2607,6 +2621,14 @@ class TaskRuntime:
                 session.commit()
 
         return True
+
+    def cancel_all_active_tasks(self, reason: str = "Interrupted by user") -> List[str]:
+        """Cancels all active (non-terminal) durable tasks."""
+        cancelled = []
+        for task in self.list_active_tasks():
+            if self.cancel_task(task.task_id, reason=reason):
+                cancelled.append(task.task_id)
+        return cancelled
 
     def pause_task(self, task_id: str) -> bool:
         """Pauses a running or pending durable task."""

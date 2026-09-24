@@ -1,5 +1,8 @@
 # AURA project state
 
+## Cloud-Only Architecture (2026-09-23)
+AURA has been completely transitioned to a Cloud-Only architecture (default provider Google Gemini, with 11 supported cloud providers). All local-learning daemons, on-device GGUF/llama runtimes, and dead training scripts/datasets have been excised from the Python backend and the Android companion app, reclaiming ~54.2 GB of disk space. Settings store maps legacy local provider identifiers seamlessly to Gemini. Both Python backend (496 unit/regression tests) and Android companion (`:app:testDebugUnitTest`) are 100% passing.
+
 Server-side grounding, the Android companion transport, and the device-side
 dispatcher are implemented and committed. As of 2026-09-05 ALL Phase 1-5A work
 is committed and pushed: `9466f89` on `origin/feature/aura-identity` (167

@@ -135,6 +135,9 @@ class ServerRuntime:
         bus = EventBus()
 
         vision = self._build_remote_vision(server_config, bus)
+        if vision is None:
+            from launcher.services import _build_vision
+            vision = _build_vision(server_config, bus)
 
         self.services = build_services(
             server_config,
@@ -201,9 +204,6 @@ class ServerRuntime:
         from vision.remote import build_remote_vision
 
         processor = build_cloud_vision_processor(config)
-        if processor is None:
-            logger.error("Cloud vision is not configured; remote vision remains disabled")
-            return None
 
         manager, source = build_remote_vision(
             events=bus,
@@ -215,8 +215,9 @@ class ServerRuntime:
         self.screen_source = source
 
         logger.info(
-            "Cloud screen vision enabled (min_interval=%.1fs)",
+            "Screen vision enabled (min_interval=%.1fs, processor=%s)",
             manager.min_interval,
+            "cloud" if processor else "remote_text",
         )
 
         return manager
@@ -322,7 +323,7 @@ class ServerRuntime:
                     task_runtime=task_runtime if "task_runtime" in locals() else None,
                     tool_registry=registry if "registry" in locals() else None,
                     proactive_engine=getattr(self.services, "proactive", None),
-                    offline=self.config.get("llm", {}).get("offline", True),
+                    offline=False,
                     poll_interval=poll_interval,
                     proactive_interval=proactive_interval,
                     backup_interval=backup_interval,
@@ -551,6 +552,68 @@ class ServerRuntime:
             "accepted": True,
             "reason": "recorded",
             "decision": decision.as_dict(),
+        }
+
+    def interrupt(self, reason: str = "User requested emergency stop") -> dict:
+        """
+        Emergency action interruption (barge-in mechanism).
+        Immediately halts running tasks, active agent loops, and pending device actions.
+        """
+        logger.warning("Emergency interruption triggered: %s", reason)
+
+        # 1. Device Gateway pending invocations
+        cancelled_devices = 0
+        try:
+            from server.device_gateway import get_device_gateway
+            cancelled_devices = get_device_gateway().cancel_all(reason=reason)
+        except Exception as e:
+            logger.warning("Failed to cancel device gateway invocations: %s", e)
+
+        # 2. Durable Tasks
+        cancelled_tasks = []
+        try:
+            from server.routes.agent import get_task_runtime
+            task_rt = get_task_runtime()
+            if hasattr(task_rt, "cancel_all_active_tasks"):
+                cancelled_tasks = task_rt.cancel_all_active_tasks(reason=reason)
+            else:
+                for t in task_rt.list_active_tasks():
+                    if task_rt.cancel_task(t.task_id, reason=reason):
+                        cancelled_tasks.append(t.task_id)
+        except Exception as e:
+            logger.warning("Failed to cancel durable tasks: %s", e)
+
+        # 3. Agent Runs
+        cancelled_runs = []
+        try:
+            from server.routes.agent import get_agent_runtime
+            agent_rt = get_agent_runtime()
+            if hasattr(agent_rt, "cancel_all_active_runs"):
+                cancelled_runs = agent_rt.cancel_all_active_runs()
+        except Exception as e:
+            logger.warning("Failed to cancel agent runs: %s", e)
+
+        # 4. Bus notification
+        try:
+            if self.bus is not None:
+                from events.types import AgentInterruptedEvent
+                evt = AgentInterruptedEvent(
+                    reason=reason,
+                    cancelled_tasks=tuple(cancelled_tasks),
+                    cancelled_runs=tuple(cancelled_runs),
+                    cancelled_devices=cancelled_devices,
+                    timestamp=time.time(),
+                )
+                self.bus.publish(evt)
+        except Exception as e:
+            logger.warning("Failed to publish interrupt event: %s", e)
+
+        return {
+            "interrupted": True,
+            "cancelled_tasks": cancelled_tasks,
+            "cancelled_runs": cancelled_runs,
+            "cancelled_device_invocations": cancelled_devices,
+            "message": "Em đã dừng lại ngay lập tức theo lệnh của anh rồi!",
         }
 
     def readiness(self) -> dict:

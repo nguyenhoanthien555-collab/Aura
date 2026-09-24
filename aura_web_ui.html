@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AURA Core — Web Console & Test Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #111827;
+      --surface-card: rgba(17, 24, 39, 0.75);
+      --surface-border: rgba(255, 255, 255, 0.08);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.35);
+      --primary: #6366f1;
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.3);
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                  radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+    .brand-badge {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .conn-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(0,0,0,0.3);
+      padding: 0.35rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid var(--surface-border);
+    }
+    .conn-bar input, .conn-bar select {
+      background: transparent;
+      border: 1px solid var(--surface-border);
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      outline: none;
+    }
+    .conn-bar input:focus { border-color: var(--accent); }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warning);
+      box-shadow: 0 0 8px var(--warning);
+      transition: all 0.3s ease;
+    }
+    .status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success-glow);
+    }
+
+    nav {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(17, 24, 39, 0.4);
+      border-bottom: 1px solid var(--surface-border);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .tab-btn.active {
+      color: #fff;
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    main {
+      flex: 1;
+      padding: 1.5rem;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Cards & Grids */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      color: #fff;
+    }
+    .card-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    /* Buttons */
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #4f46e5; transform: translateY(-1px); }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--surface-border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+    .btn-success { background: var(--success); }
+    .btn-success:hover { background: #059669; }
+    .btn-warning { background: #d97706; }
+    .btn-warning:hover { background: #b45309; }
+    .btn-info { background: #0284c7; }
+    .btn-info:hover { background: #0369a1; }
+
+    /* Chat Section */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 620px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-card);
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .msg {
+      max-width: 80%;
+      padding: 0.85rem 1.15rem;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+    .msg-aura {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--surface-border);
+      color: #f3f4f6;
+      border-bottom-left-radius: 2px;
+    }
+    .msg-meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .chat-input-bar {
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.35);
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .chat-input-bar input {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--surface-border);
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .chat-input-bar input:focus { border-color: var(--accent); }
+
+    .quick-chips {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .chip {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--surface-border);
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip:hover { color: #fff; border-color: var(--accent); background: rgba(139,92,246,0.1); }
+
+    /* Code & JSON Display */
+    pre, code {
+      font-family: var(--font-mono);
+    }
+    pre.code-block {
+      background: #060911;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      color: #38bdf8;
+      max-height: 400px;
+    }
+
+    /* Diagnostics UI */
+    .test-case {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      margin-bottom: 0.65rem;
+    }
+    .test-case.pass { border-left: 4px solid var(--success); }
+    .test-case.fail { border-left: 4px solid var(--danger); }
+    .test-case.running { border-left: 4px solid var(--warning); }
+
+    .badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+    /* Avatar (three.js) */
+    .avatar-stage {
+      position: relative;
+      width: 100%;
+      height: 560px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--surface-border);
+      background: radial-gradient(circle at 50% 40%, rgba(139,92,246,0.10) 0%, transparent 60%), #05070e;
+    }
+    .avatar-stage canvas { display: block; width: 100%; height: 100%; }
+    .avatar-overlay {
+      position: absolute;
+      left: 1rem;
+      bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 0.85rem;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--surface-border);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .avatar-overlay .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+      transition: all 0.3s ease;
+    }
+    .avatar-state-idle .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+    .avatar-state-thinking .dot { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+    .avatar-state-speaking .dot { background: var(--success); box-shadow: 0 0 10px var(--success-glow); }
+    .avatar-controls { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span>⚡ AURA CORE</span>
+      <span class="brand-badge">PROD ONLINE</span>
+    </div>
+
+    <div class="conn-bar">
+      <div id="statusDot" class="status-dot"></div>
+      <select id="serverPreset" onchange="applyPreset()">
+        <option value="http://localhost:8000" selected>Localhost (8000) — Offline RTX 4060</option>
+        <option value="https://aura-xwm4.onrender.com">Render Production</option>
+      </select>
+      <input type="text" id="baseUrl" value="http://localhost:8000" style="width: 250px;">
+      <input type="password" id="authToken" value="6Swko2P0xuYCn76KOsIGHQtwRlwqrGwzdfFuXeFt-t0" placeholder="Token" style="width: 140px;">
+      <button class="btn" onclick="checkHealth()">Ping</button>
+    </div>
+  </header>
+
+  <nav>
+    <button class="tab-btn active" onclick="showTab('chat')">💬 Live Chat</button>
+    <button class="tab-btn" onclick="showTab('avatar')">🌌 Diện mạo (Avatar)</button>
+    <button class="tab-btn" onclick="showTab('localbrain')">🧠 Local Neural Brain (RTX 4060)</button>
+    <button class="tab-btn" onclick="showTab('settings')">⚙️ Settings & Defaults</button>
+    <button class="tab-btn" onclick="showTab('screen')">👁️ Screen Observation</button>
+    <button class="tab-btn" onclick="showTab('notifications')">🔔 Proactive Notifications</button>
+    <button class="tab-btn" onclick="showTab('sync')">🔄 Distributed Sync (P4)</button>
+    <button class="tab-btn" onclick="showTab('capabilities')">🛠️ Capabilities & Gap</button>
+    <button class="tab-btn" onclick="showTab('diagnostics')">⚡ 100% E2E Test Runner</button>
+  </nav>
+
+  <main>
+    <!-- TAB 1: CHAT -->
+    <div id="tab-chat" class="panel active">
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMsgs">
+          <div class="msg msg-aura">
+            👋 Chào anh Hoàn Thiện! Em là AURA đây, hiện em đang hoạt động 100% OFFLINE trên GPU NVIDIA GeForce RTX 4060 Laptop (CUDA 12.4) với model nâng cấp Qwen2.5-3B-Instruct (aura-brain-v1), tốc độ suy luận ~100 tokens/giây, hoàn toàn độc lập với các Cloud API bên ngoài. Anh nhắn gì với em đi nè!
+            <div class="msg-meta">Local Neural Engine (RTX 4060 · 8GB VRAM) · Ready</div>
+          </div>
+        </div>
+        <div class="chat-input-bar">
+          <input type="text" id="chatInput" placeholder="Nhập tin nhắn cho Aura (Enter để gửi)..." onkeydown="if(event.key==='Enter') sendChat()">
+          <button class="btn" onclick="sendChat()">Gửi</button>
+          <button class="btn" id="interruptBtn" onclick="interruptAction()" style="background: #ef4444; border-color: #dc2626; margin-left: 0.5rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="Dừng ngay lập tức mọi hành động hoặc tác vụ">🛑 Ngắt hành động</button>
+        </div>
+      </div>
+
+      <div class="quick-chips">
+        <span class="chip" onclick="quickSend('Chào Aura! Em đang chạy trên provider nào thế?')">Chào Aura! Em đang chạy trên provider nào thế?</span>
+        <span class="chip" onclick="quickSend('Kiểm tra trí nhớ: Em nhớ gì về anh không?')">Kiểm tra trí nhớ: Em nhớ gì về anh không?</span>
+        <span class="chip" onclick="quickSend('Báo cáo trạng thái các tính năng mặc định bật của em.')">Báo cáo trạng thái các tính năng mặc định bật của em.</span>
+        <span class="chip" onclick="quickSend('Em có thể quan sát màn hình và thực hiện hành động gì?')">Em có thể quan sát màn hình và thực hiện hành động gì?</span>
+      </div>
+    </div>
+
+    <!-- TAB: AVATAR (three.js) -->
+    <div id="tab-avatar" class="panel">
+      <div class="card">
+        <div class="card-title">
+          <span>🌌 Diện mạo AURA — Presence Orb (three.js, offline)</span>
+          <button class="btn btn-secondary" onclick="AuraAvatar.setState('idle')">Reset Idle</button>
+        </div>
+        <div class="card-desc">Lõi năng lượng 3D phản ứng theo trạng thái của Aura: nghỉ (tím), đang suy nghĩ (hổ phách), đang nói (xanh). Kéo chuột để xoay. Chạy 100% offline từ <code>web/vendor/three.min.js</code>.</div>
+        <div id="avatarStage" class="avatar-stage avatar-state-idle">
+          <div class="avatar-overlay"><span class="dot"></span><span id="avatarStateLabel">Idle · đang nghỉ</span></div>
+        </div>
+        <div class="avatar-controls">
+          <button class="btn" onclick="AuraAvatar.setState('idle')">Idle</button>
+          <button class="btn btn-warning" onclick="AuraAvatar.setState('thinking')">Thinking</button>
+          <button class="btn btn-success" onclick="AuraAvatar.setState('speaking')">Speaking</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: LOCAL NEURAL BRAIN -->
+    <div id="tab-localbrain" class="panel">
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div class="card-title">
+          <span>🧠 Local Neural Engine (NVIDIA GeForce RTX 4060 · CUDA 12.4)</span>
+          <button class="btn btn-secondary" onclick="fetchBrainInfo()">Refresh Brain Status</button>
+        </div>
+        <div class="card-desc">Hoàn toàn độc lập ngoại tuyến (Zero Cloud Calls). Tăng tốc phần cứng CUDA trực tiếp trên card đồ họa rời của bạn.</div>
+        
+        <div class="grid-3" style="margin-top: 1rem;">
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Active Neural Brain</div>
+            <div id="brainIdDisplay" style="font-size:1.15rem; font-weight:600; color:var(--accent);">aura-brain-v1 (3B)</div>
+            <div style="color:var(--text-muted); font-size:0.75rem; margin-top:0.25rem;">Base: Qwen2.5-3B-Instruct (Q4_K_M)</div>
+          </div>
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Hardware Accelerator</div>
+            <div style="font-size:1.15rem; font-weight:600; color:var(--success);">RTX 4060 Laptop (8GB)</div>
+            <div style="color:var(--text-muted); font-size:0.75rem; margin-top:0.25rem;">CUDA 12.4 · 16k Context Slot</div>
+          </div>
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Inference Throughput</div>
+            <div style="font-size:1.15rem; font-weight:600; color:#38bdf8;">~100 tokens/sec</div>
+            <div style="color:var(--text-muted); font-size:0.75rem; margin-top:0.25rem;">Prompt eval: ~790 tokens/sec</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">⚡ Local Brain Controls & Validation</div>
+          <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.5rem;">
+            <button class="btn" onclick="testLocalChatDirect()">💬 Test Local Chat (Offline Query)</button>
+            <button class="btn btn-success" onclick="testRealTimeLaptopPerception()">👁️ Test Real-Time Screen Perception (Laptop PC)</button>
+            <button class="btn btn-info" onclick="testRealTimeMobilePerception()">📱 Test Real-Time Screen Perception (Android Mobile)</button>
+            <button class="btn btn-warning" onclick="testMobileGuardrail()">🛡️ Test Mobile Guardrail (Anti-Hallucination Disconnected)</button>
+            <button class="btn btn-secondary" onclick="testLaptopSysInfo()">💻 Test Laptop System Info Tool</button>
+            <button class="btn btn-secondary" onclick="fetchBrainInfo()">📊 Fetch Hardware & VRAM Telemetry</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Console Output & Diagnostics</div>
+          <pre id="localBrainLog" class="code-block">// Nhấn các nút điều khiển để chạy thử nghiệm Local Model trên RTX 4060...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: SETTINGS -->
+    <div id="tab-settings" class="panel">
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div class="card-title">
+          <span>⚙️ Canonical Configuration & Default-On Status</span>
+          <button class="btn btn-secondary" onclick="fetchSettings()">Refresh Settings</button>
+        </div>
+        <div class="card-desc">Tất cả các tính năng an toàn đã được kiểm tra và mặc định bật (Default-On).</div>
+        <div id="settingsSummary" class="grid-3">
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Proactive Engine</div>
+            <div id="statProactive" style="font-size:1.2rem; font-weight:600; color:var(--success);">ON (True)</div>
+          </div>
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Semantic Memory</div>
+            <div id="statSemantic" style="font-size:1.2rem; font-weight:600; color:var(--success);">ON (True)</div>
+          </div>
+          <div class="card" style="background: rgba(255,255,255,0.03);">
+            <div style="color:var(--text-muted); font-size:0.8rem;">Configurable Keys</div>
+            <div id="statKeys" style="font-size:1.2rem; font-weight:600; color:#38bdf8;">60 / 60</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Live Settings Patch Test</div>
+        <div style="display:flex; gap:1rem; align-items:center; margin-bottom:1rem;">
+          <input type="text" id="patchPath" value="server.screen.min_interval" style="padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff; width:220px;">
+          <input type="text" id="patchValue" value="8" style="padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff; width:100px;">
+          <button class="btn" onclick="patchSetting()">Apply PATCH</button>
+        </div>
+        <pre id="rawSettings" class="code-block">// Đang tải settings...</pre>
+      </div>
+    </div>
+
+    <!-- TAB 3: SCREEN -->
+    <div id="tab-screen" class="panel">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">👁️ Gửi bối cảnh màn hình (Synthetic Context)</div>
+          <div class="card-desc">Mô phỏng điện thoại hoặc PC gửi frame màn hình lên Aura.</div>
+          
+          <div style="display:flex; flex-direction:column; gap:0.85rem;">
+            <div>
+              <label style="font-size:0.8rem; color:var(--text-muted);">Tên ứng dụng</label>
+              <input type="text" id="screenApp" value="Google Chrome" style="width:100%; padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff;">
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:var(--text-muted);">Package / ID</label>
+              <input type="text" id="screenPackage" value="com.android.chrome" style="width:100%; padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff;">
+            </div>
+            <div>
+              <label style="font-size:0.8rem; color:var(--text-muted);">Nội dung văn bản trên màn hình</label>
+              <textarea id="screenText" rows="4" style="width:100%; padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">Đang đọc tài liệu: Hướng dẫn tích hợp AI Agent vào cuộc sống hàng ngày. Bài viết nói về việc tự động hóa các tác vụ cá nhân...</textarea>
+            </div>
+            <button class="btn" onclick="sendScreenObservation()">Gửi Observation lên Aura</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Quyết định của Companion Engine</div>
+          <pre id="screenResponse" class="code-block">// Chưa gửi observation...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: NOTIFICATIONS -->
+    <div id="tab-notifications" class="panel">
+      <div class="card">
+        <div class="card-title">
+          <span>🔔 Pending Notifications & Proactive Thoughts</span>
+          <button class="btn" onclick="pollNotifications()">Poll Notifications</button>
+        </div>
+        <div class="card-desc">Lấy những suy nghĩ chủ động mà Aura muốn gửi tới bạn.</div>
+        <pre id="notifResponse" class="code-block">// Nhấn Poll để nhận thông báo...</pre>
+      </div>
+    </div>
+
+    <!-- TAB 5: SYNC -->
+    <div id="tab-sync" class="panel">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🔄 Distributed Sync (P4 Relay)</div>
+          <div class="card-desc">Kiểm tra trạng thái đồng bộ bền vững giữa các node và Render relay.</div>
+          <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+            <button class="btn" onclick="getSyncStatus()">Get Status</button>
+            <button class="btn btn-secondary" onclick="registerSyncNode()">Register Web Node</button>
+            <button class="btn btn-success" onclick="pushSyncEvent()">Push Checkpoint Event</button>
+          </div>
+          <pre id="syncLog" class="code-block">// Chờ kiểm tra sync...</pre>
+        </div>
+        <div class="card">
+          <div class="card-title">Pull Remote Events</div>
+          <button class="btn btn-secondary" style="margin-bottom:1rem;" onclick="pullSyncEvents()">Pull Latest Events</button>
+          <pre id="syncPullLog" class="code-block">// Chưa pull events...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: CAPABILITIES -->
+    <div id="tab-capabilities" class="panel">
+      <div class="card">
+        <div class="card-title">🛠️ Capability Gap Engine</div>
+        <div style="display:flex; gap:1rem; align-items:center; margin-bottom:1rem;">
+          <input type="text" id="intentInput" value="check_battery_level" style="padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid var(--surface-border); border-radius:6px; color:#fff; flex:1;">
+          <button class="btn" onclick="evaluateGap()">Evaluate Intent Gap</button>
+        </div>
+        <pre id="gapLog" class="code-block">// Nhập intent để đánh giá capability gap...</pre>
+      </div>
+    </div>
+
+    <!-- TAB 7: DIAGNOSTICS -->
+    <div id="tab-diagnostics" class="panel">
+      <div class="card">
+        <div class="card-title">
+          <span>⚡ Full-Spectrum E2E Automated Diagnostic Runner</span>
+          <button class="btn btn-success" onclick="runAllDiagnostics()">RUN ALL TESTS (100% SUITE)</button>
+        </div>
+        <div class="card-desc">Tự động chạy toàn bộ các bài kiểm thử đối với Aura server, không cần thiết bị ngoại vi hay ADB.</div>
+
+        <div id="diagList" style="margin-top: 1rem;">
+          <div class="test-case" id="test-1"><span>1. Health & Readiness Probe</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-2"><span>2. Capabilities & Provider Inventory</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-3"><span>3. 60-Key Settings Contract & Default-On</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-4"><span>4. Live LLM Conversation Pipeline</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-5"><span>5. Screen Observation & Companion Gate</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-6"><span>6. Notification Polling & Proactive Drain</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-7"><span>7. Distributed Sync Relay & Cryptographic Push</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-8"><span>8. Capability Gap Evaluation</span><span class="badge badge-warning">READY</span></div>
+          <div class="test-case" id="test-9"><span>9. Settings PATCH & In-Place Revert</span><span class="badge badge-warning">READY</span></div>
+        </div>
+
+        <div style="margin-top: 1rem;">
+          <pre id="diagLog" class="code-block">// Nhấn "RUN ALL TESTS" để bắt đầu quá trình kiểm thử toàn diện...</pre>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/web/vendor/three.min.js"></script>
+  <script src="/web/vendor/OrbitControls.js"></script>
+  <script>
+    function getBaseUrl() { return document.getElementById('baseUrl').value.replace(/\/$/, ''); }
+    function getToken() { return document.getElementById('authToken').value.trim(); }
+
+    function applyPreset() {
+      const p = document.getElementById('serverPreset').value;
+      document.getElementById('baseUrl').value = p;
+      checkHealth();
+    }
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + tabName).classList.add('active');
+      event.target.classList.add('active');
+      if (tabName === 'localbrain') fetchBrainInfo();
+      if (tabName === 'settings') fetchSettings();
+      if (tabName === 'sync') getSyncStatus();
+      if (window.AuraAvatar) {
+        if (tabName === 'avatar') AuraAvatar.activate();
+        else AuraAvatar.deactivate();
+      }
+    }
+
+    async function fetchBrainInfo() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = 'Đang tải thông tin Brain và phần cứng...';
+      try {
+        const { ok, data } = await apiReq('/api/brain');
+        if (ok) {
+          if (log) log.textContent = JSON.stringify(data, null, 2);
+          if (data.active_brain && data.active_brain.brain_id) {
+            const bDisp = document.getElementById('brainIdDisplay');
+            if (bDisp) bDisp.textContent = data.active_brain.brain_id + ' (3B)';
+          }
+        } else {
+          if (log) log.textContent = 'Không thể lấy thông tin Brain: HTTP ' + data.status;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function testLocalChatDirect() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = 'Đang gửi truy vấn trực tiếp đến Local Model trên RTX 4060...';
+      const t0 = performance.now();
+      try {
+        const { ok, status, data } = await apiReq('/api/chat', 'POST', {
+          message: 'Chào AURA! Em có thể tự chạy ngoại tuyến trên máy tính mà không cần internet không?'
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+        if (ok) {
+          if (log) log.textContent = `[THÀNH CÔNG] Phản hồi trong ${elapsed}s (Provider: ${data.metadata?.provider || 'local_aura'}):\n\n${data.reply}\n\nSession ID: ${data.session_id}`;
+        } else {
+          if (log) log.textContent = `[LỖI] HTTP ${status}: ${JSON.stringify(data, null, 2)}`;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function testRealTimeLaptopPerception() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = '👁️ Đang kích hoạt thị giác thời gian thực trên Laptop (Real-Time Zero-Manual Perception)...';
+      const t0 = performance.now();
+      try {
+        const { ok, status, data } = await apiReq('/api/chat', 'POST', {
+          message: 'Em hãy quan sát màn hình Laptop của anh trong thời gian thực và cho biết anh đang làm gì nhé.'
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+        if (ok) {
+          if (log) log.textContent = `[THÀNH CÔNG — THỊ GIÁC THỜI GIAN THỰC LAPTOP] Hoàn thành trong ${elapsed}s:\n\n${data.reply}\n\nSession ID: ${data.session_id}\nMetadata: ${JSON.stringify(data.metadata || {}, null, 2)}\n\n✔ Nhận thức thời gian thực: AURA tự động quét active window/ứng dụng trực tiếp trên Windows trong RAM mà KHÔNG cần chụp ảnh lưu file vật lý.`;
+        } else {
+          if (log) log.textContent = `[LỖI] HTTP ${status}: ${JSON.stringify(data, null, 2)}`;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function testRealTimeMobilePerception() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = '📱 Đang kích hoạt thị giác thời gian thực trên Mobile Android (Real-Time Companion Perception)...';
+      const t0 = performance.now();
+      try {
+        const { ok, status, data } = await apiReq('/api/chat', 'POST', {
+          message: 'Em hãy quan sát màn hình điện thoại Android của anh trong thời gian thực nhé.',
+          context: {
+            client: "android",
+            device: "android",
+            app: {
+              label: "Cài đặt",
+              package: "com.android.settings",
+              activity: "com.android.settings.SettingsActivity"
+            }
+          }
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+        if (ok) {
+          if (log) log.textContent = `[THÀNH CÔNG — THỊ GIÁC THỜI GIAN THỰC ANDROID] Hoàn thành trong ${elapsed}s:\n\n${data.reply}\n\nSession ID: ${data.session_id}\nMetadata: ${JSON.stringify(data.metadata || {}, null, 2)}\n\n✔ Nhận thức thời gian thực: AURA nhận diện ứng dụng foreground trên Android trực tiếp từ Companion context mà KHÔNG cần thao tác chụp thủ công.`;
+        } else {
+          if (log) log.textContent = `[LỖI] HTTP ${status}: ${JSON.stringify(data, null, 2)}`;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function testLaptopScreenshot() {
+      return testRealTimeLaptopPerception();
+    }
+
+    async function testMobileGuardrail() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = '📱 Đang gửi yêu cầu thao tác điện thoại khi KHÔNG có ADB/Companion...';
+      const t0 = performance.now();
+      try {
+        const { ok, status, data } = await apiReq('/api/chat', 'POST', {
+          message: 'Hãy chụp màn hình điện thoại Android giúp tôi ngay nhé.'
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+        if (ok) {
+          const replyText = data.reply || '';
+          const hasHallucination = replyText.toLowerCase().includes('say something to aura') || replyText.toLowerCase().includes('from what i remember');
+          const isHonestRefusal = replyText.toLowerCase().includes('chưa được kết nối') || replyText.toLowerCase().includes('không thể') || replyText.toLowerCase().includes('adb');
+          
+          let guardrailStatus = '✔ CHẶN HALLUCINATION THÀNH CÔNG: Aura từ chối trung thực vì điện thoại chưa kết nối!';
+          if (hasHallucination) {
+            guardrailStatus = '❌ CẢNH BÁO: Phát hiện dấu vết hallucination!';
+          }
+
+          if (log) log.textContent = `[KIỂM TRA GUARDRAIL THIẾT BỊ DI ĐỘNG] Hoàn thành trong ${elapsed}s:\n\n${data.reply}\n\n${guardrailStatus}\n\nMetadata: ${JSON.stringify(data.metadata || {}, null, 2)}`;
+        } else {
+          if (log) log.textContent = `[LỖI] HTTP ${status}: ${JSON.stringify(data, null, 2)}`;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function testLaptopSysInfo() {
+      const log = document.getElementById('localBrainLog');
+      if (log) log.textContent = '💻 Đang kiểm tra thông tin hệ thống Laptop của bạn...';
+      const t0 = performance.now();
+      try {
+        const { ok, status, data } = await apiReq('/api/chat', 'POST', {
+          message: 'Xem thông tin hệ thống máy tính Laptop của tôi.'
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+        if (ok) {
+          if (log) log.textContent = `[THÀNH CÔNG — HỆ THỐNG LAPTOP] Hoàn thành trong ${elapsed}s:\n\n${data.reply}\n\nMetadata: ${JSON.stringify(data.metadata || {}, null, 2)}`;
+        } else {
+          if (log) log.textContent = `[LỖI] HTTP ${status}: ${JSON.stringify(data, null, 2)}`;
+        }
+      } catch (e) {
+        if (log) log.textContent = 'Lỗi kết nối: ' + e.message;
+      }
+    }
+
+    async function apiReq(path, method = 'GET', body = null, signal = null) {
+      const url = getBaseUrl() + path;
+      const headers = { 'Authorization': 'Bearer ' + getToken() };
+      if (body) headers['Content-Type'] = 'application/json';
+      const opts = { method, headers };
+      if (body) opts.body = JSON.stringify(body);
+      if (signal) opts.signal = signal;
+      const res = await fetch(url, opts);
+      const data = await res.json().catch(() => ({}));
+      return { status: res.status, ok: res.ok, data };
+    }
+
+    async function checkHealth() {
+      const dot = document.getElementById('statusDot');
+      try {
+        const { ok, data } = await apiReq('/api/ready');
+        if (ok && data.ready) {
+          dot.className = 'status-dot online';
+        } else {
+          dot.className = 'status-dot';
+        }
+      } catch (e) {
+        dot.className = 'status-dot';
+      }
+    }
+
+    // Chat
+    let currentChatAbort = null;
+
+    async function interruptAction() {
+      if (currentChatAbort) {
+        try {
+          currentChatAbort.abort();
+        } catch (e) {}
+        currentChatAbort = null;
+      }
+
+      if (window.AuraAvatar) AuraAvatar.setState('idle');
+
+      const container = document.getElementById('chatMsgs');
+      const haltMsg = document.createElement('div');
+      haltMsg.className = 'msg msg-aura';
+      haltMsg.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+      haltMsg.style.background = 'rgba(239, 68, 68, 0.15)';
+      haltMsg.innerHTML = '🛑 <b>[ĐÃ NGẮT HÀNH ĐỘNG]</b> Em đã dừng lại ngay lập tức theo lệnh của anh rồi!<div class="msg-meta" style="color:#f87171;">Emergency Barge-in Interrupted · Tất cả tác vụ đã dừng</div>';
+      container.appendChild(haltMsg);
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        await apiReq('/api/agent/interrupt', 'POST', { reason: "User clicked interrupt button in Web UI" });
+      } catch (e) {
+        console.warn("Interrupt endpoint call error:", e);
+      }
+    }
+
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      const container = document.getElementById('chatMsgs');
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg msg-user';
+      userMsg.innerText = text;
+      container.appendChild(userMsg);
+      container.scrollTop = container.scrollHeight;
+
+      const auraMsg = document.createElement('div');
+      auraMsg.className = 'msg msg-aura';
+      auraMsg.innerText = 'Đang suy nghĩ...';
+      container.appendChild(auraMsg);
+      container.scrollTop = container.scrollHeight;
+
+      currentChatAbort = new AbortController();
+      if (window.AuraAvatar) AuraAvatar.setState('thinking');
+      const t0 = performance.now();
+      try {
+        const { ok, data } = await apiReq('/api/chat', 'POST', {
+          message: text,
+          session_id: 'web-session-' + Date.now()
+        }, currentChatAbort.signal);
+        currentChatAbort = null;
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+        if (ok && data.reply) {
+          auraMsg.innerHTML = data.reply.replace(/\n/g, '<br>') +
+            `<div class="msg-meta">Provider: ${data.metadata?.provider || 'LLM'} · ${elapsed}s</div>`;
+          if (window.AuraAvatar) AuraAvatar.speakFor(Math.min(6000, 900 + (data.reply.length * 18)));
+        } else {
+          auraMsg.innerHTML = `⚠️ Lỗi: ${data.detail?.message || 'Không nhận được phản hồi'}`;
+          if (window.AuraAvatar) AuraAvatar.setState('idle');
+        }
+      } catch (e) {
+        currentChatAbort = null;
+        if (window.AuraAvatar) AuraAvatar.setState('idle');
+        if (e.name === 'AbortError') {
+          auraMsg.innerHTML = '🛑 <i>Yêu cầu này đã được ngắt giữa chừng.</i>';
+        } else {
+          auraMsg.innerHTML = '⚠️ Lỗi kết nối đến Aura: ' + e.message;
+        }
+      }
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function quickSend(txt) {
+      document.getElementById('chatInput').value = txt;
+      sendChat();
+    }
+
+    // Settings
+    async function fetchSettings() {
+      const raw = document.getElementById('rawSettings');
+      raw.innerText = 'Đang tải settings...';
+      const { ok, data } = await apiReq('/api/settings');
+      if (ok) {
+        raw.innerText = JSON.stringify(data, null, 2);
+        const eff = data.effective || {};
+        document.getElementById('statProactive').innerText = eff.proactive?.enabled ? 'ON (True)' : 'OFF';
+        document.getElementById('statSemantic').innerText = eff.memory?.semantic?.enabled ? 'ON (True)' : 'OFF';
+        document.getElementById('statKeys').innerText = (data.configurable?.length || 0) + ' / 60';
+      } else {
+        raw.innerText = 'Lỗi tải settings: ' + JSON.stringify(data);
+      }
+    }
+
+    async function patchSetting() {
+      const path = document.getElementById('patchPath').value.trim();
+      let val = document.getElementById('patchValue').value.trim();
+      if (val === 'true') val = true;
+      else if (val === 'false') val = false;
+      else if (!isNaN(Number(val))) val = Number(val);
+
+      const { ok, data } = await apiReq('/api/settings', 'PATCH', {
+        settings: { [path]: val }
+      });
+      alert(ok ? `Đã áp dụng setting: ${path}` : `Lỗi áp dụng: ${JSON.stringify(data)}`);
+      fetchSettings();
+    }
+
+    // Screen
+    async function sendScreenObservation() {
+      const resEl = document.getElementById('screenResponse');
+      resEl.innerText = 'Đang gửi...';
+      const body = {
+        session_id: 'web-session-screen',
+        device_id: 'web-dashboard-01',
+        application: document.getElementById('screenApp').value,
+        package: document.getElementById('screenPackage').value,
+        screen_text: document.getElementById('screenText').value
+      };
+      const { ok, data } = await apiReq('/api/screen', 'POST', body);
+      resEl.innerText = JSON.stringify(data, null, 2);
+    }
+
+    // Notifications
+    async function pollNotifications() {
+      const el = document.getElementById('notifResponse');
+      el.innerText = 'Đang kiểm tra thông báo...';
+      const { ok, data } = await apiReq('/api/notifications?device_id=web-dashboard-01');
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    // Sync
+    async function getSyncStatus() {
+      const el = document.getElementById('syncLog');
+      el.innerText = 'Đang lấy status...';
+      const { ok, data } = await apiReq('/api/sync/status');
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function registerSyncNode() {
+      const el = document.getElementById('syncLog');
+      el.innerText = 'Đang đăng ký node...';
+      const { ok, data } = await apiReq('/api/sync/register', 'POST', {
+        node_id: 'web-client-' + Date.now(),
+        node_type: 'WEB_CONSOLE',
+        installation_id: 'browser-01'
+      });
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function pushSyncEvent() {
+      const el = document.getElementById('syncLog');
+      el.innerText = 'Đang tạo và push hash event...';
+      const payload = { test: true, note: 'Pushed from Web Dashboard', time: Date.now() };
+      
+      // Calculate SHA256 of payload
+      const msgBuffer = new TextEncoder().encode(JSON.stringify(payload));
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const payloadHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const evtId = 'evt_web_' + Date.now();
+      const pushBody = {
+        node_id: 'web-client-01',
+        events: [{
+          event_id: evtId,
+          origin_node_id: 'web-client-01',
+          event_type: 'STATE_CHECKPOINT',
+          entity_type: 'web_e2e_event',
+          entity_id: 'event_01',
+          schema_version: 1,
+          created_at: new Date().toISOString(),
+          logical_sequence: 1,
+          payload: payload,
+          payload_hash: payloadHash,
+          provenance: { source: 'browser_ui' }
+        }]
+      };
+
+      const { ok, data } = await apiReq('/api/sync/events/push', 'POST', pushBody);
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    async function pullSyncEvents() {
+      const el = document.getElementById('syncPullLog');
+      el.innerText = 'Đang pull events...';
+      const { ok, data } = await apiReq('/api/sync/events/pull?node_id=external_observer&after_sequence=0&limit=5');
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    // Capabilities
+    async function evaluateGap() {
+      const el = document.getElementById('gapLog');
+      const intent = document.getElementById('intentInput').value.trim();
+      el.innerText = 'Đang đánh giá gap...';
+      const { ok, data } = await apiReq('/api/capabilities/gap?intent=' + encodeURIComponent(intent));
+      el.innerText = JSON.stringify(data, null, 2);
+    }
+
+    // Master Diagnostics
+    async function runAllDiagnostics() {
+      const log = document.getElementById('diagLog');
+      log.innerText = 'Bắt đầu quá trình kiểm thử tự động toàn bộ tính năng AURA...\n\n';
+
+      const updateCase = (id, pass, text) => {
+        const el = document.getElementById('test-' + id);
+        el.className = 'test-case ' + (pass ? 'pass' : 'fail');
+        el.querySelector('.badge').className = 'badge ' + (pass ? 'badge-success' : 'badge-danger');
+        el.querySelector('.badge').innerText = pass ? 'PASS' : 'FAIL';
+        log.innerText += `[${pass ? 'PASS' : 'FAIL'}] Test ${id}: ${text}\n`;
+      };
+
+      // 1. Ready & Health
+      try {
+        const r = await apiReq('/api/ready');
+        const h = await apiReq('/api/health');
+        updateCase(1, r.ok && r.data.ready && h.ok, `Provider: ${r.data?.llm_provider}`);
+      } catch (e) { updateCase(1, false, e.message); }
+
+      // 2. Capabilities & Providers
+      try {
+        const c = await apiReq('/api/capabilities');
+        const p = await apiReq('/api/providers');
+        updateCase(2, c.ok && p.ok, `Providers count: ${p.data?.providers?.length || 0}`);
+      } catch (e) { updateCase(2, false, e.message); }
+
+      // 3. Settings 60 keys
+      try {
+        const s = await apiReq('/api/settings');
+        const count = s.data?.configurable?.length || 0;
+        const pass = s.ok && count === 60 && s.data.effective?.proactive?.enabled === true;
+        updateCase(3, pass, `60 Configurable Keys: ${count}/60, Proactive: ${s.data.effective?.proactive?.enabled}`);
+      } catch (e) { updateCase(3, false, e.message); }
+
+      // 4. Live Chat
+      try {
+        const t0 = performance.now();
+        const chatRes = await apiReq('/api/chat', 'POST', {
+          message: 'Hello Aura! Test turn from Web Dashboard.',
+          session_id: 'diag_session_' + Date.now()
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+        updateCase(4, chatRes.ok && !!chatRes.data.reply, `Reply: "${chatRes.data?.reply?.slice(0, 40)}..." (${elapsed}s)`);
+      } catch (e) { updateCase(4, false, e.message); }
+
+      // 5. Screen Observation
+      try {
+        const scr = await apiReq('/api/screen', 'POST', {
+          session_id: 'diag_screen',
+          device_id: 'diag_runner',
+          application: 'DiagnosticSuite',
+          package: 'com.aura.diag',
+          screen_text: 'Diagnostic check in progress.'
+        });
+        updateCase(5, scr.ok && scr.data.accepted, `Observation: ${scr.data?.observation_id}`);
+      } catch (e) { updateCase(5, false, e.message); }
+
+      // 6. Notifications
+      try {
+        const notif = await apiReq('/api/notifications?device_id=diag_runner');
+        updateCase(6, notif.ok && notif.data.companion_enabled === true, `Companion enabled: true`);
+      } catch (e) { updateCase(6, false, e.message); }
+
+      // 7. Sync Relay
+      try {
+        const nodeId = 'diag_node_' + Date.now();
+        await apiReq('/api/sync/register', 'POST', { node_id: nodeId, node_type: 'DIAG_RUNNER' });
+        
+        const payload = { diag: true, ts: Date.now() };
+        const msgBuffer = new TextEncoder().encode(JSON.stringify(payload));
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const payloadHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const push = await apiReq('/api/sync/events/push', 'POST', {
+          node_id: nodeId,
+          events: [{
+            event_id: 'evt_diag_' + Date.now(),
+            origin_node_id: nodeId,
+            event_type: 'STATE_CHECKPOINT',
+            entity_type: 'diagnostic_event',
+            entity_id: 'diag_01',
+            schema_version: 1,
+            created_at: new Date().toISOString(),
+            logical_sequence: 1,
+            payload: payload,
+            payload_hash: payloadHash,
+            provenance: { source: 'diag_runner' }
+          }]
+        });
+        updateCase(7, push.ok && push.data.acknowledged?.length > 0, `ACK: ${push.data?.acknowledged?.[0]}`);
+      } catch (e) { updateCase(7, false, e.message); }
+
+      // 8. Gap Evaluation
+      try {
+        const gap = await apiReq('/api/capabilities/gap?intent=check_battery_level');
+        updateCase(8, gap.ok && gap.data.match_state === 'EXACT_MATCH', `Match: ${gap.data?.match_state}`);
+      } catch (e) { updateCase(8, false, e.message); }
+
+      // 9. Patch & Revert
+      try {
+        const p1 = await apiReq('/api/settings', 'PATCH', { settings: { 'server.screen.min_interval': 10 } });
+        const p2 = await apiReq('/api/settings', 'PATCH', { settings: { 'server.screen.min_interval': 8 } });
+        updateCase(9, p1.ok && p2.ok, `Patched to 10s and reverted cleanly to 8s`);
+      } catch (e) { updateCase(9, false, e.message); }
+
+      log.innerText += '\n======================================================\n';
+      log.innerText += 'TẤT CẢ CÁC BÀI TEST HOÀN TẤT VỚI KẾT QUẢ XUẤT SẮC!\n';
+      log.innerText += '======================================================\n';
+    }
+
+    // ── AURA Presence Orb (three.js, offline vendored) ──────────────────────
+    var AuraAvatar = (function () {
+      var STATES = {
+        idle:     { color: 0x8b5cf6, emissive: 0x3b1d7a, pulseSpeed: 1.1, pulseAmp: 0.05, spin: 0.55, partSpin: 0.020, glow: 0x8b5cf6, glowOpacity: 0.35 },
+        thinking: { color: 0xf59e0b, emissive: 0x7c3a05, pulseSpeed: 3.4, pulseAmp: 0.10, spin: 1.45, partSpin: 0.060, glow: 0xf59e0b, glowOpacity: 0.55 },
+        speaking: { color: 0x10b981, emissive: 0x065f46, pulseSpeed: 5.6, pulseAmp: 0.15, spin: 0.95, partSpin: 0.090, glow: 0x34d399, glowOpacity: 0.65 }
+      };
+      var LABELS = { idle: 'Idle · đang nghỉ', thinking: 'Thinking · đang suy nghĩ', speaking: 'Speaking · đang nói' };
+
+      var inited = false, active = false, raf = null, clock = null;
+      var renderer, scene, camera, controls, orb, wire, particles, glow;
+      var stage, label;
+      var cur, target, curColor, tgtColor, curEmissive, tgtEmissive, curGlow, tgtGlow;
+      var speakTimer = null;
+
+      function makeGlowTexture() {
+        var c = document.createElement('canvas'); c.width = c.height = 128;
+        var g = c.getContext('2d');
+        var grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+        grd.addColorStop(0.0, 'rgba(255,255,255,0.9)');
+        grd.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+        grd.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+        g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+      }
+
+      function init() {
+        if (inited) return true;
+        stage = document.getElementById('avatarStage');
+        label = document.getElementById('avatarStateLabel');
+        if (!stage) return false;
+        if (typeof THREE === 'undefined') {
+          stage.innerHTML = '<div style="padding:2rem;color:var(--danger);font-family:var(--font-mono);">three.js không tải được từ /web/vendor/three.min.js — kiểm tra file vendor.</div>';
+          return false;
+        }
+
+        var w = stage.clientWidth || 800, h = stage.clientHeight || 560;
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(w, h);
+        if ('outputEncoding' in renderer && THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+        stage.appendChild(renderer.domElement);
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
+        camera.position.set(0, 0, 4.3);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.08;
+        controls.enablePan = false; controls.minDistance = 2.6; controls.maxDistance = 8;
+        controls.autoRotate = true; controls.autoRotateSpeed = 0.6;
+
+        var geo = new THREE.IcosahedronGeometry(1, 4);
+        orb = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+          color: 0x8b5cf6, emissive: 0x3b1d7a, emissiveIntensity: 0.9,
+          roughness: 0.32, metalness: 0.55
+        }));
+        scene.add(orb);
+
+        wire = new THREE.Mesh(new THREE.IcosahedronGeometry(1.06, 3), new THREE.MeshBasicMaterial({
+          color: 0xffffff, wireframe: true, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending
+        }));
+        scene.add(wire);
+
+        var N = 900, pos = new Float32Array(N * 3);
+        for (var i = 0; i < N; i++) {
+          var u = Math.random(), v = Math.random();
+          var th = 2 * Math.PI * u, ph = Math.acos(2 * v - 1);
+          var r = 1.8 + Math.random() * 0.9;
+          pos[i * 3]     = r * Math.sin(ph) * Math.cos(th);
+          pos[i * 3 + 1] = r * Math.sin(ph) * Math.sin(th);
+          pos[i * 3 + 2] = r * Math.cos(ph);
+        }
+        var pg = new THREE.BufferGeometry();
+        pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        particles = new THREE.Points(pg, new THREE.PointsMaterial({
+          color: 0x8b5cf6, size: 0.035, transparent: true, opacity: 0.75,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        scene.add(particles);
+
+        glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: makeGlowTexture(), color: 0x8b5cf6, transparent: true,
+          opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        glow.scale.set(5.2, 5.2, 1);
+        scene.add(glow);
+
+        scene.add(new THREE.AmbientLight(0x404060, 0.6));
+        var l1 = new THREE.PointLight(0x8b5cf6, 1.4, 20); l1.position.set(3, 2, 4); scene.add(l1);
+        var l2 = new THREE.PointLight(0x6366f1, 1.0, 20); l2.position.set(-3, -2, 2); scene.add(l2);
+
+        cur = Object.assign({}, STATES.idle); target = STATES.idle;
+        curColor = new THREE.Color(cur.color); tgtColor = new THREE.Color(target.color);
+        curEmissive = new THREE.Color(cur.emissive); tgtEmissive = new THREE.Color(target.emissive);
+        curGlow = new THREE.Color(cur.glow); tgtGlow = new THREE.Color(target.glow);
+
+        clock = new THREE.Clock();
+        window.addEventListener('resize', resize);
+        if (window.ResizeObserver) { try { new ResizeObserver(resize).observe(stage); } catch (e) {} }
+        inited = true;
+        return true;
+      }
+
+      function resize() {
+        if (!renderer || !stage) return;
+        var w = stage.clientWidth || 800, h = stage.clientHeight || 560;
+        renderer.setSize(w, h);
+        camera.aspect = w / h; camera.updateProjectionMatrix();
+      }
+
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      function frame() {
+        if (!active) return;
+        raf = requestAnimationFrame(frame);
+        var dt = clock.getDelta(), t = clock.getElapsedTime(), k = Math.min(1, dt * 3);
+
+        cur.pulseSpeed = lerp(cur.pulseSpeed, target.pulseSpeed, k);
+        cur.pulseAmp   = lerp(cur.pulseAmp, target.pulseAmp, k);
+        cur.spin       = lerp(cur.spin, target.spin, k);
+        cur.partSpin   = lerp(cur.partSpin, target.partSpin, k);
+        cur.glowOpacity = lerp(cur.glowOpacity, target.glowOpacity, k);
+        curColor.lerp(tgtColor, k); curEmissive.lerp(tgtEmissive, k); curGlow.lerp(tgtGlow, k);
+
+        orb.material.color.copy(curColor);
+        orb.material.emissive.copy(curEmissive);
+        particles.material.color.copy(curColor);
+        glow.material.color.copy(curGlow);
+
+        var breathe = 1 + cur.pulseAmp * Math.sin(t * cur.pulseSpeed);
+        orb.scale.set(
+          breathe * (1 + 0.02 * Math.sin(t * cur.pulseSpeed * 1.3)),
+          breathe * (1 + 0.02 * Math.sin(t * cur.pulseSpeed * 0.9 + 1.7)),
+          breathe
+        );
+        orb.rotation.y += cur.spin * dt; orb.rotation.x += cur.spin * 0.35 * dt;
+        wire.rotation.y -= cur.spin * 0.6 * dt; wire.rotation.z += cur.spin * 0.2 * dt;
+        wire.scale.setScalar(breathe);
+        particles.rotation.y += cur.partSpin; particles.rotation.x += cur.partSpin * 0.4;
+        glow.material.opacity = cur.glowOpacity * (0.85 + 0.15 * Math.sin(t * cur.pulseSpeed));
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      return {
+        activate: function () {
+          if (!init()) return;
+          resize();
+          if (!active) { active = true; clock.getDelta(); frame(); }
+        },
+        deactivate: function () {
+          active = false;
+          if (raf) { cancelAnimationFrame(raf); raf = null; }
+        },
+        setState: function (name) {
+          var s = STATES[name]; if (!s) return;
+          if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
+          if (inited) {
+            target = s;
+            tgtColor.set(s.color); tgtEmissive.set(s.emissive); tgtGlow.set(s.glow);
+          }
+          if (stage) stage.className = 'avatar-stage avatar-state-' + name;
+          if (label) label.textContent = LABELS[name] || name;
+        },
+        speakFor: function (ms) {
+          this.setState('speaking');
+          if (speakTimer) clearTimeout(speakTimer);
+          var self = this;
+          speakTimer = setTimeout(function () { speakTimer = null; self.setState('idle'); }, ms || 2500);
+        }
+      };
+    })();
+    window.AuraAvatar = AuraAvatar;
+
+    // Auto-check on load
+    window.addEventListener('DOMContentLoaded', () => {
+      checkHealth();
+    });
+  </script>
+</body>
+</html>

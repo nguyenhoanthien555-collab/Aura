@@ -21,7 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from brain.providers.errors import (
+    ProviderAuthError,
     ProviderRateLimitError,
+    ProviderTimeoutError,
     ProviderUnavailableError,
 )
 from server import config as server_config
@@ -354,6 +356,20 @@ def test_an_unavailable_provider_is_503():
 
     assert failure.status == 503
     assert failure.code == "provider_unavailable"
+
+
+def test_an_auth_error_is_502():
+    failure = classify(ProviderAuthError("invalid api key"))
+
+    assert failure.status == 502
+    assert failure.code == "provider_auth_error"
+
+
+def test_a_timeout_is_504():
+    failure = classify(ProviderTimeoutError("request timed out"))
+
+    assert failure.status == 504
+    assert failure.code == "provider_timeout"
 
 
 def test_an_unrecognised_error_stays_a_500():

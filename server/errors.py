@@ -24,7 +24,9 @@ from dataclasses import dataclass
 
 from brain.providers.errors import (
     CapabilityUnavailableError,
+    ProviderAuthError,
     ProviderRateLimitError,
+    ProviderTimeoutError,
     ProviderUnavailableError,
 )
 
@@ -61,6 +63,18 @@ PROVIDER_UNAVAILABLE = Failure(
     message="The language model is temporarily unavailable.",
 )
 
+PROVIDER_AUTH_ERROR = Failure(
+    status=502,
+    code="provider_auth_error",
+    message="The language model provider rejected credentials. Check your API key in settings.",
+)
+
+PROVIDER_TIMEOUT = Failure(
+    status=504,
+    code="provider_timeout",
+    message="The language model request timed out. Try again shortly.",
+)
+
 CAPABILITY_UNAVAILABLE = Failure(
     status=501,
     code="capability_unavailable",
@@ -95,8 +109,14 @@ def classify(error: BaseException) -> Failure:
             retry_after=float(retry_after),
         )
 
+    if isinstance(error, ProviderTimeoutError):
+        return PROVIDER_TIMEOUT
+
     if isinstance(error, ProviderUnavailableError):
         return PROVIDER_UNAVAILABLE
+
+    if isinstance(error, ProviderAuthError):
+        return PROVIDER_AUTH_ERROR
 
     if isinstance(error, CapabilityUnavailableError):
         return CAPABILITY_UNAVAILABLE

@@ -362,7 +362,7 @@ def test_safety_invariant_full_autonomy_false():
     Enforces the fundamental safety invariant across AURA:
     full_autonomy_enabled MUST be False.
     """
-    from learning.autonomy_guard import AutonomyGateManager
+    from agent.autonomy_guard import AutonomyGateManager
     
     manager = AutonomyGateManager()
     assert manager.state["full_autonomy_enabled"] is False

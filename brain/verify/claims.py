@@ -165,6 +165,13 @@ _EN_ACTION_VERBS = (
     "set", "turned", "moved", "renamed", "copied", "downloaded",
     "shared", "muted", "unmuted", "locked", "unlocked", "dismissed",
     "snoozed", "toggled",
+    # Screen observation and capture verbs
+    "see", "seeing", "seen", "saw", "capture", "captured", "capturing",
+    "take", "took", "taken", "taking", "screenshot", "screenshotted", "screenshotting",
+    "observe", "observed", "observing",
+    # Mobile interaction verbs
+    "tap", "tapped", "tapping", "swipe", "swiped", "swiping",
+    "type", "typed", "typing", "press", "pressed", "pressing",
 )
 
 _VI_ACTION_PHRASES = (
@@ -173,6 +180,17 @@ _VI_ACTION_PHRASES = (
     "đã xác nhận", "đã hủy", "đã trả lời", "đã chuyển", "đã đặt",
     "đã gọi", "đã viết", "đã bật", "đã tắt", "đã kiểm tra",
     "đã hoàn tất", "đã khởi động lại",
+    # Screen observation and capture phrases in Vietnamese
+    "nhìn thấy", "đang nhìn thấy", "thấy", "quan sát", "đang quan sát",
+    "chụp", "đã chụp", "đang chụp", "sẽ chụp", "chụp màn hình",
+    "xem", "đang xem", "kiểm tra màn hình", "bắt đầu chụp", "tiến hành chụp",
+    "thả", "đã thả", "thả biểu cảm", "thả tim",
+    # Mobile interaction phrases in Vietnamese
+    "đã chạm", "đang chạm", "chạm", "đã bấm", "đang bấm", "bấm",
+    "đã nhấn", "đang nhấn", "nhấn", "đã gõ", "đang gõ", "gõ",
+    "đã nhập", "đang nhập", "nhập", "đã vuốt", "đang vuốt", "vuốt",
+    "đã cuộn", "đang cuộn", "cuộn", "đã về home", "về home",
+    "đã quay lại", "quay lại", "đã khởi chạy", "khởi chạy",
 )
 
 _EN_ACTION_VERBS_ALT = "|".join(_EN_ACTION_VERBS)
@@ -206,7 +224,7 @@ _EXTERNAL_OUTCOME = re.compile(
 # Capability claims
 # ----------------------------------------------------------------------
 
-_VI_CAPABILITY = r"\b(tôi|có thể|không thể)\b"
+_VI_CAPABILITY = r"\b(?:tôi\s+)?(?:có thể|không thể|khả năng|tính năng|chức năng)\b"
 
 _CAPABILITY_PATTERN = re.compile(rf"({_VI_CAPABILITY})", re.IGNORECASE)
 
@@ -307,13 +325,12 @@ _FACTUAL_PATTERNS = re.compile(
     r"\b(received|delivered)\b",
     re.IGNORECASE,
 )
-_EN_FIRST_PERSON = r"\b(i|i've|i have|i had|i'm|we've|tôi|em|mình)\b"
+_EN_FIRST_PERSON = r"\b(i|i've|i have|i had|i'm|we've|tôi|em|mình|ta)\b"
 
 _ACTION_FIRST_PERSON = re.compile(
-    rf"{_EN_FIRST_PERSON}(?:\s+[a-z']+)?(?:\s+[a-z']+)?(?:\s+[a-z']+)?\s+"
-    rf"(?:successfully\s+)?(?:"
-    rf"{_EN_ACTION_VERBS_ALT}|{_VI_ACTION_PHRASES_ALT}"
-    rf")\b",
+    rf"{_EN_FIRST_PERSON}(?:\s+[\w']+){{0,4}}\s+"
+    rf"(?:successfully\s+)?"
+    rf"(?:{_EN_ACTION_VERBS_ALT}|{_VI_ACTION_PHRASES_ALT})\b",
     re.IGNORECASE,
 )
 
@@ -422,6 +439,10 @@ def _classify(sentence: str) -> tuple[str, frozenset, bool]:
     trustworthy, it has made it useless. See `_WORLD_OBJECT`.
     """
 
+    stripped = sentence.strip()
+    if stripped.endswith("?"):
+        return ClaimType.GENERAL, frozenset(), False
+
     tags: set[str] = set()
 
     world = bool(_WORLD_OBJECT.search(sentence))
@@ -431,11 +452,17 @@ def _classify(sentence: str) -> tuple[str, frozenset, bool]:
         or _ACTION_PASSIVE.search(sentence)
     )
 
-    if (names_action and world) or _EXTERNAL_OUTCOME.search(sentence):
-        return ClaimType.ACTION, frozenset(tags), world
+    has_capability = any(pattern.search(sentence) for pattern in _CAPABILITY_PATTERNS)
+    has_external_outcome = bool(_EXTERNAL_OUTCOME.search(sentence))
 
-    if any(pattern.search(sentence) for pattern in _CAPABILITY_PATTERNS):
+    # Capability modals ("can", "able to", "có thể", "khả năng", "tính năng", "chức năng") indicate
+    # an ability or permission claim rather than an assertion of an executed action,
+    # unless an external outcome is explicitly asserted.
+    if has_capability and not has_external_outcome:
         return ClaimType.CAPABILITY, frozenset(tags), world
+
+    if (names_action and world) or has_external_outcome:
+        return ClaimType.ACTION, frozenset(tags), world
 
     if _NUMERIC_PATTERN.search(sentence):
         tags.add(ClaimType.NUMERICAL)

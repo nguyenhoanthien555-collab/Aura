@@ -15,6 +15,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,11 +63,17 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
 
-    // Follow the conversation as it grows, so a reply that arrives while
-    // the user is reading does not land below the fold unseen.
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+    // Follow the conversation as it grows - including a reply streaming in
+    // token-by-token (keyed on the last message's length, not just the count) -
+    // but never yank the user back down while they've scrolled up to read
+    // history. Instant scrollToItem, not animate, so a fast stream doesn't
+    // queue a stutter of competing scroll animations.
+    val lastLen = state.messages.lastOrNull()?.text?.length ?: 0
+    LaunchedEffect(state.messages.size, lastLen) {
+        if (state.messages.isEmpty()) return@LaunchedEffect
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (lastVisible >= state.messages.lastIndex - 1) {
+            listState.scrollToItem(state.messages.lastIndex)
         }
     }
 
@@ -119,6 +137,11 @@ fun ChatScreen(
                 }
             }
 
+            // Aura's face + status at the top of the chat: her present
+            // expression and what she's doing, in words. Only here now - the
+            // per-message faces were removed at the owner's request.
+            AuraPresence(state = state)
+
             Box(modifier = Modifier.weight(1f)) {
 
                 if (state.messages.isEmpty()) {
@@ -134,11 +157,15 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(items = state.messages, key = { it.id }) { message ->
-                            MessageBubble(
-                                message = message,
-                                onRetry = { viewModel.retry(message.id) },
-                                onReact = { emoji -> viewModel.react(message.id, emoji) }
-                            )
+                            // animateItem() gives new bubbles a smooth fade+slide-in
+                            // and animates reflow, instead of popping in.
+                            Box(modifier = Modifier.fillMaxWidth().animateItem()) {
+                                MessageBubble(
+                                    message = message,
+                                    onRetry = { viewModel.retry(message.id) },
+                                    onReact = { emoji -> viewModel.react(message.id, emoji) }
+                                )
+                            }
                         }
                     }
                 }
@@ -149,6 +176,60 @@ fun ChatScreen(
                             .align(Alignment.BottomStart)
                             .padding(start = 20.dp, bottom = 8.dp),
                     )
+                }
+            }
+
+            AnimatedVisibility(visible = state.isAgentRunning || state.isSending) {
+                androidx.compose.material3.Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(12.dp),
+                    tonalElevation = 3.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                            Text(
+                                text = state.agentStatusText.ifBlank { "Aura đang xử lý..." },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Button(
+                            onClick = viewModel::interruptAgent,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Stop,
+                                contentDescription = "Dừng lại",
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Dừng lại", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
 

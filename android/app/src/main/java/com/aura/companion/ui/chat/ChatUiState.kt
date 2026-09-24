@@ -15,6 +15,8 @@ data class ChatUiState(
     val draft: String = "",
     val connection: ConnectionState = ConnectionState.Unknown,
     val isSending: Boolean = false,
+    val isAgentRunning: Boolean = false,
+    val agentStatusText: String = "",
     val error: AuraError? = null,
     val isConfigured: Boolean = false,
 ) {
@@ -54,6 +56,7 @@ sealed interface ConnectionState {
     data object Unknown : ConnectionState
     data object Connecting : ConnectionState
     data object WakingUp : ConnectionState
+    data class OnDevice(val modelName: String = "Qwen2.5-1.5B Local") : ConnectionState
     data class Connected(val provider: String) : ConnectionState
     data class Unavailable(val reason: String) : ConnectionState
 }

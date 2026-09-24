@@ -4,29 +4,20 @@ AURA 24/7 Persistent Daemon & Subsystem Supervisor.
 Runs continuously in the background, independently of HTTP request lifecycles.
 Coordinates bounded background workers:
     - TaskWorker: Drives and recovers durable tasks across disconnects and restarts.
-    - LearningWorker: Background experience collection, consolidation, and candidate generation.
-    - MemoryWorker: Periodic memory maintenance and deduplication.
+    - ProactiveWorker: Evaluates proactive messaging triggers on an interval.
+    - BackupWorker: Creates periodic atomic backups of the memory database.
+    - PruningWorker: Prunes acknowledged outbox and processed inbox records.
     - HealthMonitor: Subsystem health tracking (HEALTHY, DEGRADED, UNAVAILABLE).
 """
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from brain.hardware import detect_hardware, HardwareProfile
-from brain.local_runtime import LocalModelRuntime
-from brain.package import BrainManager
-from brain.providers.local_aura import LocalAuraBrain
 from core.logger import logger
-from learning.experience import AuraExperienceStore
-from learning.pipeline import LearningCandidatePipeline
-from learning.promotion import LearningCoordinator
-from learning.scheduler import AutonomousLearningScheduler
-from learning.training import TrainingJobRunner
 
 
 class SubsystemHealth(str, Enum):
@@ -38,19 +29,15 @@ class SubsystemHealth(str, Enum):
 @dataclass
 class DaemonHealthStatus:
     daemon: str = SubsystemHealth.HEALTHY.value
-    brain: str = SubsystemHealth.HEALTHY.value
     memory: str = SubsystemHealth.HEALTHY.value
     task_runtime: str = SubsystemHealth.HEALTHY.value
     tool_registry: str = SubsystemHealth.HEALTHY.value
     android: str = SubsystemHealth.HEALTHY.value
-    learning: str = SubsystemHealth.HEALTHY.value
     storage: str = SubsystemHealth.HEALTHY.value
     backup: str = SubsystemHealth.HEALTHY.value
     sync_pruning: str = SubsystemHealth.HEALTHY.value
     backups_created: int = 0
     records_pruned: int = 0
-    offline: bool = True
-    active_brain_id: str = "aura-local-v1"
     uptime_seconds: float = 0.0
     timestamp: str = ""
 
@@ -66,13 +53,8 @@ class AuraDaemon:
 
     def __init__(
         self,
-        brain: Optional[LocalAuraBrain] = None,
         task_runtime: Optional[Any] = None,
         tool_registry: Optional[Any] = None,
-        experience_store: Optional[AuraExperienceStore] = None,
-        learning_pipeline: Optional[LearningCandidatePipeline] = None,
-        learning_coordinator: Optional[LearningCoordinator] = None,
-        scheduler: Optional[AutonomousLearningScheduler] = None,
         offline: bool = True,
         poll_interval: float = 1.0,
         proactive_engine: Optional[Any] = None,
@@ -93,18 +75,8 @@ class AuraDaemon:
         self.prune_interval = prune_interval
         self.prune_retention_limit = prune_retention_limit
         self._last_prune_tick = 0.0
-        self.brain = brain
         self.task_runtime = task_runtime
         self.tool_registry = tool_registry
-        self.experience_store = experience_store or AuraExperienceStore()
-        self.learning_pipeline = learning_pipeline or LearningCandidatePipeline(store=self.experience_store)
-        self.learning_coordinator = learning_coordinator or LearningCoordinator()
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.scheduler = scheduler or AutonomousLearningScheduler(
-            experience_store=self.experience_store,
-            pipeline=self.learning_pipeline,
-            state_file=os.path.join(repo_root, "brains", "scheduler_state.json"),
-        )
 
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
@@ -114,8 +86,6 @@ class AuraDaemon:
 
         # Worker metrics
         self.tasks_processed = 0
-        self.learning_cycles = 0
-        self.last_consolidation_at = 0.0
         self.backups_created = 0
         self.records_pruned = 0
 
@@ -151,9 +121,8 @@ class AuraDaemon:
         self._wake_event.set()
 
     def step_once(self) -> None:
-        """Executes a single supervisory step across task, learning, proactive, backup, and pruning workers."""
+        """Executes a single supervisory step across task, proactive, backup, and pruning workers."""
         self._step_task_worker()
-        self._step_learning_worker()
         self._step_proactive_worker()
         self._step_backup_worker()
         self._step_pruning_worker()
@@ -165,19 +134,16 @@ class AuraDaemon:
                 # 1. Task Worker Step
                 self._step_task_worker()
 
-                # 2. Learning & Sleep/Consolidation Step
-                self._step_learning_worker()
-
-                # 3. Proactive Messaging Step
+                # 2. Proactive Messaging Step
                 self._step_proactive_worker()
 
-                # 4. Periodic Backup Step
+                # 3. Periodic Backup Step
                 self._step_backup_worker()
 
-                # 5. Outbox / Inbox Pruning Step
+                # 4. Outbox / Inbox Pruning Step
                 self._step_pruning_worker()
 
-                # 6. Sleep until next poll interval or wake event
+                # 5. Sleep until next poll interval or wake event
                 self._wake_event.wait(timeout=self.poll_interval)
                 self._wake_event.clear()
 
@@ -200,25 +166,6 @@ class AuraDaemon:
                 pass
         except Exception as e:
             logger.debug("Task worker tick error: %s", e)
-
-    def _step_learning_worker(self) -> None:
-        """Periodically checks eligibility and executes autonomous self-learning cycles."""
-        if not self.scheduler:
-            return
-        if "PYTEST_CURRENT_TEST" in os.environ and os.environ.get("AURA_FORCE_NEURAL_TEST") != "1":
-            return
-        try:
-            eligible, reason = self.scheduler.check_eligibility()
-            if eligible:
-                logger.info("[AuraDaemon] Scheduler detected eligible learning conditions: %s", reason)
-                self.learning_cycles += 1
-                cycle_trace = self.scheduler.execute_cycle(
-                    auto_promote=self.scheduler.config.auto_promote,
-                )
-                self.last_consolidation_at = time.time()
-                logger.info("[AuraDaemon] Completed autonomous learning cycle: %s", cycle_trace.get("status"))
-        except Exception as e:
-            logger.debug("Learning worker tick error: %s", e)
 
     def _step_proactive_worker(self) -> None:
         """Periodically evaluates proactive messaging triggers unprompted."""
@@ -281,30 +228,20 @@ class AuraDaemon:
         now = datetime.now().isoformat(timespec="seconds")
         uptime = (time.time() - self._started_at) if self.is_running else 0.0
 
-        brain_health = SubsystemHealth.HEALTHY.value
-        active_brain_id = "unknown"
-        if self.brain:
-            brain_health = self.brain.health()
-            active_brain_id = self.brain.brain_id
-
         task_health = SubsystemHealth.HEALTHY.value if self.task_runtime else SubsystemHealth.DEGRADED.value
         tool_health = SubsystemHealth.HEALTHY.value if self.tool_registry else SubsystemHealth.DEGRADED.value
 
         return DaemonHealthStatus(
             daemon=SubsystemHealth.HEALTHY.value if self.is_running else SubsystemHealth.DEGRADED.value,
-            brain=brain_health,
             memory=SubsystemHealth.HEALTHY.value,
             task_runtime=task_health,
             tool_registry=tool_health,
             android=SubsystemHealth.HEALTHY.value,
-            learning=SubsystemHealth.HEALTHY.value,
             storage=SubsystemHealth.HEALTHY.value,
             backup=SubsystemHealth.HEALTHY.value,
             sync_pruning=SubsystemHealth.HEALTHY.value,
             backups_created=self.backups_created,
             records_pruned=self.records_pruned,
-            offline=self.offline,
-            active_brain_id=active_brain_id,
             uptime_seconds=round(uptime, 1),
             timestamp=now,
         )

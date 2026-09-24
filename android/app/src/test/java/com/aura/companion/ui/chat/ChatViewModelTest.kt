@@ -583,7 +583,15 @@ class ChatViewModelTest {
 
     private fun viewModel(serverUrl: String = server.url("/").toString()): ChatViewModel {
 
-        val settings = FakeSettings(serverUrl = serverUrl, authToken = "test-token")
+        // Cloud (server) mode: every test in this class exercises the REST /
+        // WebSocket path against [server]. The store now defaults to
+        // "on_device", which would route to the local brain and never touch
+        // the socket - so the transport under test is selected explicitly.
+        val settings = FakeSettings(
+            serverUrl = serverUrl,
+            authToken = "test-token",
+            intelligenceMode = "cloud",
+        )
 
         // Registered so [tearDown] can stop it. Every test builds its
         // ViewModel through here, which is what makes that guarantee hold.

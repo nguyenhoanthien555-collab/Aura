@@ -95,6 +95,28 @@ class AppContainer(application: Application) {
     val cursorStore: CursorStore by lazy {
         FileCursorStore(File(application.filesDir, "sync/cursor"))
     }
+    private val appContext = application.applicationContext
+
+    /**
+     * Is there a network that can actually carry a request right now?
+     *
+     * Used by the hybrid chat brain to decide, per turn, whether to reach for
+     * the smart cloud server or answer on-device. Checks for a validated
+     * internet capability rather than merely "a network exists", so captive
+     * portals and a connected-but-dead Wi-Fi fall back to local instead of
+     * hanging. Any failure reading connectivity is treated as offline — the
+     * safe default is the model that needs nothing.
+     */
+    fun isOnline(): Boolean = try {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java)
+        val network = cm?.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    } catch (e: Exception) {
+        false
+    }
+
     val syncClient: SyncClient by lazy {
         SyncClient(
             api = { repository.api() ?: throw IllegalStateException("Server not configured") },

@@ -140,8 +140,10 @@ def _builtin_tools(
         # would let the two disagree, and the failure would be a tool that
         # registers and then writes to nothing.
         from tools.builtins.memory import RememberTool
+        from tools.builtins.memory import ForgetTool, RememberTool
 
         tools.append(RememberTool(memory))
+        tools.append(ForgetTool(memory))
 
     applications = _mapping_setting(config, "applications")
 
@@ -199,11 +201,8 @@ def _builtin_tools(
     # at best - a confirmation per call unless they widen
     # `tools.auto_approve` too.
     if vision is not None and vision.is_available():
-
         from tools.builtins.vision import DescribeScreenTool
-
         tools.append(DescribeScreenTool(vision))
-
     else:
         logger.debug(
             "describe_screen not registered: vision is off"

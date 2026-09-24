@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.runtime.Composable
@@ -117,8 +116,9 @@ fun VisionSection(
 
             ToggleRow(
                 title = "Send desktop screen images to cloud",
-                subtitle = "Off, only the local model ever sees your pixels. " +
-                    "Turning this on sends screenshots to the configured provider.",
+                subtitle = "Off, your screen pixels stay on the machine Aura " +
+                    "runs on. Turning this on sends screenshots to the " +
+                    "configured provider.",
                 icon = Icons.Filled.CloudUpload,
                 checked = vision.sendScreenToCloud,
                 pending = "vision.send_screen_to_cloud" in state.pending,
@@ -129,7 +129,7 @@ fun VisionSection(
 
         SettingsSection(
             title = "Models",
-            subtitle = "Where captions come from, and where they fall back",
+            subtitle = "Where the server's captions come from",
         ) {
 
             SelectRow(
@@ -139,17 +139,6 @@ fun VisionSection(
                 icon = Icons.Filled.Cloud,
                 lockedReason = state.lockedReason("vision.cloud_model"),
                 onClick = { editing = VisionField.Cloud },
-            )
-
-            RowDivider()
-
-            SelectRow(
-                title = "Local model",
-                value = vision.ollamaModel.ifBlank { "Not set" },
-                subtitle = "Used by the on-device processor, where Aura runs",
-                icon = Icons.Filled.Computer,
-                lockedReason = state.lockedReason("vision.ollama_model"),
-                onClick = { editing = VisionField.Local },
             )
         }
 
@@ -178,18 +167,8 @@ fun VisionSection(
             onDismiss = { editing = null },
         )
 
-        VisionField.Local -> TextEntryDialog(
-            title = "Local model",
-            initial = vision.ollamaModel,
-            label = "Model name",
-            help = "The model the local processor uses when no cloud is " +
-                "available. Enter it exactly as the provider spells it.",
-            onCommit = { viewModel.setText("vision.ollama_model", it) },
-            onDismiss = { editing = null },
-        )
-
         null -> Unit
     }
 }
 
-private enum class VisionField { Cloud, Local }
+private enum class VisionField { Cloud }

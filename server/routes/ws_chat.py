@@ -193,7 +193,24 @@ async def chat_stream(
                 context=request.get("context"),
             )
 
+            from events.types import AgentInterruptedEvent
+            interrupted_signal = [False]
+
+            def on_interrupt(event: AgentInterruptedEvent):
+                interrupted_signal[0] = True
+
+            if runtime.bus is not None:
+                runtime.bus.subscribe(AgentInterruptedEvent, on_interrupt)
+
             async for fragment in iterate_in_threadpool(fragments):
+                if interrupted_signal[0]:
+                    await websocket.send_json({
+                        "type": "interrupted",
+                        "session_id": session_id,
+                        "message_id": message_id,
+                        "message": "Em đã dừng lại ngay lập tức theo lệnh của anh rồi!",
+                    })
+                    break
                 
                 while not reaction_queue.empty():
                     try:

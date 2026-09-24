@@ -63,18 +63,35 @@ def test_prompt_builder_with_agent_context():
     assert "===== DEVICE STATE =====" in user_cont
 
 def test_runtime_chat_forwards_context(monkeypatch):
+    # This test proves the runtime forwards the agent context to whatever
+    # LLM answers - here Gemini. config.yaml ships offline: true with
+    # provider local_aura (the production default keeps inference local),
+    # so a default runtime would resolve to local_aura and never reach the
+    # mocked Gemini. Build the runtime on a config that selects gemini and
+    # opt cloud routing back on through the authoritative AURA_OFFLINE
+    # override (which is what _create_provider consults), rather than
+    # weakening the shipped default.
+    from core.config import load_config
+
+    monkeypatch.setenv("AURA_OFFLINE", "0")
     monkeypatch.setenv("GEMINI_API_KEY", "dummy")
-    
+
+    cloud_config = dict(load_config())
+    cloud_llm = dict(cloud_config.get("llm") or {})
+    cloud_llm["provider"] = "gemini"
+    cloud_llm["offline"] = False
+    cloud_config["llm"] = cloud_llm
+
     from brain.providers.gemini import GeminiProvider
     captured_prompts = []
-    
+
     def mock_gemini_generate(self, prompt):
         captured_prompts.append(prompt)
         return '{"action": "click", "node_id": "node_1"}'
-        
+
     monkeypatch.setattr(GeminiProvider, "generate", mock_gemini_generate)
-    
-    runtime = ServerRuntime()
+
+    runtime = ServerRuntime(config=cloud_config)
     context = {
         "device": {"width": 1080, "height": 2400},
         "app": {"package": "com.example.app", "activity": "ExampleActivity"},

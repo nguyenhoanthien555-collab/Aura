@@ -137,6 +137,18 @@ def _non_empty_text(maximum: int = 120):
     return validate
 
 
+DEPRECATED_LOCAL_PROVIDERS: dict[str, str] = {
+    "local_aura": "gemini",
+    "on_device": "gemini",
+    "local": "gemini",
+    "ollama": "gemini",
+}
+
+DEPRECATED_PATH_MIGRATIONS: dict[str, str] = {
+    "llm.model": "llm.gemini_model",
+}
+
+
 def _provider_name(value, path: str) -> str:
     """
     A provider Aura can actually build.
@@ -149,9 +161,17 @@ def _provider_name(value, path: str) -> str:
 
     from brain.router import KEYLESS_PROVIDERS, PROVIDER_KEYS
 
-    known = {"mock", *PROVIDER_KEYS, *KEYLESS_PROVIDERS}
-
     name = str(value or "").strip().lower()
+
+    if name in DEPRECATED_LOCAL_PROVIDERS:
+        migrated = DEPRECATED_LOCAL_PROVIDERS[name]
+        logger.info(
+            "Migrated deprecated provider '%s' at %s to '%s'",
+            name, path, migrated,
+        )
+        name = migrated
+
+    known = {"mock", *PROVIDER_KEYS, *KEYLESS_PROVIDERS}
 
     if name not in known:
         raise SettingsError(
@@ -416,17 +436,16 @@ def _quiet_hours(value, path: str) -> list[list[int]]:
 
 ALLOWED: dict[str, object] = {
 
-    # AI / Models. `model` is free text on purpose: provider model names
-    # change constantly and a hardcoded enum would reject a model that
-    # shipped this morning. It is length-capped and its effect is visible
-    # immediately via the provider test.
+    # AI / Models. Model names are free text on purpose: provider model
+    # names change constantly and a hardcoded enum would reject a model
+    # that shipped this morning. Each is length-capped and its effect is
+    # visible immediately via the provider test.
     "llm.provider": _provider_name,
-    "llm.model": _non_empty_text(120),
+    "llm.gemini_model": _non_empty_text(120),
     "llm.fallback_providers": _provider_list,
     "llm.fallback_model": _non_empty_text(120),
     "llm.groq_model": _non_empty_text(120),
     "llm.mistral_model": _non_empty_text(120),
-    "llm.ollama_model": _non_empty_text(120),
     "llm.openai_model": _non_empty_text(120),
     "llm.anthropic_model": _non_empty_text(120),
     "llm.cerebras_model": _non_empty_text(120),
@@ -516,7 +535,6 @@ ALLOWED: dict[str, object] = {
     "vision.send_screen_to_cloud": _boolean,
     "vision.min_interval": _bounded_number(0.0, 3600.0),
     "vision.cloud_model": _non_empty_text(120),
-    "vision.ollama_model": _non_empty_text(120),
 
     # Voice. Server-side only - there is no phone TTS/STT in this app, and
     # the UI says so rather than offering a control that does nothing.
@@ -740,6 +758,13 @@ class RuntimeSettings:
         accepted: dict = {}
 
         for path, value in flatten(stored.get("settings") or {}).items():
+            if path in DEPRECATED_PATH_MIGRATIONS:
+                new_path = DEPRECATED_PATH_MIGRATIONS[path]
+                logger.info(
+                    "Migrated deprecated setting path '%s' to '%s'",
+                    path, new_path,
+                )
+                path = new_path
             try:
                 accepted[path] = validate_path(path, value)
             except SettingsError as error:

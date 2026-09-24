@@ -6633,3 +6633,117 @@ note that everything above SAFE is absent from the shipped allow list.
   over one live attribute is recorded, not resolved.
 - Nothing here was exercised against a live vision model. Both decline
   paths were, which is the part that used to break.
+
+## Cloud-Only Migration — Phase 3 deletion (VERIFIED)
+
+Removed the local/on-device LLM subsystem. Staged **54 tracked file
+deletions** (`git rm`, not committed):
+
+- **6 test files**: `test_aura_local_ai.py`, `test_p1_learning_quality.py`,
+  `test_p2_canary_policy.py`, `test_p0_forensic_hardening.py`,
+  `test_neural_learning_lifecycle.py`, `test_vision_ollama.py`.
+- **18 scripts**: the tracked `scripts/` p1/p2 self-learning, training,
+  and forensic-verification harnesses (audit_p1_5, evaluate_pre_full_
+  autonomy_gate, run_aura_self_learning, run_micro_learning_benchmark,
+  run_p1_6, run_p2_* ×9, verify_aura_local_ai_live,
+  verify_p1_learning_quality_live, verify_production_isolation,
+  verify_scheduler_autonomy, generate_p2_master_forensic_report).
+- **10 production modules**: `brain/{local_runtime,registry,package,
+  hardware}.py`, `brain/providers/{local_aura,local,ollama}.py`,
+  `vision/ollama_processor.py`, `server/routes/{brain,learning}.py`.
+- **20 files under `learning/`** (the whole package; no `__init__.py`
+  existed — implicit namespace pkg). `learning/` fully removed from disk
+  (only stale `__pycache__` remained, deleted).
+
+KEPT (cloud-only spine): `brain/{router,ports,provenance,native_fc}.py`,
+`brain/verify/*`, all cloud providers, `agent/autonomy_guard.py` (rehomed).
+
+**Safety**: before deletion, 7 deletion-target files had uncommitted
+working-tree deltas (1163 lines total, from the superseded local-learning
+effort — `brain/local_runtime.py` +951, `brain/providers/local_aura.py`,
+`learning/{curriculum,heldout_v2,scheduler,trainer}.py`,
+`vision/ollama_processor.py`). Preserved in `git stash@{0}`
+("cloud-only-migration: uncommitted deltas on deleted local-subsystem
+files (recoverable)") so nothing was destroyed — recover with
+`git stash apply stash@{0}` if ever needed.
+
+**Verification (real execution)**:
+- `pytest --co` → **3838/3839 collected (1 deselected), exit 0, zero
+  import/collection errors** (was 3931/3932; the ~93 drop = the deleted
+  local test files).
+- Import smoke of 14 KEPT spine modules (server.main, server.runtime,
+  brain.router, launcher.services, daemon.supervisor, agent.autonomy_guard,
+  vision.*, …) → **ALL IMPORTS OK**.
+- Functional subset (vision chain, multimodal, capability routing, cloud
+  providers, cloud failover, laptop/mobile separation) → **171 passed**.
+
+**Held (untracked → irreversible, NOT deleted)**: `tests/benchmark_dual_
+models.py` and 6 untracked scripts (`phase1_{retrain_05b,eval_3b_candidate,
+build_training_set,baseline_harness}.py`, `train_15b_{cauto,v4}.py`). All
+dead (import deleted modules) but uncollected + not imported by production,
+so non-blocking; left for owner confirm since disk-deletion is irreversible.
+
+**Deferred (non-blocking) cleanup**: dead `"local"/"local_aura"/"ollama"`
+strings + Ollama comment in `brain/providers/capabilities.py`; guarded
+ollama branch in `vision/debug.py:96` (degrades gracefully); config keys
+in `core/config.py`/`core/settings_store.py`/`vision/settings.py`/
+`config.yaml`.
+
+### Cloud-only migration — Stage 1 (config-key removal + settings migration), Python DONE + VERIFIED (2026-09-23)
+
+Removed the five dead local/on-device config keys and repointed Gemini's
+model picker at its own key. One coherent cross-stack unit; Python half
+complete and green, Android/Kotlin half (Stage 2) next.
+
+**Source edits**:
+- `core/config.py` DEFAULT_CONFIG: dropped `llm.model`, `llm.mobile_model`,
+  `llm.offline`, `llm.ollama_model`, `vision.ollama_model`; added
+  `llm.gemini_model: gemini-flash-latest`; comments rewritten. KEPT
+  `llm.fallback_model`, `vision.cloud_model`.
+- `config.yaml`: same key removals; added `gemini_model`; kept
+  `cloud_model: gemini-flash-latest` and the fallback chain.
+- `core/settings_store.py` ALLOWED: removed `llm.model`, `llm.mobile_model`,
+  `llm.ollama_model`, `vision.ollama_model`; added `llm.gemini_model`.
+  Migration is automatic — `_load()` drops stored overrides that no longer
+  validate, so an old `local_aura`/`on_device`/`ollama` selection falls back
+  to config.yaml `gemini` with NO new code.
+- `server/settings_service.py` LIVE_PATHS: removed `llm.model`,
+  `llm.ollama_model`; added `llm.gemini_model`; docstring corrected.
+- `server/routes/settings.py`: gemini `model_setting` `llm.model` →
+  `llm.gemini_model`.
+- `server/runtime.py:326`: `offline=self.config...get("offline", True)` →
+  `offline=False` (daemon only logs it; constructor param unchanged).
+- `vision/settings.py`: cloud-only rewrite — removed `DEFAULT_OLLAMA_MODEL`
+  and `ollama_model()`; `cloud_model()` keeps `vision.cloud_model` →
+  legacy `vision.model` → "" (dropped the `llm.model` fallback). It was the
+  only production reader of `llm.model`.
+- `vision/debug.py`: `describe()` rewritten cloud-only (was importing the
+  deleted `vision.ollama_processor`). Saves the exact JPEG a provider would
+  receive via `CloudVisionProcessor([])._compact`; builds the real chain via
+  `build_cloud_vision_processor`; `.png` defaults → `.jpg`.
+- `brain/providers/gemini.py`: stale `llm.model`-is-the-local-brain comment
+  removed (resolution already reads `gemini_model` → `cloud_model` → default).
+
+**Test edits**: `tests/test_config.py` (retargeted 4 assertions/overlays from
+`llm.model`/`llm.ollama_model` → `llm.gemini_model`); `tests/test_vision_
+settings.py` (rewritten cloud-only, ollama/DEFAULT_OLLAMA_MODEL/desktop-
+processor tests dropped, legacy-`vision.model` precedence kept);
+`tests/test_settings_fixture.py` (model-setting guard now `llm.gemini_model`
+→ name must be `gemini`).
+
+**Android fixtures regenerated** (`AURA_WRITE_ANDROID_FIXTURES=1`):
+`live/{settings,providers,provider_health}.json` now carry the new
+`configurable` list and gemini `model_setting: llm.gemini_model`.
+
+**Verification (real execution)**:
+- Regen run: `test_settings_fixture.py` → 4 passed.
+- Targeted suite (test_config, test_vision_settings, test_settings_fixture,
+  test_settings_contract, test_cloud_providers, test_provider_resolution,
+  test_capability_routing) → **298 passed**.
+- `test_vision.py` → 27 passed. `pytest --co` → **3829/3830 collected
+  (1 deselected), zero import errors**. `py_compile` of all 7 edited modules
+  → OK.
+
+**Next**: Stage 2 (Android/Kotlin) — align `ControlDto.kt`, `VisionSection.kt`
+and the Kotlin tests to the regenerated fixture shape; verify with
+`./gradlew :app:testDebugUnitTest`. No commit/push.

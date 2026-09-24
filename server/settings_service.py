@@ -14,7 +14,7 @@ a change that only `config.yaml` would have honoured is reported as
 WHAT APPLIES LIVE, AND WHY
 --------------------------
 Persisted-and-live:
-    llm.provider, llm.model, the fallback chain and per-provider models,
+    llm.provider, the fallback chain and per-provider models,
     llm.temperature/max_output_tokens/timeout
         The provider chain is rebuilt from the effective config; the
         router's cached provider is cleared. `conversation.llm` is a
@@ -120,9 +120,9 @@ COMPANION_LIVE_PATHS = (
 # Live-applyable paths. A PATCH arrives flattened, so the checks are
 # exact dotted paths only.
 LIVE_PATHS = {
-    "llm.provider", "llm.model",
+    "llm.provider", "llm.gemini_model",
     "llm.fallback_providers", "llm.fallback_model",
-    "llm.groq_model", "llm.mistral_model", "llm.ollama_model",
+    "llm.groq_model", "llm.mistral_model",
     "llm.temperature", "llm.max_output_tokens", "llm.timeout",
     "proactive.enabled", "proactive.cooldown_seconds",
     "proactive.max_per_day", "proactive.quiet_hours",

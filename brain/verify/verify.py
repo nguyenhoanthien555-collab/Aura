@@ -54,6 +54,31 @@ class VerificationResult:
         return self.repaired_text != self.text
 
 
+_CAPABILITY_KEYWORDS: dict[str, set[str]] = {
+    "vision.capture": {"screenshot", "capture", "chụp", "chup", "màn", "man", "screen", "ảnh"},
+    "vision.describe": {"describe", "quan", "sát", "nhìn", "thấy", "xem", "mô", "tả"},
+    "desktop.windows": {"window", "windows", "cửa", "sổ"},
+    "desktop.input": {"mouse", "keyboard", "chuột", "phím", "gõ", "click"},
+    "desktop.applications": {"app", "application", "ứng", "dụng", "mở"},
+    "desktop.commands": {"command", "shell", "lệnh", "terminal", "cmd"},
+    "system.time": {"time", "clock", "date", "thời", "gian", "giờ", "ngày"},
+    "system.info": {"system", "info", "os", "hệ", "thống", "cấu", "hình", "thông", "tin"},
+    "system.processes": {"process", "processes", "tiến", "trình"},
+    "filesystem.read": {"read", "file", "tệp", "tập", "tin", "đọc"},
+    "filesystem.write": {"write", "save", "lưu", "ghi", "tạo"},
+    "memory.write": {"remember", "memory", "nhớ", "ghi", "lưu"},
+    "memory.write": {"remember", "memory", "nhớ", "ghi", "lưu", "forget", "quên", "xóa"},
+    "chat.react": {"react", "reaction", "thả", "tim", "cảm", "xúc"},
+    "android.foreground_app": {"foreground", "app", "ứng", "dụng"},
+    "android.ui_tree": {"tree", "cây", "giao", "diện"},
+    "android.screen_capture": {"screenshot", "chụp", "ảnh"},
+    "android.tap": {"tap", "chạm", "bấm", "nhấn"},
+    "android.back": {"back", "quay", "lại"},
+    "android.home": {"home", "chính"},
+    "android.app_launch": {"launch", "khởi", "chạy"},
+}
+
+
 def default_capability_provider(words: set[str]) -> tuple[str, bool, str]:
     """
     Match the claim's words against the live capability registry.
@@ -71,7 +96,18 @@ def default_capability_provider(words: set[str]) -> tuple[str, bool, str]:
         return "UNKNOWN", False, ""
 
     try:
-        for capability in registry.all():
+        all_caps = registry.all()
+
+        # 1. First check explicit keyword / Vietnamese synonym matches
+        for cap_id, kw_set in _CAPABILITY_KEYWORDS.items():
+            if words & kw_set:
+                cap = registry.get(cap_id)
+                if cap is not None:
+                    state = resolve_capability(cap_id)
+                    return state.value, True, cap_id
+
+        # 2. Check English haystack words
+        for capability in all_caps:
 
             haystack = (
                 capability.capability_id.lower()

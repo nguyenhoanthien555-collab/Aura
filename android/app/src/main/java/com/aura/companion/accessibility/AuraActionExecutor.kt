@@ -175,11 +175,29 @@ class AuraActionExecutor(
         return when (action.action) {
             "open_app" -> {
                 val pkg = action.packageName ?: return false
-                val intent = service.packageManager.getLaunchIntentForPackage(pkg)
+                var intent = service.packageManager.getLaunchIntentForPackage(pkg)
+                if (intent == null) {
+                    if (pkg == "com.android.settings") {
+                        intent = Intent(android.provider.Settings.ACTION_SETTINGS)
+                    } else {
+                        intent = Intent(Intent.ACTION_MAIN).apply {
+                            setPackage(pkg)
+                            addCategory(Intent.CATEGORY_LAUNCHER)
+                        }
+                        if (service.packageManager.queryIntentActivities(intent, 0).isEmpty()) {
+                            intent = null
+                        }
+                    }
+                }
                 if (intent != null) {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    service.startActivity(intent)
-                    true
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    try {
+                        service.startActivity(intent)
+                        true
+                    } catch (e: Exception) {
+                        Log.e("AuraActionExecutor", "Failed to start activity for $pkg", e)
+                        false
+                    }
                 } else {
                     false
                 }

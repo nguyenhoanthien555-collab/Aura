@@ -141,7 +141,7 @@ class CapabilityLLM(Protocol):
         ...
 
 
-def generate_for(llm, prompt: str, task=None) -> str:
+def generate_for(llm, prompt: str, task=None, context: dict | None = None) -> str:
     """
     Ask `llm` for `task`, or just ask it, if that is all it can do.
 
@@ -152,9 +152,20 @@ def generate_for(llm, prompt: str, task=None) -> str:
     capability layer not being wired up.
     """
 
-    if task is not None:
-        lane_aware = getattr(llm, "generate_for", None)
-        if callable(lane_aware):
-            return lane_aware(prompt, task)
+    lane_aware = getattr(llm, "generate_for", None)
+    if callable(lane_aware):
+        try:
+            return lane_aware(prompt, task, context=context)
+        except TypeError:
+            try:
+                return lane_aware(prompt, task)
+            except TypeError:
+                pass
+
+    if context is not None:
+        try:
+            return llm.generate(prompt, context=context)
+        except TypeError:
+            pass
 
     return llm.generate(prompt)

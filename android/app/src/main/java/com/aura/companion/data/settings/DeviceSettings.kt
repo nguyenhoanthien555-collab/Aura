@@ -34,4 +34,8 @@ interface DeviceSettings : SettingsProvider {
     fun setThemeMode(mode: ThemeMode)
 
     fun setDynamicColour(enabled: Boolean)
+
+    fun setIntelligenceMode(mode: String)
+
+    fun setAllowCloudFallback(enabled: Boolean)
 }

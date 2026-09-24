@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
@@ -139,26 +140,20 @@ fun Modifier.auraGlassEdge(shape: Shape): Modifier = border(
 fun Modifier.auraGlassBlur(
     shape: Shape,
     tint: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-    blurRadius: Float = 32f
+    elevation: androidx.compose.ui.unit.Dp = 2.dp,
+    @Suppress("UNUSED_PARAMETER") blurRadius: Float = 32f,
 ): Modifier {
-    val isBlurSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    // Real per-frame backdrop blur (RenderEffect / Haze) is too expensive for a
+    // mid-range phone, so rather than fake it with a no-op graphicsLayer we render
+    // a clean, intentional Material-3 elevated surface: a soft real shadow for
+    // depth, a tonal fill, and a hairline edge highlight. Cheap and modern, and
+    // it looks deliberate instead of like a washed-out rectangle.
     return this
-        .then(
-            if (isBlurSupported) {
-                Modifier.graphicsLayer {
-                    // Note: RenderEffect on graphicsLayer blurs the *content* of the modifier, 
-                    // not what is strictly behind it. For true behind-blur in Compose without libraries,
-                    // we accept this limitation or use Haze/Cloudy. 
-                    // Wait, actually, standard RenderEffect.createBlurEffect on Compose 1.4+ graphicsLayer
-                    // only blurs the content. We will just use the beautiful auraBackgroundBrush instead
-                    // and apply a rich tint.
-                }
-            } else Modifier
-        )
+        .shadow(elevation = elevation, shape = shape, clip = false)
         .background(color = tint, shape = shape)
         .border(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             shape = shape,
         )
 }

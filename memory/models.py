@@ -251,6 +251,35 @@ class SemanticVector(Base):
     created_at: Mapped[str] = mapped_column(default=timestamp_now)
 
 
+class CompanionMemoryRecord(Base):
+    """
+    Durable backing for the companion stores (facts, preferences, goals,
+    projects, coding style, highlights) that used to live only in process
+    memory and vanished on restart.
+
+    One generic table rather than six: `kind` names which store owns the
+    row, `key` is that store's dedup key (topic / title / name / language,
+    or a unique id for append-only highlights), and `payload` is the
+    JSON-serialised dataclass. Newest write to a (kind, key) wins, matching
+    the in-memory "newest wins" upsert. A future per-kind schema, if one is
+    ever justified, can migrate out of here without the readers changing -
+    they only ever see the rendered dataclass.
+    """
+
+    __tablename__ = "companion_memory"
+
+    __table_args__ = (
+        UniqueConstraint("kind", "key", name="uq_companion_memory_kind_key"),
+        Index("ix_companion_memory_kind", "kind"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    key: Mapped[str] = mapped_column(String(256))
+    payload: Mapped[str] = mapped_column(Text(), default="{}")
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
 class DurableTaskRecord(Base):
     """
     One user task spanning multiple steps and runs.

@@ -272,7 +272,7 @@ PROVIDER_CAPABILITIES = {
         "models": ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
         "api_base": "https://generativelanguage.googleapis.com",
         "api_key_env": "GEMINI_API_KEY",
-        "model_setting": "llm.model",
+        "model_setting": "llm.gemini_model",
     },
     "openai": {
         "label": "OpenAI",
@@ -368,15 +368,6 @@ PROVIDER_CAPABILITIES = {
         "api_key_env": "CUSTOM_API_KEY",
         "model_setting": "llm.custom_model",
     },
-    "ollama": {
-        "label": "Ollama (local)",
-        "chat": True, "streaming": True, "tools": True, "vision": False,
-        "keyless": True,
-        "models": [],
-        "api_base": "http://localhost:11434",
-        "api_key_env": "",
-        "model_setting": "llm.ollama_model",
-    },
     "mock": {
         "label": "Mock (offline)",
         "chat": True, "streaming": True, "tools": False, "vision": False,
@@ -401,7 +392,6 @@ PROVIDER_BASE_URL_ENV = {
     "deepseek": "DEEPSEEK_BASE_URL",
     "qwen": "QWEN_BASE_URL",
     "custom": "CUSTOM_BASE_URL",
-    "ollama": "OLLAMA_HOST",
 }
 
 

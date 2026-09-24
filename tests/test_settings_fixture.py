@@ -130,11 +130,11 @@ def test_every_provider_still_names_the_setting_holding_its_model(api):  # noqa:
 
     assert mapping(stored) == mapping(live)
 
-    # Only Gemini reads `llm.model`. Any other provider pointed at it would be
-    # a model picker that appears to work and cannot.
+    # Gemini reads `llm.gemini_model`. Any other provider pointed at it would
+    # be a model picker that appears to work and cannot.
     for name, setting in mapping(live).items():
-        if setting == "llm.model":
-            assert name == "gemini", f"{name} must not be sent to llm.model"
+        if setting == "llm.gemini_model":
+            assert name == "gemini", f"{name} must not be sent to llm.gemini_model"
 
 
 def test_the_fixtures_contain_nothing_key_shaped():

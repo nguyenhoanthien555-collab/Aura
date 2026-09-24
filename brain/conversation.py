@@ -224,7 +224,7 @@ class ConversationManager:
         if not machine:
             self._emit(ThinkingEvent())
 
-        text = self._generate(prompt, task)
+        text = self._generate(prompt, task, context=context)
 
         if machine:
             return Response(text=text)
@@ -323,7 +323,7 @@ class ConversationManager:
         pieces: list[str] = []
 
         try:
-            for index, fragment in enumerate(stream_of(self.llm, prompt)):
+            for index, fragment in enumerate(stream_of(self.llm, prompt, context=context)):
 
                 if not fragment:
                     continue
@@ -474,7 +474,7 @@ class ConversationManager:
             session_id=session_id,
             history=history,
             persona=persona_of(self.persona, history, user_msg),
-            vision=self._vision_context(),
+            vision=self._vision_context(context),
             knowledge=self._knowledge_for(user_msg.content),
             temporal=self._temporal_lines(),
             task=classify_task(
@@ -500,6 +500,28 @@ class ConversationManager:
                     )
                 except Exception as error:  # noqa: BLE001
                     logger.debug("Memory evidence skipped: %s", error)
+
+            if turn.vision is not None and getattr(turn.vision, "description", None):
+                try:
+                    ledger.add_vision(
+                        source=getattr(turn.vision, "source", "screen"),
+                        description=str(getattr(turn.vision, "description", "")),
+                    )
+                except Exception as error:  # noqa: BLE001
+                    logger.debug("Vision evidence skipped: %s", error)
+
+            app_ctx = (context or {}).get("app")
+            if app_ctx and isinstance(app_ctx, dict):
+                lbl = app_ctx.get("label") or app_ctx.get("package") or "Android App"
+                pkg = app_ctx.get("package") or ""
+                act = app_ctx.get("activity") or ""
+                try:
+                    ledger.add_vision(
+                        source="phone",
+                        description=f"User is using {lbl} on Android phone (package: {pkg})" + (f", activity: {act}" if act else ""),
+                    )
+                except Exception as error:  # noqa: BLE001
+                    logger.debug("App vision evidence skipped: %s", error)
 
         return (
             user_msg,
@@ -541,7 +563,7 @@ class ConversationManager:
         )
 
 
-    def _generate(self, prompt: str, task: TaskClass | None = None) -> str:
+    def _generate(self, prompt: str, task: TaskClass | None = None, context: dict | None = None) -> str:
         """
         Ask the provider, announcing a failure before re-raising it.
 
@@ -557,7 +579,7 @@ class ConversationManager:
         """
 
         try:
-            return generate_for(self.llm, prompt, task)
+            return generate_for(self.llm, prompt, task, context=context)
 
         except Exception as error:
             self._emit(
@@ -1326,15 +1348,43 @@ class ConversationManager:
             # The step it gave up on is the useful half.
             self._emit(TaskStuckEvent(goal=plan.goal, step=was))
 
-    def _vision_context(self):
-        if self.vision is None:
-            return None
+    def _vision_context(self, context: dict | None = None):
+        # 1. Direct mobile / Android context
+        app = (context or {}).get("app")
+        if app and isinstance(app, dict):
+            pkg = str(app.get("package") or "").strip()
+            lbl = str(app.get("label") or pkg).strip()
+            act = str(app.get("activity") or "").strip()
+            screen_txt = str((context or {}).get("screen_text") or "").strip()
+            desc = f"User is using {lbl} on Android phone"
+            if pkg and pkg != lbl:
+                desc += f" (package: {pkg})"
+            if act:
+                desc += f" (activity: {act})"
+            if screen_txt:
+                desc += f". On screen: {screen_txt}"
+            from vision.context import VisionContext
+            return VisionContext(source="phone", description=desc)
 
-        try:
-            return self.vision.get_context()
-        except Exception as error:
-            logger.debug("Vision context unavailable: %s", error)
-            return None
+        # 2. Managed vision (either remote pushed or local desktop).
+        #
+        # This is the ONLY path that reads the desktop, and it exists only
+        # when `self.vision` was constructed - i.e. when the owner turned
+        # vision on. There is deliberately no fallback that inspects the
+        # live foreground window when vision is off, absent, or has just
+        # thrown: "vision off means no vision section" is a contract, and a
+        # tool that reads the screen anyway because the managed reader was
+        # unavailable is exactly the unprompted screen read that contract
+        # forbids. Vision off means off.
+        if self.vision is not None:
+            try:
+                ctx = self.vision.get_context()
+                if ctx is not None and not ctx.is_empty():
+                    return ctx
+            except Exception as error:
+                logger.debug("Vision context unavailable: %s", error)
+
+        return None
 
     def _knowledge_for(self, query: str) -> list[str]:
         """

@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The conversation on disk.
@@ -50,6 +53,17 @@ class TranscriptStore(context: Context) : Transcript, SessionStore {
      */
     private var held: StoredConversation = load()
 
+    /**
+     * The observable mirror of [held].
+     *
+     * Declared after [held] so its initial value is the loaded conversation,
+     * not an empty one. Updated inside [save] alongside [held], so every write
+     * both persists and notifies - which is what lets a second surface (the
+     * floating overlay's ViewModel) see a change without a restart.
+     */
+    private val _changes = MutableStateFlow(held)
+    override val changes: StateFlow<StoredConversation> = _changes.asStateFlow()
+
     override val sessionId: String? get() = held.sessionId
 
     override fun read(): StoredConversation = held
@@ -76,6 +90,11 @@ class TranscriptStore(context: Context) : Transcript, SessionStore {
         // id mid-conversation, while the user is still typing into it, is
         // worse.
         held = conversation
+
+        // Notify observers even if the disk write below fails: an in-memory
+        // process that agrees with itself matters more than one that persisted.
+        // Both surfaces still converge; only the next cold start would differ.
+        _changes.value = conversation
 
         val prefs = prefs ?: return
 

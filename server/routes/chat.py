@@ -51,6 +51,10 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
         chat_context = dict(request.context or {})
         chat_context.setdefault("message_id", message_id)
         chat_context.setdefault("session_id", session.session_id)
+        if request.metadata:
+            for k in ("client", "device", "platform"):
+                if k in request.metadata and k not in chat_context:
+                    chat_context[k] = request.metadata[k]
         response = await run_in_threadpool(
             runtime.chat,
             request.message,
@@ -60,21 +64,6 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
         )
 
         elapsed = time.time() - start_time
-
-        # Wire self-learning experience store with PII screening
-        try:
-            from learning.experience import AuraExperienceStore
-            store = AuraExperienceStore()
-            store.record_experience(
-                session_id=session.session_id,
-                input_text=request.message,
-                model_decision="ANSWER",
-                final_response=response.text,
-                outcome="SUCCESS",
-                category="chat",
-            )
-        except Exception as exp_err:
-            logger.debug("Chat experience recording error: %s", exp_err)
 
         return ChatResponse(
             session_id=session.session_id,

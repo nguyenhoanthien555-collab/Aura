@@ -124,6 +124,24 @@ class CapabilityEvidence:
         }
 
 
+@dataclass(frozen=True)
+class VisionEvidence:
+    """
+    One real-time vision observation from laptop screen or mobile device.
+    """
+
+    evidence_id: str
+    source: str
+    description: str
+
+    def as_dict(self) -> dict:
+        return {
+            "kind": "vision",
+            "source": self.source,
+            "description": self.description,
+        }
+
+
 class EvidenceLedger:
     """
     One request's evidence, claim by claim.
@@ -143,6 +161,7 @@ class EvidenceLedger:
         self.tools: list[ToolEvidence] = []
         self.memories: list[MemoryEvidence] = []
         self.capabilities: list[CapabilityEvidence] = []
+        self.vision: list[VisionEvidence] = []
         self.claims: list = []
 
     def rehydrate_tools(self, tool_dicts: list[dict]) -> None:
@@ -239,6 +258,17 @@ class EvidenceLedger:
         )
         return evidence_id
 
+    def add_vision(self, source: str, description: str) -> str:
+        evidence_id = f"vis_{len(self.vision) + 1}"
+        self.vision.append(
+            VisionEvidence(
+                evidence_id=evidence_id,
+                source=source,
+                description=description,
+            )
+        )
+        return evidence_id
+
     def add_claim(self, claim) -> None:
         claim.evidence_refs = []
         self.claims.append(claim)
@@ -302,18 +332,77 @@ class EvidenceLedger:
 
         for tool in self.tools:
 
-            name = tool.tool.lower().replace(".", " ")
+            name = tool.tool.lower().replace(".", " ").replace("_", " ")
             content = (tool.outcome or "").lower()
-            capability = tool.capability.lower()
+            capability = tool.capability.lower().replace(".", " ").replace("_", " ")
+
+            aliases = set(name.split()) | set(capability.split())
+            if "screenshot" in name:
+                aliases.update({"chụp", "chup", "màn", "man", "screen"})
+            if "describe" in name or "screen" in name:
+                aliases.update({"màn", "man", "screen", "thấy", "thay", "nhìn", "nhin", "xem", "quan", "sát"})
+            if "window" in name:
+                aliases.update({"cửa", "sổ", "cua", "so", "window", "windows", "ứng", "dụng", "ung", "dung", "mở", "mo"})
+            if "process" in name:
+                aliases.update({"tiến", "trình", "tien", "trinh", "process", "processes", "chạy", "chay"})
+            if "time" in name or "clock" in name:
+                aliases.update({"giờ", "gio", "thời", "gian", "thoi", "gian", "ngày", "ngay", "time", "date"})
+            if "system" in name and "info" in name:
+                aliases.update({"hệ", "thống", "he", "thong", "cấu", "hình", "cau", "hinh"})
+            if "file" in name:
+                aliases.update({"tệp", "tep", "file"})
+            if "remember" in name or "memory" in name:
+                aliases.update({"nhớ", "nho", "ghi", "lưu", "luu", "memory"})
+            if "react" in name:
+                aliases.update({"thả", "tha", "tim", "biểu", "cảm", "bieu", "cam", "react", "emoji"})
+            if "tap" in name or "click" in name:
+                aliases.update({"chạm", "cham", "bấm", "bam", "nhấn", "nhan", "tap", "click"})
+            if "type" in name or "text" in name:
+                aliases.update({"gõ", "go", "nhập", "nhap", "type", "text", "nội", "dung", "tin", "nhắn"})
+            if "swipe" in name:
+                aliases.update({"vuốt", "vuot", "cuộn", "cuon", "swipe", "scroll"})
+            if "launch" in name or "app" in name:
+                aliases.update({"mở", "mo", "khởi", "chạy", "app", "ứng", "dụng", "launch"})
+            if "home" in name:
+                aliases.update({"home", "trang", "chủ", "chu"})
+            if "back" in name:
+                aliases.update({"back", "quay", "lại", "lai"})
 
             if (
-                self._overlaps(words, name)
+                bool(words & aliases)
                 or self._overlaps(words, content)
-                or self._overlaps(words, capability)
             ):
                 matched.append(tool)
 
         return matched
+
+    def matching_vision(self, words: set[str]) -> list[VisionEvidence]:
+        """
+        Vision evidence whose source or description overlaps the claim's words.
+        """
+        if not self.vision:
+            return []
+
+        words_set = set(words)
+        matched: list[VisionEvidence] = []
+        for vis in self.vision:
+            source = vis.source.lower()
+            content = vis.description.lower()
+            aliases = set(source.split()) | set(content.split())
+            aliases.update({
+                "màn", "hình", "screen", "display", "giao", "diện", "cửa", "sổ",
+                "window", "windows", "ứng", "dụng", "app", "đang", "mở", "chạy",
+                "xem", "nhìn", "thấy", "quan", "sát",
+            })
+            if source == "phone":
+                aliases.update({"điện", "thoại", "phone", "android", "mobile"})
+            elif source in ("screen", "laptop", "pc", "desktop"):
+                aliases.update({"laptop", "máy", "tính", "desktop", "pc"})
+
+            if bool(words_set & aliases) or self._overlaps(words_set, content):
+                matched.append(vis)
+
+        return matched if matched else list(self.vision)
 
     def summary(self) -> dict:
         """Counts only - the diagnostics form of the ledger."""
@@ -323,6 +412,7 @@ class EvidenceLedger:
             "tools": len(self.tools),
             "memories": len(self.memories),
             "capabilities": len(self.capabilities),
+            "vision": len(self.vision),
             "claims": len(self.claims),
         }
 

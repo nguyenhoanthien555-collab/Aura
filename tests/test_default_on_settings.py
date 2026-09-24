@@ -10,7 +10,7 @@ Verifies that:
 import pytest
 from core.config import DEFAULT_CONFIG
 from core.settings_store import ALLOWED
-from learning.autonomy_guard import AutonomyGateManager
+from agent.autonomy_guard import AutonomyGateManager
 
 
 def test_safe_features_default_on_in_default_config():

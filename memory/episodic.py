@@ -144,6 +144,24 @@ class EpisodicStore:
 
         return True
 
+    def forget_matching(self, query: str) -> int:
+        query = (query or "").strip()
+        if not query:
+            return 0
+        pattern = f"%{query}%"
+        with db_lock:
+            episodes = (
+                self.session.query(EpisodicMemory)
+                .filter(EpisodicMemory.content.like(pattern))
+                .all()
+            )
+            count = len(episodes)
+            for ep in episodes:
+                self.session.delete(ep)
+            if count > 0:
+                self.session.commit()
+            return count
+
     def clear(self) -> None:
 
         with db_lock:

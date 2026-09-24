@@ -349,6 +349,11 @@ def test_persona_lands_in_the_system_slot():
 def test_provider_fallback_keeps_the_persona_contract(monkeypatch):
     """The same contract reaches Gemini, Groq and Mistral, verbatim."""
 
+    # This exercises the cloud fallback chain, which offline mode (the
+    # shipped default) collapses to local_aura. Opt into cloud routing
+    # explicitly through the authoritative override.
+    monkeypatch.setenv("AURA_OFFLINE", "0")
+
     monkeypatch.setenv("GEMINI_API_KEY", "dummy-gemini-key")
     monkeypatch.setenv("GROQ_API_KEY", "dummy-groq-key")
     monkeypatch.setenv("MISTRAL_API_KEY", "dummy-mistral-key")

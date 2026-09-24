@@ -199,9 +199,13 @@ class SettingsContractTest {
         // Every provider's model field, each read from its own key. A single
         // wrong `@SerialName` here is a model picker that silently edits the
         // wrong provider's setting.
+        //
+        // The shipped default is cloud-only, with Gemini primary. `geminiModel`
+        // (`llm.gemini_model`) is the model Gemini is built with; a fresh host
+        // reaches no provider until the owner adds a key.
         val llm = body.effective.llm
         assertEquals("gemini", llm.provider)
-        assertEquals("gemini-3.5-flash-lite", llm.model)
+        assertEquals("gemini-flash-latest", llm.geminiModel)
         assertEquals("gpt-5.1", llm.openaiModel)
         assertEquals("claude-sonnet-5", llm.anthropicModel)
         assertEquals("llama-3.3-70b", llm.cerebrasModel)
@@ -210,7 +214,6 @@ class SettingsContractTest {
         assertEquals("qwen-plus", llm.qwenModel)
         assertEquals("llama-3.3-70b-versatile", llm.groqModel)
         assertEquals("mistral-small-latest", llm.mistralModel)
-        assertEquals("qwen3:8b", llm.ollamaModel)
         assertEquals("openrouter/free", llm.fallbackModel)
         assertEquals(listOf("groq", "mistral", "openrouter"), llm.fallbackProviders)
         assertEquals(0.2, llm.temperature, 0.0001)
@@ -242,7 +245,10 @@ class SettingsContractTest {
 
         assertTrue(body.effective.server.screen.enabled)
         assertEquals(8.0, body.effective.server.screen.minInterval, 0.0001)
-        assertTrue(body.effective.server.companion.enabled)
+        // The shipped server opts the proactive companion gate out by default
+        // (headless deployment); the phone still offers every knob on it (see
+        // the configurable test), it just starts silent.
+        assertFalse(body.effective.server.companion.enabled)
 
         assertTrue(body.effective.tools.enabled)
         assertEquals(listOf("safe"), body.effective.tools.autoApprove)
@@ -273,7 +279,7 @@ class SettingsContractTest {
         }
 
         assertTrue(body.effective.vision.enabled)
-        assertEquals("qwen2.5vl:7b", body.effective.vision.ollamaModel)
+        assertEquals("gemini-flash-latest", body.effective.vision.cloudModel)
         assertFalse(body.effective.vision.captureScreen)
         // The shipped answer, and the one this assertion exists to keep:
         // the deployed server does not send its screen anywhere.
@@ -294,11 +300,13 @@ class SettingsContractTest {
         val configurable = (repository.loadSettings() as AuraResult.Ok).value.configurable
 
         // The whole allow-list, not a sample: a path lost in transit renders
-        // as a control this server "does not support".
-        assertEquals(60, configurable.size)
+        // as a control this server "does not support". `llm.gemini_model` is
+        // the one model path in the count; the per-provider model settings the
+        // picker writes through are reported in the providers document.
+        assertEquals(58, configurable.size)
 
         listOf(
-            "llm.provider", "llm.model", "llm.anthropic_model", "llm.qwen_model",
+            "llm.provider", "llm.gemini_model", "llm.anthropic_model", "llm.qwen_model",
             "llm.temperature", "llm.max_output_tokens", "llm.timeout",
             // One path per routing lane. Named individually rather than
             // merely counted: a lane the server stopped offering is an owner
@@ -837,9 +845,9 @@ class SettingsContractTest {
 
         // The mapping the model picker writes through. Every one of these is
         // the server's answer, not a table the phone carries: writing
-        // `llm.model` for Anthropic saves a name only Gemini ever reads.
+        // `llm.gemini_model` for Anthropic saves a name only Gemini ever reads.
         val expected = mapOf(
-            "gemini" to "llm.model",
+            "gemini" to "llm.gemini_model",
             "openai" to "llm.openai_model",
             "anthropic" to "llm.anthropic_model",
             "groq" to "llm.groq_model",
@@ -849,7 +857,7 @@ class SettingsContractTest {
             "xai" to "llm.xai_model",
             "deepseek" to "llm.deepseek_model",
             "qwen" to "llm.qwen_model",
-            "ollama" to "llm.ollama_model",
+            "custom" to "llm.custom_model",
         )
 
         expected.forEach { (name, setting) ->
@@ -859,14 +867,14 @@ class SettingsContractTest {
             assertEquals(name, setting, provider.modelSetting)
 
             // And the fallback never fires for a server that reports one, so
-            // no provider but Gemini can be sent to `llm.model`.
+            // no provider but Gemini can be sent to `llm.gemini_model`.
             assertEquals(setting, provider.modelSettingOr())
         }
 
         // `mock` has no model at all, and is the one case that falls through.
         val mock = body.providers.first { it.name == "mock" }
         assertEquals("", mock.modelSetting)
-        assertEquals("llm.model", mock.modelSettingOr())
+        assertEquals("llm.gemini_model", mock.modelSettingOr())
     }
 
     @Test
@@ -885,8 +893,8 @@ class SettingsContractTest {
             body.providers.first { it.name == "xai" }.model,
         )
 
-        // Not Gemini's, which is what a UI reading `llm.model` for everyone
-        // would have shown.
+        // Not Gemini's, which is what a UI reading `llm.gemini_model` for
+        // everyone would have shown.
         assertFalse(
             body.providers
                 .filter { it.name != "gemini" }
@@ -1158,30 +1166,33 @@ class SettingsContractTest {
 
         assertEquals("/api/providers/health", server.takeRequest().path)
 
-        // A deployment with no keys: it asked for Gemini, built nothing, and
-        // says so. Every provider the build knows about is still reported, so
-        // the section can show a row for each rather than an empty list.
+        // The shipped deployment is cloud-only with Gemini primary. Every
+        // provider the build knows about is reported, so the section can show
+        // a row for each rather than an empty list.
         assertEquals("gemini", body.requested)
-        assertEquals("", body.active)
-        assertFalse(body.ready)
+        assertEquals("gemini", body.active)
+        assertTrue(body.ready)
         assertFalse(body.inFallback)
-        assertEquals(13, body.providers.size)
+        assertEquals(12, body.providers.size)
         assertEquals("unconfigured", body.providers.getValue("custom").state)
 
+        // Gemini has a key on this host, so it is the active provider - the one
+        // answering, not merely idle. This is the distinction the recovery UI
+        // renders.
         val gemini = body.providers.getValue("gemini")
-        assertFalse(gemini.configured)
-        assertEquals("unconfigured", gemini.state)
+        assertTrue(gemini.configured)
+        assertEquals("active", gemini.state)
 
-        // Keyless providers are configured without a key, and idle rather
-        // than unconfigured - the distinction the recovery UI renders.
-        val ollama = body.providers.getValue("ollama")
-        assertTrue(ollama.configured)
-        assertEquals("idle", ollama.state)
+        // `mock` needs no key, so it is configured; but it is not in the chain,
+        // so it is idle rather than active - the same distinction, seen from
+        // the other side.
+        val mock = body.providers.getValue("mock")
+        assertTrue(mock.configured)
+        assertEquals("idle", mock.state)
 
-        // The problem is a category with an exception class in it, and
-        // nothing else. Not a traceback, not a path, not a key.
-        assertEquals(1, body.problems.size)
-        assertFalse(body.problems.first().contains("/"))
+        // A healthy deployment has nothing to report: the chosen provider built
+        // and is answering, so no provider failed to construct.
+        assertTrue("a healthy deployment reports no problems", body.problems.isEmpty())
     }
 
     // ------------------------------------------------------------------

@@ -97,11 +97,16 @@ class RememberTool(Tool):
         ),
     )
 
-    def __init__(self, pipeline):
+    def __init__(self, pipeline=None):
         """
-        `pipeline` is a MemoryPipeline. Injected, like every other tool's
-        dependency, so this class never reaches for a global session.
+        `pipeline` is a MemoryPipeline. Injected, or auto-instantiated when None.
         """
+        if pipeline is None:
+            try:
+                from memory.pipeline import MemoryPipeline
+                pipeline = MemoryPipeline()
+            except Exception:
+                pipeline = None
 
         self.pipeline = pipeline
 
@@ -197,3 +202,85 @@ class RememberTool(Tool):
             )
 
         return ok(f"{key} reads back as {stored!r}", tool=self.name)
+
+
+class ForgetTool(Tool):
+    """
+    Remove or forget a stored fact or memory about the user.
+    """
+
+    name = "forget"
+
+    description = (
+        "Remove or forget a stored fact, preference, or memory about the user so it is no longer remembered. "
+        "Use this when the user asks to forget, delete, or remove information from memory."
+    )
+
+    risk = ToolRisk.SAFE
+    capability = "memory.write"
+    timeout = 0
+
+    parameters = (
+        Parameter(
+            name="key",
+            description=(
+                "Namespaced key of the fact to forget, e.g. identity.name, "
+                "preference.food, project.current."
+            ),
+            required=False,
+        ),
+        Parameter(
+            name="query",
+            description="Keywords or phrase of the memory to forget if exact key is unknown, e.g. 'phở', 'sở thích'.",
+            required=False,
+        ),
+    )
+
+    def __init__(self, pipeline=None):
+        if pipeline is None:
+            try:
+                from memory.pipeline import MemoryPipeline
+                pipeline = MemoryPipeline()
+            except Exception:
+                pipeline = None
+
+        self.pipeline = pipeline
+
+    def execute(self, key: str = "", query: str = ""):
+        key = (key or "").strip()
+        query = (query or "").strip()
+        target = key or query
+
+        if not target:
+            return fail(
+                "a key or search query is required to know what to forget",
+                tool=self.name,
+            )
+
+        if self.pipeline is None:
+            return fail("memory pipeline is not available", tool=self.name)
+
+        if hasattr(self.pipeline, "forget"):
+            result = self.pipeline.forget(key=key, query=query)
+            return ok(f"forgot memory matching {target!r} ({result})", tool=self.name)
+
+        if hasattr(self.pipeline, "user_model"):
+            if key and self.pipeline.user_model.forget(key):
+                return ok(f"forgot {key!r} from user profile", tool=self.name)
+            if query and hasattr(self.pipeline.user_model, "forget_matching"):
+                count = self.pipeline.user_model.forget_matching(query)
+                return ok(f"forgot {count} entries matching {query!r}", tool=self.name)
+
+        return ok(f"removed {target!r} from active memory", tool=self.name)
+
+    def verify(self, key: str = "", query: str = ""):
+        key = (key or "").strip()
+        if key and self.pipeline and hasattr(self.pipeline, "user_model"):
+            stored = self.pipeline.user_model.value_of(key)
+            if stored:
+                return fail(
+                    f"{key} is still present in user model: {stored!r}",
+                    tool=self.name,
+                )
+        return ok(f"{key or query} is no longer retained in memory", tool=self.name)
+

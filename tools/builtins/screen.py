@@ -1,4 +1,4 @@
-﻿"""
+"""
 A picture of the owner's screen, written where the owner allowed writing.
 
 Section 24's "screenshots", and the shape follows from three facts that
@@ -89,7 +89,8 @@ class ScreenshotTool(Tool):
     parameters = (
         Parameter(
             name="path",
-            description="Where to save the .png file",
+            description="Where to save the .png file (optional, defaults to data/screenshots/screenshot_<timestamp>.png)",
+            required=False,
         ),
         Parameter(
             name="monitor",
@@ -98,11 +99,13 @@ class ScreenshotTool(Tool):
                 "joined together, 2 and up are the others"
             ),
             required=False,
+            type="integer",
         ),
         Parameter(
             name="overwrite",
             description="true to replace a file that already exists",
             required=False,
+            type="boolean",
         ),
     )
 
@@ -127,7 +130,15 @@ class ScreenshotTool(Tool):
         display.
         """
 
-        self.roots = _resolve_roots(roots)
+        # No default roots. An empty grant means nothing is writable, and
+        # `_contained` refuses every path against it - the same posture the
+        # 18.3 writers take. Injecting fallback directories here (a data
+        # dir, or worse ".") would silently widen the sandbox for any
+        # caller that constructed the tool without a grant, which is a path
+        # escape, not a convenience. Production always passes the owner's
+        # real writable roots; tests pass [] on purpose to prove the
+        # refusal holds.
+        self.roots = _resolve_roots(roots or [])
         self.monitor = monitor
 
         if capture_factory is None:
@@ -139,7 +150,7 @@ class ScreenshotTool(Tool):
 
     # ------------------------------------------------------------------
 
-    def _target(self, path: str, overwrite) -> Path:
+    def _target(self, path: str | None, overwrite) -> Path:
         """
         The file to write, proven to be inside a writable root.
 
@@ -149,6 +160,21 @@ class ScreenshotTool(Tool):
         existed in memory for no reason, and on a failure path there is
         nothing to gain by having taken it.
         """
+
+        if not path or not str(path).strip():
+            from core.temporal import local_now
+            ts = local_now().strftime("%Y%m%d_%H%M%S")
+            default_dir = None
+            for r in self.roots:
+                if str(r).replace("\\", "/").rstrip("/").endswith("screenshots"):
+                    default_dir = r
+                    break
+            if default_dir is None and self.roots:
+                default_dir = self.roots[0]
+            if default_dir is not None:
+                path = str(default_dir / f"screenshot_{ts}.png")
+            else:
+                path = f"data/screenshots/screenshot_{ts}.png"
 
         target = _contained(path, self.roots)
 
@@ -172,6 +198,12 @@ class ScreenshotTool(Tool):
                 f"replace it, or save to a different name."
             )
 
+        # A missing parent is refused, not created. Creating it silently
+        # would be the tool inventing a destination the owner never named -
+        # the same reason `write_file` does not mkdir a missing parent. The
+        # caller says where, and the message names the fix. This also keeps
+        # the "capture nothing on a path that will be refused" guarantee:
+        # the refusal happens here, before a single pixel is read.
         if not target.parent.is_dir():
             raise FileNotFoundError(
                 f"the directory {target.parent.name} does not exist - "
@@ -207,9 +239,10 @@ class ScreenshotTool(Tool):
 
     capability = 'vision.capture'
 
-    def execute(self, path: str, monitor=None, overwrite=False) -> str:
+    def execute(self, path: str | None = None, monitor=None, overwrite=False) -> str:
 
         target = self._target(path, overwrite)
+        self._last_target = target
 
         display = self._display(monitor)
 
@@ -243,7 +276,7 @@ class ScreenshotTool(Tool):
             f"({frame.width}x{frame.height}, {len(data)} bytes)"
         )
 
-    def verify(self, path: str, monitor=None, overwrite=False) -> ToolResult:
+    def verify(self, path: str | None = None, monitor=None, overwrite=False) -> ToolResult:
         """
         The postcondition: a decodable PNG of non-zero size is now there.
 
@@ -265,7 +298,12 @@ class ScreenshotTool(Tool):
         pretended at here every call.
         """
 
-        target = _contained(path, self.roots)
+        if not path or not str(path).strip():
+            target = getattr(self, "_last_target", None)
+            if target is None:
+                return fail("no screenshot path was provided or recorded")
+        else:
+            target = _contained(path, self.roots)
 
         if not target.is_file():
             return fail(f"{target.name} is not there after saving it")
@@ -290,4 +328,7 @@ class ScreenshotTool(Tool):
             )
 
         return ok(f"{target.name} reads back as a {width}x{height} PNG")
+
+
+TakeScreenshotTool = ScreenshotTool
 

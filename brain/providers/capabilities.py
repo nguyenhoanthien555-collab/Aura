@@ -61,7 +61,7 @@ class ProviderCapabilities:
 # Structural evidence, read from brain/providers: `generate_with_tools`
 # is implemented by GeminiProvider and by OpenAICompatibleProvider (which
 # OpenAI, Cerebras, Custom, DeepSeek, Qwen and XAI subclass). Groq,
-# Mistral, OpenRouter, Ollama, Anthropic and Mock define no such method,
+# Mistral, OpenRouter, Anthropic and Mock define no such method,
 # so a tool catalogue sent to them would have nowhere to go.
 #
 # Everything capable is UNKNOWN, not VERIFIED: capability means a real
@@ -69,15 +69,14 @@ class ProviderCapabilities:
 # the only thing that flips a row to VERIFIED, and it is called only
 # after generate_with_tools returned a real turn.
 _FUNCTION_CAPABLE = frozenset({
-    "gemini", "openai", "cerebras", "custom", "deepseek", "qwen", "xai", "local", "local_aura",
+    "gemini", "openai", "cerebras", "custom", "deepseek", "qwen", "xai",
 })
 
 _REGISTRY: dict[str, ProviderCapabilities] = {}
 
 for _name in (
     "gemini", "groq", "mistral", "openrouter", "openai", "anthropic",
-    "cerebras", "xai", "deepseek", "qwen", "custom", "ollama", "mock",
-    "local", "local_aura",
+    "cerebras", "xai", "deepseek", "qwen", "custom", "mock",
 ):
     _REGISTRY[_name] = ProviderCapabilities(
         name=_name,

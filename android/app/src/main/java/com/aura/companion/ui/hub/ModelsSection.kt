@@ -106,10 +106,55 @@ fun ModelsSection(
         }
 
         // ------------------------------------------------------------------
+        // On-Device Intelligence (Standalone Local Brain)
+        // ------------------------------------------------------------------
+        val isOnDevice = state.device.isOnDevice
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val extModelsDir = context.getExternalFilesDir("models")
+        val localModelFile = extModelsDir?.resolve("aura-1.5b.gguf") ?: java.io.File("/sdcard/Android/data/com.aura.companion/files/models/aura-1.5b.gguf")
+        val modelExists = localModelFile.exists() && localModelFile.length() > 0
+        val modelSizeMb = if (modelExists) localModelFile.length() / (1024 * 1024) else 0L
+
+        SettingsSection(title = "On-Device Brain (Local AI)") {
+
+            SelectRow(
+                title = "Chế độ AI",
+                value = if (isOnDevice) "⚡ On-Device" else "☁️ Cloud",
+                subtitle = if (isOnDevice) "Tự host độc lập, không cần server hay laptop" else "Kết nối tới server ngoài",
+                icon = Icons.Filled.Bolt,
+                onClick = {
+                    viewModel.setIntelligenceMode(if (isOnDevice) "cloud" else "on_device")
+                },
+            )
+
+            RowDivider()
+
+            ToggleRow(
+                title = "Cho phép Cloud Fallback",
+                subtitle = "Dự phòng cloud model khi cần xử lý tác vụ phức tạp",
+                checked = state.device.allowCloudFallback,
+                onCheckedChange = { viewModel.setAllowCloudFallback(it) },
+                icon = Icons.Filled.Cloud,
+            )
+
+            RowDivider()
+
+            SelectRow(
+                title = "Mô hình On-Device",
+                value = if (modelExists) "Qwen 1.5B" else "Chưa có",
+                subtitle = if (modelExists) "aura-1.5b.gguf ($modelSizeMb MB) · ARM64" else "Tệp weights aura-1.5b.gguf chưa tải",
+                icon = Icons.Filled.Tune,
+                onClick = {},
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // ------------------------------------------------------------------
         // Active configuration
         // ------------------------------------------------------------------
 
-        SettingsSection(title = "Active") {
+        SettingsSection(title = "Cloud Configuration") {
 
             SelectRow(
                 title = "Provider",

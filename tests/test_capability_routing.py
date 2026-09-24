@@ -56,7 +56,7 @@ def add_row(monkeypatch, name, status):
 def test_every_buildable_provider_has_a_row():
     from brain.router import PROVIDER_KEYS
 
-    for name in [*PROVIDER_KEYS, "ollama", "mock"]:
+    for name in [*PROVIDER_KEYS, "mock"]:
         assert capabilities_for(name).name == name, (
             f"{name} is buildable but absent from the capability registry"
         )
@@ -75,11 +75,10 @@ def test_structurally_capable_providers_are_unknown_not_verified():
 
 
 def test_structurally_incapable_providers_are_unsupported():
-    # Read from the code: Groq, Mistral, OpenRouter, Ollama, Anthropic
-    # and Mock define no generate_with_tools, so a tool catalogue sent
-    # to them has nowhere to land.
-    for name in ("groq", "mistral", "openrouter", "ollama", "anthropic",
-                 "mock"):
+    # Read from the code: Groq, Mistral, OpenRouter, Anthropic and Mock
+    # define no generate_with_tools, so a tool catalogue sent to them
+    # has nowhere to land.
+    for name in ("groq", "mistral", "openrouter", "anthropic", "mock"):
         row = capabilities_for(name)
 
         assert row.function_calling is CapabilityStatus.UNSUPPORTED

@@ -36,6 +36,7 @@ class FakeSettings(
     uploadScreenshots: Boolean = true,
     syncEnabled: Boolean = true,
     deviceIntegrationEnabled: Boolean = true,
+    intelligenceMode: String = "cloud",
 ) : DeviceSettings {
 
     private val _settings = MutableStateFlow(
@@ -48,6 +49,7 @@ class FakeSettings(
             uploadScreenshots = uploadScreenshots,
             syncEnabled = syncEnabled,
             deviceIntegrationEnabled = deviceIntegrationEnabled,
+            intelligenceMode = intelligenceMode,
         )
     )
 
@@ -85,5 +87,13 @@ class FakeSettings(
 
     override fun setDynamicColour(enabled: Boolean) {
         current = current.copy(dynamicColour = enabled)
+    }
+
+    override fun setIntelligenceMode(mode: String) {
+        current = current.copy(intelligenceMode = mode)
+    }
+
+    override fun setAllowCloudFallback(enabled: Boolean) {
+        current = current.copy(allowCloudFallback = enabled)
     }
 }

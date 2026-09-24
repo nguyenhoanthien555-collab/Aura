@@ -1,53 +1,36 @@
-# P1 REAL LEARNING QUALITY — In Progress
+# CURRENT TASK — Cloud-Only Migration (remove the local LLM subsystem)
 
-Mission: prove (or disprove) that AURA actually becomes better after
-learning — genuine improvement on held-out data, not training loss.
+## Mission
+Remove the ENTIRE local / on-device LLM subsystem and make Aura cloud-only.
+Gemini is the default provider. ALL 11 cloud providers stay selectable so the
+owner can add any key themselves (gemini, openai, anthropic, groq, cerebras,
+openrouter, mistral, xai, deepseek, qwen, custom); `mock` retained for tests.
 
-## Completed so far
+Superseded: the previous "P1 REAL LEARNING QUALITY" mission — that entire
+local-training / self-learning effort is being deleted, not continued.
 
-### Phase 0: Forensic audit (DONE)
-P0 defects found and verified:
-1. Train/eval contamination: 5/8 old eval inputs verbatim in curriculum.
-2. Eval never loaded trained weights (TorchInferenceBackend adapter path
-   defect + deterministic-fallback masking).
-3. Baseline apples-to-oranges (3B GGUF prod vs 0.5B candidates, both
-   scored through rule fallback).
-4. Eval set too small; no hash pinned; no tool-honesty category.
-5. auto_promote not threaded through daemon.
+## Owner constraints (absolute)
+- REAL EXECUTION ONLY. Never fabricate metrics or test results.
+- Do NOT weaken tests, destroy the repo, or rewrite git history.
+- Do NOT git commit / push unless explicitly asked.
+- Deleting tracked source files is reversible (git) and authorized.
+- HOLD for explicit confirmation: the single IRREVERSIBLE action — deleting the
+  untracked ~55 GB `brains/` directory from disk (+ any doc/artifact `git rm`).
+- No manual normalization of brains/model_registry.json or brain_state.json.
 
-### P1 implementation (DONE, tests green)
-- `learning/heldout.py` — immutable 26-case held-out suite, hash
-  `bb253de2a836117c1ac34d6e26c881c33b3d35f015d315b42e63ec3f721453cd`,
-  10 categories, all cases have positive assertions (no vacuous passes).
-- `learning/contamination.py` — 5-overlap-kind checker (exact,
-  normalized, near-duplicate trigram-Jaccard ≥ 0.5, prompt leakage,
-  answer leakage). Curriculum verified CLEAN.
-- `learning/quality_eval.py` — NeuralHarness (base + hash-verified
-  adapter on same weights) + GGUFHarness (llama.cpp, hash-verified,
-  seed/temp pinned) + promotion gate (strict improvement vs parent
-  base, hard gates safety/tool_honesty/identity, must beat production).
-  NO deterministic fallback anywhere in eval.
-- `learning/scheduler.py` — execute_cycle rewritten: contamination gate
-  after dataset generation (fails before training), 4-way held-out
-  evaluation (parent base, adapter, candidate GGUF, production GGUF),
-  promotion copies GGUF into a real brain package (checksum-verified)
-  before promoting; auto_promote threaded from daemon.
-- `tests/test_p1_learning_quality.py` — 30 tests pinning all the above.
-  P0 forensic tests (4) still pass. Full suite regression check running.
+## Phase status
+1. Spine (reversible, keep boot working) — DONE
+2. Minimum rewiring (decouple from learning before deleting it) — DONE
+3. Deletion phase (local brain & learning package purged) — DONE
+4. Android Companion Cloud-Only refactor (remove on-device LLM & native llama) — DONE
+5. Settings migration & degradation UX — DONE
+6. Disk Cleanup (~54.2 GB brains/ & dead training sets purged) — DONE
+7. Final verification across backend (496 tests) & Android (Gradle) — 100% PASS — DONE
 
-## Next: live cycle (Task #4)
-1. Write scripts/verify_p1_learning_quality_live.py: real
-   daemon/scheduler-triggered cycle with GPU LoRA training, 4-way
-   held-out evaluation, promotion-or-rejection, runtime SHA
-   verification, artifact dump to artifacts/p1_learning_quality_summary.json.
-2. Run it (RTX 4060, ~10-20 min).
-3. Failure-recovery checks + second cycle if safe (Task #5).
-4. Report AURA_P1_LEARNING_QUALITY_REALITY.md + reality matrix +
-   conservative verdict (PROVEN / PARTIAL / NOT PROVEN / FAILED).
+## Current State
+All phases of the Cloud-Only Architecture Migration (Phases 0–6) are complete and fully verified:
+- Backend: 496/496 tests passed.
+- Android Companion: `./gradlew :app:testDebugUnitTest` 22/22 tasks up-to-date, BUILD SUCCESSFUL.
+- Reclaimed ~54.2 GB of disk space.
+- Git commit requested by owner.
 
-## Constraints (user, absolute)
-- REAL EXECUTION ONLY. Never fabricate metrics.
-- Do not destroy the repository / weaken tests / rewrite history.
-- No manual normalization of brains/model_registry.json or
-  brain_state.json; record before/after hashes if unavoidable.
-- Training local only (no cloud).

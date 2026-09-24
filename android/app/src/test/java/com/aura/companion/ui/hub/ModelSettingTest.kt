@@ -13,8 +13,8 @@ import org.junit.Test
  *
  * THE BUG THIS EXISTS FOR
  * -----------------------
- * The model picker wrote `llm.model` for every provider. `brain/router.py`
- * reads `llm.model` only for Gemini: Anthropic's model lives at
+ * The model picker wrote `llm.gemini_model` for every provider. `brain/router.py`
+ * reads `llm.gemini_model` only for Gemini: Anthropic's model lives at
  * `llm.anthropic_model`, Qwen's at `llm.qwen_model`, OpenRouter's at
  * `llm.fallback_model`, and so on for all eleven. So choosing
  * `claude-sonnet-5` while Claude was primary saved a string that only Gemini
@@ -37,7 +37,7 @@ class ModelSettingTest {
             state(
                 primary = "anthropic",
                 providers = listOf(
-                    provider("gemini", modelSetting = "llm.model"),
+                    provider("gemini", modelSetting = "llm.gemini_model"),
                     provider("anthropic", modelSetting = "llm.anthropic_model"),
                 ),
             ).modelSetting,
@@ -50,7 +50,7 @@ class ModelSettingTest {
         // Whatever the server says, verbatim. The app carries no copy of this
         // table, which is the only reason it cannot drift from the router.
         val table = mapOf(
-            "gemini" to "llm.model",
+            "gemini" to "llm.gemini_model",
             "openai" to "llm.openai_model",
             "anthropic" to "llm.anthropic_model",
             "groq" to "llm.groq_model",
@@ -60,7 +60,6 @@ class ModelSettingTest {
             "xai" to "llm.xai_model",
             "deepseek" to "llm.deepseek_model",
             "qwen" to "llm.qwen_model",
-            "ollama" to "llm.ollama_model",
         )
 
         val providers = table.map { (name, setting) ->
@@ -80,11 +79,11 @@ class ModelSettingTest {
     fun `an older server that reports no mapping keeps the old behaviour`() {
 
         // `model_setting` did not exist before this phase. On a deployment
-        // without it, `llm.model` is the correct answer and was the only one
+        // without it, `llm.gemini_model` is the correct answer and was the only one
         // the app ever used - so nothing regresses, rather than the picker
         // silently doing nothing.
         assertEquals(
-            "llm.model",
+            "llm.gemini_model",
             state(
                 primary = "gemini",
                 providers = listOf(provider("gemini", modelSetting = "")),
@@ -96,24 +95,24 @@ class ModelSettingTest {
     fun `a provider the server never listed still writes somewhere real`() {
 
         // The providers route 404d, or named a provider this build does not
-        // list. `llm.model` is a settable path on every server that has the
+        // list. `llm.gemini_model` is a settable path on every server that has the
         // settings API at all, so the picker degrades instead of 422ing.
-        assertEquals("llm.model", state(primary = "openai").modelSetting)
-        assertEquals("llm.model", HubUiState().modelSetting)
+        assertEquals("llm.gemini_model", state(primary = "openai").modelSetting)
+        assertEquals("llm.gemini_model", HubUiState().modelSetting)
     }
 
     @Test
     fun `mock has no model, and is not given one`() {
 
         // `mock` reports an empty `model_setting` because it has no model at
-        // all. The fallback puts it on `llm.model`, which is harmless -
+        // all. The fallback puts it on `llm.gemini_model`, which is harmless -
         // Gemini's name - and is the same path the picker used before.
         val state = state(
             primary = "mock",
             providers = listOf(provider("mock", modelSetting = "")),
         )
 
-        assertEquals("llm.model", state.modelSetting)
+        assertEquals("llm.gemini_model", state.modelSetting)
         assertEquals("", state.activeModel)
     }
 
@@ -124,13 +123,13 @@ class ModelSettingTest {
     @Test
     fun `the displayed model is the primary provider's, not Gemini's`() {
 
-        // The row used to read `llm.model` directly, so with Claude primary
+        // The row used to read `llm.gemini_model` directly, so with Claude primary
         // it displayed a Gemini model name that Claude would never be sent.
         val state = state(
             primary = "anthropic",
             llm = LlmConfigDto(
                 provider = "anthropic",
-                model = "gemini-3.6-flash",
+                geminiModel = "gemini-3.6-flash",
                 anthropicModel = "claude-sonnet-5",
             ),
             providers = listOf(
@@ -150,8 +149,8 @@ class ModelSettingTest {
 
         val state = state(
             primary = "gemini",
-            llm = LlmConfigDto(provider = "gemini", model = "gemini-2.5-pro"),
-            providers = listOf(provider("gemini", modelSetting = "llm.model")),
+            llm = LlmConfigDto(provider = "gemini", geminiModel = "gemini-2.5-pro"),
+            providers = listOf(provider("gemini", modelSetting = "llm.gemini_model")),
         )
 
         assertEquals("gemini-2.5-pro", state.activeModel)

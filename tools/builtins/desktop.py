@@ -266,6 +266,17 @@ class WindowsWindowSource:
         except Exception:
             return []
 
+        hdesk = None
+        try:
+            hwinsta = user32.OpenWindowStationW("winsta0", False, 0x000F037F)
+            if hwinsta:
+                user32.SetProcessWindowStation(hwinsta)
+            hdesk = user32.OpenDesktopW("default", 0, False, 0x000F01FF)
+            if hdesk:
+                user32.SetThreadDesktop(hdesk)
+        except Exception as desk_err:
+            logger.debug("Desktop attachment in window source: %s", desk_err)
+
         front = user32.GetForegroundWindow()
 
         found: list[WindowInfo] = []
@@ -318,10 +329,27 @@ class WindowsWindowSource:
             return True
 
         try:
-            user32.EnumWindows(callback_type(visit), 0)
+            cb = callback_type(visit)
+            if hdesk:
+                user32.EnumDesktopWindows(hdesk, cb, 0)
+            else:
+                user32.EnumWindows(cb, 0)
 
         except Exception as error:
             logger.debug("EnumWindows failed: %s", error)
+
+        # If no window was marked foreground (e.g. background runner), mark the first visible non-minimized window
+        if found and not any(w.foreground for w in found):
+            for i, w in enumerate(found):
+                if not w.minimised and w.title not in ("Program Manager", "Windows Input Experience"):
+                    found[i] = WindowInfo(
+                        handle=w.handle,
+                        title=w.title,
+                        pid=w.pid,
+                        minimised=w.minimised,
+                        foreground=True,
+                    )
+                    break
 
         return found
 

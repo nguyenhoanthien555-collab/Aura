@@ -96,7 +96,8 @@ data class AppConfigDto(
  *
  * WHY THERE ARE ELEVEN MODEL FIELDS
  * ---------------------------------
- * `model` is Gemini's. Every other provider reads its own key, because
+ * `geminiModel` is Gemini's (`llm.gemini_model`). Every other provider
+ * reads its own key, because
  * the names are not interchangeable - `gemini-3.6-flash` means nothing to
  * Anthropic - and switching provider must not silently take the previous
  * provider's model name with it. `brain/router.py` decides which key it
@@ -110,14 +111,13 @@ data class AppConfigDto(
 @Serializable
 data class LlmConfigDto(
     val provider: String = "",
-    /** Gemini's model. `llm.model` - not a generic "current model". */
-    val model: String = "",
+    /** Gemini's model (`llm.gemini_model`) - not a generic "current model". */
+    @SerialName("gemini_model") val geminiModel: String = "",
     @SerialName("fallback_providers") val fallbackProviders: List<String> = emptyList(),
     /** OpenRouter's model, and the chain's shared fallback name. */
     @SerialName("fallback_model") val fallbackModel: String = "",
     @SerialName("groq_model") val groqModel: String = "",
     @SerialName("mistral_model") val mistralModel: String = "",
-    @SerialName("ollama_model") val ollamaModel: String = "",
     @SerialName("openai_model") val openaiModel: String = "",
     @SerialName("anthropic_model") val anthropicModel: String = "",
     @SerialName("cerebras_model") val cerebrasModel: String = "",
@@ -218,7 +218,6 @@ data class VisionConfigDto(
     @SerialName("send_screen_to_cloud") val sendScreenToCloud: Boolean = false,
     @SerialName("min_interval") val minInterval: Double = 2.0,
     @SerialName("cloud_model") val cloudModel: String = "",
-    @SerialName("ollama_model") val ollamaModel: String = "",
 )
 
 @Serializable
@@ -429,7 +428,7 @@ data class ProviderDto(
      * This is why the model picker works for every provider without the
      * app carrying a copy of the provider→setting table. Empty on a server
      * older than the field, and on `mock`, which has no model; callers
-     * fall back to `llm.model` through `modelSettingOr`.
+     * fall back to `llm.gemini_model` through `modelSettingOr`.
      */
     @SerialName("model_setting") val modelSetting: String = "",
     /**
@@ -457,11 +456,11 @@ data class ProviderDto(
     /**
      * Where a model chosen for this provider must be written.
      *
-     * Falls back to `llm.model` so a server that predates `model_setting`
-     * behaves exactly as it did before this field existed, rather than
-     * having its model picker do nothing.
+     * Falls back to `llm.gemini_model` so a server that predates
+     * `model_setting` behaves exactly as it did before this field existed,
+     * rather than having its model picker do nothing.
      */
-    fun modelSettingOr(fallback: String = "llm.model"): String =
+    fun modelSettingOr(fallback: String = "llm.gemini_model"): String =
         modelSetting.ifBlank { fallback }
 }
 

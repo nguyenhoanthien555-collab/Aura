@@ -667,6 +667,17 @@ Context` is used instead, set immediately before the grab and restored
         previous = None
 
         try:
+            if os.name == "nt":
+                try:
+                    hwinsta = user32.OpenWindowStationW("winsta0", False, 0x000F037F)
+                    if hwinsta:
+                        user32.SetProcessWindowStation(hwinsta)
+                    hdesk = user32.OpenDesktopW("default", 0, False, 0x000F01FF)
+                    if hdesk:
+                        user32.SetThreadDesktop(hdesk)
+                except Exception as werr:
+                    logger.debug("Desktop attachment failed: %s", werr)
+
             screen_dc = user32.GetDC(None)
 
             if not screen_dc:
@@ -895,24 +906,70 @@ class WindowsWindowReader:
 
         try:
             import ctypes           # noqa: PLC0415
+            from ctypes import wintypes
 
             user32 = ctypes.windll.user32
 
+            # Ensure attachment to winsta0\default so background processes can inspect windows
+            hdesk = None
+            try:
+                hwinsta = user32.OpenWindowStationW("winsta0", False, 0x000F037F)
+                if hwinsta:
+                    user32.SetProcessWindowStation(hwinsta)
+                hdesk = user32.OpenDesktopW("default", 0, False, 0x000F01FF)
+                if hdesk:
+                    user32.SetThreadDesktop(hdesk)
+            except Exception as desk_err:
+                logger.debug("Desktop attachment in window reader: %s", desk_err)
+
             handle = user32.GetForegroundWindow()
 
-            if not handle:
-                return ""
+            if handle:
+                length = user32.GetWindowTextLengthW(handle)
+                if length > 0:
+                    buffer = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(handle, buffer, length + 1)
+                    title = (buffer.value or "").strip()
+                    if title:
+                        return title
 
-            length = user32.GetWindowTextLengthW(handle)
+            # Fallback: find topmost visible, non-minimized window with a non-system title
+            top_title = ""
+            system_ignore = {
+                "program manager",
+                "windows input experience",
+                "omapsvcbroker",
+                "nahimic",
+                "nvidia geforce overlay",
+                "cua.agentcursoroverlay.default",
+            }
 
-            if length <= 0:
-                return ""
+            def enum_proc(hwnd, _lparam):
+                nonlocal top_title
+                try:
+                    if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+                        return True
+                    w_len = user32.GetWindowTextLengthW(hwnd)
+                    if w_len <= 0:
+                        return True
+                    buf = ctypes.create_unicode_buffer(w_len + 1)
+                    user32.GetWindowTextW(hwnd, buf, w_len + 1)
+                    cand = (buf.value or "").strip()
+                    if cand and cand.lower() not in system_ignore:
+                        top_title = cand
+                        return False  # Stop enumeration
+                except Exception:
+                    pass
+                return True
 
-            buffer = ctypes.create_unicode_buffer(length + 1)
+            callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            cb = callback_type(enum_proc)
+            if hdesk:
+                user32.EnumDesktopWindows(hdesk, cb, 0)
+            else:
+                user32.EnumWindows(cb, 0)
 
-            user32.GetWindowTextW(handle, buffer, length + 1)
-
-            return buffer.value or ""
+            return top_title or ""
 
         except Exception as error:
             logger.debug("Active window lookup failed: %s", error)

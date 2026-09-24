@@ -226,6 +226,24 @@ class DeviceGateway:
 
         return len(doomed)
 
+    def cancel_all(self, reason: str = "emergency interruption") -> int:
+        """
+        Resolve all pending invocations across all runs and tasks as CANCELLED.
+        Used by the emergency interrupt / barge-in mechanism.
+        """
+        with self._condition:
+            doomed = list(self._pending)
+            for invocation in doomed:
+                self._results[invocation.invocation_id] = _failure(
+                    invocation, "CANCELLED",
+                    f"interrupted: {reason}",
+                )
+            self._pending.clear()
+            if doomed:
+                self._condition.notify_all()
+
+        return len(doomed)
+
     # ------------------------------------------------------------------
     # Device side
     # ------------------------------------------------------------------

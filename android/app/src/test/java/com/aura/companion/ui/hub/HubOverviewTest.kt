@@ -449,6 +449,11 @@ class HubOverviewTest {
             serverUrl = if (configured) "https://aura.example/" else "",
             authToken = if (configured) "test-token" else "",
             screenObservationEnabled = screenOnPhone,
+            // `configured = false` means nothing is set up at all. On-device
+            // is a configured state (no server needed), so an unconfigured
+            // device must not be in on-device mode - otherwise `isConfigured`
+            // stays true and the "Not set up" headline never fires.
+            intelligenceMode = if (configured) "on_device" else "cloud",
         ),
         loading = loading,
         server = ServerState(

@@ -570,6 +570,7 @@ class ListProcessesTool(Tool):
             name="limit",
             description=f"How many to name, at most {MAX_PROCESSES}",
             required=False,
+            type="integer",
         ),
     )
 

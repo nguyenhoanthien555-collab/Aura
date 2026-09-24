@@ -17,7 +17,7 @@ from core.sync.models import (
 )
 from memory.sqlite import init_sync_tables, SessionLocal, db_lock
 from memory.models import SyncEventRecord, SyncNodeRecord
-from learning.autonomy_guard import AutonomyGateManager
+from agent.autonomy_guard import AutonomyGateManager
 
 
 @pytest.fixture(scope="module", autouse=True)

@@ -141,9 +141,9 @@ fun AuraSection(
 
             StatusRow(
                 title = "Model",
-                // The primary provider's model, not `llm.model`. That field
-                // is Gemini's, so reading it directly showed a Gemini model
-                // name on a phone whose primary was Claude - a fact about
+                // The primary provider's model, not `llm.gemini_model`. That
+                // field is Gemini's, so reading it directly showed a Gemini
+                // model name on a phone whose primary was Claude - a fact about
                 // Aura that was simply untrue. See `ModelSettingTest`.
                 value = state.activeModel.ifBlank { "—" },
                 icon = Icons.Filled.Cloud,

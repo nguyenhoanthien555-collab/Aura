@@ -112,8 +112,15 @@ fun MessageBubble(
                     },
             ) {
                 val codeBg = if (fromUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                val linkColor = if (fromUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                // Parse markdown only when the text/colours actually change, not on
+                // every recomposition of every visible bubble (was re-running a regex
+                // over the whole transcript on each streamed token).
+                val rendered = androidx.compose.runtime.remember(message.text, codeBg, linkColor) {
+                    parseMarkdownToAnnotatedString(message.text, codeColor = codeBg, linkColor = linkColor)
+                }
                 Text(
-                    text = parseMarkdownToAnnotatedString(message.text, codeColor = codeBg),
+                    text = rendered,
                     style = MaterialTheme.typography.bodyLarge,
                     color = when {
                         message.failed -> MaterialTheme.colorScheme.onErrorContainer
@@ -223,6 +230,10 @@ fun ConnectionLabel(connection: ConnectionState) {
         ConnectionState.WakingUp ->
             stringResource(R.string.connection_waking) to
                 MaterialTheme.colorScheme.tertiary
+
+        is ConnectionState.OnDevice ->
+            "⚡ On-Device Brain (${connection.modelName})" to
+                MaterialTheme.colorScheme.primary
 
         is ConnectionState.Connected ->
             stringResource(R.string.connection_connected, connection.provider) to

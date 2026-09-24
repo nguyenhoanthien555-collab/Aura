@@ -12,6 +12,21 @@ from vision.capture import Frame
 from vision.cloud_processor import CloudVisionProcessor
 
 
+@pytest.fixture(autouse=True)
+def cloud_routing_enabled(monkeypatch):
+    """
+    Force cloud routing on for every test in this module.
+
+    config.yaml ships `offline: true` (the production default keeps all
+    inference local). These tests exist to prove the cloud failover chain
+    still behaves, so they opt back into cloud routing explicitly through
+    the authoritative AURA_OFFLINE override rather than by weakening the
+    shipped default. monkeypatch reverts it when each test ends.
+    """
+
+    monkeypatch.setenv("AURA_OFFLINE", "0")
+
+
 class ReplyProvider:
     provider_name = "fallback-cloud"
 

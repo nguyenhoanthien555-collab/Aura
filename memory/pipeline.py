@@ -203,6 +203,29 @@ class MemoryPipeline:
 
         return self.user_model.correct(key, value, category=category)
 
+    def forget(self, key: str = "", query: str = "") -> dict[str, int]:
+        """
+        Forget/delete memories matching key or query across user model, episodic, and temporary tiers.
+        """
+        deleted_user_model = 0
+        deleted_episodic = 0
+
+        target = (key or query or "").strip()
+        if not target:
+            return {"user_model": 0, "episodic": 0}
+
+        # 1. User model tier
+        if key and self.user_model.forget(key):
+            deleted_user_model += 1
+        elif hasattr(self.user_model, "forget_matching"):
+            deleted_user_model += self.user_model.forget_matching(target)
+
+        # 2. Episodic tier
+        if hasattr(self.episodic, "forget_matching"):
+            deleted_episodic += self.episodic.forget_matching(target)
+
+        return {"user_model": deleted_user_model, "episodic": deleted_episodic}
+
     def ensure_profile(self) -> int:
         """Seed the initial profile if it is not there. Idempotent."""
 

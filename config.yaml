@@ -4,13 +4,17 @@ app:
 
 llm:
   provider: gemini
-  model: gemini-3.5-flash-lite
 
-  # The fallback chain, in order. This key is authoritative. The singular
-  # `fallback_provider` is its superseded form and is read only when this
-  # list is empty; setting both is a warning at boot, not a silent
-  # surprise. Removed from this file so there is one answer to "which
-  # providers does Aura fall back to".
+  # Gemini's model. Gemini is the default provider, so this is the primary
+  # model. Older pinned names (gemini-1.5/2.0/2.5) are being retired; the
+  # `-latest` alias tracks the current stable flash.
+  gemini_model: gemini-flash-latest
+
+  # The generic cloud model, read by Gemini as a fallback when
+  # `gemini_model` is unset and used when a fallback runs.
+  cloud_model: gemini-flash-latest
+
+  # The fallback chain, in order.
   fallback_providers:
     - groq
     - mistral
@@ -19,11 +23,6 @@ llm:
   # OpenRouter's model. Not a provider name - this is unrelated to the
   # chain above and is still read by the router.
   fallback_model: openrouter/free
-
-  # Ollama's model tag, used only when ollama is in the chain. Kept as
-  # the value the provider has always defaulted to; nothing here has been
-  # verified against what is actually pulled on this machine.
-  ollama_model: qwen3:8b
 
   timeout: 120
   max_output_tokens: 2048
@@ -253,22 +252,10 @@ vision:
   # the Android screen feature at your server is itself the decision.
   send_screen_to_cloud: false
 
-  # Two processors read this section, and they want two different kinds
-  # of model name. They get a key each:
-  #
-  #   cloud_model  -> vision/cloud_processor.py, a hosted model name,
-  #                   used in server mode
-  #   ollama_model -> the desktop processor, an OLLAMA TAG posted to a
-  #                   local daemon at 127.0.0.1:11434, built only when
-  #                   capture_screen is true
-  #
-  # Both can now be right at once. A legacy `vision.model` is still read
-  # as a fallback for either, so an older config file keeps working, but
-  # setting it means one name has to serve both again - prefer the two
-  # keys below. The startup line "Vision: <model> at <host>" shows which
-  # tag the desktop processor ended up with.
-  cloud_model: gemini-3.6-flash
-  ollama_model: qwen2.5vl:7b
+  # The vision model name for vision/cloud_processor.py (server mode), a
+  # hosted model name. A legacy `vision.model` is still read as a fallback
+  # so an older config file keeps working.
+  cloud_model: gemini-flash-latest
 
   fallback_model: openrouter/free
 
@@ -516,6 +503,13 @@ server:
   screen:
     enabled: true
     min_interval: 8.0
+  # Unprompted companion notifications stay off on this headless server
+  # deployment - there is no local display for the screen-observation
+  # companion to watch, so the gate has nothing to run. The product
+  # default is on (see DEFAULT_CONFIG); this deployment opts out
+  # explicitly rather than relying on the default either way.
+  companion:
+    enabled: false
   daemon:
     enabled: true
     poll_interval: 2.0

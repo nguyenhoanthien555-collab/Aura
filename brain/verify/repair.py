@@ -31,9 +31,17 @@ _ALREADY_HEDGED = re.compile(
     r"\b(can't verify|can’t verify|cannot verify|can't confirm|"
     r"can’t confirm|cannot confirm|am not sure|i'm not sure|probably|"
     r"i think|i believe|as far as i know|unclear|not certain|"
-    r"không chắc|không thể xác nhận|không rõ)\b",
+    r"không chắc|không thể xác nhận|không rõ|chưa thể xác nhận|hiện không thể quan sát)\b",
     re.IGNORECASE,
 )
+
+_VIETNAMESE_CHARS = re.compile(
+    r"[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]",
+    re.IGNORECASE,
+)
+
+def _is_vietnamese(text: str) -> bool:
+    return bool(_VIETNAMESE_CHARS.search(text or ""))
 
 
 # "the email", "your calendar" - an article followed by one noun.
@@ -171,6 +179,17 @@ def _hedge_sentence(claim: Claim) -> str:
     the whole of what repair is allowed to do.
     """
 
+    lowered = claim.sentence.lower()
+    is_vi = _is_vietnamese(claim.sentence)
+    is_screen = any(w in lowered for w in ("màn hình", "screen", "giao diện", "chụp"))
+
+    if is_vi:
+        if is_screen:
+            return "Tôi hiện không thể quan sát hay xác nhận trạng thái màn hình khi chưa có công cụ thực thi."
+        if claim.type == ClaimType.ACTION:
+            return "Tôi chưa thể xác nhận thao tác này đã diễn ra."
+        return "Tôi chưa thể xác nhận " + _unassert(claim.sentence)
+
     if claim.type == ClaimType.ACTION:
 
         verbs = _verbs_in(claim.sentence)
@@ -229,7 +248,19 @@ def _unassert(sentence: str) -> str:
 def _repair_sentence(claim: Claim, reason: str = "") -> str:
     """One contradiction repair, phrased from the evidence or honestly."""
 
+    is_vi = _is_vietnamese(claim.sentence)
     lowered_reason = reason.lower()
+
+    if is_vi:
+        if "partial" in lowered_reason:
+            return "Thao tác chỉ hoàn thành một phần - tôi chưa thể xác nhận phần còn lại."
+        if "denied" in lowered_reason:
+            return "Thao tác đã bị từ chối trước khi có thể thực thi."
+        if "unavailable" in lowered_reason:
+            return "Tính năng đó hiện không khả dụng nên thao tác không thể diễn ra."
+        if "failed" in lowered_reason or "not established" in lowered_reason:
+            return "Thao tác đã không thể hoàn tất do xảy ra lỗi."
+        return _hedge_sentence(claim)
 
     # PARTIAL first: it is the one contradiction where something DID
     # happen, and saying "that did not happen" about a partial success
@@ -334,28 +365,52 @@ def repair_claims(
 
         if state is ClaimState.CONTRADICTED:
             if claim.type == ClaimType.CAPABILITY:
-                replacement = "I can't do that right now - that capability isn't available."
+                if _is_vietnamese(claim.sentence):
+                    replacement = "Tôi không thể thực hiện thao tác đó lúc này - tính năng này hiện chưa khả dụng."
+                else:
+                    replacement = "I can't do that right now - that capability isn't available."
             else:
                 replacement = _repair_sentence(claim, reason)
         elif claim.type == ClaimType.CAPABILITY:
-            replacement = "I'm not entirely sure I can do that."
+            if _is_vietnamese(claim.sentence):
+                replacement = "Tôi chưa chắc chắn có thể thực hiện thao tác đó."
+            else:
+                replacement = "I'm not entirely sure I can do that."
         elif claim.type == ClaimType.MEMORY_DERIVED:
-            replacement = "From what I remember, " + _lower_first(
-                claim.sentence
-            )
+            if _is_vietnamese(claim.sentence):
+                replacement = "Theo ghi nhớ trước đây, " + _lower_first(
+                    claim.sentence
+                )
+            else:
+                replacement = "From what I remember, " + _lower_first(
+                    claim.sentence
+                )
         elif state is ClaimState.INFERRED:
-            replacement = "As far as I can tell, " + _lower_first(
-                claim.sentence
-            )
+            if _is_vietnamese(claim.sentence):
+                replacement = "Theo như tôi ghi nhận, " + _lower_first(
+                    claim.sentence
+                )
+            else:
+                replacement = "As far as I can tell, " + _lower_first(
+                    claim.sentence
+                )
         else:
             replacement = _hedge_sentence(claim)
 
         if replacement == claim.sentence:
             continue
 
+        # Prevent duplicate consecutive replacements
+        if repairs and repairs[-1][2] == replacement:
+            result = result.replace(claim.sentence, "", 1)
+            claim.repair = ""
+            continue
+
         result = result.replace(claim.sentence, replacement, 1)
         claim.repair = replacement
         repairs.append((claim.id, claim.sentence, replacement))
+
+    result = re.sub(r"[ ]{2,}", " ", result).strip()
 
     return result, repairs
 

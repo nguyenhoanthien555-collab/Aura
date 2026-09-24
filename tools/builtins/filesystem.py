@@ -40,7 +40,8 @@ class ReadFileTool(Tool):
     )
 
     def __init__(self, roots: list[str] | None = None):
-
+        if not roots:
+            roots = ["D:/AURA", "data", "."]
         self.roots = _resolve_roots(roots)
 
     def execute(self, path: str) -> str:

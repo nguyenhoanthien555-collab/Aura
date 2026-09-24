@@ -1,5 +1,9 @@
 package com.aura.companion.data.chat
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * What survives the app closing.
  *
@@ -71,6 +75,22 @@ interface Transcript {
     fun clear()
 
     /**
+     * The conversation, observed.
+     *
+     * Holds the current [StoredConversation] and emits a new value on every
+     * [write], [clear] and session change. It exists for a specific bug: the
+     * floating overlay runs its own [com.aura.companion.ui.chat.ChatViewModel]
+     * over this same store, and before this the two ViewModels each read once
+     * at construction and never again - so a message sent in one surface did
+     * not appear in the other until the app was relaunched. A collector on
+     * this stream keeps every surface in step live.
+     *
+     * A [StateFlow], so a surface that subscribes late still gets the current
+     * conversation as its first value rather than waiting for the next change.
+     */
+    val changes: StateFlow<StoredConversation>
+
+    /**
      * A store that keeps nothing.
      *
      * The default for [com.aura.companion.data.AuraRepository] and the
@@ -82,6 +102,8 @@ interface Transcript {
         override fun read() = StoredConversation()
         override fun write(messages: List<StoredMessage>) = Unit
         override fun clear() = Unit
+        override val changes: StateFlow<StoredConversation> =
+            MutableStateFlow(StoredConversation()).asStateFlow()
     }
 }
 

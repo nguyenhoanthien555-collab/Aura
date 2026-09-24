@@ -29,14 +29,12 @@ are given a string that is deliberately not one.
 """
 
 import logging
-import urllib.error
 
 import pytest
 
 from brain.providers.errors import ProviderUnavailableError
 from vision.capture import Frame
 from vision.cloud_processor import CloudVisionProcessor
-from vision.ollama_processor import OllamaVisionProcessor
 from vision.processor import (
     MockVisionProcessor,
     ProcessorChain,
@@ -120,18 +118,6 @@ def rgb_frame(width: int = 4, height: int = 3, source: str = "screen") -> Frame:
     )
 
 
-def unreachable_daemon(monkeypatch) -> None:
-    """Every Ollama request refused, without a socket being opened."""
-
-    def refuse(request, timeout=None):
-        raise urllib.error.URLError("connection refused")
-
-    monkeypatch.setattr(
-        "vision.ollama_processor.urllib.request.urlopen",
-        refuse,
-    )
-
-
 # ----------------------------------------------------------------------
 # The first real description wins
 # ----------------------------------------------------------------------
@@ -186,31 +172,6 @@ def test_a_whitespace_only_return_advances_the_chain():
     ])
 
     assert chain.describe(None, "Spotify") == "User is using Spotify"
-
-
-def test_the_way_ollama_declines_advances_the_chain(monkeypatch):
-    """
-    Decline mode one, from the real class. `OllamaVisionProcessor`
-    returns "" for every failure it has - dead daemon, HTTP error, model
-    not pulled, unencodable frame - and never raises. A chain that
-    advanced only on an exception would go silent for this backend.
-    """
-
-    pytest.importorskip("PIL", reason="Pillow is an optional vision extra")
-
-    unreachable_daemon(monkeypatch)
-
-    pixels = OllamaVisionProcessor(host="http://127.0.0.1:11434")
-
-    # The decline mode itself, so what follows pins a real behaviour
-    # rather than this file's belief about one.
-    assert pixels.describe(rgb_frame()) == ""
-
-    chain = ProcessorChain([pixels, WindowTitleProcessor()])
-
-    assert chain.describe(
-        rgb_frame(), "main.py - AURA - Visual Studio Code"
-    ) == "User is editing Python code in Visual Studio Code (file: main.py)"
 
 
 def test_the_way_cloud_vision_declines_advances_the_chain():
@@ -462,7 +423,6 @@ def build_chain(**vision):
 
     settings = {
         "cloud_model": "gemini-3.6-flash",
-        "ollama_model": "qwen2.5vl:7b",
         **vision,
     }
 
@@ -474,14 +434,13 @@ def build_chain(**vision):
     return _build_vision_processor(settings, config)
 
 
-def test_the_built_chain_is_local_then_cloud_then_titles(monkeypatch):
+def test_the_built_chain_is_cloud_then_titles(monkeypatch):
     """
-    Phase 19.1's order, and the last position is the guarantee: a machine
+    Aura is cloud-only, and the last position is the guarantee: a machine
     with no reachable vision model still describes the active window
-    instead of reporting nothing. Local first is a section 30 statement
-    as much as a cost one - the model on this machine gets first refusal
-    on the owner's screen, and pixels only leave when it had nothing to
-    say.
+    instead of reporting nothing. With the cloud switch on and a key in
+    the environment, the launcher builds the cloud processor first and
+    keeps `WindowTitleProcessor` as the floor beneath it.
     """
 
     monkeypatch.setenv("GEMINI_API_KEY", "not-a-real-key")
@@ -490,29 +449,9 @@ def test_the_built_chain_is_local_then_cloud_then_titles(monkeypatch):
     chain = build_chain(send_screen_to_cloud=True)
 
     assert [type(p).__name__ for p in chain.processors] == [
-        "OllamaVisionProcessor",
         "CloudVisionProcessor",
         "WindowTitleProcessor",
     ]
-
-
-def test_a_dead_local_model_still_describes_the_window(monkeypatch):
-    """
-    The regression end to end, through the launcher's own chain rather
-    than a hand-built one: `capture_screen: true` with nothing listening
-    on 11434 used to report None where titles-only reported a sentence.
-    """
-
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-
-    chain = build_chain()
-
-    unreachable_daemon(monkeypatch)
-
-    assert chain.describe(
-        rgb_frame(), "bus.ts - events - Visual Studio Code"
-    ) == "User is editing TypeScript code in Visual Studio Code (file: bus.ts)"
 
 
 # ----------------------------------------------------------------------
@@ -541,12 +480,11 @@ def test_a_provider_key_is_not_permission_to_send_a_screenshot(
 
     monkeypatch.setenv("GEMINI_API_KEY", "not-a-real-key")
 
-    chain = build_chain(**vision)
-
-    names = [type(p).__name__ for p in chain.processors]
-
-    assert "CloudVisionProcessor" not in names
-    assert names == ["OllamaVisionProcessor", "WindowTitleProcessor"]
+    # Cloud-only and the switch off: the desktop screenshot path is not
+    # built at all, so the launcher returns no chain and the manager
+    # falls back to its window-title floor. The key in the environment
+    # bought a text provider, not permission to upload this screen.
+    assert build_chain(**vision) is None
 
 
 def test_config_yaml_ships_the_cloud_switch_off():

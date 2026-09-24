@@ -51,7 +51,7 @@ def can_stream(llm) -> bool:
     return callable(getattr(llm, "stream", None))
 
 
-def stream_of(llm, prompt: str) -> Iterator[str]:
+def stream_of(llm, prompt: str, context: dict | None = None) -> Iterator[str]:
     """
     Any provider as a stream of fragments.
 
@@ -63,10 +63,22 @@ def stream_of(llm, prompt: str) -> Iterator[str]:
     """
 
     if can_stream(llm):
+        if context is not None:
+            try:
+                yield from llm.stream(prompt, context=context)
+                return
+            except TypeError:
+                pass
         yield from llm.stream(prompt)
         return
 
-    text = llm.generate(prompt)
+    if context is not None:
+        try:
+            text = llm.generate(prompt, context=context)
+        except TypeError:
+            text = llm.generate(prompt)
+    else:
+        text = llm.generate(prompt)
 
     if text:
         yield text

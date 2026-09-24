@@ -36,7 +36,12 @@ DEFAULT_CONFIG = {
 
     "llm": {
         "provider": "mock",
-        "model": "gemini-2.5-flash",
+
+        # Gemini's model. Gemini is the default cloud provider, so this
+        # is the primary model; it follows the per-provider `<name>_model`
+        # convention below and is the path the Control Hub's model picker
+        # writes through for Gemini (see PROVIDER_CAPABILITIES).
+        "gemini_model": "gemini-flash-latest",
 
         # The fallback chain, in order. This is the authoritative
         # setting; `fallback_provider` below is its superseded singular
@@ -45,14 +50,12 @@ DEFAULT_CONFIG = {
         "fallback_providers": [],
         "fallback_provider": "",
 
-        # Per-provider models. `model` above names the *primary* cloud
-        # model and is not a valid tag for any of these, so each provider
-        # that needs a different one says so here rather than having it
-        # inferred from the primary's name.
+        # Per-provider models. Each provider that needs a specific tag
+        # names it here rather than sharing one, because a model name that
+        # is right for one vendor is not a valid tag at another.
         "fallback_model": "",
         "groq_model": "llama-3.3-70b-versatile",
         "mistral_model": "mistral-small-latest",
-        "ollama_model": "qwen3:8b",
 
         # The Phase 11 providers. Each of these must equal its provider
         # class's `default_model`, or the Control Hub would show one model
@@ -435,15 +438,10 @@ DEFAULT_CONFIG = {
         "capture_screen": False,
         "monitor": 1,
 
-        # Two model keys, because two processors read this section and
-        # want different kinds of name. `cloud_model` is a hosted model
-        # name for vision/cloud_processor.py (server mode);
-        # `ollama_model` is an Ollama tag posted to a local daemon when
-        # capture_screen is on. `vision.settings` resolves both, and
-        # still honours a legacy `vision.model` written before the split.
-        # Empty host falls back to llm.host.
+        # The vision model name for vision/cloud_processor.py (server
+        # mode). `vision.settings.cloud_model` resolves it, still honouring
+        # a legacy `vision.model`. Empty host falls back to llm.host.
         "cloud_model": "",
-        "ollama_model": "qwen2.5vl:7b",
         "host": "",
         "timeout": 120.0,
 

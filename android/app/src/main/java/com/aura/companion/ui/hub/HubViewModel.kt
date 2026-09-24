@@ -182,9 +182,9 @@ data class HubUiState(
     /**
      * The settings path that holds the primary provider's model.
      *
-     * WHY THIS IS NOT ALWAYS `llm.model`
+     * WHY THIS IS NOT ALWAYS `llm.gemini_model`
      * ----------------------------------
-     * It was, and that was a bug: the model picker wrote `llm.model` for
+     * It was, and that was a bug: the model picker wrote `llm.gemini_model` for
      * every provider, but `brain/router.py` reads `llm.anthropic_model` for
      * Anthropic, `llm.qwen_model` for Qwen, `llm.fallback_model` for
      * OpenRouter, and so on. Choosing a Claude model while Claude was
@@ -192,21 +192,21 @@ data class HubUiState(
      * appeared to work and could not. The server reports the mapping per
      * provider ([ProviderDto.modelSetting]) so this stays in one place.
      *
-     * `llm.model` remains the fallback: an older server sends no
+     * `llm.gemini_model` remains the fallback: an older server sends no
      * `model_setting`, and on those the old behaviour is the correct one.
      */
     val modelSetting: String
-        get() = primaryProvider?.modelSettingOr() ?: "llm.model"
+        get() = primaryProvider?.modelSettingOr() ?: "llm.gemini_model"
 
     /**
      * The model the primary provider would actually be built with.
      *
      * Read from the providers document, which resolved it through the same
-     * setting the router reads. Falls back to `llm.model` for a server that
+     * setting the router reads. Falls back to `llm.gemini_model` for a server that
      * does not report it.
      */
     val activeModel: String
-        get() = primaryProvider?.model?.ifBlank { null } ?: server.config.llm.model
+        get() = primaryProvider?.model?.ifBlank { null } ?: server.config.llm.geminiModel
 
     /** Model names this build knows for the primary provider; may be empty. */
     val modelChoices: List<String>
@@ -693,7 +693,7 @@ class HubViewModel(
      * Set the primary provider's model.
      *
      * Writes whichever `llm.*_model` setting that provider reads, per
-     * [HubUiState.modelSetting] - not a hardcoded `llm.model`, which only
+     * [HubUiState.modelSetting] - not a hardcoded `llm.gemini_model`, which only
      * Gemini reads. `setting` is a parameter so a caller with a specific
      * provider in hand (the fallback editor) can name its path directly.
      */
@@ -873,6 +873,10 @@ class HubViewModel(
     fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
 
     fun setDynamicColour(enabled: Boolean) = settings.setDynamicColour(enabled)
+
+    fun setIntelligenceMode(mode: String) = settings.setIntelligenceMode(mode)
+
+    fun setAllowCloudFallback(enabled: Boolean) = settings.setAllowCloudFallback(enabled)
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -39,16 +40,21 @@ import java.util.UUID
  * link with intermittent signal is the difference between an app you trust
  * with a long message and one you don't.
  */
+// Compiled once, not per streamed token (see streamReply's Chunk handler).
+private val REACT_REGEX = "\\[REACT:\\s*([^\\]]+)\\]".toRegex()
+
 class ChatViewModel(
     private val repository: AuraRepository,
     private val settings: SettingsProvider,
     private val transcript: Transcript = Transcript.None,
+    private val isOnline: () -> Boolean = { true },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         ChatUiState(
             messages = restored(),
             isConfigured = settings.current.isConfigured,
+            connection = ConnectionState.Unknown,
         )
     )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
@@ -73,6 +79,7 @@ class ChatViewModel(
             }
         }
         keep()
+        observeTranscript()
         checkConnection()
     }
 
@@ -145,6 +152,50 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Adopt changes another owner of this transcript made.
+     *
+     * The floating overlay runs its own [ChatViewModel] over the same
+     * [com.aura.companion.data.chat.TranscriptStore] singleton. Each used to
+     * read once at construction and never again, so a message sent in one
+     * surface stayed invisible in the other until the app was relaunched.
+     * Collecting the store's stream keeps them in step live.
+     *
+     * `drop(1)` skips the stream's initial value: it is the conversation this
+     * ViewModel already restored into its first frame, and reacting to it
+     * would either be a no-op or, when the last read failed, wrongly resurrect
+     * a transcript we deliberately treated as empty. Only later emissions are
+     * real external changes.
+     *
+     * Compared and adopted in the *persisted* shape ([stored]) because that is
+     * the only shape both surfaces agree on: reactions and the `streaming`
+     * flag are not stored, so a difference in only those is not an external
+     * change and must not trigger adoption. A reply still arriving here is
+     * kept on top of whatever the store now holds, and this surface's own
+     * reactions are preserved by id. Setting [kept] to the adopted list stops
+     * [keep] from writing it straight back.
+     */
+    private fun observeTranscript() {
+        viewModelScope.launch {
+            transcript.changes.drop(1).collect { stored ->
+
+                val settled = _state.value.messages.filterNot { it.streaming }
+                if (stored.messages == settled.map { it.stored() }) return@collect
+
+                val existingById = _state.value.messages.associateBy { it.id }
+                val adopted = stored.messages.map { sm ->
+                    sm.rendered().copy(
+                        reactions = existingById[sm.id]?.reactions ?: emptyMap()
+                    )
+                }
+                val streaming = _state.value.messages.filter { it.streaming }
+
+                kept = adopted
+                _state.update { it.copy(messages = adopted + streaming) }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------
     // Input
     // ------------------------------------------------------------------
@@ -203,6 +254,13 @@ class ChatViewModel(
         if (!settings.current.isConfigured) {
             _state.update {
                 it.copy(connection = ConnectionState.Unavailable("Not configured"))
+            }
+            return
+        }
+
+        if (!isOnline()) {
+            _state.update {
+                it.copy(connection = ConnectionState.Unavailable("Offline"))
             }
             return
         }
@@ -292,6 +350,16 @@ class ChatViewModel(
 
         if (!settings.current.isConfigured) {
             _state.update { it.copy(error = AuraError.NotConfigured) }
+            return
+        }
+
+        if (!isOnline()) {
+            _state.update {
+                it.copy(
+                    error = AuraError.Offline,
+                    connection = ConnectionState.Unavailable("Offline"),
+                )
+            }
             return
         }
 
@@ -497,10 +565,11 @@ class ChatViewModel(
                     val first = reply.isEmpty()
 
                     reply += event.text
-                    
-                    // Parse fallback tag for models that don't support tool calls well
-                    val reactRegex = "\\[REACT:\\s*([^\\]]+)\\]".toRegex()
-                    val match = reactRegex.find(reply)
+
+                    // Parse fallback REACT tag for models that don't tool-call well.
+                    // Cheap substring guard first so we don't run the (hoisted) regex
+                    // over the whole accumulated reply on every single streamed token.
+                    val match = if (!reacted && reply.contains("[REACT")) REACT_REGEX.find(reply) else null
                     if (match != null) {
                         val emoji = match.groupValues[1].trim()
                         reply = reply.replace(match.value, "").trim()
@@ -690,6 +759,17 @@ class ChatViewModel(
         }
     }
 
+    fun interruptAgent() {
+        AuraAccessibilityService.stopAgentTask()
+        _state.update {
+            it.copy(
+                isSending = false,
+                isAgentRunning = false,
+                agentStatusText = "Tớ dừng lại theo lời cậu rồi nè!",
+            )
+        }
+    }
+
     companion object {
 
         /** How long a request may take before we explain the wait. */
@@ -699,11 +779,12 @@ class ChatViewModel(
             repository: AuraRepository,
             settings: SettingsProvider,
             transcript: Transcript = Transcript.None,
+            isOnline: () -> Boolean = { true },
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                ChatViewModel(repository, settings, transcript) as T
+                ChatViewModel(repository, settings, transcript, isOnline) as T
         }
     }
 }

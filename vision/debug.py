@@ -4,14 +4,15 @@ Vision debugging.
     python -m vision.debug              list monitors, save + describe monitor 1
     python -m vision.debug --monitor 2  the second display
     python -m vision.debug --all        save every monitor, describe none
-    python -m vision.debug --no-model   capture only, no Ollama round trip
+    python -m vision.debug --no-model   capture only, no cloud round trip
 
 Answers one question: is the vision model receiving the screen the user
-is actually looking at? The PNG this writes is the exact byte string that
-was base64 encoded into the request, saved at the processor boundary -
-not a second screenshot taken afterwards.
+is actually looking at? The JPEG this writes is the exact byte string
+that would be base64 encoded into the request, produced by the cloud
+processor's own compaction step - not a second screenshot taken
+afterwards.
 
-Writes PNGs of your screen to the current directory. Nothing here runs
+Writes JPEGs of your screen to the current directory. Nothing here runs
 as part of Aura; it exists to be run by hand.
 """
 
@@ -83,50 +84,55 @@ def capture(monitor: int):
 
 def describe(frame, path: str, use_model: bool) -> None:
     """
-    Save the frame, then optionally ask the vision model about it.
+    Save the frame, then optionally ask the cloud vision model about it.
 
-    Both use the same processor instance, so the PNG on disk and the
-    image in the request are the same bytes by construction.
+    The bytes written are the same bytes a provider would receive: the
+    frame runs through the cloud processor's own compaction step, so the
+    file on disk and the image in the request match by construction.
+    Compaction needs no providers, so a keyless machine can still see
+    exactly what would have been sent.
     """
 
-    config = load_config()
-    settings = config.get("vision") or {}
-
-    try:
-        from vision.ollama_processor import (
-            DEFAULT_HOST,
-            OllamaVisionProcessor,
-        )
-    except ImportError as error:
-        print(f"Cannot build the vision processor: {error}")
-        return
-
-    from vision.settings import ollama_model
-
-    processor = OllamaVisionProcessor(
-        model=ollama_model(config),
-        host=settings.get("host") or DEFAULT_HOST,
-        timeout=settings.get("timeout") or 120.0,
-        debug_path=path,
+    from vision.cloud_processor import (
+        CloudVisionProcessor,
+        build_cloud_vision_processor,
     )
 
-    if not use_model:
-        try:
-            png = processor._to_png(frame)
-        except Exception as error:
-            print(f"Could not encode the frame: {error}")
-            return
+    config = load_config()
 
-        processor._save_debug(png)
-        print(f"saved {path} ({len(png)} bytes), model not called")
+    try:
+        image, mime = CloudVisionProcessor([])._compact(frame)
+    except Exception as error:
+        print(f"Could not encode the frame: {error}")
+        return
+
+    with open(path, "wb") as handle:
+        handle.write(image)
+
+    if not use_model:
+        print(f"saved {path} ({len(image)} bytes, {mime}), model not called")
+        return
+
+    processor = build_cloud_vision_processor(config)
+
+    if processor is None or not processor.is_configured:
+        print(
+            "No cloud vision provider configured "
+            "(set GEMINI_API_KEY or OPENROUTER_API_KEY); "
+            f"saved {path}, model not called"
+        )
         return
 
     title = default_window_reader().active_window()
 
     print(f"active window title: {title!r}")
-    print(f"asking {processor.model} at {processor.host} ...")
+    print("asking the configured cloud vision provider ...")
 
-    description = processor.describe(frame, title)
+    try:
+        description = processor.describe(frame, title)
+    except Exception as error:
+        print(f"model call failed: {error}")
+        description = ""
 
     print()
     print(f"saved {path} - open it and compare with what the model said")
@@ -155,19 +161,19 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="save every monitor as debug_monitor_N.png, describe none",
+        help="save every monitor as debug_monitor_N.jpg, describe none",
     )
 
     parser.add_argument(
         "--no-model",
         action="store_true",
-        help="capture and save only, no Ollama request",
+        help="capture and save only, no cloud request",
     )
 
     parser.add_argument(
         "--out",
-        default="debug_screen.png",
-        help="where to write the frame (default: debug_screen.png)",
+        default="debug_screen.jpg",
+        help="where to write the frame (default: debug_screen.jpg)",
     )
 
     arguments = parser.parse_args(argv)
@@ -189,7 +195,7 @@ def main(argv=None) -> int:
             frame = capture(index)
 
             if frame is not None:
-                describe(frame, f"debug_monitor_{index}.png", False)
+                describe(frame, f"debug_monitor_{index}.jpg", False)
 
         return 0
 

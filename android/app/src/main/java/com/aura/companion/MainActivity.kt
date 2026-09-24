@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                         container.repository,
                         container.settings,
                         container.transcript,
+                        container::isOnline,
                     )
                 )
 

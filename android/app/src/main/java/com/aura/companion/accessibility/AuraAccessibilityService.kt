@@ -1563,6 +1563,24 @@ class AuraAccessibilityService : AccessibilityService() {
             return ForegroundApp(resolved, activityFor(window, resolved), label)
         }
 
+        fun getInstance(): AuraAccessibilityService? = instance.get()
+
+        fun captureCurrentTree(): Pair<ForegroundApp?, Map<String, AccessibilityNode>> {
+            val service = instance.get() ?: return Pair(null, emptyMap())
+            val app = currentForegroundApp()
+            val root = service.rootInActiveWindow ?: return Pair(app, emptyMap())
+            val nodeMap = mutableMapOf<String, AccessibilityNodeInfo>()
+            val tree = AccessibilityNodeSerializer.serialize(root, nodeMap)
+            nodeMap.values.forEach { it.recycle() }
+            root.recycle()
+            return Pair(app, tree)
+        }
+
+        suspend fun executeAction(action: AgentAction, oldTree: Map<String, AccessibilityNode>): ExecutionResult {
+            val service = instance.get() ?: return ExecutionResult.Failed
+            return service.executeActionForProtocol(action, oldTree)
+        }
+
         fun startAgentTask(request: String, onComplete: (String) -> Unit): Boolean {
             val service = instance.get()
             return if (service != null) {

@@ -621,6 +621,15 @@ class AgentRuntime:
         self._stop(run, StopReason.CANCELLED, "cancelled by owner")
         return True
 
+    def cancel_all_active_runs(self) -> list[str]:
+        """Cancels all currently running agent runs."""
+        cancelled = []
+        for run_id, run in list(self._runs.items()):
+            if getattr(run, "status", None) is RunStatus.RUNNING:
+                if self.cancel(run_id):
+                    cancelled.append(run_id)
+        return cancelled
+
     def _maybe_synthesize_gap(self, run: AgentRun) -> None:
         """
         Phase 5B.3: Autonomous Capability Gap -> Tool Synthesis and Promotion.
@@ -1470,26 +1479,6 @@ class AgentRuntime:
             provider=provider_label(self.llm),
             duration_s=round(time.time() - run.created_at, 3),
         )
-
-        # Wire self-learning experience store with live evidence and verification
-        try:
-            from learning.experience import AuraExperienceStore
-            store = AuraExperienceStore()
-            is_verified = (reason is StopReason.GOAL_VERIFIED)
-            store.record_experience(
-                session_id=run.session_id,
-                input_text=run.goal,
-                model_decision="TOOL_CALL" if run.tool_call_count > 0 else "ANSWER",
-                task_id=run.task_id,
-                run_id=run.run_id,
-                selected_tool=run.messages[-2].get("tool", "") if (run.tool_call_count > 0 and len(run.messages) >= 2) else "",
-                final_response=run.messages[-1].get("content", "") if run.messages else "",
-                outcome="SUCCESS" if run.status is RunStatus.COMPLETED else "FAILED",
-                verifier_result="VERIFIED" if is_verified else ("UNVERIFIED" if reason is StopReason.COMPLETED_UNVERIFIED else "CONTRADICTED"),
-                category="agent_run",
-            )
-        except Exception as exp_err:
-            logger.debug("Agent run experience recording skipped: %s", exp_err)
 
         self._persist_run(run)
 

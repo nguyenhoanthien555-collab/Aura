@@ -286,6 +286,46 @@ class TestTimezoneSetting:
         assert accepted["temporal.timezone"] == "Asia/Ho_Chi_Minh"
 
 
+class TestDeprecatedSettingsMigration:
+    """
+    Deprecated local/on-device providers and paths must gracefully
+    migrate to cloud-only (Gemini) instead of raising or crashing.
+    """
+
+    def store(self, tmp_path) -> RuntimeSettings:
+        return RuntimeSettings(path=tmp_path / "settings.json")
+
+    @pytest.mark.parametrize("deprecated", ["local_aura", "on_device", "local", "ollama"])
+    def test_deprecated_provider_names_migrate_to_gemini(self, tmp_path, deprecated):
+        accepted = self.store(tmp_path).update({"llm": {"provider": deprecated}})
+        assert accepted["llm.provider"] == "gemini"
+
+    def test_deprecated_provider_in_fallback_chain(self, tmp_path):
+        accepted = self.store(tmp_path).update(
+            {"llm": {"fallback_providers": ["groq", "ollama"]}}
+        )
+        assert accepted["llm.fallback_providers"] == ["groq", "gemini"]
+
+    def test_deprecated_setting_file_migration_on_load(self, tmp_path):
+        settings_file = tmp_path / "settings.json"
+        old_data = {
+            "version": 1,
+            "settings": {
+                "llm": {
+                    "model": "test-migrated-model",
+                    "provider": "local_aura",
+                }
+            }
+        }
+        import json
+        settings_file.write_text(json.dumps(old_data), encoding="utf-8")
+        store = RuntimeSettings(path=settings_file)
+        overrides = store.overrides
+        assert overrides["llm.gemini_model"] == "test-migrated-model"
+        assert overrides["llm.provider"] == "gemini"
+        assert "llm.model" not in overrides
+
+
 # ----------------------------------------------------------------------
 # `applied` is a promise: the conditional handlers must keep it
 # ----------------------------------------------------------------------
@@ -782,7 +822,9 @@ class TestProviderHealthRoute:
         assert providers["groq"]["problem"] == "RuntimeError"
         assert "on fire" not in response.text
 
-        assert providers["ollama"]["configured"] is True
+        # Another provider is still fully present in the map: one bad
+        # entry must not blank the rest.
+        assert providers["mock"]["configured"] is True
         assert len(providers) > 1
 
 
@@ -1175,11 +1217,10 @@ class TestPerProviderStates:
         assert entry["configured"] is False
 
     def test_keyless_providers_report_configured(self):
-        # Ollama and the mock provider need no key, so "no key stored"
-        # must not render as "not set up".
+        # The mock provider needs no key, so "no key stored" must not
+        # render as "not set up".
         result = self.health([], "")
 
-        assert result["ollama"]["configured"] is True
         assert result["mock"]["configured"] is True
 
     def test_an_empty_chain_blames_nothing(self):

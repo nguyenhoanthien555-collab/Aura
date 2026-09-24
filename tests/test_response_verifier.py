@@ -834,3 +834,92 @@ class TestDecisionsAndModes:
         assert result.latency_ms < 100.0, (
             f"verification took {result.latency_ms}ms"
         )
+
+    def test_vietnamese_screen_observation_without_evidence_is_repaired(
+        self, verifier,
+    ):
+        """
+        Regression test for hallucination audit:
+        Screen claims in Vietnamese without live tool evidence must be repaired
+        and must never pass through ungrounded.
+        """
+        text = "Mình đang nhìn thấy màn hình của bạn đây."
+        ledger = EvidenceLedger()
+        result = verifier.verify(text, ledger)
+
+        assert result.decision in (VerifierDecision.REPAIR, VerifierDecision.MARK_UNCERTAIN)
+        assert result.changed is True
+        assert "không thể quan sát" in result.repaired_text
+
+    def test_screen_claims_never_grounded_by_stale_memory(
+        self, verifier,
+    ):
+        """
+        Regression test:
+        Old memories mentioning 'màn hình' must NEVER be used to ground
+        or substantiate a live screen state.
+        """
+        text = "Hiện tại trên màn hình điện thoại đang là giao diện chat tối màu."
+        ledger = EvidenceLedger()
+        ledger.add_memory(
+            line="trên màn hình điện thoại đang là giao diện chat tối màu của Aura",
+            recency="recent",
+            confidence="high",
+        )
+        result = verifier.verify(text, ledger)
+
+        # Must not be accepted as SUPPORTED/VERIFIED
+        assert result.changed is True
+        assert "không thể quan sát hay xác nhận" in result.repaired_text
+
+    def test_vietnamese_capability_vocabulary_recognizes_screen(self):
+        """
+        Regression test:
+        Vietnamese words 'quan sát', 'màn hình', 'chụp' match vision.capture capability
+        and do not return UNKNOWN when the capability is AVAILABLE.
+        """
+        from brain.verify.verify import default_capability_provider
+        from core.capabilities.factory import register_core_capabilities
+        register_core_capabilities()
+
+        words = {"quan", "sát", "màn", "hình"}
+        state, matched, cap_id = default_capability_provider(words)
+        assert matched is True
+        assert cap_id in ("vision.capture", "vision.describe")
+        assert state == "AVAILABLE"
+
+    def test_system_feature_description_never_falsely_prefixed_as_memory(self):
+        """
+        Regression test:
+        Sentences describing Aura's own features or default capabilities
+        must NOT be converted to MEMORY_DERIVED or prefixed with 'Theo ghi nhớ trước đây,'.
+        """
+        text = "Hiện tại các tính năng mặc định của tôi bao gồm việc tương tác trực tiếp với thiết bị Android của bạn."
+        ledger = EvidenceLedger()
+        # Add memory mentioning overlapping words to simulate potential false match
+        ledger.add_memory(
+            line="thiết bị Android của bạn rất đẹp",
+            recency="recent",
+            confidence="high",
+        )
+        verifier = ResponseVerifier()
+        result = verifier.verify(text, ledger)
+
+        # Must not be prepended with 'Theo ghi nhớ trước đây,'
+        assert not result.repaired_text.startswith("Theo ghi nhớ trước đây,")
+        assert "Theo ghi nhớ trước đây" not in result.repaired_text
+
+    def test_consecutive_duplicate_hedges_never_stutter(self):
+        """
+        Regression test:
+        Multiple consecutive ungrounded capability claims must NOT produce duplicate identical
+        sentences like 'Tôi chưa chắc chắn có thể thực hiện thao tác đó. Tôi chưa chắc chắn...'.
+        """
+        text = "Tôi có thể bay lên mặt trăng. Tôi có thể biến ra một con rồng."
+        ledger = EvidenceLedger()
+        verifier = ResponseVerifier(capability_provider=lambda words: ("UNKNOWN", False, ""))
+        result = verifier.verify(text, ledger)
+
+        hedge = "Tôi chưa chắc chắn có thể thực hiện thao tác đó."
+        # The hedge must appear at most once, never duplicated consecutively
+        assert result.repaired_text.count(hedge) <= 1

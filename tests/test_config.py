@@ -225,7 +225,7 @@ def test_unspecified_keys_still_arrive(config_file):
 
     config = load_config()
 
-    assert config["llm"]["model"] == DEFAULT_CONFIG["llm"]["model"]
+    assert config["llm"]["gemini_model"] == DEFAULT_CONFIG["llm"]["gemini_model"]
 
 
 def test_a_sprint_four_config_still_starts(config_file):
@@ -351,12 +351,12 @@ def test_the_returned_dict_is_an_independent_copy(config_file):
 
     first = load_config()
     first["tools"]["enabled"] = False
-    first["llm"]["model"] = "mutated"
+    first["llm"]["gemini_model"] = "mutated"
 
     second = load_config()
 
     assert second["tools"]["enabled"] is True
-    assert second["llm"]["model"] == DEFAULT_CONFIG["llm"]["model"]
+    assert second["llm"]["gemini_model"] == DEFAULT_CONFIG["llm"]["gemini_model"]
 
 
 def test_an_overlay_change_is_seen_without_rewriting_config_yaml(
@@ -375,20 +375,20 @@ def test_an_overlay_change_is_seen_without_rewriting_config_yaml(
     )
     monkeypatch.setattr(settings_module, "_settings", store)
 
-    write(config_file, {"llm": {"provider": "ollama", "ollama_model": "base"}})
+    write(config_file, {"llm": {"provider": "gemini", "gemini_model": "base"}})
 
-    assert load_config()["llm"]["ollama_model"] == "base"
+    assert load_config()["llm"]["gemini_model"] == "base"
 
-    store.update({"llm.ollama_model": "tuned"})
+    store.update({"llm.gemini_model": "tuned"})
 
     patched = load_config()
 
-    assert patched["llm"]["ollama_model"] == "tuned"
-    assert patched["llm"]["provider"] == "ollama"  # file layer intact
+    assert patched["llm"]["gemini_model"] == "tuned"
+    assert patched["llm"]["provider"] == "gemini"  # file layer intact
 
     store.reset()
 
-    assert load_config()["llm"]["ollama_model"] == "base"
+    assert load_config()["llm"]["gemini_model"] == "base"
 
 
 def test_swapping_in_a_fresh_store_invalidates_the_cache(config_file, monkeypatch):
@@ -406,20 +406,20 @@ def test_swapping_in_a_fresh_store_invalidates_the_cache(config_file, monkeypatc
     )
     monkeypatch.setattr(settings_module, "_settings", first)
 
-    write(config_file, {"llm": {"ollama_model": "base"}})
+    write(config_file, {"llm": {"gemini_model": "base"}})
     load_config()
 
-    first.update({"llm.ollama_model": "from-first"})
-    assert load_config()["llm"]["ollama_model"] == "from-first"
+    first.update({"llm.gemini_model": "from-first"})
+    assert load_config()["llm"]["gemini_model"] == "from-first"
 
     second = settings_module.RuntimeSettings(
         path=config_file.parent / "b.json"
     )
     monkeypatch.setattr(settings_module, "_settings", second)
 
-    assert load_config()["llm"]["ollama_model"] == "base"
+    assert load_config()["llm"]["gemini_model"] == "base"
 
     # And back to no overlay at all - same answer.
     monkeypatch.setattr(settings_module, "_settings", None)
 
-    assert load_config()["llm"]["ollama_model"] == "base"
+    assert load_config()["llm"]["gemini_model"] == "base"

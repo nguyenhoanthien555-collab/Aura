@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-09-23 — Cloud-Only Architecture Migration DELIVERED (Phases 0–5)
+
+Successfully migrated AURA from hybrid local-learning / on-device architecture to 100% Cloud-Only architecture with Google Gemini as default provider + 11 configurable cloud providers:
+
+1. **Python Backend Decoupling & Dead Code Purge (Phases 0–3)**:
+   - Purged 54 legacy local-learning / local-brain files (`learning/` package, `brain/providers/{local,local_aura,ollama}.py`, `brain/{local_runtime,registry,package,hardware}.py`, `vision/ollama_processor.py`, `server/routes/{brain,learning}.py`, training scripts).
+   - Refactored `daemon/supervisor.py`: removed background learning worker processes; supervisor is now lean and cloud-only.
+   - Migrated configuration keys in `core/config.py`, `core/settings_store.py`, `vision/settings.py`, and `config.yaml`: default provider is `gemini`, `llm.gemini_model`, purged offline mode and keyless providers (`KEYLESS_PROVIDERS = ()`).
+2. **Android Companion App Cloud-Only Refactor (Phase 4)**:
+   - Deleted dead on-device engine files: `OnDeviceBrainEngine.kt` and `MobileAgentRuntime.kt`.
+   - Removed native llama library `dev.ffmpegkit-maintained:llama-android:0.1.1` from `android/app/build.gradle.kts`.
+   - Refactored `ChatViewModel.kt`, `AuraApplication.kt`, `MainActivity.kt`, and `FloatingChatService.kt`: removed local model listeners and execution branches; chat immediately streams/executes against the cloud backend with clean `AuraError.Offline` degradation when offline.
+   - Updated settings defaults in `SettingsStore.kt` and `FakeSettings.kt` (`intelligenceMode` defaults to `"cloud"`).
+   - Gradle verification: `./gradlew.bat :app:testDebugUnitTest` 100% BUILD SUCCESSFUL (22 actionable tasks, 0 failures).
+3. **Settings Backward-Compatibility Migration & Error Surfacing (Phase 5)**:
+   - Added automatic graceful deprecation mapping in `core/settings_store.py`: `DEPRECATED_LOCAL_PROVIDERS` (`"local_aura"`, `"on_device"`, `"local"`, `"ollama"`) map seamlessly to `"gemini"`; `DEPRECATED_PATH_MIGRATIONS` (`"llm.model"` -> `"llm.gemini_model"`) on load.
+   - Enhanced `server/errors.py` with `ProviderAuthError` (502 `provider_auth_error`) and `ProviderTimeoutError` (504 `provider_timeout`), providing safe, honest error reporting to clients without leaking secrets or paths.
+4. **Disk Hygiene & High-Caution Cleanup (Phase 6)**:
+   - Purged untracked ~55 GB `brains/` directory (obsolete local model weights/checkpoints).
+   - Purged untracked legacy training datasets in `data/aura/` (3.9 MB).
+   - Purged 10 obsolete local training/eval scripts in `scripts/` (`build_companion_*`, `train_15b_*`, `phase1_*`, `verify_gguf_runtime.py`).
+   - Purged 10 obsolete local training reports in `artifacts/` (`phase1-companion-*.json`).
+   - Purged dead test `tests/benchmark_dual_models.py` (relied on deleted `brain.local_runtime`).
+   - Carefully preserved all active system components (`agent/autonomy_guard.py`, `KaomojiAvatar.kt`, `server/routes/confirmations.py`, `memory/companion_sqlite.py`, launchers, web UI).
+5. **Verification & Testing (Post-Cleanup)**:
+   - Comprehensive Python backend suite: **496/496 PASSED (100%)**.
+   - Android Companion test suite (`./gradlew.bat :app:testDebugUnitTest`): **22/22 actionable tasks UP-TO-DATE, BUILD SUCCESSFUL (100%)**.
+   - Total clean disk space reclaimed: **~54.2 GB**.
+
+---
+
 ## 2026-09-14 — Phase 5B.3 DELIVERED: Autonomous Capability Gap → Self-Extension Runtime Wiring & Live Laptop E2E Verification
 
 The true autonomous self-extension pipeline is fully wired into `AgentRuntime` and verified on live Windows laptop hardware:

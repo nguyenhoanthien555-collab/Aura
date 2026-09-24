@@ -51,6 +51,19 @@ DEFAULT_SCOPE = 500
 DEFAULT_SKIP_RECENT = 20
 
 
+_EPHEMERAL_SCREEN_PATTERN = re.compile(
+    r"(say something to aura|message aura|nhìn thấy màn hình|trên màn hình đang|màn hình điện thoại đang|from what i remember.*màn hình)",
+    re.IGNORECASE,
+)
+
+
+def _is_ephemeral_screen_observation(text: str) -> bool:
+    """Screen observations are transient and must never be recalled as persistent memory."""
+    if not text:
+        return False
+    return bool(_EPHEMERAL_SCREEN_PATTERN.search(str(text)))
+
+
 def tokenize(text: str) -> set[str]:
     """Meaningful lowercase words in `text`."""
 
@@ -114,6 +127,8 @@ class KeywordRetriever:
         scored = []
 
         for message in candidates:
+            if _is_ephemeral_screen_observation(message.content):
+                continue
 
             score = len(wanted & tokenize(message.content))
 

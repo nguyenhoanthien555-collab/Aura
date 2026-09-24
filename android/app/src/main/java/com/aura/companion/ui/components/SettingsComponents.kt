@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,23 +111,43 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
 ) {
-    Column(
-        modifier = modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp),
+    Row(
+        modifier = modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
+        // A short rounded accent bar before the title: a small, consistent
+        // modern cue that reads the same across all 18 hub sections.
+        Box(
+            modifier = Modifier
+                .padding(top = 3.dp, end = 10.dp)
+                .width(3.dp)
+                .height(if (subtitle != null) 30.dp else 15.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.tertiary,
+                        )
+                    )
+                ),
         )
-
-        if (subtitle != null) {
-            Spacer(Modifier.height(2.dp))
+        Column {
             Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
             )
+
+            if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -254,9 +276,9 @@ fun SelectRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                // Bounded so a long model name truncates instead of
-                // pushing the chevron off the row.
-                modifier = Modifier.widthIn(max = 168.dp),
+                // Bounded so long values (e.g. model name, fallback chain)
+                // don't squish the title/subtitle column.
+                modifier = Modifier.widthIn(max = 115.dp),
             )
             Spacer(Modifier.width(4.dp))
             Icon(

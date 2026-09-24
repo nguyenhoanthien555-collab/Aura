@@ -52,6 +52,11 @@ class ScreenshotUploaderTest {
             authToken = "test-token",
             screenObservationEnabled = true,
             uploadScreenshots = true,
+            // Server mode: screenshot upload targets the server, and the
+            // "no server means nothing is captured" case gates on a blank
+            // URL. The store defaults to "on_device", where `isConfigured`
+            // is true without a URL, so the mode is pinned here.
+            intelligenceMode = "cloud",
         )
 
         repository = AuraRepository(settings)

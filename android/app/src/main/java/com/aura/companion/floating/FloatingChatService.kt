@@ -143,7 +143,8 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                     factory = com.aura.companion.ui.chat.ChatViewModel.factory(
                         container.repository,
                         container.settings,
-                        container.transcript
+                        container.transcript,
+                        container::isOnline,
                     )
                 )
 

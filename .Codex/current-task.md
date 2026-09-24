@@ -1,5 +1,17 @@
 # Current task
 
+## Cloud-Only Architecture Migration (Phases 0–6) DELIVERED (2026-09-23)
+
+Complete migration of AURA from hybrid local/on-device learning to pure Cloud-Only architecture:
+- Python backend decoupled and 54 legacy local files removed (`learning/`, `brain/providers/{local,local_aura,ollama}.py`, etc.).
+- Android companion app purged of on-device LLM engines and native llama binaries; direct cloud chat operational.
+- Settings store deprecation mappings active (`local_aura` / `on_device` / `local` / `ollama` -> `gemini`).
+- Error reporting mapped: `ProviderAuthError` (502), `ProviderTimeoutError` (504), `ProviderUnavailableError` (503).
+- **Phase 6 Disk Cleanup Completed**: ~54.2 GB `brains/` directory, `data/aura/` datasets, dead training scripts and reports purged with high caution. All active components (`agent/autonomy_guard.py`, `KaomojiAvatar.kt`, `confirmations.py`, `companion_sqlite.py`, etc.) preserved intact.
+- **All tests verified**: 496/496 Python tests passed; Android `./gradlew.bat :app:testDebugUnitTest` BUILD SUCCESSFUL.
+
+---
+
 ## Phase 5B.3 — Autonomous Capability Gap → Self-Extension Runtime Wiring DELIVERED (2026-09-14)
 
 Deliverable: Real user request autonomous self-extension pipeline in `AgentRuntime`, verified on live Windows laptop with Gemini 3.5 Flash Lite provider.

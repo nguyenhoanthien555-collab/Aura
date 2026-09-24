@@ -69,7 +69,11 @@ PROVIDER_KEYS = {
 # which is what the phone writes. `_skip_reason` names them.
 OWNER_DEFINED_ENDPOINTS = {"custom": "CUSTOM_BASE_URL"}
 
-KEYLESS_PROVIDERS = ("ollama",)
+# Cloud-only: every provider now authenticates with a key (see
+# PROVIDER_KEYS). `mock` is handled separately in `_create_provider` and
+# is not listed here. Kept as an (empty) tuple because the settings
+# validator and `_skip_reason` still consume it.
+KEYLESS_PROVIDERS: tuple[str, ...] = ()
 
 # The providers built on `brain/providers/http_chat.py`, which take an
 # identical constructor. Registering one is a row here and a small file,
@@ -147,19 +151,13 @@ class BrainRouter:
 
         config = load_config().get("llm") or {}
 
-        # Offline mode: ensure zero remote cloud calls
-        offline_mode = bool(config.get("offline") or os.getenv("AURA_OFFLINE") in ("1", "true", "True"))
+        # Aura is cloud-only: there is no local provider to force a request
+        # onto, so the primary the operator selected is always the primary
+        # that is built. The former offline-forcing block - which rewrote
+        # `name` to local_aura and filtered the chain down to local
+        # providers whenever `llm.offline`/AURA_OFFLINE was set - was
+        # removed with the local LLM subsystem.
         fallback_names = self._fallback_names(config)
-
-        if offline_mode:
-            allowed_offline = {"local_aura", "local", "ollama", "mock"}
-            if name not in allowed_offline:
-                logger.warning(
-                    "Offline mode active: requested provider %s is external - falling back to local_aura",
-                    name,
-                )
-                name = "local_aura"
-            fallback_names = [fb for fb in fallback_names if fb in allowed_offline]
 
         # The primary is built through the same guarded path as a
         # fallback. It used to be built inline and a `None` raised
@@ -421,18 +419,6 @@ class BrainRouter:
         or whether its key was present.
         """
 
-        if name in ("local_aura", "local"):
-            from brain.providers.local_aura import LocalAuraBrain
-            return LocalAuraBrain()
-
-        if name == "ollama":
-            # Needs no key, so there is nothing to check first: it is
-            # built, and a wrong host surfaces when a request is made.
-            # Reachability is deliberately not probed here - construction
-            # must not require network access (see the module docstring).
-            from brain.providers.ollama import OllamaProvider
-            return OllamaProvider()
-
         if name == "gemini":
             if not os.getenv("GEMINI_API_KEY"):
                 return None
@@ -532,17 +518,53 @@ class BrainRouter:
         )
 
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, **kwargs) -> str:
         """
         Generate a response using the configured provider.
         """
+        if kwargs and hasattr(self.provider, "generate"):
+            try:
+                return self.provider.generate(prompt, **kwargs)
+            except TypeError:
+                pass
         return self.provider.generate(prompt)
 
-    def generate_with_tools(self, system: str, messages: list, tools: list):
+    def generate_for(self, prompt: str, task=None, context: dict | None = None) -> str:
+        if hasattr(self.provider, "generate_for"):
+            try:
+                return self.provider.generate_for(prompt, task, context=context)
+            except TypeError:
+                return self.provider.generate_for(prompt, task)
+        if context and hasattr(self.provider, "generate"):
+            try:
+                return self.provider.generate(prompt, context=context)
+            except TypeError:
+                pass
+        return self.provider.generate(prompt)
+
+    def stream(self, prompt: str, **kwargs):
+        """
+        Stream a response using the configured provider.
+        """
+        if hasattr(self.provider, "stream"):
+            if kwargs:
+                try:
+                    return self.provider.stream(prompt, **kwargs)
+                except TypeError:
+                    pass
+            return self.provider.stream(prompt)
+        raise AttributeError(f"Provider {self.active_chain()} does not support stream")
+
+    def generate_with_tools(self, system: str, messages: list, tools: list, **kwargs):
         """
         Generate a structured tool-calling turn using the active provider.
         """
         if hasattr(self.provider, "generate_with_tools"):
+            if kwargs:
+                try:
+                    return self.provider.generate_with_tools(system, messages, tools, **kwargs)
+                except TypeError:
+                    pass
             return self.provider.generate_with_tools(system, messages, tools)
         raise AttributeError(f"Provider {self.active_chain()} does not support generate_with_tools")
 

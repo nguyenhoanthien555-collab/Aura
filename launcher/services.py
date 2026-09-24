@@ -480,6 +480,7 @@ def _build_knowledge(config: dict, memory):
     from memory.profile import ProfileStore
     from memory.retrieval import KeywordRetriever, NullRetriever
     from memory.companion import CompanionMemory
+    from memory.companion_sqlite import build_sqlite_companion_stores
 
     session = getattr(memory, "session", None)
 
@@ -501,11 +502,23 @@ def _build_knowledge(config: dict, memory):
         max_recalled=settings.get("max_recalled", 3),
     )
 
-    # Companion context (facts, preferences, goals, projects, style, highlights)
-    companion = CompanionMemory(
-        max_lines=settings.get("max_companion", 10),
-        max_highlights=settings.get("max_highlights", 3),
-    ) if use_companion else None
+    # Companion context (facts, preferences, goals, projects, style, highlights).
+    # Persisted to SQLite by default so Aura still knows the person she is talking
+    # to after a restart; set companion.persist=false to fall back to session-only
+    # in-memory stores (the old behaviour, still what the tests construct).
+    if use_companion:
+        durable_stores = (
+            build_sqlite_companion_stores()
+            if settings.get("persist_companion", True)
+            else {}
+        )
+        companion = CompanionMemory(
+            **durable_stores,
+            max_lines=settings.get("max_companion", 10),
+            max_highlights=settings.get("max_highlights", 3),
+        )
+    else:
+        companion = None
 
     # Compose both into one knowledge provider
     if companion:
@@ -521,7 +534,8 @@ class _CompositeKnowledge:
     Merges two knowledge providers into one.
 
     ProfileStore lives in SQLite and persists across sessions.
-    CompanionMemory is in-memory and session-only for now.
+    CompanionMemory now persists too (SQLite, via companion_sqlite), unless
+    companion.persist is set false, in which case it is session-only.
 
     Both are queried, both contribute lines, and max_lines is applied
     after merging so neither source can crowd out the other.
@@ -558,7 +572,7 @@ class _CompositeKnowledge:
 def _build_vision(config: dict, bus):
     settings = config.get("vision") or {}
 
-    if not settings.get("enabled", False):
+    if settings.get("enabled") is False:
         return None
 
     from vision.manager import VisionManager
@@ -646,7 +660,6 @@ def _build_vision_processor(settings: dict, config: dict):
     from vision.processor import ProcessorChain, WindowTitleProcessor
 
     pixels = [
-        _build_ollama_vision(settings, config),
         _build_cloud_vision(settings, config),
     ]
 
@@ -659,51 +672,6 @@ def _build_vision_processor(settings: dict, config: dict):
     # because the manager only reaches its default when `processor` is
     # None, and from here on it never will be.
     return ProcessorChain([*pixels, WindowTitleProcessor()])
-
-
-def _build_ollama_vision(settings: dict, config: dict):
-    """
-    The local pixel processor.
-
-    The model comes from `vision.settings.ollama_model`, which is also
-    what keeps this path from being handed the server's cloud model
-    name: the two processors have separate keys (`ollama_model` and
-    `cloud_model`) rather than one shared `vision.model`. The log line
-    below is deliberately the model and the host together, so a
-    mismatch is visible at startup rather than as an empty vision
-    section later.
-
-    Not gated on the daemon answering. A startup probe would add a
-    connect to every launch and a second failure mode to read, and it
-    would answer a question that has already changed by the time vision
-    first runs - Ollama can be started after Aura. An unreachable daemon
-    costs one refused connection per observation, and the chain behind
-    it is what makes that cost a fall-through rather than a silence.
-    """
-
-    from vision.ollama_processor import (
-        DEFAULT_HOST,
-        DEFAULT_TIMEOUT,
-        OllamaVisionProcessor,
-    )
-    from vision.settings import ollama_model
-
-    llm = config.get("llm") or {}
-
-    model = ollama_model(config)
-    host = settings.get("host") or llm.get("host") or DEFAULT_HOST
-    timeout = settings.get("timeout") or DEFAULT_TIMEOUT
-
-    debug_path = settings.get("debug_frame") or None
-
-    logger.info("Vision: %s at %s", model, host)
-
-    return OllamaVisionProcessor(
-        model=model,
-        host=host,
-        timeout=timeout,
-        debug_path=debug_path,
-    )
 
 
 def _build_cloud_vision(settings: dict, config: dict):

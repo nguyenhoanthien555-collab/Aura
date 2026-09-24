@@ -322,6 +322,9 @@ class ChatPersistenceTest {
 
         val current: StoredConversation get() = stored
 
+        private val _changes = kotlinx.coroutines.flow.MutableStateFlow(stored)
+        override val changes: kotlinx.coroutines.flow.StateFlow<StoredConversation> get() = _changes
+
         override fun read(): StoredConversation {
             if (failReads) throw IllegalStateException("keystore unavailable")
             return stored
@@ -330,17 +333,26 @@ class ChatPersistenceTest {
         override fun write(messages: List<StoredMessage>) {
             writes++
             stored = stored.copy(messages = messages)
+            _changes.value = stored
         }
 
         override fun clear() {
             cleared = true
             stored = StoredConversation()
+            _changes.value = stored
         }
     }
 
     private fun viewModel(transcript: Transcript): ChatViewModel {
 
-        val settings = FakeSettings(serverUrl = server.url("/").toString(), authToken = "t")
+        // Cloud (server) mode: these tests drive the REST/WebSocket path and
+        // assert what gets persisted. The store defaults to "on_device",
+        // which would answer from the local brain and never reach [server].
+        val settings = FakeSettings(
+            serverUrl = server.url("/").toString(),
+            authToken = "t",
+            intelligenceMode = "cloud",
+        )
 
         return ChatViewModel(AuraRepository(settings), settings, transcript)
             .also { viewModels += it }

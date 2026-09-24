@@ -542,3 +542,15 @@ class ToolLifecycleEvent(Event):
     detail: str = ""
     timestamp: float = 0.0
 
+
+@dataclass(frozen=True)
+class AgentInterruptedEvent(Event):
+    """
+    Emergency action interruption event.
+    """
+    reason: str = "User requested emergency stop"
+    cancelled_tasks: tuple[str, ...] = ()
+    cancelled_runs: tuple[str, ...] = ()
+    cancelled_devices: int = 0
+    timestamp: float = 0.0
+

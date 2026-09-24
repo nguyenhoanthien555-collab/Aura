@@ -2,27 +2,18 @@
 Provider resolution and failover (Phase 5).
 
 One question this file exists to answer, permanently: *which provider does
-Aura use, in what order, and what happens when one fails?* Before this
-phase the honest answer was "it depends, and the configuration lies about
-it in three separate ways".
+Aura use, in what order, and what happens when one fails?*
 
-    AURA-P1-009  `provider: ollama` returned early from _create_provider
-                 and never built a chain, so the local provider - the one
-                 most likely to be unreachable - was the only one with no
-                 failover at all.
-    AURA-P1-010  OLLAMA_HOST was documented in docs/DEPLOYMENT.md and
-                 .env.example and read by nothing.
-    AURA-P2-009  The Ollama model was inferred from `llm.model` by testing
-                 `startswith("gemini")`, so any non-Gemini primary model
-                 name was passed to Ollama as if it were a model tag.
     AURA-P2-010  `fallback_provider` (singular) was read only when
                  `fallback_providers` was None - but that key is in
                  DEFAULT_CONFIG, so after the deep merge it is never None.
                  An operator who wrote only the singular form got no
                  failover and no warning.
 
-The tests are grouped by the promise they keep rather than by the defect
-number, because the promises are what has to survive Phase 6.
+The local (Ollama) provider these tests were first written around was
+removed with the rest of the on-device subsystem: Aura is cloud-only. The
+resolution, failover, observability, and registry promises below are
+provider-agnostic, and they are what has to survive that removal.
 """
 
 import copy
@@ -31,14 +22,12 @@ import logging
 import pytest
 
 from brain.router import (
-    KEYLESS_PROVIDERS,
     OWNER_DEFINED_ENDPOINTS,
     PROVIDER_KEYS,
     BrainRouter,
 )
-from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
-from brain.providers.fallback import ACCOUNT_LIMIT, FallbackProvider, _category_of
-from brain.providers.ollama import OllamaProvider
+from brain.providers.errors import ProviderRateLimitError
+from brain.providers.fallback import ACCOUNT_LIMIT, _category_of
 
 from core.config import DEFAULT_CONFIG
 
@@ -49,7 +38,6 @@ PROVIDER_ENV = (
     # their own environment silently changed what these tests resolved.
     *PROVIDER_KEYS.values(),
     *(f"{name.upper()}_BASE_URL" for name in PROVIDER_KEYS),
-    "OLLAMA_HOST",
 )
 
 
@@ -133,157 +121,9 @@ def fake_cloud(monkeypatch):
     ):
         monkeypatch.setattr(cls, "generate", lambda self, prompt, _n=name: f"{_n} reply")
 
-    monkeypatch.setattr(OllamaProvider, "generate", lambda self, prompt: "ollama reply")
-
 
 # ======================================================================
-# 1. Ollama is a provider like any other (AURA-P1-009)
-# ======================================================================
-
-def test_ollama_as_primary_builds_a_real_fallback_chain(monkeypatch, fake_cloud):
-    # The defect: _create_provider returned OllamaProvider() before the
-    # chain builder was reached, so this used to be a bare OllamaProvider
-    # no matter what fallback_providers said.
-    router = router_with(
-        monkeypatch, "ollama",
-        provider="ollama", fallback_providers=["gemini", "groq"],
-    )
-
-    assert isinstance(router.provider, FallbackProvider)
-    assert router.active_chain() == "ollama->gemini->groq"
-
-
-def test_ollama_can_be_a_fallback_member(monkeypatch, fake_cloud):
-    # The other half of the same defect: _instantiate_provider had no
-    # "ollama" branch, so naming it as a fallback silently dropped it.
-    router = router_with(
-        monkeypatch, "gemini",
-        provider="gemini", fallback_providers=["ollama"],
-    )
-
-    assert router.active_chain() == "gemini->ollama"
-
-
-def test_an_unreachable_ollama_falls_through_to_the_cloud(monkeypatch, fake_cloud):
-    # The scenario the whole phase is for: the local box is off, and Aura
-    # keeps answering instead of failing.
-    monkeypatch.setattr(
-        OllamaProvider, "generate",
-        lambda self, prompt: (_ for _ in ()).throw(
-            ProviderUnavailableError("Ollama is unreachable")
-        ),
-    )
-
-    router = router_with(
-        monkeypatch, "ollama",
-        provider="ollama", fallback_providers=["gemini"],
-    )
-
-    assert router.generate("hello") == "gemini reply"
-
-
-def test_ollama_needs_no_key_and_is_never_skipped_for_a_missing_one(monkeypatch, fake_cloud):
-    # Ollama is keyless, so the key-based skip logic must not apply to it.
-    assert "ollama" in KEYLESS_PROVIDERS
-    assert "ollama" not in PROVIDER_KEYS
-
-    reason = BrainRouter._skip_reason("ollama")
-
-    assert "API key" in reason
-    assert "not set" not in reason
-
-
-def test_an_unreachable_ollama_is_classified_as_transient_not_unknown():
-    # A bare RuntimeError reads as "unclassified provider error" to the
-    # failover layer, which is the wrong description of the most ordinary
-    # failure a local provider has.
-    import urllib.error
-
-    provider = OllamaProvider(host="http://127.0.0.1:9", model="qwen3:8b", timeout=0.2)
-
-    with pytest.raises(ProviderUnavailableError) as raised:
-        provider.generate("hello")
-
-    assert _category_of(raised.value) == "transient/unavailable"
-
-
-# ======================================================================
-# 2. The Ollama host is configurable (AURA-P1-010)
-# ======================================================================
-
-def test_the_default_host_is_loopback(monkeypatch):
-    monkeypatch.setattr("brain.providers.ollama.load_config", lambda: config_with())
-
-    assert OllamaProvider().host == "http://127.0.0.1:11434"
-
-
-def test_ollama_host_environment_variable_is_honoured(monkeypatch):
-    # docs/DEPLOYMENT.md has documented this variable for four sections;
-    # until this phase nothing read it.
-    monkeypatch.setattr("brain.providers.ollama.load_config", lambda: config_with())
-    monkeypatch.setenv("OLLAMA_HOST", "http://ollama.internal:11434")
-
-    assert OllamaProvider().host == "http://ollama.internal:11434"
-
-
-def test_an_explicit_host_beats_config_which_beats_the_environment(monkeypatch):
-    monkeypatch.setenv("OLLAMA_HOST", "http://from-env:11434")
-    monkeypatch.setattr(
-        "brain.providers.ollama.load_config",
-        lambda: config_with(host="http://from-config:11434"),
-    )
-
-    assert OllamaProvider().host == "http://from-config:11434"
-    assert OllamaProvider(host="http://explicit:11434").host == "http://explicit:11434"
-
-
-def test_a_trailing_slash_does_not_produce_a_double_slash_url(monkeypatch):
-    monkeypatch.setattr("brain.providers.ollama.load_config", lambda: config_with())
-    monkeypatch.setenv("OLLAMA_HOST", "http://ollama.internal:11434/")
-
-    assert OllamaProvider().host == "http://ollama.internal:11434"
-
-
-# ======================================================================
-# 3. The Ollama model is configured, not inferred (AURA-P2-009)
-# ======================================================================
-
-@pytest.mark.parametrize("primary_model", [
-    "gemini-3.6-flash",
-    "claude-opus-5",
-    "llama3",
-    "",
-])
-def test_the_primary_model_name_never_leaks_into_ollama(monkeypatch, primary_model):
-    # The old rule was `startswith("gemini")`, so every model name that
-    # was not Gemini's - including another vendor's - was handed to Ollama
-    # as if it were a local tag.
-    monkeypatch.setattr(
-        "brain.providers.ollama.load_config",
-        lambda: config_with(model=primary_model),
-    )
-
-    assert OllamaProvider().model == "qwen3:8b"
-
-
-def test_ollama_model_is_read_from_its_own_setting(monkeypatch):
-    monkeypatch.setattr(
-        "brain.providers.ollama.load_config",
-        lambda: config_with(model="gemini-3.6-flash", ollama_model="mistral:7b"),
-    )
-
-    assert OllamaProvider().model == "mistral:7b"
-
-
-def test_ollama_has_a_dedicated_setting_like_its_peers():
-    # groq_model and mistral_model already existed; the absence of an
-    # ollama_model is what forced the string hack in the first place.
-    for setting in ("groq_model", "mistral_model", "ollama_model"):
-        assert setting in DEFAULT_CONFIG["llm"], setting
-
-
-# ======================================================================
-# 4. One authoritative fallback setting (AURA-P2-010)
+# 1. One authoritative fallback setting (AURA-P2-010)
 # ======================================================================
 
 def test_fallback_providers_is_authoritative(monkeypatch, fake_cloud):
@@ -374,7 +214,7 @@ def test_the_shipped_config_states_the_chain_once():
 
 
 # ======================================================================
-# 5. The chain that exists is observable (AURA-P1-012)
+# 2. The chain that exists is observable (AURA-P1-012)
 # ======================================================================
 
 def test_health_reports_the_chain_that_was_built_not_the_one_configured(monkeypatch, fake_cloud):
@@ -624,7 +464,7 @@ def test_no_key_value_is_ever_logged(monkeypatch, caplog):
 
 
 # ======================================================================
-# 6. Failure behaviour is unchanged (Phase 1 contract)
+# 3. Failure behaviour is unchanged (Phase 1 contract)
 # ======================================================================
 
 def test_a_rate_limited_provider_falls_through(monkeypatch, fake_cloud):
@@ -671,7 +511,7 @@ def test_the_account_limit_category_is_the_one_that_stops_failover():
 
 
 # ======================================================================
-# 7. The registry is complete, and a key alone still conjures nothing
+# 4. The registry is complete, and a key alone still conjures nothing
 # ======================================================================
 #
 # This section used to assert the opposite for two names: that `cerebras`

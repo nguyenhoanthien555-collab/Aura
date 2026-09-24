@@ -34,11 +34,27 @@ _NEGATIONS = frozenset(
      "don't", "dont", "doesn't", "không", "không thể"}
 )
 
+# Aura stating who or what she is: "I am Aura", "Tôi là Aura", "Em là một
+# AI companion", "Mình là AURA". This is a first-person constant grounded
+# by the persona, not a fact recalled from the memory store - so it must
+# not be reclassified as MEMORY_DERIVED and hedged into "from what I
+# remember, I am Aura", which reads as Aura being unsure who she is. The
+# subject is first-person (I/Tôi/Em/Mình/Tớ/Tui) + a copula + a self
+# descriptor (a name, or companion/assistant/AI). It deliberately does
+# NOT match claims about the user ("you are...") or the user's world.
+_SELF_IDENTITY = re.compile(
+    r"\b(i\s?am|i'?m|tôi\s+là|em\s+là|mình\s+là|tớ\s+là|tui\s+là)\b"
+    r"[^.?!]*?"
+    r"\b(aura|companion|đồng\s+hành|assistant|trợ\s+lý|ai\b|a\.?i\.?|"
+    r"trí\s+tuệ|model|mô\s+hình)\b",
+    re.IGNORECASE,
+)
+
 _VERB_TOOL_FAMILIES = {
     "sent": ("send", "sends", "sent", "email", "sms", "text"),
     "created": ("create", "created", "calendar", "event", "note", "contact"),
     "deleted": ("delete", "deleted", "remove", "removed", "trash"),
-    "opened": ("open", "opened", "launch", "launched", "start"),
+    "opened": ("open", "opened", "launch", "launched", "start", "mở", "khởi chạy"),
     "changed": ("change", "changed", "set", "settings", "update", "updated"),
     "saved": ("save", "saved", "write", "wrote"),
     "modified": ("modify", "modified", "edit", "edited", "file"),
@@ -46,6 +62,11 @@ _VERB_TOOL_FAMILIES = {
     "verified": ("verify", "verified", "confirm", "confirmed"),
     "scheduled": ("schedule", "scheduled", "calendar", "meeting", "event"),
     "cancelled": ("cancel", "cancelled", "canceled"),
+    "tapped": ("tap", "tapped", "click", "clicked", "press", "chạm", "bấm", "nhấn"),
+    "swiped": ("swipe", "swiped", "scroll", "vuốt", "cuộn"),
+    "typed": ("type", "typed", "text", "input", "gõ", "nhập"),
+    "home": ("home", "launcher", "trang chủ"),
+    "back": ("back", "quay lại"),
 }
 
 
@@ -122,6 +143,18 @@ def _verify_action_claim(claim: Claim, ledger: EvidenceLedger) -> None:
 
     words = ledger.claim_words(claim.sentence)
 
+    is_screen_or_live_state = bool(
+        re.search(r"\b(screen|màn hình|giao diện|display|cửa sổ|window|ứng dụng|app)\b", claim.sentence, re.IGNORECASE)
+    )
+    if getattr(ledger, "vision", None) and is_screen_or_live_state:
+        matched_vis = ledger.matching_vision(words)
+        if matched_vis:
+            best_vis = matched_vis[0]
+            claim.evidence_refs.append(best_vis.evidence_id)
+            claim.state = ClaimState.SUPPORTED
+            claim.notes.append(f"grounded in real-time vision observation ({best_vis.source}: {best_vis.description[:60]})")
+            return
+
     matched: list[ToolEvidence] = list(ledger.matching_tool(words))
 
     if not matched:
@@ -177,6 +210,14 @@ def _verify_capability_claim(
     negated = any(word in _NEGATIONS for word in words)
 
     if not matched:
+        is_screen_capability = bool(
+            re.search(r"\b(màn hình|screen|giao diện|quan sát|nhìn màn hình|xem màn hình)\b", claim.sentence, re.IGNORECASE)
+        )
+        if is_screen_capability and getattr(ledger, "vision", None):
+            claim.state = ClaimState.SUPPORTED if not negated else ClaimState.CONTRADICTED
+            claim.notes.append("screen observation capability is active via real-time vision")
+            return
+
         claim.state = ClaimState.SUPPORTED if negated else ClaimState.UNKNOWN
         claim.notes.append("no registry entry matches the claim's words")
         return
@@ -342,6 +383,18 @@ def _verify_factual_claim(
 
     words = ledger.claim_words(claim.sentence)
 
+    is_screen_or_live_state = bool(
+        re.search(r"\b(screen|màn hình|giao diện|display|cửa sổ|window|windows|ứng dụng|app|đang mở|đang chạy|foreground)\b", claim.sentence, re.IGNORECASE)
+    )
+    if getattr(ledger, "vision", None) and is_screen_or_live_state:
+        matched_vis = ledger.matching_vision(words)
+        if matched_vis:
+            best_vis = matched_vis[0]
+            claim.evidence_refs.append(best_vis.evidence_id)
+            claim.state = ClaimState.SUPPORTED
+            claim.notes.append(f"grounded in real-time vision observation ({best_vis.source}: {best_vis.description[:60]})")
+            return
+
     matched = ledger.matching_tool(words)
 
     if matched:
@@ -375,6 +428,18 @@ def _verify_factual_claim(
     # three options" is a turn of phrase with the same shape, and
     # hedging it would be exactly the over-strictness the contract
     # forbids.
+    is_system_feature = bool(
+        re.search(
+            r"\b(tính năng|khả năng|chức năng|mặc định|feature|features|capability|capabilities)\b",
+            claim.sentence,
+            re.IGNORECASE,
+        )
+    )
+    if is_system_feature:
+        claim.state = ClaimState.SUPPORTED
+        claim.notes.append("describes system features and capabilities")
+        return
+
     if ClaimType.IDENTITY in claim.tags and claim.world:
         claim.state = ClaimState.UNKNOWN
         claim.hallucination = HallucinationType.IDENTITY_OVERCLAIM.value
@@ -417,8 +482,25 @@ def verify_claim(claim: Claim, ledger: EvidenceLedger,
     # route it away from the tool ledger and the capability registry -
     # the only two things that can actually answer them.
     words = ledger.claim_words(claim.sentence)
-    if ledger.matching_memory(words) and claim.type not in (
-        ClaimType.ACTION, ClaimType.CAPABILITY,
+    is_screen_or_live_state = bool(
+        re.search(r"\b(screen|màn hình|giao diện|display)\b", claim.sentence, re.IGNORECASE)
+    )
+    is_system_feature_description = bool(
+        re.search(
+            r"\b(tính năng|khả năng|chức năng|mặc định|feature|features|capability|capabilities)\b",
+            claim.sentence,
+            re.IGNORECASE,
+        )
+    )
+    has_fresh_tool_evidence = bool(ledger.matching_tool(words))
+    is_self_identity = bool(_SELF_IDENTITY.search(claim.sentence))
+    if (
+        ledger.matching_memory(words)
+        and not has_fresh_tool_evidence
+        and not is_screen_or_live_state
+        and not is_system_feature_description
+        and not is_self_identity
+        and claim.type not in (ClaimType.ACTION, ClaimType.CAPABILITY)
     ):
         claim.type = ClaimType.MEMORY_DERIVED
 

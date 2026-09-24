@@ -36,7 +36,7 @@ from core.sync.invocation_ledger import DurableInvocationLedger
 from core.sync.models import InboxStatus, OutboxStatus, SyncEvent
 from core.sync.outbox import OutboxManager
 from daemon.supervisor import AuraDaemon, SubsystemHealth
-from learning.autonomy_guard import AutonomyGateManager
+from agent.autonomy_guard import AutonomyGateManager
 from memory.backup import (
     create_database_backup,
     get_backup_history,
