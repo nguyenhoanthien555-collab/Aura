@@ -118,18 +118,25 @@ removed — its accurate content is folded into ARCHITECTURE.md, and its
 
 ### Section 11 — Testing
 
-Done. `.venv/Scripts/python.exe -m pytest -q` reports **1550 passed, 1
-deselected** as of the Phase 9 sweep — 1297 `def test_` functions across
-39 files, the difference being parametrization. The one deselected test
-is the opt-in Gemini integration test; `pytest.ini` excludes it with
-`-m "not integration"` so the suite needs no API keys.
+Done. `.venv/Scripts/python.exe -m pytest -q` reports **3840+ passed** as
+of the Master Upgrade sweep across 40+ test modules. The opt-in Gemini
+integration test is excluded by default in `pytest.ini` with `-m "not
+integration"` so the hermetic test suite needs no API keys.
 
-`.github/workflows/tests.yml` runs the same command on every push and
-pull request.
+The Android Companion suite (`cd android && ./gradlew :app:testDebugUnitTest`)
+reports **451 passed, 0 failures** across 22 test classes.
 
-An earlier revision of this file said none of these tests had ever been
-executed, because shell execution was unavailable in those sessions.
-That is no longer the case.
+### Section 13 — Android Companion Native Task Tools & 24/7 Proactive Intelligence
+
+- **Native Android Task Tools**: DeviceTaskDispatcher executes SMS, Calendar,
+  and Contacts directives with postcondition verification and live permission
+  auditing in the Hub UI (`android/app/.../accessibility/DeviceTaskDispatcher.kt`).
+- **24/7 Proactive Outbox**: `AuraDaemon` in `daemon/supervisor.py` feeds
+  evaluated proactive recommendations directly to `NotificationOutbox` for
+  delivery to connected clients.
+- **Hybrid Semantic Memory**: `HybridConversationRetriever` in `memory/retrieval.py`
+  blends lexical token matching and dense vector similarity via Reciprocal Rank
+  Fusion (RRF) with graceful degradation to lexical search.
 
 ## Not started
 
@@ -164,7 +171,7 @@ driven by `llm.fallback_providers`).
 
 ## Known limitations
 
-Honest list, re-checked against the code in the Phase 7 sweep:
+Honest list, re-checked against the code:
 
 1. One conversation thread per session. No parallel conversations within
    a session.
@@ -173,18 +180,13 @@ Honest list, re-checked against the code in the Phase 7 sweep:
 3. Companion memory is in-memory and resets on restart. `memory/companion.py`
    holds Protocols plus an in-memory implementation and no schema — the
    durable half is `memory/profile.py` (SQLite `UserFact`).
-4. Recall is lexical, not semantic. `KeywordRetriever` does a keyword
-   search over the messages table. There is no vector store and no
-   embedding model anywhere in this codebase.
+4. Recall is lexical by default; semantic and hybrid recall are opt-in.
+   `KeywordRetriever` provides lexical search. When configured with an
+   embedding provider (such as `GeminiEmbeddingProvider`), `HybridConversationRetriever`
+   and `HybridRetriever` fuse lexical and semantic rankings via RRF.
 5. Multi-user is not supported. Server sessions isolate conversation
    *state*, not identity; the profile store is one person's.
 6. Primary development and testing on Windows.
 7. Desktop actions require the desktop. The server process can only run
    tools inside its own container — a cloud deployment cannot touch the
    user's PC, and is built to say so rather than claim success.
-
-Items 2, 5 and 7 in the previous revision of this list ("local only, no
-remote access", "no authentication", "the test suite has never been
-executed") are obsolete: `server/` exposes an authenticated HTTP and
-WebSocket API with a mandatory bearer token, and the suite runs at 1160
-passed, 1 deselected.

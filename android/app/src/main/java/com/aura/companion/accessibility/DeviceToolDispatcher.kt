@@ -155,6 +155,7 @@ class FileInvocationLedger(
 class AccessibilityToolDispatcher(
     private val service: AuraAccessibilityService,
     private val invocationLedger: InvocationLedger = InMemoryInvocationLedger(),
+    private val taskDispatcher: DeviceTaskDispatcher = DeviceTaskDispatcher(AndroidDeviceTaskHandler(service)),
 ) : DeviceToolExecutor, DeviceCapabilityReporter {
 
     fun getCachedReport(toolCallId: String): ToolResultReport? {
@@ -192,6 +193,42 @@ class AccessibilityToolDispatcher(
             },
             permissions = basePermissions + ("android.screen_capture" to captureAllowed),
         )
+
+        // Phase 5 Task Capabilities
+        val canSendSms = service.checkSelfPermission(android.Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val canReadSms = service.checkSelfPermission(android.Manifest.permission.READ_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        statuses["android.sms"] = DeviceCapabilityStatusDto(
+            state = if (canSendSms && canReadSms) "AVAILABLE" else "BLOCKED_PERMISSION",
+            healthy = true,
+            reason = if (canSendSms && canReadSms) "SMS permissions granted" else "SMS permissions not granted",
+            permissions = mapOf(
+                "android.permission.SEND_SMS" to canSendSms,
+                "android.permission.READ_SMS" to canReadSms,
+            ),
+        )
+
+        val canReadCal = service.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val canWriteCal = service.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        statuses["android.calendar"] = DeviceCapabilityStatusDto(
+            state = if (canReadCal && canWriteCal) "AVAILABLE" else "BLOCKED_PERMISSION",
+            healthy = true,
+            reason = if (canReadCal && canWriteCal) "Calendar permissions granted" else "Calendar permissions not granted",
+            permissions = mapOf(
+                "android.permission.READ_CALENDAR" to canReadCal,
+                "android.permission.WRITE_CALENDAR" to canWriteCal,
+            ),
+        )
+
+        val canContacts = service.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        statuses["android.contacts"] = DeviceCapabilityStatusDto(
+            state = if (canContacts) "AVAILABLE" else "BLOCKED_PERMISSION",
+            healthy = true,
+            reason = if (canContacts) "Contacts permission granted" else "Contacts permission not granted",
+            permissions = mapOf(
+                "android.permission.READ_CONTACTS" to canContacts,
+            ),
+        )
+
         return statuses
     }
 
@@ -267,6 +304,22 @@ class AccessibilityToolDispatcher(
             if (cached != null) {
                 return cached
             }
+        }
+
+        // Phase 5: Personal Task Tools
+        if (DeviceTaskToolCatalog.isTaskTool(directive.tool)) {
+            val report = when (val validation = DeviceTaskToolCatalog.validate(directive)) {
+                is DeviceToolCatalog.Validation.UnknownTool ->
+                    failure(directive, TOOL_NOT_FOUND, "this device has no tool ${directive.tool}")
+                is DeviceToolCatalog.Validation.BadArguments ->
+                    failure(directive, INVALID_ARGUMENTS, validation.reason)
+                is DeviceToolCatalog.Validation.Ok ->
+                    taskDispatcher.execute(directive)
+            }
+            if (directive.toolCallId.isNotEmpty()) {
+                invocationLedger.record(directive.toolCallId, report)
+            }
+            return report
         }
 
         val capabilityId = CAPABILITY_BY_TOOL[directive.tool]

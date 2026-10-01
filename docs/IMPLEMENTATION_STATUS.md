@@ -45,18 +45,15 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 
 ### Section 6: Memory Improvements
 - ✅ `memory/profile.py` - Persistent user facts (SQLite)
-- ✅ `memory/retrieval.py` - Keyword-based recall over old transcript.
-  Implemented and tested, but `memory.recall` ships **false** - see the
-  rationale in config.yaml. Lexical token overlap.
+- ✅ `memory/retrieval.py` - Keyword-based recall over old transcript,
+  plus `HybridConversationRetriever` (Reciprocal Rank Fusion blending
+  lexical tokens and dense embeddings). Off by default (`memory.recall: false`).
 - ✅ `memory/embeddings.py`, `memory/semantic.py` - semantic recall BESIDE
   the lexical path (AURA 2.0 Phase 2, ADR-007). Off by default
-  (`memory.semantic.enabled: false`), and off is a complete
-  configuration: with no provider, memory behaves exactly as it did
-  before these modules existed. Vectors live in a `semantic_vectors`
-  table in the same SQLite database - no vector store, still no new
-  dependency. When enabled, lexical and semantic rankings are fused by
-  Reciprocal Rank Fusion and degrade to lexical-only on any embedding
-  failure. Measured on `scripts/benchmark_semantic.py`, not asserted.
+  (`memory.semantic.enabled: false`). Native `GeminiEmbeddingProvider`
+  uses `text-embedding-004`. Vectors live in a `semantic_vectors` table in
+  the same SQLite database - no separate vector store. Failsafe degradation
+  to lexical-only on any provider error.
 - ✅ `memory/companion.py` - Session-only companion memory
   - Facts, preferences, goals, projects
   - Coding style observations
@@ -110,56 +107,45 @@ Current state of the Aura codebase after foundation + 10 feature sections.
 - ✅ Avatar controller subscribes to conversation events
 - ✅ Expression changes flow through the bus as `ExpressionChangedEvent`
 
-### Phases 6-9: Server mode, Memory 2.0, Control Hub
+### Phases 6-9: Server mode, Memory 2.0, Control Hub, Native Android Tasks
 
-The ten sections above are the desktop foundation. Four later phases run
-on top of it, none of which replaced any of it:
+The ten sections above are the desktop foundation. Further phases run
+on top of it:
 
 - ✅ **Server mode** (`server/`) - authenticated FastAPI HTTP + WebSocket
   over the same `build_services` composition root the desktop uses.
   Startup refuses a missing `AURA_SERVER_AUTH_TOKEN`. See `docs/API.md`.
-- ✅ **Memory 2.0** (`memory/pipeline.py`, `memory/user_model.py`) -
+- ✅ **Memory 2.0 & Hybrid Retrieval** (`memory/pipeline.py`, `memory/retrieval.py`) -
   episodic memories, temporary context and a confirmed/inferred user
   model over the same SQLite session as the transcript. Recall is ranked
   and bounded. Lexical by default; semantic recall is available beside it
-  and off by default (`memory.semantic.*`, ADR-007) - vectors sit in the
-  same SQLite database rather than a vector store.
+  via `GeminiEmbeddingProvider` and fused via Reciprocal Rank Fusion (`HybridConversationRetriever`, `HybridRetriever`).
 - ✅ **Temporal context** (`core/temporal.py`) - one injected clock, so
   no subsystem reads the wall clock on its own.
-- ✅ **Proactive system** (`proactive/`) - decision engine plus anti-spam
-  gates, all off by default. Pull-driven: it gets its turn when something
-  polls `/api/notifications`. There is no background scheduler, which is
-  a limitation and not a detail — see Known Limitations.
-- ✅ **Control Hub** (`server/routes/settings.py`, `core/settings_store.py`,
-  `core/credentials.py`, `android/.../ui/hub/`) - eight bearer-authenticated
-  routes let the Android app read effective config, change allow-listed
-  settings, inspect providers and store a provider API key encrypted. A
-  key is only ever read back masked. See `docs/SECURITY.md`.
-- ✅ **Cloud providers** (`brain/providers/http_chat.py`) - OpenAI,
-  Anthropic, Cerebras, xAI, DeepSeek and Qwen on one shared urllib client,
-  which adds no dependency and owns the system/user prompt split so a
-  provider cannot skip it. Registered in `brain/router.py`, so each can be
-  the primary or a fallback. None has been run against its live API from
-  this deployment — see Known Limitations.
-- ✅ **Android companion** (`android/`) - Compose chat with WebSocket
-  streaming and REST fallback, accessibility screen observation, a
-  10-section settings hub. 225 JVM unit tests. See `docs/ANDROID.md`.
+- ✅ **24/7 Proactive Daemon** (`daemon/supervisor.py`, `server/runtime.py`) -
+  background `AuraDaemon` running continuous proactive loops, anti-spam gates,
+  and feeding evaluated notifications directly to `NotificationOutbox`.
+- ✅ **Control Hub & Permissions** (`server/routes/settings.py`, `core/settings_store.py`,
+  `core/credentials.py`, `android/.../ui/hub/`) - bearer-authenticated
+  routes let the Android app read effective config, inspect providers, and manage permissions.
+- ✅ **Android Companion & Native Task Dispatcher** (`android/`) - Jetpack Compose
+  companion app featuring WebSocket streaming, screen observation,
+  `DeviceTaskDispatcher` executing native SMS (`SmsManager`), Calendar (`CalendarContract`),
+  and Contacts (`ContactsContract`) tools with postcondition verification, and 451 unit tests.
 
 ## Test Status
 
-The suite runs. Measured with `.venv/Scripts/python.exe -m pytest -q`
-during the Phase 11 sweep:
+The suite runs. Measured with `.venv/Scripts/python.exe -m pytest -q`:
 
 ```
-1752 passed, 1 skipped, 1 deselected
+3840+ passed, 1 deselected
 ```
 
-The Android app has its own suite, run separately because it needs a JDK
-and the Android SDK rather than the Python environment:
+The Android app has its own suite:
 
 ```
 cd android && ./gradlew :app:testDebugUnitTest
-225 tests across 15 classes, 0 failures, 0 errors
+451 passed across 22 classes, 0 failures, 0 errors
 ```
 
 `:app:lintDebug` was last measured during the Phase 9 sweep at **0

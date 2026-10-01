@@ -59,6 +59,7 @@ class AuraDaemon:
         poll_interval: float = 1.0,
         proactive_engine: Optional[Any] = None,
         proactive_interval: float = 60.0,
+        notifications_outbox: Optional[Any] = None,
         backup_interval: float = 86400.0,
         backup_dir: Optional[Any] = None,
         prune_interval: float = 3600.0,
@@ -68,6 +69,7 @@ class AuraDaemon:
         self.poll_interval = poll_interval
         self.proactive_engine = proactive_engine
         self.proactive_interval = proactive_interval
+        self.notifications_outbox = notifications_outbox
         self._last_proactive_tick = 0.0
         self.backup_interval = backup_interval
         self.backup_dir = backup_dir
@@ -99,7 +101,14 @@ class AuraDaemon:
             if self.is_running:
                 return
             self._stop_event.clear()
-            self._started_at = time.time()
+            now = time.time()
+            self._started_at = now
+            if self._last_proactive_tick == 0.0:
+                self._last_proactive_tick = now
+            if self._last_backup_tick == 0.0:
+                self._last_backup_tick = now
+            if self._last_prune_tick == 0.0:
+                self._last_prune_tick = now
             self._thread = threading.Thread(target=self._daemon_loop, name="aura-daemon-24-7", daemon=True)
             self._thread.start()
             logger.info("AURA 24/7 Daemon started (offline=%s)", self.offline)
@@ -193,7 +202,22 @@ class AuraDaemon:
         try:
             decision = self.proactive_engine.tick()
             if decision and getattr(decision, "send", False):
-                logger.info("[AuraDaemon] Proactive message generated: %s", getattr(decision, "detail", ""))
+                detail = getattr(decision, "detail", "") or str(decision)
+                logger.info("[AuraDaemon] Proactive message generated: %s", detail)
+                if self.notifications_outbox is not None:
+                    try:
+                        from server.notifications import PendingNotification
+                        self.notifications_outbox.add(
+                            PendingNotification(
+                                message=detail,
+                                reason=getattr(decision, "reason", "proactive"),
+                                priority=getattr(getattr(decision, "priority", None), "value", "normal"),
+                                source="proactive",
+                                confidence=1.0,
+                            )
+                        )
+                    except Exception as outbox_err:
+                        logger.debug("[AuraDaemon] Error enqueueing to outbox: %s", outbox_err)
         except Exception as e:
             logger.debug("Proactive worker tick error: %s", e)
 
@@ -222,15 +246,17 @@ class AuraDaemon:
             return
         self._last_prune_tick = now
         try:
-            from core.sync.outbox import OutboxManager
-            from core.sync.inbox import InboxProcessor
-            outbox = OutboxManager()
-            inbox = InboxProcessor()
-            pruned_out = outbox.prune_acknowledged(max_records_to_keep=self.prune_retention_limit)
-            pruned_in = inbox.prune_processed(max_records_to_keep=self.prune_retention_limit)
-            self.records_pruned += (pruned_out + pruned_in)
-            if pruned_out or pruned_in:
-                logger.info("[AuraDaemon] Pruned %d outbox and %d inbox records", pruned_out, pruned_in)
+            from memory.sqlite import db_lock
+            with db_lock:
+                from core.sync.outbox import OutboxManager
+                from core.sync.inbox import InboxProcessor
+                outbox = OutboxManager()
+                inbox = InboxProcessor()
+                pruned_out = outbox.prune_acknowledged(max_records_to_keep=self.prune_retention_limit)
+                pruned_in = inbox.prune_processed(max_records_to_keep=self.prune_retention_limit)
+                self.records_pruned += (pruned_out + pruned_in)
+                if pruned_out or pruned_in:
+                    logger.info("[AuraDaemon] Pruned %d outbox and %d inbox records", pruned_out, pruned_in)
         except Exception as e:
             logger.debug("[AuraDaemon] Pruning worker tick error: %s", e)
 

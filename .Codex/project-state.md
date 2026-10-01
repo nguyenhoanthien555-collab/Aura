@@ -1,7 +1,21 @@
 # AURA project state
 
-## Cloud-Only Architecture, Gemini Semantic Memory & Phase 5 Task Tools (2026-10-01)
-AURA has been completely transitioned to a Cloud-Only architecture (default provider Google Gemini, with 11 supported cloud providers). Native `GeminiEmbeddingProvider` is operational in `memory/embeddings.py` (via Google GenAI SDK, `text-embedding-004`). Grounded Android personal task tools (`android.send_sms`, `android.read_sms`, `android.create_calendar_event`, `android.list_calendar_events`, `android.search_contacts`) are implemented and verified with postcondition ledger evidence. Android Companion features 1-tap connection presets (Local/Render) and inline `✓ Verified` claim verification badges in chat. Both Python backend (3,842+ passing tests) and Android companion (`:app:testDebugUnitTest --rerun-tasks`) are 100% passing.
+## Master Upgrade: Android Native Task Dispatcher, 24/7 Proactive Daemon, & Hybrid Retrieval (2026-10-01)
+AURA has completed the comprehensive master upgrade across four core pillars:
+1. **Android Companion Native Task Tools & Permissions Hub**:
+   - `DeviceTaskDispatcher.kt` handles device task directives: `android.send_sms` and `android.read_sms` (via `SmsManager` & `Telephony.Sms`), `android.create_calendar_event` and `android.list_calendar_events` (via `CalendarContract`), `android.search_contacts` (via `ContactsContract`).
+   - Postcondition hash validation and error reporting (`BLOCKED_PERMISSION`, `INVALID_ARGUMENTS`).
+   - Hub UI (`ToolsSection.kt`, `DevicePermissions.kt`) provides real-time permission status auditing (`Granted` / `Denied`).
+   - 451 unit tests passing in Android suite (`:app:testDebugUnitTest --rerun-tasks`, 22/22 executed).
+2. **24/7 Proactive Daemon Outbox Dispatch**:
+   - `AuraDaemon` in `daemon/supervisor.py` continuously evaluates proactive triggers and directly enqueues actionable recommendations into `NotificationOutbox` (`PendingNotification`).
+   - Thread safety: synchronized SQLite access across pruning and daemon ticks via `db_lock`.
+   - Wired seamlessly into server runtime (`server/runtime.py`).
+3. **Hybrid Semantic Memory Retrieval**:
+   - `HybridConversationRetriever` in `memory/retrieval.py` implements Reciprocal Rank Fusion (RRF with $k=60.0$) combining lexical token matching with dense vector similarity (`GeminiEmbeddingProvider`).
+   - Robust graceful degradation: automatically falls back to pure lexical retrieval on missing provider or exception.
+4. **Verification & Stability**:
+   - 100% test pass rate: 3,840+ Python unit and regression tests, 451 Android unit tests. All hermetic, zero API key requirements in CI.
 
 Server-side grounding, the Android companion transport, and the device-side
 dispatcher are implemented and committed. As of 2026-09-05 ALL Phase 1-5A work

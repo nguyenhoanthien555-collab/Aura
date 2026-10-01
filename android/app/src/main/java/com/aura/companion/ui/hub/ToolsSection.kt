@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aura.companion.ui.components.AnimatedNotice
 import com.aura.companion.ui.components.NoticeCard
@@ -195,6 +196,35 @@ fun ToolsSection(
                     ?.joinToString(", ")
                     ?: "No application can be launched",
                 icon = Icons.Filled.Lock,
+            )
+        }
+
+        val context = LocalContext.current
+        val permissions = DevicePermissions.read(context)
+
+        SettingsSection(
+            title = "Device Permissions",
+            subtitle = "Required for personal task tools (SMS, Calendar, Contacts)",
+        ) {
+            StatusRow(
+                title = "SMS",
+                value = if (permissions.smsPermitted) "Granted" else "Denied",
+                subtitle = if (permissions.smsPermitted) "Can send and read SMS messages" else "Permission not granted in Android settings",
+                tone = if (permissions.smsPermitted) StatusTone.Good else StatusTone.Neutral,
+            )
+            RowDivider()
+            StatusRow(
+                title = "Calendar",
+                value = if (permissions.calendarPermitted) "Granted" else "Denied",
+                subtitle = if (permissions.calendarPermitted) "Can create and view calendar events" else "Permission not granted in Android settings",
+                tone = if (permissions.calendarPermitted) StatusTone.Good else StatusTone.Neutral,
+            )
+            RowDivider()
+            StatusRow(
+                title = "Contacts",
+                value = if (permissions.contactsPermitted) "Granted" else "Denied",
+                subtitle = if (permissions.contactsPermitted) "Can query device address book" else "Permission not granted in Android settings",
+                tone = if (permissions.contactsPermitted) StatusTone.Good else StatusTone.Neutral,
             )
         }
 

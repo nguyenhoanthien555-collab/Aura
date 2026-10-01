@@ -323,6 +323,7 @@ class ServerRuntime:
                     task_runtime=task_runtime if "task_runtime" in locals() else None,
                     tool_registry=registry if "registry" in locals() else None,
                     proactive_engine=getattr(self.services, "proactive", None),
+                    notifications_outbox=self.notifications,
                     offline=False,
                     poll_interval=poll_interval,
                     proactive_interval=proactive_interval,

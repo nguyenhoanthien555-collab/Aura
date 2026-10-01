@@ -173,6 +173,114 @@ class KeywordRetriever:
 
 
 # ----------------------------------------------------------------------
+# Hybrid Conversation Retrieval (Reciprocal Rank Fusion)
+# ----------------------------------------------------------------------
+
+RRF_K = 60.0
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+class HybridConversationRetriever:
+    """
+    Blends lexical keyword overlap with semantic vector similarity
+    over conversation transcript lines using Reciprocal Rank Fusion (RRF).
+
+    Fails closed: if the embedding provider is absent or encounters errors
+    (e.g. privacy consent refusal, network timeout), retrieval cleanly
+    degrades to lexical keyword retrieval.
+    """
+
+    def __init__(
+        self,
+        lexical: KeywordRetriever,
+        embedding_provider=None,
+        weight: float = 0.5,
+    ):
+        self.lexical = lexical
+        self.embedding_provider = embedding_provider
+        self.weight = min(1.0, max(0.0, float(weight)))
+
+    def search(self, query: str, limit: int = 3) -> list[str]:
+        if not (query or "").strip():
+            return []
+
+        # If no embedding provider is wired, execute pure lexical retrieval
+        if self.embedding_provider is None:
+            return self.lexical.search(query, limit)
+
+        wanted = tokenize(query)
+        candidates = [
+            m for m in self.lexical._candidates()
+            if not _is_ephemeral_screen_observation(m.content)
+        ]
+
+        if not candidates:
+            return []
+
+        # 1. Lexical ranking
+        lex_scored = []
+        for msg in candidates:
+            tok_score = len(wanted & tokenize(msg.content))
+            lex_scored.append((tok_score, msg.id, msg))
+        lex_scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        lexical_ranks = {
+            item[2].id: rank + 1
+            for rank, item in enumerate(lex_scored)
+            if item[0] >= self.lexical.min_score
+        }
+
+        # 2. Semantic ranking
+        semantic_ranks = {}
+        try:
+            query_vec = self.embedding_provider.embed(query)
+            texts = [m.content for m in candidates]
+            candidate_vecs = self.embedding_provider.embed_batch(texts)
+            sem_scored = []
+            for msg, vec in zip(candidates, candidate_vecs):
+                sim = _cosine_similarity(query_vec, vec)
+                sem_scored.append((sim, msg.id, msg))
+            sem_scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            semantic_ranks = {
+                item[2].id: rank + 1
+                for rank, item in enumerate(sem_scored)
+                if item[0] > 0.0
+            }
+        except Exception:
+            # Degrade gracefully to pure lexical ranking
+            return self.lexical.search(query, limit)
+
+        # 3. Reciprocal Rank Fusion
+        fused = []
+        for msg in candidates:
+            score = 0.0
+            if msg.id in lexical_ranks:
+                score += (1.0 - self.weight) / (RRF_K + lexical_ranks[msg.id])
+            if msg.id in semantic_ranks:
+                score += self.weight / (RRF_K + semantic_ranks[msg.id])
+
+            if score > 0.0:
+                fused.append((score, msg.id, msg))
+
+        fused.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+        return [
+            self.lexical._render(item[2])
+            for item in fused[:limit]
+        ]
+
+
+# ----------------------------------------------------------------------
 # Ranked retrieval over episodic memory
 # ----------------------------------------------------------------------
 

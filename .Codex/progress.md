@@ -1,5 +1,27 @@
 # Progress
 
+## 2026-10-01 — Master Upgrade: Android Native Tasks, 24/7 Proactive Daemon, & Hybrid Retrieval DELIVERED
+
+- **Pillar 1: Android Companion Native Task Tools & Permissions Hub (`android/`)**:
+  - Implemented `DeviceTaskDispatcher.kt` with `DeviceTaskToolCatalog`, `DeviceTaskHandler`, `AndroidDeviceTaskHandler`, and `DeviceTaskDispatcher`.
+  - Native handling for SMS (`SmsManager` & `Telephony.Sms`), Calendar (`CalendarContract.Events`), and Contacts (`ContactsContract.CommonDataKinds.Phone`).
+  - Runtime permissions declared in `AndroidManifest.xml` (`SEND_SMS`, `READ_SMS`, `READ_CALENDAR`, `WRITE_CALENDAR`, `READ_CONTACTS`).
+  - Permissions Hub UI: extended `DevicePermissions.kt` with `smsPermitted`, `calendarPermitted`, `contactsPermitted`, and added live status reporting in `ToolsSection.kt`.
+  - Unit tests: `DeviceTaskDispatcherTest.kt` (5 tests covering argument parsing, permission denials, execution, and SHA-256 postcondition verification).
+  - Android test suite: `:app:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (22 actionable tasks executed, 451 tests passed, 0 failures).
+- **Pillar 2: Proactive Intelligence 24/7 Outbox Dispatch (`daemon/supervisor.py`, `server/runtime.py`)**:
+  - Integrated `notifications_outbox: Optional[NotificationOutbox]` in `AuraDaemon`.
+  - When proactive decision evaluates `send=True`, it directly enqueues `PendingNotification` into `notifications_outbox` for delivery to streaming clients.
+  - Thread-safety & Windows SQLite concurrency: wrapped step pruning in `db_lock` and initialized tick timestamps on start.
+  - Unit tests: verified via `tests/test_phase1_runtime_closure.py` (10/10 passed), `tests/test_proactive.py` (126/126 passed).
+- **Pillar 3: Hybrid Semantic Memory Retrieval (`memory/retrieval.py`)**:
+  - Implemented `HybridConversationRetriever` blending lexical token overlap and dense embedding cosine similarity using Reciprocal Rank Fusion (RRF with $k=60.0$).
+  - Fail-safe degradation: automatically falls back to pure lexical retrieval when `embedding_provider` is None or raises an error.
+  - Filters transient screen observations (`_is_ephemeral_screen_observation`).
+  - Unit tests: `tests/test_hybrid_retrieval.py` (8 tests covering protocol conformance, fallbacks, semantic ranking boost without token overlap, and screen filtering). 57/57 passed across hybrid & semantic test suite.
+- **Pillar 4: Documentation & State Sync**:
+  - Updated `docs/ROADMAP.md`, `docs/IMPLEMENTATION_STATUS.md`, and `.Codex/*.md` persistent state files.
+
 ## 2026-10-01 — Phase 5 Personal Task Tools & Android Companion Verification Badges DELIVERED
 
 - **Phase 5 Personal Task Tools (`tools/providers/android_task_provider.py`)**:

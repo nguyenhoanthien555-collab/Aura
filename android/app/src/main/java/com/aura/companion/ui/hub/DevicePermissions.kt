@@ -22,12 +22,33 @@ data class DevicePermissions(
     val agentServiceEnabled: Boolean = false,
     val observerServiceEnabled: Boolean = false,
     val notificationsPermitted: Boolean = false,
+    val smsPermitted: Boolean = false,
+    val calendarPermitted: Boolean = false,
+    val contactsPermitted: Boolean = false,
 ) {
     companion object {
 
         fun read(context: Context): DevicePermissions {
 
             val enabled = enabledAccessibilityServices(context)
+
+            val hasSms = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.SEND_SMS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.READ_SMS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val hasCal = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.READ_CALENDAR
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.WRITE_CALENDAR
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val hasContacts = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.READ_CONTACTS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
             return DevicePermissions(
                 agentServiceEnabled = enabled.any {
@@ -38,6 +59,9 @@ data class DevicePermissions(
                 },
                 notificationsPermitted = NotificationManagerCompat.from(context)
                     .areNotificationsEnabled(),
+                smsPermitted = hasSms,
+                calendarPermitted = hasCal,
+                contactsPermitted = hasContacts,
             )
         }
 

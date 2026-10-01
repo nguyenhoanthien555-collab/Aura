@@ -441,6 +441,49 @@ def test_supervisor_proactive_worker_disabled_behavior():
     assert engine_enabled.ticked is True
 
 
+def test_supervisor_proactive_worker_enqueues_to_outbox():
+    """
+    Verify that when proactive_engine decides to send, _step_proactive_worker
+    enqueues the notification into notifications_outbox.
+    """
+    from server.notifications import NotificationOutbox
+    from proactive.decision import ProactiveDecision, Category, Priority
+
+    class MockPolicy:
+        def __init__(self):
+            self.settings = type("Settings", (), {"enabled": True})()
+
+    class MockSendingEngine:
+        def __init__(self):
+            self.policy = MockPolicy()
+
+        def tick(self):
+            return ProactiveDecision(
+                send=True,
+                reason="time to check in",
+                category=Category.GREETING,
+                priority=Priority.NORMAL,
+                detail="Good morning, hope you have a great day!",
+            )
+
+    outbox = NotificationOutbox()
+    engine = MockSendingEngine()
+    daemon = AuraDaemon(
+        offline=True,
+        proactive_engine=engine,
+        notifications_outbox=outbox,
+        proactive_interval=0.001,
+    )
+    assert outbox.pending() == 0
+    daemon._step_proactive_worker()
+    assert outbox.pending() == 1
+    drained = outbox.drain()
+    assert len(drained) == 1
+    assert drained[0].message == "Good morning, hope you have a great day!"
+    assert drained[0].source == "proactive"
+
+
+
 def test_api_chat_endpoint_e2e_with_tool_and_evidence(monkeypatch):
     """
     Test real HTTP POST /api/chat with TestClient:
@@ -457,29 +500,34 @@ def test_api_chat_endpoint_e2e_with_tool_and_evidence(monkeypatch):
             lambda *args, **kwargs: Response(text="hello back from aura"),
         )
 
-    client = TestClient(app)
-    token = settings.auth_token
+    try:
+        client = TestClient(app)
+        token = settings.auth_token
 
-    # Verify unauthorized request is rejected
-    unauth_res = client.post("/api/chat", json={"message": "hello"})
-    assert unauth_res.status_code == 401
+        # Verify unauthorized request is rejected
+        unauth_res = client.post("/api/chat", json={"message": "hello"})
+        assert unauth_res.status_code == 401
 
-    # Verify authorized chat request
-    res = client.post(
-        "/api/chat",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "message": "hello aura",
-            "session_id": "test_e2e_session",
-            "context": {"source": "test"},
-        },
-    )
-    assert res.status_code == 200
-    data = res.json()
-    assert "reply" in data
-    assert "session_id" in data
-    assert data["session_id"] == "test_e2e_session"
-    assert "message_id" in data
+        # Verify authorized chat request
+        res = client.post(
+            "/api/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "message": "hello aura",
+                "session_id": "test_e2e_session",
+                "context": {"source": "test"},
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "reply" in data
+        assert "session_id" in data
+        assert data["session_id"] == "test_e2e_session"
+        assert "message_id" in data
+    finally:
+        rt = get_runtime()
+        if rt and rt.started:
+            rt.stop()
 
 
 def test_autonomy_gate_state3_locked():

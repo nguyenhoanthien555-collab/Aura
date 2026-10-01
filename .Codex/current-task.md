@@ -1,5 +1,27 @@
 # Current task
 
+## Master Upgrade: Android Native Tasks, 24/7 Proactive Daemon, & Hybrid Retrieval DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Android Companion Native Task Tools & Permissions Hub**:
+  - Implemented `DeviceTaskDispatcher.kt` with `DeviceTaskToolCatalog`, `DeviceTaskHandler`, `AndroidDeviceTaskHandler`, and `DeviceTaskDispatcher`.
+  - Added native directive routing in `DeviceToolDispatcher.kt` and capabilities (`android.sms`, `android.calendar`, `android.contacts`).
+  - Added permissions in `AndroidManifest.xml` (`SEND_SMS`, `READ_SMS`, `READ_CALENDAR`, `WRITE_CALENDAR`, `READ_CONTACTS`).
+  - Hub UI (`ToolsSection.kt`, `DevicePermissions.kt`) shows real-time status of device permissions.
+  - Tested: `DeviceTaskDispatcherTest.kt` (5/5 unit tests passed). Android Gradle suite: 451/451 tests passed.
+- **Trụ cột 2: Proactive Intelligence 24/7 Outbox & Stream Dispatch**:
+  - `AuraDaemon` in `daemon/supervisor.py` feeds evaluated proactive recommendations to `NotificationOutbox` (`PendingNotification`).
+  - Thread-safe step pruning with `db_lock` and startup tick synchronization.
+  - Runtime integration in `server/runtime.py`.
+  - Tested: `tests/test_phase1_runtime_closure.py` (10/10 passed), `tests/test_proactive.py` (126/126 passed).
+- **Trụ cột 3: Hybrid Semantic Memory Retrieval**:
+  - `HybridConversationRetriever` in `memory/retrieval.py` using Reciprocal Rank Fusion ($k=60.0$) combining lexical token matching and dense embedding similarity (`GeminiEmbeddingProvider`).
+  - Failsafe degradation to lexical retrieval when embedding provider is unavailable.
+  - Tested: `tests/test_hybrid_retrieval.py` (8/8 passed). Semantic memory suite: 57/57 passed.
+- **Trụ cột 4: Documentation & State Sync**:
+  - Updated `docs/ROADMAP.md`, `docs/IMPLEMENTATION_STATUS.md`, `.Codex/progress.md`, `.Codex/current-task.md`, `.Codex/project-state.md`.
+
+---
+
 ## Phase 5 Personal Task Tools & Android Companion Verification Badges DELIVERED (2026-10-01)
 
 - Grounded personal task tools in Android Companion bridge:

@@ -20,6 +20,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!--
+        Phase 5: Personal Task Tools.
+        Permissions for SMS, Calendar, and Contacts operations.
+        All permissions are dangerous/runtime-requested.
+    -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!--
         What `open_app` needs to exist at all.
 
         Since Android 11 (API 30) a package query is filtered to apps the
