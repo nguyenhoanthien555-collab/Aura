@@ -106,8 +106,7 @@ built, and it is the only substantial feature work still outstanding.
       auth in `server/auth.py`
 - [~] The agent holds its own allowlist locally and refuses anything
       outside it, so a compromised server is not code execution on the PC
-- [ ] `open_url` tool - does not exist yet, and is what "open YouTube on
-      my PC" actually needs
+- [x] `open_url` tool - implemented in `tools/builtins/desktop.py` with http/https scheme validation, capability registration (`desktop.open_url`), and factory/runtime integration
 - [ ] Agent registration/heartbeat, so the server knows whether Phase 4's
       honest refusal or a real dispatch applies
 

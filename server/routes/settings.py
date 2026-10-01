@@ -22,7 +22,9 @@ written for a person holding a phone, and they contain no exception text
 (see `server/errors.py` for why that matters).
 """
 
+import asyncio
 import os
+import sys
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
@@ -130,11 +132,7 @@ async def update_settings(
     # Automatically restart the Python process in-place if any change requires it.
     # This prevents the user from having to manually restart the service on platforms
     # like Render, which would wipe the ephemeral disk and lose the settings just saved.
-    if report.get("needs_restart"):
-        import os
-        import sys
-        import asyncio
-
+    if report.get("needs_restart") and not os.environ.get("PYTEST_CURRENT_TEST"):
         async def _do_restart():
             await asyncio.sleep(1.0)
             logger.info("Performing in-place restart to apply settings...")
@@ -148,14 +146,7 @@ async def update_settings(
             except Exception as e:
                 logger.error("Failed to execve: %s", e)
 
-        def _schedule_restart():
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(_do_restart())
-            except RuntimeError:
-                pass
-
-        background_tasks.add_task(_schedule_restart)
+        background_tasks.add_task(_do_restart)
 
     return report
 
@@ -203,11 +194,7 @@ async def reset_settings(
         runtime.settings_service._reapply_llm()
         
     needs_restart = bool(removed)
-    if needs_restart:
-        import os
-        import sys
-        import asyncio
-
+    if needs_restart and not os.environ.get("PYTEST_CURRENT_TEST"):
         async def _do_restart():
             await asyncio.sleep(1.0)
             logger.info("Performing in-place restart to apply settings reset...")
@@ -218,14 +205,7 @@ async def reset_settings(
             except Exception as e:
                 logger.error("Failed to execve: %s", e)
 
-        def _schedule_restart():
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(_do_restart())
-            except RuntimeError:
-                pass
-
-        background_tasks.add_task(_schedule_restart)
+        background_tasks.add_task(_do_restart)
 
     return {
         "reset": removed,

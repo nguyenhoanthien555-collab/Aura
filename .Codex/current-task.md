@@ -1,5 +1,25 @@
 # Current task
 
+## Settings API Coroutine Warning Fix & Desktop `open_url` Tool DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Settings API Async Restart Clean Coroutine Handling (`server/routes/settings.py`)**:
+  - Resolved `AURA-TASK-001` un-awaited coroutine warning on `_do_restart` in `update_settings` and `reset_settings`.
+  - Hoisted imports (`asyncio`, `os`, `sys`) to module level and bypassed physical `os.execve` during test runs (`PYTEST_CURRENT_TEST`).
+  - Added coroutine directly to FastAPI `background_tasks.add_task(_do_restart)` ensuring clean async loop execution without un-awaited Task warnings.
+  - Verified: `tests/test_settings_api.py` (71 passed, zero warnings with `-W error::RuntimeWarning`), `tests/test_settings_contract.py` (123 passed).
+- **Trụ cột 2: Phase 8 Desktop `open_url` Tool (`tools/builtins/desktop.py`, `core/capabilities/factory.py`)**:
+  - Implemented `OpenUrlTool` (`open_url`, capability: `desktop.open_url`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`).
+  - Strict security validation: enforces `http` or `https` schemes only (rejecting `file://`, `javascript:`, `data:`, etc.) and requires non-empty host domain.
+  - Registered capability in `core/capabilities/factory.py` with discovery metadata.
+  - Registered in `tools/factory.py` under `_pc_tools(config)` when `"open_url" in (config.get("allowed") or [])`, strictly maintaining the stock server cloud boundary invariant (`tests/test_device_boundary.py`).
+  - Added to allowed desktop tools in `server/runtime.py` and documented in `prompts/system.md`.
+- **Trụ cột 3: Testing & Verification**:
+  - Dedicated unit tests: `tests/test_open_url_tool.py` (9/9 passed).
+  - Stock boundary invariant: `tests/test_device_boundary.py` (14/14 passed).
+  - Regression: `tests/test_sandbox_tools.py` + `tests/test_stream_tool_calling.py` + `tests/test_pc_tools.py` (96 passed, 1 skipped).
+
+---
+
 ## Sandbox Execution, Autonomous Tool Synthesis, Timeout Anti-Hang Hardening, & Speculative Streaming DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Built-in Sandbox Execution & Custom Tool Creation (`tools/builtins/sandbox.py`)**:

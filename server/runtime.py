@@ -113,7 +113,8 @@ class ServerRuntime:
             "android.screenshot", "android.tap", "android.long_press", "android.swipe",
             "android.type_text", "android.press_key", "android.back", "android.home",
             "android.launch_app", "android.wait_for", "android.verify",
-            "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware"
+            "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware",
+            "open_url"
         ]:
             if android_tool_name not in allowed:
                 allowed.append(android_tool_name)

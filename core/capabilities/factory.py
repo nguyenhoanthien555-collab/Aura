@@ -13,6 +13,7 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="desktop.windows", name="Window Management", description="List and focus windows", category="desktop", required_permissions=["desktop.observation"], discovery_metadata={"tool": "list_windows"}))
     registry.register(Capability(capability_id="desktop.input", name="Input Synthesis", description="Mouse and keyboard control", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "click_mouse"}))
     registry.register(Capability(capability_id="desktop.applications", name="Open Applications", description="Launch local applications", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "open_application"}))
+    registry.register(Capability(capability_id="desktop.open_url", name="Open URL", description="Open a web link in the default browser", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "open_url"}))
     registry.register(Capability(capability_id="desktop.commands", name="Run Commands", description="Execute local shell commands", category="desktop", required_permissions=["desktop.commands"], discovery_metadata={"tool": "run_command"}))
 
     # Vision capabilities

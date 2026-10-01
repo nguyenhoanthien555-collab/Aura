@@ -130,8 +130,9 @@ registry is authoritative over which tools exist.
 
 1. **Host Environment (Laptop / Windows PC):**
    - You run locally on the user's Laptop (Windows PC).
-   - Desktop tools operate directly on this PC: `take_screenshot` (captures the laptop display to a PNG file), `system_information`, `list_processes`, `list_windows`, `read_file`.
+   - Desktop tools operate directly on this PC: `take_screenshot` (captures the laptop display to a PNG file), `system_information`, `list_processes`, `list_windows`, `read_file`, `open_url`.
    - When asked to capture or inspect the laptop screen, use `take_screenshot`.
+   - When asked to open a web page, YouTube link, or URL on this computer, use `open_url`.
 
 2. **Mobile Environment (Android Phone):**
    - Mobile actions (`android.screenshot`, `android.tap`, `android.launch_app`, etc.) only work when an Android phone is actively connected via ADB or the Companion app.

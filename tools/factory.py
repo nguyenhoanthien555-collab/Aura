@@ -215,12 +215,12 @@ def _builtin_tools(
             "describe_screen not registered: vision is off"
         )
 
-    tools.extend(_pc_tools())
+    tools.extend(_pc_tools(config))
 
     return tools
 
 
-def _pc_tools() -> list[ToolProtocol]:
+def _pc_tools(config: dict = None) -> list[ToolProtocol]:
     """
     Section 24's PC layer, as much of it as this machine can actually do.
 
@@ -258,6 +258,11 @@ def _pc_tools() -> list[ToolProtocol]:
     # left out of the description rather than reported as a zero.
     tools.append(SystemInformationTool())
     tools.append(RescanHardwareTool())
+
+    allowed = (config or {}).get("allowed") or []
+    if "open_url" in allowed:
+        from tools.builtins.desktop import OpenUrlTool
+        tools.append(OpenUrlTool())
 
     processes = default_process_source()
 

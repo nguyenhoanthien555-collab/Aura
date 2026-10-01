@@ -32,6 +32,8 @@ open on the machine running them.
 
 import os
 import time
+import urllib.parse
+import webbrowser
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -701,6 +703,65 @@ class FocusWindowTool(Tool):
         )
 
 
+class OpenUrlTool(Tool):
+    """
+    Open a web URL in the user's default desktop browser.
+
+    Security: Only http:// and https:// schemes are permitted.
+    Arbitrary URI schemes (file:, javascript:, data:, etc.) are rejected.
+    """
+
+    name = "open_url"
+    description = "Open a web URL in the user's default desktop browser"
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.IDEMPOTENT
+    capability = "desktop.open_url"
+
+    parameters = (
+        Parameter(
+            name="url",
+            description="The web URL (http:// or https://) to open",
+            type="string",
+            required=True,
+        ),
+    )
+
+    def __init__(self, opener=None):
+        self._opener = opener or webbrowser.open
+
+    def execute(self, url: str) -> ToolResult:
+        if not url or not isinstance(url, str):
+            return fail("A valid URL string is required", tool=self.name)
+
+        trimmed = url.strip()
+        try:
+            parsed = urllib.parse.urlsplit(trimmed)
+        except Exception as error:
+            return fail(f"Malformed URL '{trimmed}': {error}", tool=self.name)
+
+        scheme = (parsed.scheme or "").lower()
+        if scheme not in ("http", "https"):
+            return fail(
+                f"Unsupported URL scheme '{scheme}': only http and https URLs are permitted",
+                tool=self.name,
+            )
+
+        if not parsed.netloc:
+            return fail(
+                f"Invalid URL '{trimmed}': missing host/domain",
+                tool=self.name,
+            )
+
+        try:
+            success = self._opener(trimmed)
+            if success is False:
+                return fail(f"Failed to launch browser for '{trimmed}'", tool=self.name)
+            return ok(f"Opened '{trimmed}' in default browser", tool=self.name)
+        except Exception as error:
+            logger.error("Error opening URL '%s': %s", trimmed, error)
+            return fail(f"Error opening URL: {error}", tool=self.name)
+
+
 def _as_pid(pid) -> int:
     """
     A pid the caller asked for, or 0 meaning "they did not ask".
@@ -734,6 +795,7 @@ __all__ = [
     "FocusWindowTool",
     "ListWindowsTool",
     "MockWindowSource",
+    "OpenUrlTool",
     "WindowInfo",
     "WindowSource",
     "WindowsWindowSource",
