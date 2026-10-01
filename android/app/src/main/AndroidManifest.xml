@@ -31,6 +31,18 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!--
+        Aura Smart Alarm System.
+        Permissions for exact alarm scheduling, full-screen lockscreen wakeup, and boot restoration.
+    -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
         What `open_app` needs to exist at all.
 
         Since Android 11 (API 30) a package query is filtered to apps the
@@ -119,6 +131,28 @@
             android:name=".floating.FloatingChatService"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
+
+        <!-- Full-screen Lockscreen Cyber Alarm Activity -->
+        <activity
+            android:name=".alarm.ui.AuraAlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Aura" />
+
+        <!-- BroadcastReceiver for AlarmManager RTC_WAKEUP and BOOT_COMPLETED -->
+        <receiver
+            android:name=".alarm.receiver.AuraAlarmReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.aura.companion.ALARM_TRIGGER" />
+                <action android:name="com.aura.companion.ALARM_DISMISS" />
+                <action android:name="com.aura.companion.ALARM_SNOOZE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

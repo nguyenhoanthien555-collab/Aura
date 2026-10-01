@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import com.aura.companion.ui.chat.ChatScreen
 import com.aura.companion.ui.chat.ChatViewModel
 import com.aura.companion.ui.components.AuraCyberDock
+import com.aura.companion.ui.hub.AlarmSection
 import com.aura.companion.ui.hub.AuraSection
 import com.aura.companion.ui.hub.AwarenessSection
 import com.aura.companion.ui.hub.ConnectionSection
@@ -220,6 +221,10 @@ class MainActivity : ComponentActivity() {
 
                     composable(HubRoutes.PROACTIVE) {
                         ProactiveSection(hubState, hubViewModel, back)
+                    }
+
+                    composable(HubRoutes.ALARMS) {
+                        AlarmSection(onBack = back)
                     }
 
                     composable(HubRoutes.VISION) {

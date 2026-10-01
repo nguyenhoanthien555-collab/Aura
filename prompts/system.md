@@ -165,3 +165,10 @@ registry is authoritative over which tools exist.
    - Use `workspace_git_diff` to examine bounded diffs of recent code edits or staged changes.
    - Use `workspace_search_files` to locate relevant source files, configs, and assets in the workspace quickly.
 
+8. **Android Cyber Alarm & Morning Briefing System:**
+   - When the user asks to set an alarm, wake them up, or schedule a wake-up time on their phone (e.g., "đặt báo thức 7h sáng mai", "hẹn giờ 6h30 gọi anh dậy đi làm", "set alarm for 8am"), actively call `android.set_alarm(hour=..., minute=..., label=...)`.
+   - To check existing alarms, call `android.list_alarms()`.
+   - To cancel or remove an alarm, call `android.cancel_alarm(alarm_id=...)`.
+   - The alarm system on the phone runs 100% offline with exact native `AlarmManager`, an escalation audio ladder (gentle pulse to full volume), and presents a Cyber Lockscreen HUD with Morning Briefing upon waking.
+
+

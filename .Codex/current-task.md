@@ -1,6 +1,30 @@
 # Current task
 
+## Intelligent Offline Cyber Alarm & Morning Briefing System DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Đảm bảo Độc lập & Bền bỉ 100% Offline (Zero-Cloud Offline Reliability)**:
+  - Khởi tạo hệ thống báo thức chuẩn native thông qua `AlarmManager.setAlarmClock()` trong `AlarmScheduler.kt` và `AuraAlarmReceiver.kt`.
+  - Lưu trữ bền vững độc lập `AlarmStore.kt` ghi chép toàn bộ danh sách báo thức, cấu hình lặp ngày (Thứ 2 - CN), và trạng thái bật/tắt. Tự động tái lập lịch khi máy khởi động lại (`RECEIVE_BOOT_COMPLETED`).
+  - Hoạt động tin cậy 100% ngoại tuyến: không phụ thuộc vào tình trạng mạng, uptime của Render.com hay kết nối máy chủ.
+- **Trụ cột 2: Thang Âm lượng Leo thang Đa giai đoạn (Escalation Audio Ladder - `AlarmAudioPlayer.kt`)**:
+  - Phát qua luồng phần cứng `STREAM_ALARM` bảo đảm âm thanh thức tỉnh:
+    - *Giai đoạn 1 (0–3 phút)*: Nhịp đập âm thanh cyber êm dịu ở mức ~45% âm lượng kèm rung nhẹ nhàng theo nhịp.
+    - *Giai đoạn 2 (sau 3 phút nếu chưa tắt)*: Tự động leo thang lên 100% âm lượng tối đa kèm chuỗi rung cảnh báo dồn dập.
+- **Trụ cột 3: Giao diện Khóa màn hình Toàn diện & Morning Briefing (`AuraAlarmActivity.kt`)**:
+  - Đánh thức thiết bị và hiển thị đè lên màn hình khóa (`setTurnScreenOn(true)`, `setShowWhenLocked(true)`).
+  - Vòng radar sóng xung kích phát sáng nhịp nhàng, 2 nút tương tác nhanh [Tắt báo thức] và [Báo lại 5 phút].
+  - Khi tắt báo thức, màn hình chuyển hiệu ứng mượt mà sang thẻ Morning Briefing: hiển thị ngày tháng, lời chào buổi sáng tràn đầy năng lượng từ Aura, cùng nút mở nhanh cuộc trò chuyện với Aura.
+- **Trụ cột 4: Điều khiển Hai chiều (Chat/Voice Directives & Hub UI)**:
+  - Bộ công cụ ra lệnh: `android.set_alarm`, `android.list_alarms`, `android.cancel_alarm`.
+  - Đăng ký chặt chẽ trong `DeviceTaskDispatcher.kt`, `DeviceToolDispatcher.kt`, và `tools/providers/android_task_provider.py`.
+  - Bổ sung mục "Báo thức Aura" vào nhóm Presence trong `HubScreen.kt` mở ra `AlarmSection.kt` với thẻ test thử 5 giây, danh sách báo thức kèm nút bật/tắt và hộp thoại thêm báo thức trực quan.
+- **Trụ cột 5: Kiểm thử Toàn diện & Đóng gói Sẵn sàng**:
+  - Android JVM Tests: `AlarmStoreTest.kt` (6 tests), `DeviceTaskDispatcherTest.kt` (3 tests).
+  - Python Tests: `tests/test_android_alarm_tools.py` (8 tests), `tests/test_android_task_tools.py` (13 tests), `tests/test_device_boundary.py` (14 tests). 100% passing.
+  - Đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (20.3 MB).
+
 ## Architecture Topology Alignment & Dual-Device Cyber Telemetry HUD DELIVERED (2026-10-02)
+
 
 - **Trụ cột 1: Thấu hiểu Kiến trúc Thực tế & Vận hành Triển khai (Deployment Topology)**:
   - Khẳng định mô hình vận hành thực tế của Aura: Máy chủ Aura được deploy lên **Render.com** (`https://aura-xwm4.onrender.com/`) qua các commit đẩy lên GitHub (`nguyenhoanthien555-collab/Aura.git`).

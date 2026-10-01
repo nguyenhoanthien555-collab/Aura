@@ -85,6 +85,46 @@ class DeviceTaskDispatcherTest {
                 })
             }
         )
+
+        override suspend fun setAlarm(
+            hour: Int,
+            minute: Int,
+            label: String,
+            repeatDays: List<Int>
+        ): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("alarm_id", "alarm_test_123")
+                put("hour", hour)
+                put("minute", minute)
+                put("formatted_time", String.format("%02d:%02d", hour, minute))
+                put("label", label)
+                put("status", "scheduled")
+            }
+        )
+
+        override suspend fun listAlarms(): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("count", 1)
+                put("alarms", buildJsonArray {
+                    add(buildJsonObject {
+                        put("id", "alarm_test_123")
+                        put("hour", 7)
+                        put("minute", 0)
+                        put("formatted_time", "07:00")
+                        put("label", "Báo thức sáng")
+                        put("is_enabled", true)
+                    })
+                })
+            }
+        )
+
+        override suspend fun cancelAlarm(alarmId: String): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("alarm_id", alarmId)
+                put("deleted", true)
+                put("status", "canceled")
+            }
+        )
     }
 
     private fun directive(tool: String, arguments: JsonObject): ToolCallDirective =
@@ -179,5 +219,55 @@ class DeviceTaskDispatcherTest {
         assertTrue(report.ok)
         assertEquals(1, (report.result?.get("count")?.jsonPrimitive?.contentOrNull)?.toInt())
         assertEquals("search_contacts", report.observation?.kind)
+    }
+
+    @Test
+    fun `set_alarm executes with verified postcondition`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.set_alarm", buildJsonObject {
+            put("hour", 7)
+            put("minute", 30)
+            put("label", "Dậy đi làm")
+        })
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals("scheduled", report.result?.get("status")?.jsonPrimitive?.contentOrNull)
+        assertEquals("07:30", report.result?.get("formatted_time")?.jsonPrimitive?.contentOrNull)
+        assertNotNull(report.postcondition)
+        assertEquals(true, report.postcondition?.get("verified")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals("set_alarm", report.postcondition?.get("action")?.jsonPrimitive?.contentOrNull)
+        assertEquals("07:30", report.postcondition?.get("formatted_time")?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun `list_alarms returns alarm list`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.list_alarms", buildJsonObject {})
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals(1, report.result?.get("count")?.jsonPrimitive?.contentOrNull?.toInt())
+    }
+
+    @Test
+    fun `cancel_alarm executes with verified postcondition`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.cancel_alarm", buildJsonObject {
+            put("alarm_id", "alarm_123")
+        })
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals("canceled", report.result?.get("status")?.jsonPrimitive?.contentOrNull)
+        assertEquals(true, report.postcondition?.get("verified")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals("cancel_alarm", report.postcondition?.get("action")?.jsonPrimitive?.contentOrNull)
+        assertEquals("alarm_123", report.postcondition?.get("alarm_id")?.jsonPrimitive?.contentOrNull)
     }
 }

@@ -154,6 +154,17 @@ class LoopbackDeviceBridge:
             {"name": "Alice Smith", "phone": "+1234567890", "email": "alice@example.com"},
             {"name": "Bob Jones", "phone": "+0987654321", "email": "bob@example.com"},
         ]
+        self.alarms: list[dict] = [
+            {
+                "id": "alarm_1",
+                "hour": 7,
+                "minute": 0,
+                "label": "Báo thức sáng",
+                "repeat_days": [1, 2, 3, 4, 5],
+                "is_enabled": True,
+            },
+        ]
+
 
     def status(self) -> dict:
         return {
@@ -237,7 +248,7 @@ class LoopbackDeviceBridge:
                     "device_id": (result or {}).get("device_id", ""),
                 },
             }
-        elif tool in {"android.read_sms", "android.list_calendar_events", "android.search_contacts"}:
+        elif tool in {"android.read_sms", "android.list_calendar_events", "android.search_contacts", "android.list_alarms"}:
             observation = {
                 "kind": tool.split(".", 1)[-1],
                 "data": result or {},
@@ -515,8 +526,78 @@ class LoopbackDeviceBridge:
         lim = max(1, int(limit or 10))
         return ({"contacts": contacts[:lim], "count": len(contacts[:lim])}, None)
 
+    # ------------------------------------------------------------------
+    # Cyber Alarm Tools
+    # ------------------------------------------------------------------
+
+    def _do_set_alarm(
+        self,
+        hour: int = 0,
+        minute: int = 0,
+        label: str = "Báo thức Aura",
+        repeat_days: list[int] | None = None,
+        **_,
+    ):
+        try:
+            h = int(hour)
+            m = int(minute)
+        except (TypeError, ValueError):
+            miss = LoopbackMiss("hour and minute must be integers")
+            miss.code = "INVALID_ARGUMENTS"
+            raise miss
+
+        if not (0 <= h <= 23) or not (0 <= m <= 59):
+            miss = LoopbackMiss("hour must be 0-23 and minute must be 0-59")
+            miss.code = "INVALID_ARGUMENTS"
+            raise miss
+
+        alarm_id = f"alarm_{int(self._clock())}_{h}_{m}"
+        record = {
+            "id": alarm_id,
+            "hour": h,
+            "minute": m,
+            "label": str(label or "Báo thức Aura"),
+            "repeat_days": list(repeat_days or []),
+            "is_enabled": True,
+        }
+        self.alarms.append(record)
+        return (
+            record,
+            {
+                "verified": True,
+                "action": "set_alarm",
+                "alarm_id": alarm_id,
+                "hour": h,
+                "minute": m,
+            },
+        )
+
+    def _do_list_alarms(self, **_):
+        return ({"alarms": list(self.alarms), "count": len(self.alarms)}, None)
+
+    def _do_cancel_alarm(self, alarm_id: str = "", **_):
+        if not (alarm_id or "").strip():
+            miss = LoopbackMiss("alarm_id is required to cancel an alarm")
+            miss.code = "INVALID_ARGUMENTS"
+            raise miss
+
+        target_id = alarm_id.strip()
+        before_len = len(self.alarms)
+        self.alarms = [a for a in self.alarms if a.get("id") != target_id]
+        cancelled = len(self.alarms) < before_len
+
+        return (
+            {"alarm_id": target_id, "cancelled": cancelled},
+            {
+                "verified": cancelled,
+                "action": "cancel_alarm",
+                "alarm_id": target_id,
+            },
+        )
+
 
 # ---------------------------------------------------------------------------
+
 # The real device bridge
 # ---------------------------------------------------------------------------
 

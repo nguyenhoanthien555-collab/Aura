@@ -1,6 +1,28 @@
 # AURA project state
 
+## Intelligent Offline Cyber Alarm & Morning Briefing System (2026-10-02)
+1. **100% Offline Operational Integrity**:
+   - Implemented native `AlarmManager.setAlarmClock()` in `android/app/src/main/java/com/aura/companion/alarm/` (`AlarmScheduler.kt`, `AuraAlarmReceiver.kt`).
+   - Thread-safe offline persistent storage `AlarmStore.kt` maintaining active alarms across device restarts (`RECEIVE_BOOT_COMPLETED`).
+   - Zero dependence on cloud connectivity, server uptime, or internet access: wakes device reliably anytime, anywhere.
+2. **Multi-Stage Escalation Audio Ladder (`AlarmAudioPlayer.kt`)**:
+   - Stage 1 (0–3 mins): Gentle cyber pulse at ~45% volume on `STREAM_ALARM` with rhythmic subtle vibrations.
+   - Stage 2 (after 3 mins if unhandled): Escalates automatically to 100% volume with high-urgency wake vibration pulses.
+3. **Full-Screen Lockscreen HUD & Morning Briefing (`AuraAlarmActivity.kt`)**:
+   - Wakes screen and displays above keyguard (`setTurnScreenOn(true)`, `setShowWhenLocked(true)`).
+   - Cyberpunk glowing radar clock animation, [Stop Alarm] and [Snooze 5 Min] interactive controls.
+   - Smooth animated crossfade to Morning Briefing card presenting current date, greeting, and direct launch to Aura chat.
+4. **Two-Way Control (Chat/Voice Directives & Hub UI)**:
+   - Tool directives: `android.set_alarm` (`SetAlarm`), `android.list_alarms` (`ListAlarms`), `android.cancel_alarm` (`CancelAlarm`).
+   - Grounded in `DeviceTaskDispatcher.kt`, `DeviceToolDispatcher.kt`, and `tools/providers/android_task_provider.py`.
+   - Dedicated Hub Section (`AlarmSection.kt`) under Presence group ("Báo thức Aura") with 5s quick test simulator, alarm creation dialog, and individual toggle switches.
+5. **Testing & Verification**:
+   - Android JVM tests: `AlarmStoreTest.kt` (6 tests), `DeviceTaskDispatcherTest.kt` (3 alarm tests).
+   - Python tests: `tests/test_android_alarm_tools.py` (8 tests), `tests/test_android_task_tools.py` (13 tests), `tests/test_device_boundary.py` (14 tests). All passing.
+   - APK built: `:app:assembleDebug` BUILD SUCCESSFUL (20.3 MB).
+
 ## Architecture Topology Alignment & Dual-Device Cyber Telemetry HUD (2026-10-02)
+
 1. **Deployment Architecture Grounding**:
    - Production Aura runs on **Render.com** (`https://aura-xwm4.onrender.com/`) built automatically from GitHub (`nguyenhoanthien555-collab/Aura.git`).
    - Android Companion (`Oppo CPH2251`, Android 13) is the primary daily companion interface connected via WAN.

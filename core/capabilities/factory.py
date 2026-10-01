@@ -93,7 +93,9 @@ def register_core_capabilities(config=None):
         ("android.sms", "Android SMS Messaging", "Send and read SMS messages on the device.", ["android.permission.SEND_SMS", "android.permission.READ_SMS"], "android.send_sms"),
         ("android.calendar", "Android Calendar Management", "Create and query calendar events on the device.", ["android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"], "android.create_calendar_event"),
         ("android.contacts", "Android Contacts Search", "Search address book and device contacts.", ["android.permission.READ_CONTACTS"], "android.search_contacts"),
+        ("android.alarm", "Android Cyber Alarm System", "Set, list, and cancel alarms on the device.", [], "android.set_alarm"),
     ]
+
 
     for cap_id, name, desc, perms, tool_name in task_caps:
         registry.register(Capability(

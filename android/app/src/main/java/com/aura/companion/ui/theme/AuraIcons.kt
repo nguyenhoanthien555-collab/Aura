@@ -1558,5 +1558,89 @@ object AuraIcons {
             close()
         }
     }
+
+    /** Dual-bell cyber alarm clock. */
+    val Alarm: ImageVector by lazy {
+        icon("Alarm") {
+            // Main clock circle
+            moveTo(12.0f, 4.0f)
+            curveTo(7.58f, 4.0f, 4.0f, 7.58f, 4.0f, 12.0f)
+            curveTo(4.0f, 16.42f, 7.58f, 20.0f, 12.0f, 20.0f)
+            curveTo(16.42f, 20.0f, 20.0f, 16.42f, 20.0f, 12.0f)
+            curveTo(20.0f, 7.58f, 16.42f, 4.0f, 12.0f, 4.0f)
+            close()
+            // Clock hands
+            moveTo(12.5f, 8.0f)
+            lineTo(11.0f, 8.0f)
+            lineTo(11.0f, 13.0f)
+            lineTo(15.2f, 15.5f)
+            lineTo(16.0f, 14.3f)
+            lineTo(12.5f, 12.2f)
+            close()
+            // Left alarm ear / bell
+            moveTo(5.3f, 3.8f)
+            lineTo(1.8f, 7.3f)
+            lineTo(3.2f, 8.7f)
+            lineTo(6.7f, 5.2f)
+            close()
+            // Right alarm ear / bell
+            moveTo(18.7f, 5.2f)
+            lineTo(22.2f, 8.7f)
+            lineTo(20.8f, 10.1f)
+            lineTo(17.3f, 6.6f)
+            close()
+        }
+    }
+
+    /** Alarm off / silenced bell with diagonal slash. */
+    val AlarmOff: ImageVector by lazy {
+        icon("AlarmOff") {
+            moveTo(12.0f, 6.0f)
+            curveTo(15.31f, 6.0f, 18.0f, 8.69f, 18.0f, 12.0f)
+            curveTo(18.0f, 13.25f, 17.62f, 14.41f, 16.96f, 15.37f)
+            lineTo(18.41f, 16.82f)
+            curveTo(19.4f, 15.45f, 20.0f, 13.8f, 20.0f, 12.0f)
+            curveTo(20.0f, 7.58f, 16.42f, 4.0f, 12.0f, 4.0f)
+            curveTo(10.2f, 4.0f, 8.55f, 4.6f, 7.18f, 5.59f)
+            lineTo(8.63f, 7.04f)
+            curveTo(9.59f, 6.38f, 10.75f, 6.0f, 12.0f, 6.0f)
+            close()
+            // Diagonal slash
+            moveTo(2.81f, 2.81f)
+            lineTo(1.39f, 4.22f)
+            lineTo(4.65f, 7.48f)
+            curveTo(4.23f, 8.86f, 4.0f, 10.39f, 4.0f, 12.0f)
+            curveTo(4.0f, 16.42f, 7.58f, 20.0f, 12.0f, 20.0f)
+            curveTo(13.61f, 20.0f, 15.14f, 19.77f, 16.52f, 19.35f)
+            lineTo(19.78f, 22.61f)
+            lineTo(21.19f, 21.19f)
+            close()
+        }
+    }
+
+    /** Snooze / pause sleep wave icon. */
+    val Snooze: ImageVector by lazy {
+        icon("Snooze") {
+            moveTo(9.0f, 11.0f)
+            lineTo(15.0f, 11.0f)
+            lineTo(10.5f, 17.0f)
+            lineTo(15.0f, 17.0f)
+            lineTo(15.0f, 19.0f)
+            lineTo(9.0f, 19.0f)
+            lineTo(13.5f, 13.0f)
+            lineTo(9.0f, 13.0f)
+            close()
+            // Upper small Z
+            moveTo(14.0f, 5.0f)
+            lineTo(18.0f, 5.0f)
+            lineTo(15.0f, 9.0f)
+            lineTo(18.0f, 9.0f)
+            lineTo(18.0f, 10.0f)
+            lineTo(14.0f, 10.0f)
+            lineTo(17.0f, 6.0f)
+            lineTo(14.0f, 6.0f)
+            close()
+        }
+    }
 }
 

@@ -229,6 +229,13 @@ class AccessibilityToolDispatcher(
             ),
         )
 
+        statuses["android.alarm"] = DeviceCapabilityStatusDto(
+            state = "AVAILABLE",
+            healthy = true,
+            reason = "Aura offline cyber alarm scheduler is active",
+            permissions = emptyMap(),
+        )
+
         return statuses
     }
 

@@ -21,6 +21,11 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
+import com.aura.companion.alarm.data.AlarmStore
+import com.aura.companion.alarm.data.IAlarmStore
+import com.aura.companion.alarm.model.AuraAlarm
+import com.aura.companion.alarm.service.AlarmScheduler
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -77,6 +82,27 @@ object DeviceTaskToolCatalog {
             mutating = false,
             requiredPermission = Manifest.permission.READ_CONTACTS,
         ),
+        TaskToolSpec(
+            name = "android.set_alarm",
+            required = setOf("hour", "minute"),
+            optional = setOf("label", "repeat_days"),
+            mutating = true,
+            requiredPermission = "",
+        ),
+        TaskToolSpec(
+            name = "android.list_alarms",
+            required = emptySet(),
+            optional = emptySet(),
+            mutating = false,
+            requiredPermission = "",
+        ),
+        TaskToolSpec(
+            name = "android.cancel_alarm",
+            required = setOf("alarm_id"),
+            optional = emptySet(),
+            mutating = true,
+            requiredPermission = "",
+        ),
     ).associateBy { it.name }
 
     fun isTaskTool(tool: String): Boolean = tool in TOOLS
@@ -118,14 +144,22 @@ interface DeviceTaskHandler {
     suspend fun createCalendarEvent(title: String, startTime: String, endTime: String, description: String): Result<JsonObject>
     suspend fun listCalendarEvents(startDate: String, limit: Int): Result<JsonObject>
     suspend fun searchContacts(query: String, limit: Int): Result<JsonObject>
+    suspend fun setAlarm(hour: Int, minute: Int, label: String, repeatDays: List<Int>): Result<JsonObject>
+    suspend fun listAlarms(): Result<JsonObject>
+    suspend fun cancelAlarm(alarmId: String): Result<JsonObject>
 }
 
 /**
  * Production Android task handler using platform ContentResolvers and SmsManager.
  */
-class AndroidDeviceTaskHandler(private val context: Context) : DeviceTaskHandler {
+class AndroidDeviceTaskHandler(
+    private val context: Context,
+    private val alarmStore: IAlarmStore = AlarmStore(context),
+    private val alarmScheduler: AlarmScheduler = AlarmScheduler(context, alarmStore),
+) : DeviceTaskHandler {
 
     override fun hasPermission(permission: String): Boolean {
+        if (permission.isBlank()) return true
         return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -327,6 +361,63 @@ class AndroidDeviceTaskHandler(private val context: Context) : DeviceTaskHandler
         }
     }
 
+    override suspend fun setAlarm(
+        hour: Int,
+        minute: Int,
+        label: String,
+        repeatDays: List<Int>
+    ): Result<JsonObject> = runCatching {
+        val alarm = AuraAlarm(
+            hour = hour,
+            minute = minute,
+            label = label.ifBlank { "Báo thức Aura" },
+            repeatDays = repeatDays
+        )
+        alarmStore.save(alarm)
+        val triggerMillis = alarmScheduler.schedule(alarm)
+
+        buildJsonObject {
+            put("alarm_id", alarm.id)
+            put("hour", alarm.hour)
+            put("minute", alarm.minute)
+            put("formatted_time", alarm.formattedTime)
+            put("label", alarm.label)
+            put("trigger_millis", triggerMillis)
+            put("repeat_days", buildJsonArray { repeatDays.forEach { add(JsonPrimitive(it)) } })
+            put("status", "scheduled")
+        }
+    }
+
+    override suspend fun listAlarms(): Result<JsonObject> = runCatching {
+        val alarms = alarmStore.getAll()
+        buildJsonObject {
+            put("count", alarms.size)
+            put("alarms", buildJsonArray {
+                alarms.forEach { a ->
+                    add(buildJsonObject {
+                        put("id", a.id)
+                        put("hour", a.hour)
+                        put("minute", a.minute)
+                        put("formatted_time", a.formattedTime)
+                        put("label", a.label)
+                        put("is_enabled", a.isEnabled)
+                        put("repeat_days", buildJsonArray { a.repeatDays.forEach { add(JsonPrimitive(it)) } })
+                    })
+                }
+            })
+        }
+    }
+
+    override suspend fun cancelAlarm(alarmId: String): Result<JsonObject> = runCatching {
+        alarmScheduler.cancel(alarmId)
+        val deleted = alarmStore.delete(alarmId)
+        buildJsonObject {
+            put("alarm_id", alarmId)
+            put("deleted", deleted)
+            put("status", if (deleted) "canceled" else "not_found")
+        }
+    }
+
     private fun parseTimeToMillis(isoOrEpoch: String): Long {
         return try {
             isoOrEpoch.toLong()
@@ -350,7 +441,7 @@ class DeviceTaskDispatcher(
         val spec = DeviceTaskToolCatalog.TOOLS[directive.tool]
             ?: return failure(directive, "TOOL_NOT_FOUND", "Unknown task tool ${directive.tool}")
 
-        if (!handler.hasPermission(spec.requiredPermission)) {
+        if (spec.requiredPermission.isNotBlank() && !handler.hasPermission(spec.requiredPermission)) {
             return failure(
                 directive,
                 "BLOCKED_PERMISSION",
@@ -411,6 +502,45 @@ class DeviceTaskDispatcher(
                     val limit = directive.arguments["limit"]?.jsonPrimitive?.intOrNull ?: 10
                     val res = handler.searchContacts(query, limit).getOrThrow()
                     success(directive = directive, result = res)
+                }
+
+                "android.set_alarm" -> {
+                    val hour = directive.arguments["hour"]?.jsonPrimitive?.intOrNull ?: 0
+                    val minute = directive.arguments["minute"]?.jsonPrimitive?.intOrNull ?: 0
+                    val label = directive.arguments["label"]?.jsonPrimitive?.contentOrNull ?: "Báo thức Aura"
+                    val repeatDays = (directive.arguments["repeat_days"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.intOrNull } ?: emptyList()
+                    val res = handler.setAlarm(hour, minute, label, repeatDays).getOrThrow()
+                    success(
+                        directive = directive,
+                        result = res,
+                        postcondition = buildJsonObject {
+                            put("verified", true)
+                            put("action", "set_alarm")
+                            put("hour", hour)
+                            put("minute", minute)
+                            put("formatted_time", String.format("%02d:%02d", hour, minute))
+                            put("alarm_id", res["alarm_id"]?.jsonPrimitive?.contentOrNull ?: "")
+                        },
+                    )
+                }
+
+                "android.list_alarms" -> {
+                    val res = handler.listAlarms().getOrThrow()
+                    success(directive = directive, result = res)
+                }
+
+                "android.cancel_alarm" -> {
+                    val alarmId = directive.arguments["alarm_id"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val res = handler.cancelAlarm(alarmId).getOrThrow()
+                    success(
+                        directive = directive,
+                        result = res,
+                        postcondition = buildJsonObject {
+                            put("verified", true)
+                            put("action", "cancel_alarm")
+                            put("alarm_id", alarmId)
+                        },
+                    )
                 }
 
                 else -> failure(directive, "TOOL_NOT_FOUND", "Task tool not supported: ${directive.tool}")

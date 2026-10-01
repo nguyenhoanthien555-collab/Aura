@@ -33,7 +33,11 @@ EXPECTED_TASK_TOOLS = {
     "android.create_calendar_event",
     "android.list_calendar_events",
     "android.search_contacts",
+    "android.set_alarm",
+    "android.list_alarms",
+    "android.cancel_alarm",
 }
+
 
 
 def make_task_executor(bridge=None, allowed=None, auto_approve=None):

@@ -143,10 +143,69 @@ class SearchContacts(_Read):
     )
 
 
+class SetAlarm(_Mutation):
+    name = "android.set_alarm"
+    capability = "android.alarm"
+    risk = ToolRisk.SAFE
+    description = (
+        "Set or schedule an alarm on the user's Android phone with hour, minute, and optional label. "
+        "Supports optional repeat days of the week."
+    )
+    parameters = (
+        Parameter(
+            name="hour",
+            type="integer",
+            description="Hour of the day to trigger alarm (0-23 in 24-hour format).",
+        ),
+        Parameter(
+            name="minute",
+            type="integer",
+            description="Minute of the hour to trigger alarm (0-59).",
+        ),
+        Parameter(
+            name="label",
+            type="string",
+            required=False,
+            description="Optional label or purpose of the alarm (e.g. 'Dậy đi làm', 'Tập thể dục').",
+        ),
+        Parameter(
+            name="repeat_days",
+            type="array",
+            required=False,
+            description="Optional list of integers representing days of week (1=Mon .. 7=Sun). Empty for one-shot alarm.",
+        ),
+    )
+
+
+class ListAlarms(_Read):
+    name = "android.list_alarms"
+    capability = "android.alarm"
+    description = (
+        "List all alarms currently configured on the user's Android phone."
+    )
+    parameters = ()
+
+
+class CancelAlarm(_Mutation):
+    name = "android.cancel_alarm"
+    capability = "android.alarm"
+    risk = ToolRisk.SAFE
+    description = (
+        "Cancel or remove a scheduled alarm by its unique alarm ID."
+    )
+    parameters = (
+        Parameter(
+            name="alarm_id",
+            type="string",
+            description="Unique identifier of the alarm to cancel.",
+        ),
+    )
+
+
 class AndroidTaskProvider(CapabilityProvider):
     """
     Capability provider for Android personal task management tools
-    (SMS, Calendar, Contacts).
+    (SMS, Calendar, Contacts, Alarms).
     """
 
     namespace = "android"
@@ -157,24 +216,30 @@ class AndroidTaskProvider(CapabilityProvider):
         CreateCalendarEvent,
         ListCalendarEvents,
         SearchContacts,
+        SetAlarm,
+        ListAlarms,
+        CancelAlarm,
     )
 
     _CAPABILITY_NAMES = {
         "android.sms": "Android SMS Messaging",
         "android.calendar": "Android Calendar Management",
         "android.contacts": "Android Contacts Search",
+        "android.alarm": "Android Cyber Alarm System",
     }
 
     _CAPABILITY_KEYWORDS = {
         "android.sms": ["sms", "text", "message", "send", "inbox", "tin nhắn"],
         "android.calendar": ["calendar", "event", "schedule", "meeting", "reminder", "lịch", "cuộc hẹn"],
         "android.contacts": ["contact", "person", "phone", "number", "email", "address", "danh bạ"],
+        "android.alarm": ["alarm", "wake", "wake up", "timer", "báo thức", "đánh thức", "gọi dậy", "hẹn giờ"],
     }
 
     _CAPABILITY_PERMISSIONS = {
         "android.sms": ["android.permission.SEND_SMS", "android.permission.READ_SMS"],
         "android.calendar": ["android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"],
         "android.contacts": ["android.permission.READ_CONTACTS"],
+        "android.alarm": [],
     }
 
     def __init__(self, bridge: DeviceBridge | None = None):
@@ -305,4 +370,8 @@ __all__ = [
     "CreateCalendarEvent",
     "ListCalendarEvents",
     "SearchContacts",
+    "SetAlarm",
+    "ListAlarms",
+    "CancelAlarm",
 ]
+

@@ -722,6 +722,10 @@ private val HUB_GROUPS = listOf(
                 AuraIcons.Bolt, HubRoutes.PROACTIVE,
             ),
             HubEntry(
+                "Báo thức Aura", "Giờ thức dậy & Morning Briefing",
+                AuraIcons.Alarm, HubRoutes.ALARMS,
+            ),
+            HubEntry(
                 "Notifications", "Companion messages",
                 AuraIcons.Notifications, HubRoutes.NOTIFICATIONS,
             ),
@@ -874,6 +878,7 @@ object HubRoutes {
     const val AWARENESS = "hub/awareness"
     const val MEMORY = "hub/memory"
     const val PROACTIVE = "hub/proactive"
+    const val ALARMS = "hub/alarms"
     const val VISION = "hub/vision"
     const val VOICE = "hub/voice"
     const val NOTIFICATIONS = "hub/notifications"
