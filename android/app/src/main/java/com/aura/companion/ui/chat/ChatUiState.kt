@@ -1,6 +1,8 @@
 package com.aura.companion.ui.chat
 
 import com.aura.companion.data.AuraError
+import com.aura.companion.data.local.PhoneTelemetry
+import com.aura.companion.data.remote.HostTelemetryDto
 
 /**
  * Everything the chat screen renders, in one immutable object.
@@ -21,6 +23,9 @@ data class ChatUiState(
     val scanStatusText: String = "",
     val error: AuraError? = null,
     val isConfigured: Boolean = false,
+    val hostTelemetry: HostTelemetryDto? = null,
+    val phoneTelemetry: PhoneTelemetry? = null,
+    val pingMs: Long = 0L,
 ) {
     val canSend: Boolean
         get() = draft.isNotBlank() && !isSending && isConfigured

@@ -1,5 +1,26 @@
 # Current task
 
+## Architecture Topology Alignment & Dual-Device Cyber Telemetry HUD DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Thấu hiểu Kiến trúc Thực tế & Vận hành Triển khai (Deployment Topology)**:
+  - Khẳng định mô hình vận hành thực tế của Aura: Máy chủ Aura được deploy lên **Render.com** (`https://aura-xwm4.onrender.com/`) qua các commit đẩy lên GitHub (`nguyenhoanthien555-collab/Aura.git`).
+  - Thiết bị Android (`Oppo CPH2251`, ColorOS 13) là companion cá nhân 24/7 kết nối qua WAN HTTPS/WSS tới Render.com.
+  - Laptop PC (MSI Katana 15, Windows 11) là máy trạm phát triển (workstation / dev environment) để viết code, test hermetic và push lên remote.
+- **Trụ cột 2: Hệ thống Telemetry 2 Thiết bị Động (Dual-Device Telemetry HUD)**:
+  - Backend: `GET /api/system/telemetry` linh hoạt phân biệt máy chủ Cloud Linux (Render container vCPU, RAM, 24/7 power) hay máy trạm Laptop Windows (MSI specs, RTX 4060, pin laptop).
+  - Handset: `DeviceTelemetryProbe.sample` đo lường mức pin %, sạc nhanh/chậm `⚡`, loại mạng (WiFi / 5G Cellular), và latency roundtrip ping.
+  - Top Capsule (`AuraCyberCoreCapsule`): Hiển thị Cyber Core phát sáng nhịp nhàng, chip thông tin `[☁️ Render Cloud • Latency]` và `[📱 CPH2251 • Pin %]`.
+  - Telemetry HUD Sheet (`DualDeviceTelemetrySheet`): Chạm mở bảng HUD chi tiết trạng thái máy chủ, trạng thái điện thoại, và trạng thái AI Core.
+- **Trụ cột 3: Đồng bộ Hub & Diagnostics**:
+  - `HeroCard`: Cân bằng 2 node Render Cloud và Phone với nhãn gọn gàng không bị cắt chữ (`Cloud Node`, `WiFi • A13`).
+  - `DiagnosticsSection`: Tích hợp trực tiếp thẻ phần cứng máy chủ và điện thoại thời gian thực.
+  - `MemorySection`: Thanh phân đoạn dạng viên thuốc cuộn ngang mượt mà.
+- **Trụ cột 4: Kiểm thử & Xác thực Trực tiếp Trên Phần cứng Oppo CPH2251**:
+  - Đóng gói APK (`:app:assembleDebug`) và cài đặt thành công qua ADB.
+  - Chụp màn hình và xác thực giao diện thực tế trên máy Oppo: Chat, Bottom Sheet, Memory Hub, Diagnostics, và Tools Hub.
+  - Android Unit Test Suite: `:app:testDebugUnitTest` BUILD SUCCESSFUL (22/22 tasks passed).
+  - Python tests: 23/23 tests passed.
+
 ## Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Xoá bỏ 100% Stock Icons (Triệt tiêu Clipart / Zero AI Slop)**:

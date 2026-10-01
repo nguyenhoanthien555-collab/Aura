@@ -157,10 +157,11 @@ fun ChatScreen(
                 }
             }
 
-            // Aura's face + status at the top of the chat: her present
-            // expression and what she's doing, in words. Only here now - the
-            // per-message faces were removed at the owner's request.
-            AuraPresence(state = state)
+            // Aura Cyber-Core Capsule: dual-device live telemetry, pulsing core, and detailed HUD sheet
+            AuraCyberCoreCapsule(
+                state = state,
+                onRefreshTelemetry = viewModel::refreshTelemetry,
+            )
 
             Box(modifier = Modifier.weight(1f)) {
 
@@ -168,6 +169,10 @@ fun ChatScreen(
                     EmptyConversation(
                         isConfigured = state.isConfigured,
                         onOpenSettings = onOpenSettings,
+                        onSelectPrompt = { prompt ->
+                            viewModel.onDraftChanged(prompt)
+                            viewModel.send()
+                        },
                     )
                 } else {
                     LazyColumn(

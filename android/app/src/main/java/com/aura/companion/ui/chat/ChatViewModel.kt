@@ -1,5 +1,6 @@
 package com.aura.companion.ui.chat
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
 import com.aura.companion.data.chat.Transcript
+import com.aura.companion.data.local.DeviceTelemetryProbe
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.settings.SettingsProvider
 import kotlinx.coroutines.Job
@@ -48,6 +50,7 @@ class ChatViewModel(
     private val settings: SettingsProvider,
     private val transcript: Transcript = Transcript.None,
     private val isOnline: () -> Boolean = { true },
+    private val context: Context? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -83,6 +86,15 @@ class ChatViewModel(
         keep()
         observeTranscript()
         checkConnection()
+
+        viewModelScope.launch {
+            while (isActive) {
+                delay(20_000L)
+                if (settings.current.isConfigured && isOnline() && _state.value.connection is ConnectionState.Connected) {
+                    refreshTelemetry()
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -295,46 +307,94 @@ class ChatViewModel(
                 }
             }
 
-            when (val result = repository.health()) {
-
+            val start = System.currentTimeMillis()
+            when (val telemResult = repository.telemetry()) {
                 is AuraResult.Ok -> {
                     slowNotice.cancel()
+                    val ping = (System.currentTimeMillis() - start).coerceAtLeast(1L)
+                    val phone = context?.let { DeviceTelemetryProbe.sample(it, ping) }
+                    val auraDto = telemResult.value.aura
+                    val hostDto = telemResult.value.host
+                    val providerName = auraDto.llmProvider.ifBlank { "aura" }
                     _state.update {
                         it.copy(
-                            connection = ConnectionState.Connected(
-                                result.value.runtime["llm_provider"] ?: "aura"
-                            ),
+                            connection = ConnectionState.Connected(providerName),
+                            hostTelemetry = hostDto,
+                            phoneTelemetry = phone,
+                            pingMs = ping,
                             isInitialScanning = false,
                             scanStatusText = "",
                             error = null,
                         )
                     }
                 }
-
                 is AuraResult.Failed -> {
-                    slowNotice.cancel()
+                    when (val result = repository.health()) {
+                        is AuraResult.Ok -> {
+                            slowNotice.cancel()
+                            val ping = (System.currentTimeMillis() - start).coerceAtLeast(1L)
+                            val phone = context?.let { DeviceTelemetryProbe.sample(it, ping) }
+                            _state.update {
+                                it.copy(
+                                    connection = ConnectionState.Connected(
+                                        result.value.runtime["llm_provider"] ?: "aura"
+                                    ),
+                                    phoneTelemetry = phone,
+                                    pingMs = ping,
+                                    isInitialScanning = false,
+                                    scanStatusText = "",
+                                    error = null,
+                                )
+                            }
+                        }
+                        is AuraResult.Failed -> {
+                            slowNotice.cancel()
+                            _state.update {
+                                it.copy(
+                                    connection = ConnectionState.Unavailable(
+                                        result.error.userMessage
+                                    ),
+                                    isInitialScanning = false,
+                                    scanStatusText = "",
+                                    error = if (
+                                        result.error is AuraError.Unauthorized ||
+                                        result.error is AuraError.Forbidden
+                                    ) {
+                                        result.error
+                                    } else {
+                                        it.error
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Poll telemetry in real-time to update Host PC and Phone hardware metrics.
+     */
+    fun refreshTelemetry() {
+        viewModelScope.launch {
+            val start = System.currentTimeMillis()
+            when (val telem = repository.telemetry()) {
+                is AuraResult.Ok -> {
+                    val ping = (System.currentTimeMillis() - start).coerceAtLeast(1L)
+                    val phone = context?.let { DeviceTelemetryProbe.sample(it, ping) }
                     _state.update {
                         it.copy(
-                            connection = ConnectionState.Unavailable(
-                                result.error.userMessage
-                            ),
-                            isInitialScanning = false,
-                            scanStatusText = "",
-                            // A failing probe is not worth an error banner on
-                            // its own; the connection line already says it.
-                            // Only an auth failure gets promoted, because it
-                            // needs the user to go and fix something - and a
-                            // 403 needs that as much as a 401 does, even
-                            // though what needs fixing is not the same.
-                            error = if (
-                                result.error is AuraError.Unauthorized ||
-                                result.error is AuraError.Forbidden
-                            ) {
-                                result.error
-                            } else {
-                                it.error
-                            },
+                            hostTelemetry = telem.value.host,
+                            phoneTelemetry = phone,
+                            pingMs = ping,
                         )
+                    }
+                }
+                is AuraResult.Failed -> {
+                    context?.let { ctx ->
+                        val phone = DeviceTelemetryProbe.sample(ctx, _state.value.pingMs)
+                        _state.update { it.copy(phoneTelemetry = phone) }
                     }
                 }
             }
@@ -812,11 +872,12 @@ class ChatViewModel(
             settings: SettingsProvider,
             transcript: Transcript = Transcript.None,
             isOnline: () -> Boolean = { true },
+            context: Context? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                ChatViewModel(repository, settings, transcript, isOnline) as T
+                ChatViewModel(repository, settings, transcript, isOnline, context) as T
         }
     }
 }

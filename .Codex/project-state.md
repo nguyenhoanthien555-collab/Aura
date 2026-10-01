@@ -1,5 +1,25 @@
 # AURA project state
 
+## Architecture Topology Alignment & Dual-Device Cyber Telemetry HUD (2026-10-02)
+1. **Deployment Architecture Grounding**:
+   - Production Aura runs on **Render.com** (`https://aura-xwm4.onrender.com/`) built automatically from GitHub (`nguyenhoanthien555-collab/Aura.git`).
+   - Android Companion (`Oppo CPH2251`, Android 13) is the primary daily companion interface connected via WAN.
+   - Laptop workstation (MSI Katana 15, Windows 11, RTX 4060) is the development / verification node.
+2. **Dynamic Dual-Device Telemetry HUD (`AuraCyberCore.kt`, `DeviceTelemetry.kt`, `system.py`)**:
+   - `GET /api/system/telemetry`: Probes host specs, dynamically adapting between Linux Cloud Container (Render vCPU, RAM, datacenter power) and Windows Laptop (MSI Katana specs, RTX 4060, battery %).
+   - Handset probe: Oppo CPH2251 battery level %, charging status (`⚡`), network type (WiFi / 5G Cellular), ping roundtrip.
+   - Top Chat Capsule (`AuraCyberCoreCapsule`): Glowing pulsating cyber-core emblem displaying host & phone mini-badges.
+   - Detailed HUD Sheet (`DualDeviceTelemetrySheet`): One-tap expandable bottom sheet displaying host, phone, and AI intelligence cards.
+3. **Hub & Diagnostics Refinements (`HubScreen.kt`, `DiagnosticsSection.kt`, `MemorySection.kt`)**:
+   - Dual-device `HeroCard` with balanced node weights and non-overflowing tags (`Cloud Node` / `WiFi • A13`).
+   - `DiagnosticsSection`: Embedded live telemetry hardware cards.
+   - `MemorySection`: Horizontal scrollable segmented pill tabs.
+4. **Verification**:
+   - Packaged and installed APK on Oppo hardware (`IBCQMB4PTGNZJVTO`).
+   - Live screenshots verified across Chat, Telemetry Sheet, Memory Hub, Diagnostics, and Tools Hub.
+   - Android Unit Tests: `:app:testDebugUnitTest` BUILD SUCCESSFUL (22/22 tasks passed).
+   - Python tests: 23/23 passed.
+
 ## Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock (2026-10-01)
 1. **Zero Stock Icons / Zero AI Slop (`ui/theme/AuraIcons.kt`)**:
    - Total purge of `androidx.compose.material.icons` across the entire codebase (verified 0 references).

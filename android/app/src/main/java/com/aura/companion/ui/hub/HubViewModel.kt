@@ -1,12 +1,16 @@
 package com.aura.companion.ui.hub
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
+import com.aura.companion.data.local.DeviceTelemetryProbe
+import com.aura.companion.data.local.PhoneTelemetry
 import com.aura.companion.data.remote.EffectiveConfigDto
+import com.aura.companion.data.remote.HostTelemetryDto
 import com.aura.companion.data.remote.ProviderDto
 import com.aura.companion.data.remote.ProviderHealthDto
 import com.aura.companion.data.settings.AuraSettings
@@ -105,6 +109,9 @@ data class HubUiState(
     /** The last thing that happened, for a notice at the top of a section. */
     val notice: Notice? = null,
     val providerAction: ProviderAction = ProviderAction(),
+    val hostTelemetry: HostTelemetryDto? = null,
+    val phoneTelemetry: PhoneTelemetry? = null,
+    val pingMs: Long = 0L,
 ) {
     /**
      * Whether Aura answered this app.
@@ -290,6 +297,7 @@ class HubViewModel(
     private val syncOutbox: EventOutbox? = null,
     private val syncInbox: EventInbox? = null,
     private val cursorStore: CursorStore? = null,
+    private val context: Context? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HubUiState(device = settings.current))
@@ -394,7 +402,12 @@ class HubViewModel(
 
             // 1. Reachability and authentication, from the one route that
             //    every Aura build has ever had.
-            val reachable = when (val health = repository.health()) {
+            val startPing = System.currentTimeMillis()
+            val health = repository.health()
+            val ping = (System.currentTimeMillis() - startPing).coerceAtLeast(1L)
+            val phone = context?.let { DeviceTelemetryProbe.sample(it, ping) }
+
+            val reachable = when (health) {
 
                 is AuraResult.Ok -> {
                     _state.update {
@@ -406,6 +419,8 @@ class HubViewModel(
                                 uptimeSeconds = health.value.uptimeSeconds,
                                 runtime = health.value.runtime,
                             ),
+                            phoneTelemetry = phone,
+                            pingMs = ping,
                         )
                     }
                     true
@@ -431,6 +446,8 @@ class HubViewModel(
                                 },
                                 settingsError = null,
                             ),
+                            phoneTelemetry = phone,
+                            pingMs = ping,
                         )
                     }
                     false
@@ -438,6 +455,15 @@ class HubViewModel(
             }
 
             if (!reachable) return@launch
+
+            launch {
+                when (val telem = repository.telemetry()) {
+                    is AuraResult.Ok -> {
+                        _state.update { it.copy(hostTelemetry = telem.value.host) }
+                    }
+                    else -> Unit
+                }
+            }
 
             // 2. The settings document. Its absence is a missing feature,
             //    not a missing server - and *which* absence it is has to
@@ -888,6 +914,7 @@ class HubViewModel(
             syncOutbox: EventOutbox? = null,
             syncInbox: EventInbox? = null,
             cursorStore: CursorStore? = null,
+            context: Context? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
@@ -899,6 +926,7 @@ class HubViewModel(
                     syncOutbox = syncOutbox,
                     syncInbox = syncInbox,
                     cursorStore = cursorStore,
+                    context = context,
                 ) as T
         }
     }

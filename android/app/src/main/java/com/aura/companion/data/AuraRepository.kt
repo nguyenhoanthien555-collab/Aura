@@ -15,6 +15,7 @@ import com.aura.companion.data.remote.DeviceResultReportDto
 import com.aura.companion.data.remote.DeviceResultSubmissionDto
 import com.aura.companion.data.remote.DecisionDto
 import com.aura.companion.data.remote.HealthDto
+import com.aura.companion.data.remote.TelemetryDto
 import com.aura.companion.data.remote.NotificationDto
 import com.aura.companion.data.remote.AuraStreamClient
 import com.aura.companion.data.remote.ProviderHealthDto
@@ -135,6 +136,8 @@ class AuraRepository(
     // ------------------------------------------------------------------
 
     suspend fun health(): AuraResult<HealthDto> = call { it.health() }
+
+    suspend fun telemetry(): AuraResult<TelemetryDto> = call { it.getTelemetry() }
 
     // ------------------------------------------------------------------
     // Agent tool protocol

@@ -1469,5 +1469,94 @@ object AuraIcons {
             close()
         }
     }
+
+    /** Sleek ultraportable cyber laptop. */
+    val Laptop: ImageVector by lazy {
+        icon("Laptop") {
+            moveTo(4.0f, 5.0f)
+            lineTo(20.0f, 5.0f)
+            curveTo(21.1f, 5.0f, 22.0f, 5.9f, 22.0f, 7.0f)
+            lineTo(22.0f, 15.0f)
+            curveTo(22.0f, 16.1f, 21.1f, 17.0f, 20.0f, 17.0f)
+            lineTo(4.0f, 17.0f)
+            curveTo(2.9f, 17.0f, 2.0f, 16.1f, 2.0f, 15.0f)
+            lineTo(2.0f, 7.0f)
+            curveTo(2.0f, 5.9f, 2.9f, 5.0f, 4.0f, 5.0f)
+            close()
+            moveTo(0.0f, 18.0f)
+            lineTo(24.0f, 18.0f)
+            lineTo(22.5f, 20.0f)
+            lineTo(1.5f, 20.0f)
+            close()
+            moveTo(4.0f, 7.0f)
+            lineTo(20.0f, 7.0f)
+            lineTo(20.0f, 15.0f)
+            lineTo(4.0f, 15.0f)
+            close()
+        }
+    }
+
+    /** Battery with charging lightning core. */
+    val BatteryCharging: ImageVector by lazy {
+        icon("BatteryCharging") {
+            moveTo(15.67f, 4.0f)
+            lineTo(14.0f, 4.0f)
+            lineTo(14.0f, 2.0f)
+            lineTo(10.0f, 2.0f)
+            lineTo(10.0f, 4.0f)
+            lineTo(8.33f, 4.0f)
+            curveTo(7.6f, 4.0f, 7.0f, 4.6f, 7.0f, 5.33f)
+            lineTo(7.0f, 20.67f)
+            curveTo(7.0f, 21.4f, 7.6f, 22.0f, 8.33f, 22.0f)
+            lineTo(15.67f, 22.0f)
+            curveTo(16.4f, 22.0f, 17.0f, 21.4f, 17.0f, 20.67f)
+            lineTo(17.0f, 5.33f)
+            curveTo(17.0f, 4.6f, 16.4f, 4.0f, 15.67f, 4.0f)
+            close()
+            moveTo(11.0f, 19.0f)
+            lineTo(11.0f, 14.0f)
+            lineTo(9.0f, 14.0f)
+            lineTo(13.0f, 6.0f)
+            lineTo(13.0f, 11.0f)
+            lineTo(15.0f, 11.0f)
+            close()
+        }
+    }
+
+    /** Microprocessor Silicon CPU core. */
+    val Cpu: ImageVector by lazy {
+        icon("Cpu") {
+            moveTo(5.0f, 5.0f)
+            lineTo(19.0f, 5.0f)
+            lineTo(19.0f, 19.0f)
+            lineTo(5.0f, 19.0f)
+            close()
+            moveTo(9.0f, 1.0f)
+            lineTo(11.0f, 1.0f)
+            lineTo(11.0f, 4.0f)
+            lineTo(9.0f, 4.0f)
+            close()
+            moveTo(13.0f, 1.0f)
+            lineTo(15.0f, 1.0f)
+            lineTo(15.0f, 4.0f)
+            lineTo(13.0f, 4.0f)
+            close()
+            moveTo(9.0f, 20.0f)
+            lineTo(11.0f, 20.0f)
+            lineTo(11.0f, 23.0f)
+            lineTo(9.0f, 23.0f)
+            close()
+            moveTo(13.0f, 20.0f)
+            lineTo(15.0f, 20.0f)
+            lineTo(15.0f, 23.0f)
+            lineTo(13.0f, 23.0f)
+            close()
+            moveTo(8.0f, 8.0f)
+            lineTo(16.0f, 8.0f)
+            lineTo(16.0f, 16.0f)
+            lineTo(8.0f, 16.0f)
+            close()
+        }
+    }
 }
 

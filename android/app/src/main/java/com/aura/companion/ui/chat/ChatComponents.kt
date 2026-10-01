@@ -6,6 +6,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,24 +18,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import com.aura.companion.ui.theme.auraGlassBlur
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import com.aura.companion.ui.theme.AuraIcons
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,16 +45,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aura.companion.R
+import com.aura.companion.ui.theme.AuraIcons
+import com.aura.companion.ui.theme.auraGlassBlur
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,7 +87,6 @@ fun MessageBubble(
     onRetry: () -> Unit,
     onReact: (String) -> Unit,
 ) {
-
     val fromUser = message.author == ChatMessage.Author.USER
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -88,149 +96,182 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start,
     ) {
+        val bubbleShape = if (fromUser) {
+            RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+        } else {
+            RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+        }
 
-        Box {
-            val bubbleShape = RoundedCornerShape(24.dp)
-            val bubbleColor = when {
-                message.failed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                fromUser -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            }
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 300.dp)
-                    .auraGlassBlur(
-                        shape = bubbleShape,
-                        tint = bubbleColor
+        val borderStroke = if (fromUser) {
+            androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.35f))
+        } else {
+            androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF06B6D4).copy(alpha = 0.3f))
+        }
+
+        val bubbleBg = if (fromUser) {
+            Color(0xFF5B21B6).copy(alpha = 0.65f)
+        } else {
+            Color(0xFF131224).copy(alpha = 0.7f)
+        }
+
+        Box(
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .clip(bubbleShape)
+                .border(borderStroke, bubbleShape)
+                .auraGlassBlur(
+                    shape = bubbleShape,
+                    tint = bubbleBg,
+                )
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { showMenu = true }
                     )
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onLongPress = {
-                                showMenu = true
-                            }
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Column {
+                if (!fromUser) {
+                    // Futuristic Aura Tag Header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    ) {
+                        Icon(
+                            imageVector = AuraIcons.Spark,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(11.dp),
                         )
-                    },
-            ) {
-                val codeBg = if (fromUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
-                val linkColor = if (fromUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
-                // Parse markdown only when the text/colours actually change, not on
-                // every recomposition of every visible bubble (was re-running a regex
-                // over the whole transcript on each streamed token).
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "AURA",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                            ),
+                            color = Color(0xFF38BDF8),
+                        )
+                    }
+                }
+
+                val codeBg = if (fromUser) Color(0xFF3B0764).copy(alpha = 0.5f) else Color(0xFF1E293B).copy(alpha = 0.6f)
+                val linkColor = if (fromUser) Color(0xFFC084FC) else Color(0xFF38BDF8)
                 val rendered = androidx.compose.runtime.remember(message.text, codeBg, linkColor) {
                     parseMarkdownToAnnotatedString(message.text, codeColor = codeBg, linkColor = linkColor)
                 }
+
                 Text(
                     text = rendered,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = when {
-                        message.failed -> MaterialTheme.colorScheme.onErrorContainer
-                        fromUser -> MaterialTheme.colorScheme.onPrimaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
+                    color = if (fromUser) Color(0xFFF3E8FF) else Color(0xFFF1F5F9),
                 )
-                
-                androidx.compose.material3.DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+
+                // Timestamp & Status Footer inside Bubble
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Reaction Bar
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        listOf("❤️", "👍", "😂", "😲", "😢", "🙏").forEach { emoji ->
-                            Text(
-                                text = emoji,
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.clickable {
-                                    showMenu = false
-                                    onReact(emoji)
-                                }
-                            )
-                        }
+                    if (message.verified == true) {
+                        Icon(
+                            imageVector = AuraIcons.Verified,
+                            contentDescription = "Verified",
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(11.dp),
+                        )
+                        Text(
+                            text = "Verified",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = Color(0xFF34D399),
+                        )
                     }
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("Copy text") },
-                        onClick = {
-                            showMenu = false
-                            clipboardManager.setText(buildAnnotatedString { append(message.text) })
-                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                        }
+                    Text(
+                        text = formatTime(message.timestamp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        color = Color(0xFF94A3B8),
                     )
                 }
             }
-            
-            if (message.reactions.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier
-                        .align(if (fromUser) Alignment.BottomStart else Alignment.BottomEnd)
-                        .padding(horizontal = 12.dp)
-                        .offset(y = 12.dp)
+
+            // Dropdown Menu for Copy & Reaction
+            androidx.compose.material3.DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-                        message.reactions.values.toSet().forEach { emoji ->
-                            Text(text = emoji, style = MaterialTheme.typography.labelMedium)
-                        }
+                    listOf("❤️", "👍", "😂", "😲", "😢", "🙏").forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.clickable {
+                                showMenu = false
+                                onReact(emoji)
+                            }
+                        )
+                    }
+                }
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Sao chép") },
+                    onClick = {
+                        showMenu = false
+                        clipboardManager.setText(buildAnnotatedString { append(message.text) })
+                        Toast.makeText(context, "Đã sao chép", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+
+        // Reaction chips below bubble
+        if (message.reactions.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF1E1B4B).copy(alpha = 0.8f),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF8B5CF6).copy(alpha = 0.4f)),
+                modifier = Modifier.padding(top = 2.dp, start = 6.dp, end = 6.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    message.reactions.values.distinct().forEach { emoji ->
+                        Text(
+                            text = "$emoji ${message.reactions.values.count { it == emoji }}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        )
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp),
-        ) {
-
-            Text(
-                text = formatTime(message.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
-
-            if (message.verified == true) {
-                Spacer(Modifier.width(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        0.75.dp,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                    ),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
-                    ) {
-                        Icon(
-                            imageVector = AuraIcons.Verified,
-                            contentDescription = "Verified",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(11.dp),
-                        )
-                        Spacer(Modifier.width(3.dp))
-                        Text(
-                            text = "Verified",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-
-            if (message.failed) {
-                TextButton(
-                    onClick = onRetry,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.action_retry),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
+        if (message.failed) {
+            TextButton(
+                onClick = onRetry,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
+                Icon(
+                    imageVector = AuraIcons.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(12.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.action_retry),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
@@ -331,21 +372,43 @@ fun ErrorBanner(
 fun EmptyConversation(
     isConfigured: Boolean,
     onOpenSettings: () -> Unit,
+    onSelectPrompt: (String) -> Unit = {},
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF1E1B4B).copy(alpha = 0.6f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.5f)),
+                modifier = Modifier.size(64.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = AuraIcons.Spark,
+                        contentDescription = null,
+                        tint = Color(0xFFC084FC),
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
 
             Text(
                 text = stringResource(
                     if (isConfigured) R.string.empty_title else R.string.empty_title_setup
                 ),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface,
             )
 
             Spacer(Modifier.height(8.dp))
@@ -360,9 +423,60 @@ fun EmptyConversation(
             )
 
             if (!isConfigured) {
-                Spacer(Modifier.height(16.dp))
-                TextButton(onClick = onOpenSettings) {
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = onOpenSettings,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF7C3AED),
+                        contentColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
                     Text(stringResource(R.string.action_open_settings))
+                }
+            } else {
+                Spacer(Modifier.height(24.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val quickPrompts = listOf(
+                        "⚡ Kiểm tra thông số phần cứng Laptop & Điện thoại" to "Hãy cho tôi biết chi tiết tình trạng phần cứng máy tính và điện thoại hiện tại.",
+                        "🧠 Xem danh sách ký ức & tri thức đã ghi nhớ" to "Aura đang lưu giữ những sự thật và thông tin gì về tôi?",
+                        "🔍 Tìm kiếm tin tức công nghệ hôm nay" to "Tìm kiếm tin tức công nghệ và AI nổi bật trong ngày hôm nay.",
+                        "💬 Chào Aura, hôm nay mình làm việc nhé!" to "Chào Aura, hôm nay có việc gì đáng chú ý không em?",
+                    )
+                    quickPrompts.forEach { (label, prompt) ->
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF131224).copy(alpha = 0.7f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                0.75.dp,
+                                Color(0xFF8B5CF6).copy(alpha = 0.3f),
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectPrompt(prompt) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color(0xFFE2E8F0),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    imageVector = AuraIcons.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Color(0xFF8B5CF6),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -417,10 +531,7 @@ fun TypingIndicator(modifier: Modifier = Modifier) {
 /**
  * The input row.
  *
- * Multi-line up to a point, because a companion app gets paragraphs and a
- * single-line field turns those into a scrolling slot. The send button is
- * disabled rather than hidden while a request is in flight, so its
- * position never moves under a thumb.
+ * Floating glass capsule with smooth border glow and haptic styling.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -431,48 +542,80 @@ fun Composer(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
 ) {
-    Surface(
-        tonalElevation = 3.dp,
-        modifier = Modifier.fillMaxWidth(),
+    val composerShape = RoundedCornerShape(26.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .clip(composerShape)
+            .border(
+                1.dp,
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF8B5CF6).copy(alpha = 0.4f),
+                        Color(0xFF06B6D4).copy(alpha = 0.4f),
+                    )
+                ),
+                composerShape,
+            )
+            .auraGlassBlur(
+                shape = composerShape,
+                tint = Color(0xFF131224).copy(alpha = 0.85f),
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Row(
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-
-            OutlinedTextField(
+            BasicTextField(
                 value = draft,
                 onValueChange = onDraftChanged,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.composer_hint)) },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = Color.White,
+                ),
+                cursorBrush = SolidColor(Color(0xFF8B5CF6)),
                 maxLines = 5,
-                shape = RoundedCornerShape(24.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+                decorationBox = { innerTextField ->
+                    if (draft.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.composer_hint),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color(0xFF64748B),
+                        )
+                    }
+                    innerTextField()
+                }
             )
-
-            Spacer(Modifier.size(8.dp))
 
             FilledIconButton(
                 onClick = onSend,
                 enabled = canSend,
-                modifier = Modifier
-                    .padding(bottom = 4.dp)
-                    .size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color(0xFF7C3AED),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF1E1B4B).copy(alpha = 0.5f),
+                    disabledContentColor = Color(0xFF475569),
+                ),
+                modifier = Modifier.size(42.dp),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = Color.White,
                     )
                 } else {
                     Icon(
                         imageVector = AuraIcons.Send,
                         contentDescription = stringResource(R.string.action_send),
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

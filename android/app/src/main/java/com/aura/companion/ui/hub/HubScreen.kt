@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,10 +47,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aura.companion.ui.components.NoticeCard
 import com.aura.companion.ui.components.NavigationRow
@@ -167,13 +174,15 @@ fun HubScreen(
                         headline = headline,
                         version = state.server.config.app.version
                             .ifBlank { state.server.version },
+                        state = state,
                         reduced = reduced,
                     )
                 }
 
                 item(key = "banner") {
+                    val showBanner = banner != null && (state.notice == null || banner.text != state.notice?.text)
                     AnimatedVisibility(
-                        visible = banner != null,
+                        visible = showBanner,
                         enter = expandVertically(
                             tween(AuraMotion.scaled(AuraMotion.Standard, reduced))
                         ) + fadeIn(tween(AuraMotion.scaled(AuraMotion.Standard, reduced))),
@@ -237,74 +246,205 @@ fun HubScreen(
 /**
  * "Is Aura up, and who is answering me?"
  *
- * WHY THIS READS `reach` AND NOT `loaded`
- * ---------------------------------------
- * It used to say "Disconnected" whenever `GET /api/settings` failed, which
- * on a deployment predating the Control Hub API meant the headline
- * contradicted the chat tab working in the background. The verdict comes
- * from [hubHeadline] now, which anchors on the health rung; a missing
- * settings API is a second line, not a different verdict.
+ * Futuristic Dual-Device Synced Mesh Hero Card:
+ * Displays Host PC and Handset status connected by a cyber pulse bridge.
  */
 @Composable
 private fun HeroCard(
     headline: HubHeadline,
     version: String,
+    state: HubUiState,
     reduced: Boolean,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(24.dp)
+    val borderGradient = Brush.horizontalGradient(
+        listOf(
+            Color(0xFF8B5CF6).copy(alpha = 0.5f),
+            Color(0xFF06B6D4).copy(alpha = 0.5f),
+        )
+    )
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, borderGradient, shape)
             .auraGlassBlur(
                 shape = shape,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                tint = Color(0xFF131224).copy(alpha = 0.75f),
             )
-            .background(brush = auraHeroBrush(), shape = shape, alpha = 0.5f),
+            .background(brush = auraHeroBrush(), shape = shape, alpha = 0.4f)
+            .padding(18.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(22.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Dual Device Synced Mesh Graphic
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // Host Node (Laptop or Render Cloud)
+                val isWindows = state.hostTelemetry?.os?.contains("Windows", ignoreCase = true) == true
+                val hostIcon = if (isWindows) AuraIcons.Laptop else AuraIcons.Cloud
+                val hostTitle = when {
+                    state.hostTelemetry != null && state.hostTelemetry.model.isNotBlank() && state.hostTelemetry.model != "Standard PC" -> state.hostTelemetry.model
+                    isWindows -> "Host PC"
+                    else -> "Render Cloud"
+                }
+                val hostSub = when {
+                    state.hostTelemetry != null -> "CPU ${state.hostTelemetry.cpuPercent.toInt()}% • RAM ${state.hostTelemetry.ramUsedPercent.toInt()}%"
+                    isWindows -> "Windows 11"
+                    else -> "Cloud Node"
+                }
 
-            Column(modifier = Modifier.weight(1f)) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF0369A1).copy(alpha = 0.18f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF38BDF8).copy(alpha = 0.4f)),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = hostIcon,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Column {
+                            Text(
+                                text = hostTitle,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = hostSub,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color(0xFF7DD3FC),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
 
-                Text(
-                    text = "Aura",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
-                Spacer(Modifier.height(6.dp))
-
-                Text(
-                    text = headline.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                Spacer(Modifier.height(6.dp))
-
-                Text(
-                    text = headline.detail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                if (version.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Aura $version",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                            .copy(alpha = 0.7f),
+                // Laser Sync Line with Animated Pulse & Ping
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(10.dp)
+                            .height(1.5.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF38BDF8), Color(0xFF8B5CF6))
+                                )
+                            )
                     )
+                    Text(
+                        text = if (state.pingMs > 0) "${state.pingMs}ms" else "SYNC",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        color = Color(0xFFC084FC),
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(10.dp)
+                            .height(1.5.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF8B5CF6), Color(0xFF34D399))
+                                )
+                            )
+                    )
+                }
+
+                // Phone Node
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF065F46).copy(alpha = 0.18f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF34D399).copy(alpha = 0.4f)),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = AuraIcons.DeviceMobile,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Column {
+                            Text(
+                                text = state.phoneTelemetry?.let { "${it.batteryPercent}% ${if (it.isCharging) "⚡" else ""}" } ?: "Handset",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = state.phoneTelemetry?.let { "${it.networkType} • A${it.androidVersion.replace("Android ", "")}" } ?: "Android 13",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color(0xFF6EE7B7),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(Modifier.width(16.dp))
+            // Headline & Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = headline.title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = headline.detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (version.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Aura Core v$version",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            color = Color(0xFF94A3B8),
+                        )
+                    }
+                }
 
-            StatusRing(tone = headline.tone, busy = headline.busy, reduced = reduced)
+                StatusRing(tone = headline.tone, busy = headline.busy, reduced = reduced)
+            }
         }
     }
 }

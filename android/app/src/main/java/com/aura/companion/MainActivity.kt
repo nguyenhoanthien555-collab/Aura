@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
                         container.settings,
                         container.transcript,
                         container::isOnline,
+                        container.context,
                     )
                 )
 
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
                         container.syncOutbox,
                         container.syncInbox,
                         container.cursorStore,
+                        container.context,
                     )
                 )
 

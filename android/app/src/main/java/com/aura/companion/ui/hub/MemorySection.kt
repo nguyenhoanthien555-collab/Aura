@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -125,35 +126,47 @@ fun MemorySection(
             "Cài đặt & Tẩy sạch" to AuraIcons.Settings,
         )
 
-        TabRow(
-            selectedTabIndex = memState.selectedTab,
-            containerColor = Color.Transparent,
+        // Scrollable Cyber Segmented Pill Row (No clipping / Unclipped labels)
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .auraGlass(shape = RoundedCornerShape(16.dp)),
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             tabs.forEachIndexed { index, (label, icon) ->
-                Tab(
-                    selected = memState.selectedTab == index,
-                    onClick = { memoryViewModel.setTab(index) },
-                    text = {
+                val isSelected = memState.selectedTab == index
+                val pillShape = RoundedCornerShape(14.dp)
+                val tintColor = if (isSelected) Color(0xFF8B5CF6) else MaterialTheme.colorScheme.onSurfaceVariant
+                val bgColor = if (isSelected) Color(0xFF7C3AED).copy(alpha = 0.25f) else Color(0xFF1E1B4B).copy(alpha = 0.35f)
+                val borderColor = if (isSelected) Color(0xFF8B5CF6).copy(alpha = 0.8f) else Color(0xFF475569).copy(alpha = 0.3f)
+
+                Surface(
+                    shape = pillShape,
+                    color = bgColor,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+                    modifier = Modifier.clickable { memoryViewModel.setTab(index) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = tintColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (memState.selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            ),
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
-                    },
-                    icon = {
-                        Icon(
-                            icon,
-                            contentDescription = label,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                )
+                    }
+                }
             }
         }
 

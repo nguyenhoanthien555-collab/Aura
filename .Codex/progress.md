@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-10-02 — Architecture Topology Alignment, Dual-Device Cyber Telemetry HUD & Live Cloud Detection DELIVERED
+
+- **Pillar 1: System Operation & Deployment Model Grounding**:
+  - Re-anchored system architecture to Aura's true operational reality: Aura Cloud Core is deployed to **Render.com** (`https://aura-xwm4.onrender.com/`) continuously via GitHub commit pushes (`nguyenhoanthien555-collab/Aura.git`).
+  - Android Companion (`Oppo CPH2251`, Android 13) is the primary 24/7 mobile interface, communicating over WAN (WiFi / Cellular 5G) directly with Render.
+  - The laptop workstation (MSI Katana 15, Windows 11, RTX 4060) is the development / testing node where hermetic verification runs before pushing.
+- **Pillar 2: Dynamic Dual-Device Telemetry HUD (`AuraCyberCore.kt`, `DeviceTelemetry.kt`, `system.py`)**:
+  - Backend: `GET /api/system/telemetry` dynamically detects whether the host environment is Linux Cloud Container (Render.com vCPU, memory limits, 24/7 datacenter power) or Windows PC Workstation (MSI Katana 15 specs, RTX 4060, battery %).
+  - Handset Probe: `DeviceTelemetryProbe.sample(context, pingMs)` gathers live handset battery %, charging state (`⚡`), network type (WiFi / 5G Cellular), and ping roundtrip latency.
+  - Top Chat Capsule (`AuraCyberCoreCapsule`): Glowing pulsating cyber-core emblem displaying `[☁️ Render Cloud • Latency]` / `[💻 Host PC • Latency]` alongside `[📱 CPH2251 • Battery %]`.
+  - Expanding Telemetry HUD Sheet (`DualDeviceTelemetrySheet`): One-tap expandable bottom sheet showing Host Node specs, Handset Telemetry gauges, and AI Intelligence status with responsive single-line header and "Làm mới" action.
+- **Pillar 3: Hub & Diagnostics Screen Integration (`HubScreen.kt`, `DiagnosticsSection.kt`, `MemorySection.kt`)**:
+  - `HeroCard`: Converted to dynamic dual-device mesh card with balanced weights and non-overflowing node tags (`[☁️ Render Cloud / Cloud Node]` and `[📱 40% ⚡ / WiFi • A13]`).
+  - `DiagnosticsSection`: Added "Hardware Telemetry (Live)" section embedding host and phone hardware cards.
+  - `MemorySection`: Horizontal scrollable cyber segmented pills replacing cramped tabs.
+- **Pillar 4: Verification on Physical Device (`IBCQMB4PTGNZJVTO`)**:
+  - APK compiled (`:app:assembleDebug`, 19.8 MB) and installed via ADB to Oppo CPH2251.
+  - Live screenshots captured and visually verified across Chat, Telemetry Sheet, Memory Hub, Diagnostics, and Tools Hub.
+  - Android unit test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
+  - Python tests: 23/23 targeted tests passed.
+
 ## 2026-10-01 — Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock DELIVERED
 
 - **Pillar 1: Complete Elimination of Stock Icons (Zero Stock Clipart / Zero AI Slop)**:

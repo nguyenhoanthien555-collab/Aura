@@ -95,7 +95,8 @@ class AppContainer(application: Application) {
     val cursorStore: CursorStore by lazy {
         FileCursorStore(File(application.filesDir, "sync/cursor"))
     }
-    private val appContext = application.applicationContext
+    val context: android.content.Context = application.applicationContext
+    private val appContext get() = context
 
     /**
      * Is there a network that can actually carry a request right now?

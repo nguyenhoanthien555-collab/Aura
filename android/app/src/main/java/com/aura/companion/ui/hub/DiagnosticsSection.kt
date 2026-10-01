@@ -6,6 +6,8 @@ import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.aura.companion.ui.chat.HostHardwareCard
+import com.aura.companion.ui.chat.PhoneHardwareCard
 import com.aura.companion.ui.components.AnimatedNotice
 import com.aura.companion.ui.components.NoticeCard
 import com.aura.companion.ui.components.RowDivider
@@ -187,6 +189,27 @@ fun DiagnosticsSection(
                     icon = AuraIcons.Info,
                 )
             }
+
+        // ------------------------------------------------------------------
+        // Hardware Telemetry: Dual-Device Live Gauges (Host PC + Handset)
+        // ------------------------------------------------------------------
+
+        SettingsSection(
+            title = "Hardware Telemetry (Live)",
+            subtitle = "Host PC & Handset hardware gauges",
+        ) {
+            HostHardwareCard(
+                host = state.hostTelemetry,
+                pingMs = state.pingMs,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            PhoneHardwareCard(
+                phone = state.phoneTelemetry,
+                pingMs = state.pingMs,
+            )
+        }
 
         // ------------------------------------------------------------------
         // The server, as it describes itself.

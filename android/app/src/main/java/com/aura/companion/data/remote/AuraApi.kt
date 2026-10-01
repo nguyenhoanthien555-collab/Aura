@@ -240,4 +240,7 @@ interface AuraApi {
     suspend fun purgeMemories(
         @Body request: PurgeMemoryRequestDto,
     ): Response<MemoryActionResponseDto>
+
+    @GET("api/system/telemetry")
+    suspend fun getTelemetry(): Response<TelemetryDto>
 }
