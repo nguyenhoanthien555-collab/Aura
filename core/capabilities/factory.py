@@ -26,6 +26,8 @@ def register_core_capabilities(config=None):
 
     # Memory/Chat capabilities
     registry.register(Capability(capability_id="memory.write", name="Write Memory", description="Remember facts", category="memory", discovery_metadata={"tool": "remember"}))
+    registry.register(Capability(capability_id="memory.remember", name="Remember Fact", description="Remember user facts", category="memory", discovery_metadata={"tool": "remember_fact"}))
+    registry.register(Capability(capability_id="memory.forget", name="Forget Fact", description="Forget user facts", category="memory", discovery_metadata={"tool": "forget_fact"}))
     registry.register(Capability(capability_id="chat.react", name="Message Reactions", description="React to messages", category="chat", discovery_metadata={"tool": "react_to_message"}))
 
     # Sandbox & Tool Synthesis capabilities
@@ -168,4 +170,6 @@ def register_core_capabilities(config=None):
     permissions.grant("filesystem.read")
     permissions.grant("filesystem.write")
     permissions.grant("memory.write")
+    permissions.grant("memory.remember")
+    permissions.grant("memory.forget")
     permissions.grant("chat.react")

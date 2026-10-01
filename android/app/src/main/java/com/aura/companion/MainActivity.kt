@@ -28,6 +28,7 @@ import com.aura.companion.ui.hub.GeneralSection
 import com.aura.companion.ui.hub.HubRoutes
 import com.aura.companion.ui.hub.HubScreen
 import com.aura.companion.ui.hub.HubViewModel
+import com.aura.companion.ui.hub.MemoryHubViewModel
 import com.aura.companion.ui.hub.MemorySection
 import com.aura.companion.ui.hub.ModelsSection
 import com.aura.companion.ui.hub.NotificationsSection
@@ -174,7 +175,10 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(HubRoutes.MEMORY) {
-                        MemorySection(hubState, hubViewModel, back)
+                        val memoryViewModel: MemoryHubViewModel = viewModel(
+                            factory = MemoryHubViewModel.factory(container.repository)
+                        )
+                        MemorySection(hubState, hubViewModel, memoryViewModel, back)
                     }
 
                     composable(HubRoutes.PROACTIVE) {

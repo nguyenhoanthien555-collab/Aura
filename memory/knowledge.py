@@ -15,12 +15,14 @@ Profile first, because who the user is outranks what they once said.
 """
 
 from core.logger import logger
+from memory.graph import EntityGraphStore
 from memory.profile import ProfileStore
 from memory.retrieval import NullRetriever, Retriever
 
 
 DEFAULT_MAX_FACTS = 8
 DEFAULT_MAX_RECALLED = 3
+DEFAULT_MAX_GRAPH = 6
 
 
 class MemoryKnowledgeProvider:
@@ -29,15 +31,19 @@ class MemoryKnowledgeProvider:
         self,
         profile: ProfileStore | None = None,
         retriever: Retriever | None = None,
+        graph_store: EntityGraphStore | None = None,
         max_facts: int = DEFAULT_MAX_FACTS,
         max_recalled: int = DEFAULT_MAX_RECALLED,
+        max_graph: int = DEFAULT_MAX_GRAPH,
         enabled: bool = True,
     ):
 
         self.profile = profile
         self.retriever = retriever or NullRetriever()
+        self.graph_store = graph_store
         self.max_facts = max_facts
         self.max_recalled = max_recalled
+        self.max_graph = max_graph
         self.enabled = enabled
 
     def get_knowledge(self, query: str) -> list[str]:
@@ -54,6 +60,7 @@ class MemoryKnowledgeProvider:
         lines: list[str] = []
 
         lines.extend(self._facts())
+        lines.extend(self._graph_relations(query))
         lines.extend(self._recalled(query))
 
         return lines
@@ -85,3 +92,23 @@ class MemoryKnowledgeProvider:
             return []
 
         return [f"earlier - {line}" for line in found]
+
+    def _graph_relations(self, query: str) -> list[str]:
+        if self.graph_store is None or self.max_graph <= 0 or not query:
+            return []
+
+        try:
+            import re
+            words = [w.strip() for w in re.findall(r"[\wÀ-ỹ]{2,}", query) if w.strip()]
+            if not words:
+                return []
+
+            triples = self.graph_store.query_subgraph(words, max_hops=1, limit=self.max_graph)
+            return [
+                f"knowledge - {r['source']} {r['relation'].lower().replace('_', ' ')} {r['target']}"
+                for r in triples
+            ]
+        except Exception as error:
+            logger.debug("Graph relation lookup failed: %s", error)
+            return []
+

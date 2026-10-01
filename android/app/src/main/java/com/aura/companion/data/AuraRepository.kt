@@ -27,6 +27,15 @@ import com.aura.companion.data.remote.SettingsPatchResponseDto
 import com.aura.companion.data.remote.SettingsResetRequestDto
 import com.aura.companion.data.remote.SettingsResetResponseDto
 import com.aura.companion.data.remote.SettingsResponseDto
+import com.aura.companion.data.remote.EntityCreateRequestDto
+import com.aura.companion.data.remote.FactUpsertRequestDto
+import com.aura.companion.data.remote.MemoryActionResponseDto
+import com.aura.companion.data.remote.MemoryEpisodesResponseDto
+import com.aura.companion.data.remote.MemoryFactsResponseDto
+import com.aura.companion.data.remote.MemoryGraphDto
+import com.aura.companion.data.remote.MemoryOverviewDto
+import com.aura.companion.data.remote.PurgeMemoryRequestDto
+import com.aura.companion.data.remote.RelationCreateRequestDto
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.chat.SessionStore
 import com.aura.companion.data.settings.SettingsProvider
@@ -360,6 +369,70 @@ class AuraRepository(
 
     suspend fun deleteProviderKey(provider: String): AuraResult<ApiKeyResponseDto> =
         call { it.deleteProviderKey(provider) }
+
+    // ------------------------------------------------------------------
+    // Memory & Entity Knowledge Graph
+    // ------------------------------------------------------------------
+
+    suspend fun getMemoryOverview(): AuraResult<MemoryOverviewDto> =
+        call { it.memoryOverview() }
+
+    suspend fun getMemoryFacts(
+        category: String? = null,
+        q: String? = null,
+        limit: Int = 100,
+    ): AuraResult<MemoryFactsResponseDto> =
+        call { it.listFacts(category = category, q = q, limit = limit) }
+
+    suspend fun upsertFact(
+        key: String,
+        value: String,
+        category: String = "profile",
+    ): AuraResult<MemoryActionResponseDto> =
+        call { it.upsertFact(FactUpsertRequestDto(key = key, value = value, category = category)) }
+
+    suspend fun deleteFact(key: String): AuraResult<MemoryActionResponseDto> =
+        call { it.deleteFact(key) }
+
+    suspend fun getMemoryGraph(
+        q: String? = null,
+        limit: Int = 100,
+    ): AuraResult<MemoryGraphDto> =
+        call { it.getGraph(q = q, limit = limit) }
+
+    suspend fun createEntity(
+        name: String,
+        entityType: String = "CONCEPT",
+        description: String = "",
+    ): AuraResult<MemoryActionResponseDto> =
+        call { it.createEntity(EntityCreateRequestDto(name = name, entityType = entityType, description = description)) }
+
+    suspend fun deleteEntity(name: String): AuraResult<MemoryActionResponseDto> =
+        call { it.deleteEntity(name) }
+
+    suspend fun createRelation(
+        source: String,
+        relation: String,
+        target: String,
+        confidence: Double = 1.0,
+    ): AuraResult<MemoryActionResponseDto> =
+        call { it.createRelation(RelationCreateRequestDto(source = source, relation = relation, target = target, confidence = confidence)) }
+
+    suspend fun deleteRelation(
+        source: String,
+        relation: String,
+        target: String,
+    ): AuraResult<MemoryActionResponseDto> =
+        call { it.deleteRelation(source = source, relation = relation, target = target) }
+
+    suspend fun getMemoryEpisodes(limit: Int = 50): AuraResult<MemoryEpisodesResponseDto> =
+        call { it.listEpisodes(limit = limit) }
+
+    suspend fun deleteEpisode(id: Int): AuraResult<MemoryActionResponseDto> =
+        call { it.deleteEpisode(id) }
+
+    suspend fun purgeMemory(target: String = "all", category: String? = null): AuraResult<MemoryActionResponseDto> =
+        call { it.purgeMemories(PurgeMemoryRequestDto(target = target, category = category)) }
 
     // ------------------------------------------------------------------
     // The one place an HTTP failure becomes an AuraError

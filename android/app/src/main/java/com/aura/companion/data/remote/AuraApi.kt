@@ -173,4 +173,71 @@ interface AuraApi {
         @Path("id") conflictId: String,
         @Body request: ResolveConflictRequestDto,
     ): Response<JsonObject>
+
+    // ------------------------------------------------------------------
+    // Memory & Entity Knowledge Graph (server/routes/memory.py)
+    // ------------------------------------------------------------------
+
+    @GET("api/memory/overview")
+    suspend fun memoryOverview(): Response<MemoryOverviewDto>
+
+    @GET("api/memory/facts")
+    suspend fun listFacts(
+        @Query("category") category: String? = null,
+        @Query("q") q: String? = null,
+        @Query("limit") limit: Int = 100,
+    ): Response<MemoryFactsResponseDto>
+
+    @POST("api/memory/facts")
+    suspend fun upsertFact(
+        @Body request: FactUpsertRequestDto,
+    ): Response<MemoryActionResponseDto>
+
+    @DELETE("api/memory/facts/{key}")
+    suspend fun deleteFact(
+        @Path("key") key: String,
+    ): Response<MemoryActionResponseDto>
+
+    @GET("api/memory/graph")
+    suspend fun getGraph(
+        @Query("q") q: String? = null,
+        @Query("limit") limit: Int = 100,
+    ): Response<MemoryGraphDto>
+
+    @POST("api/memory/entities")
+    suspend fun createEntity(
+        @Body request: EntityCreateRequestDto,
+    ): Response<MemoryActionResponseDto>
+
+    @DELETE("api/memory/entities/{name}")
+    suspend fun deleteEntity(
+        @Path("name") name: String,
+    ): Response<MemoryActionResponseDto>
+
+    @POST("api/memory/relations")
+    suspend fun createRelation(
+        @Body request: RelationCreateRequestDto,
+    ): Response<MemoryActionResponseDto>
+
+    @DELETE("api/memory/relations")
+    suspend fun deleteRelation(
+        @Query("source") source: String,
+        @Query("relation") relation: String,
+        @Query("target") target: String,
+    ): Response<MemoryActionResponseDto>
+
+    @GET("api/memory/episodes")
+    suspend fun listEpisodes(
+        @Query("limit") limit: Int = 50,
+    ): Response<MemoryEpisodesResponseDto>
+
+    @DELETE("api/memory/episodes/{id}")
+    suspend fun deleteEpisode(
+        @Path("id") id: Int,
+    ): Response<MemoryActionResponseDto>
+
+    @POST("api/memory/purge")
+    suspend fun purgeMemories(
+        @Body request: PurgeMemoryRequestDto,
+    ): Response<MemoryActionResponseDto>
 }

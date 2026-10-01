@@ -1,5 +1,26 @@
 # AURA project state
 
+## Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub (2026-10-01)
+1. **Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:
+   - `EntityNode` (`entity_nodes`) and `EntityRelation` (`entity_relations`) models with composite unique constraints on `(source_id, relation, target_id)`.
+   - `EntityGraphStore`: thread-safe SQLite queries, 1-hop subgraph traversal, cascading entity deletions, and store purge.
+   - Additive idempotent `init_graph_tables()` initialization.
+2. **Sensitive Data Sanitizer & Privacy Boundary (`memory/sanitizer.py`)**:
+   - `SensitiveDataSanitizer` with Luhn card algorithm, API key pattern detectors (Google AI, OpenAI, GitHub, Bearer tokens), and password/PIN regexes.
+   - Blocks secret storage via `validate_for_storage()`, ensuring zero credentials leak into SQLite.
+3. **First-Class Memory Tools & Prompt Guidance (`tools/builtins/memory_tools.py`, `prompts/system.md`)**:
+   - `RememberFactTool` (`remember_fact`, capability `memory.remember`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`).
+   - `ForgetFactTool` (`forget_fact`, capability `memory.forget`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`).
+   - System prompt instructions (Section 5) guiding active memory preservation and forgetting.
+4. **Hybrid Reflection & 1-Hop Graph Context Injection (`memory/reflection.py`, `memory/knowledge.py`, `server/runtime.py`)**:
+   - `EpisodicReflectionWorker`: background extractor extracting entity triples `(source, relation, target)` via multilingual rules (Vi/En) and fallback LLM without blocking chat stream.
+   - `MemoryKnowledgeProvider`: 1-hop subgraph retrieval linking entities mentioned in user prompts into context as `knowledge - <source> <relation> <target>`.
+5. **Authenticated REST Memory API & Android Companion Hub (`server/routes/memory.py`, `android/`)**:
+   - Full CRUD REST endpoints: `GET /api/memory/overview`, `GET /facts`, `POST /facts`, `DELETE /facts/{key}`, `GET /graph`, `POST /entities`, `DELETE /entities/{name}`, `POST /relations`, `DELETE /relations`, `GET /episodes`, `DELETE /episodes/{id}`, `POST /purge`.
+   - Android Companion multi-tier Compose UI (`MemorySection.kt`, `MemoryHubViewModel.kt`, `MemoryDtos.kt`) with 4 tabs: *Hồ sơ sự thật (Facts)*, *Mạng thực thể (Entity Graph)*, *Dòng thời gian (Episodic)*, and *Cấu hình & Tẩy sạch (Settings & Purge Danger Zone)*.
+6. **Testing & Verification**:
+   - 100% test pass rate: 31 new Python tests (`tests/test_entity_graph.py`, `tests/test_sensitive_sanitizer.py`, `tests/test_memory_tools.py`, `tests/test_memory_knowledge_graph.py`, `tests/test_memory_api.py`, `tests/test_device_boundary.py`), 126 core regression tests, and 457 Android unit tests passing (`:app:testDebugUnitTest`).
+
 ## Settings API Coroutine Warning Fix & Desktop `open_url` Tool (2026-10-01)
 1. **Settings API Async Restart Clean Coroutine Handling (`server/routes/settings.py`)**:
    - Resolved `AURA-TASK-001` un-awaited coroutine warning on `_do_restart` in `update_settings` and `reset_settings`.

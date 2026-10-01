@@ -114,7 +114,7 @@ class ServerRuntime:
             "android.type_text", "android.press_key", "android.back", "android.home",
             "android.launch_app", "android.wait_for", "android.verify",
             "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware",
-            "open_url"
+            "open_url", "remember_fact", "forget_fact"
         ]:
             if android_tool_name not in allowed:
                 allowed.append(android_tool_name)
@@ -155,6 +155,7 @@ class ServerRuntime:
         self.started = False
         self.start_time: Optional[float] = None
         self._settings_service = None
+        self._reflection_worker = None
 
     @property
     def settings_store(self):
@@ -453,7 +454,20 @@ class ServerRuntime:
             # is read the same way whatever is asking.
             return Response(text=read_intent(response.text))
 
+        self._reflect_turn(message, getattr(response, "text", str(response)))
+
         return response
+
+    def _reflect_turn(self, user_msg: str, assistant_reply: str):
+        if not user_msg or not assistant_reply or os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        try:
+            if self._reflection_worker is None:
+                from memory.reflection import EpisodicReflectionWorker
+                self._reflection_worker = EpisodicReflectionWorker()
+            self._reflection_worker.reflect_turn(user_msg, assistant_reply)
+        except Exception as err:
+            logger.debug("Background reflection error: %s", err)
 
     def chat_stream(
         self,

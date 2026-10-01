@@ -1,5 +1,41 @@
 # Progress
 
+## 2026-10-01 — Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub DELIVERED
+
+- **Pillar 1: Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:
+  - Implemented `EntityNode` (`entity_nodes`) and `EntityRelation` (`entity_relations`) with composite unique constraint on `(source_id, relation, target_id)`.
+  - Implemented `EntityGraphStore`: thread-safe SQLite operations, 1-hop subgraph queries, cascading entity deletions, graph stats, and store purge.
+  - Added additive idempotent `init_graph_tables()`.
+  - Verified: `tests/test_entity_graph.py` (4/4 passed).
+- **Pillar 2: Sensitive Data Sanitizer & Privacy Boundary (`memory/sanitizer.py`)**:
+  - Implemented `SensitiveDataSanitizer` with Luhn card algorithm, API key pattern detectors (Google AI, OpenAI, GitHub, Bearer tokens), and password/PIN regexes.
+  - Added `is_sensitive()`, `redact()`, and `validate_for_storage()` protecting the persistent SQLite database against accidental secret leakage.
+  - Verified: `tests/test_sensitive_sanitizer.py` (4/4 passed).
+- **Pillar 3: First-Class Memory Tools & Prompt Guidance (`tools/builtins/memory_tools.py`, `prompts/system.md`)**:
+  - `RememberFactTool` (`remember_fact`, capability `memory.remember`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`) with automated sensitive data pre-validation.
+  - `ForgetFactTool` (`forget_fact`, capability `memory.forget`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`).
+  - Registered capability in `core/capabilities/factory.py`, registered in `tools/factory.py`, and allowed in `server/runtime.py`.
+  - Enriched system instructions (`prompts/system.md`, Section 5) to proactively invoke memory tools whenever the user shares facts or preferences, or requests forgetting.
+  - Verified: `tests/test_memory_tools.py` (4/4 passed), `tests/test_device_boundary.py` (14/14 passed).
+- **Pillar 4: Hybrid Reflection & 1-Hop Graph Context Injection (`memory/reflection.py`, `memory/knowledge.py`, `server/runtime.py`)**:
+  - `EpisodicReflectionWorker`: background extractor extracting entity triples `(source, relation, target)` via multilingual rules (Vi/En) and fallback LLM, automatically filtering sensitive turns.
+  - `MemoryKnowledgeProvider`: extended with 1-hop subgraph retrieval linking entities mentioned in user prompts into context as `knowledge - <source> <relation> <target>`.
+  - Verified: `tests/test_memory_knowledge_graph.py` (2/2 passed).
+- **Pillar 5: Authenticated REST Memory API (`server/routes/memory.py`, `server/main.py`)**:
+  - Full CRUD REST endpoints: `GET /api/memory/overview`, `GET /facts`, `POST /facts`, `DELETE /facts/{key}`, `GET /graph`, `POST /entities`, `DELETE /entities/{name}`, `POST /relations`, `DELETE /relations`, `GET /episodes`, `DELETE /episodes/{id}`, `POST /purge`.
+  - Verified: `tests/test_memory_api.py` (3/3 passed).
+- **Pillar 6: Android Companion Multi-Tier Memory Hub (`android/`)**:
+  - Wire DTOs `MemoryDtos.kt` & Retrofit contract `AuraApi.kt`.
+  - Repository wrapper methods `AuraRepository.kt`.
+  - `MemoryHubViewModel.kt` handling state flow, real-time search, category filters, CRUD for facts, entities, relations, episodes, and purge actions.
+  - Modern Compose `MemorySection.kt` with 4 tabs: *Hồ sơ sự thật (Facts)*, *Mạng thực thể (Entity Graph)*, *Dòng thời gian (Episodic)*, and *Cấu hình & Tẩy sạch (Settings & Purge Danger Zone)*.
+  - Verified: `MemoryHubViewModelTest.kt` (6/6 passed). Full Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (457 unit tests passed).
+- **Pillar 7: Full System Verification & Regression**:
+  - Python tests: 31/31 passed 100% in 1.88s.
+  - Core regression: 126/126 passed 100% in 10.46s.
+  - Device boundary invariant: 14/14 passed.
+  - Android test suite: 457 unit tests passed.
+
 ## 2026-10-01 — Settings API Coroutine Warning Fix & Desktop `open_url` Tool DELIVERED
 
 - **Pillar 1: Settings API Async Restart Clean Coroutine Handling (`server/routes/settings.py`)**:

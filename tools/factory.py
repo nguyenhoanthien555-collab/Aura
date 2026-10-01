@@ -70,10 +70,17 @@ def _builtin_tools(
         SynthesizeCustomTool,
     )
 
+    from tools.builtins.memory_tools import (
+        ForgetFactTool,
+        RememberFactTool,
+    )
+
     tools.append(CurrentTimeTool())
     tools.append(ReactToMessageTool())
     tools.append(ExecuteSandboxPythonTool())
     tools.append(SynthesizeCustomTool(registry=registry))
+    tools.append(RememberFactTool())
+    tools.append(ForgetFactTool())
 
     roots = _list_setting(config, "allowed_paths")
 

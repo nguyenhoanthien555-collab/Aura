@@ -26,6 +26,7 @@ from server.routes import device as device_routes
 from server.routes import sync as sync_routes
 from server.routes import system as system_routes
 from server.routes import confirmations as confirmations_routes
+from server.routes import memory as memory_routes
 from core.logger import logger
 
 
@@ -91,6 +92,7 @@ app.include_router(device_routes.router)
 app.include_router(sync_routes.router)
 app.include_router(system_routes.router)
 app.include_router(confirmations_routes.router)
+app.include_router(memory_routes.router)
 
 
 @app.get("/")

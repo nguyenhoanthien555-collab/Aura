@@ -75,6 +75,8 @@ from memory.models import (
     ToolInvocationRecord,
     SemanticVector,
     CompanionMemoryRecord,
+    EntityNode,
+    EntityRelation,
 )
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -257,5 +259,17 @@ def init_tool_invocation_tables(bind=None):
     )
 
 
-
+def init_graph_tables(bind=None):
+    """
+    Create entity graph tables (EntityNode, EntityRelation), if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            EntityNode.__table__,
+            EntityRelation.__table__,
+        ],
+    )
 

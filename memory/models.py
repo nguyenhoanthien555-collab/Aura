@@ -24,7 +24,7 @@ place that converts between them, and it converts in one direction only.
 """
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Float, Index, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 from datetime import datetime
 
 
@@ -618,5 +618,37 @@ class ToolInvocationRecord(Base):
     updated_at: Mapped[str] = mapped_column(default=timestamp_now)
 
 
+class EntityNode(Base):
+    """
+    An entity in Aura's personalized knowledge graph (Person, Project, Topic, Preference, Location, etc.).
+    """
+    __tablename__ = "entity_nodes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    entity_type: Mapped[str] = mapped_column(String(32), default="CONCEPT", index=True)
+    description: Mapped[str] = mapped_column(Text(), default="")
+    properties_json: Mapped[str] = mapped_column(Text(), default="{}")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)
+    updated_at: Mapped[str] = mapped_column(default=timestamp_now)
 
 
+class EntityRelation(Base):
+    """
+    A directed relation between two entities in Aura's knowledge graph.
+    (e.g., Thien -> LIKES -> Bac Xiu, Aura -> CREATED_BY -> Thien).
+    """
+    __tablename__ = "entity_relations"
+    __table_args__ = (
+        UniqueConstraint("source_id", "relation", "target_id", name="uq_entity_relation"),
+        Index("ix_relation_source", "source_id"),
+        Index("ix_relation_target", "target_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("entity_nodes.id", ondelete="CASCADE"))
+    relation: Mapped[str] = mapped_column(String(64), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("entity_nodes.id", ondelete="CASCADE"))
+    confidence: Mapped[float] = mapped_column(Float(), default=1.0)
+    source: Mapped[str] = mapped_column(String(32), default="user")
+    created_at: Mapped[str] = mapped_column(default=timestamp_now)

@@ -1,5 +1,43 @@
 # Current task
 
+## Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:
+  - Triển khai `EntityNode` (`entity_nodes`) và `EntityRelation` (`entity_relations`) với composite unique constraint trên `(source_id, relation, target_id)`.
+  - Triển khai `EntityGraphStore`: thread-safe SQLite operations, 1-hop subgraph query, cascade entity deletions, thống kê (`stats`), và `purge`.
+  - Khởi tạo bảng idempotent `init_graph_tables()`.
+  - Verified: `tests/test_entity_graph.py` (4/4 passed).
+- **Trụ cột 2: Sensitive Data Sanitizer & Privacy Boundary (`memory/sanitizer.py`)**:
+  - `SensitiveDataSanitizer`: thuật toán Luhn cho thẻ tín dụng, regex cho Google/OpenAI/GitHub/Bearer API keys, và regex nhận diện mật khẩu/PIN/OTP (`mật khẩu là: ...`, `password: ...`).
+  - Cung cấp `is_sensitive()`, `redact()`, và `validate_for_storage()`. Chặn đứng nguy cơ lưu trữ secrets/credentials vào bộ nhớ.
+  - Verified: `tests/test_sensitive_sanitizer.py` (4/4 passed).
+- **Trụ cột 3: First-Class Memory Tools & Prompt Guidance (`tools/builtins/memory_tools.py`, `prompts/system.md`)**:
+  - `RememberFactTool` (`remember_fact`, capability `memory.remember`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`) tự động tiền kiểm qua sanitizer.
+  - `ForgetFactTool` (`forget_fact`, capability `memory.forget`, `ToolRisk.SAFE`, `SideEffect.IDEMPOTENT`).
+  - Đăng ký capability trong `core/capabilities/factory.py`, đăng ký vào `_builtin_tools` trong `tools/factory.py`, gắn allowlist trong `server/runtime.py`.
+  - System prompt bổ sung Mục 5 (`Personal Memory & Knowledge Management`) hướng dẫn Aura chủ động gọi công cụ khi người dùng cung cấp thông tin hoặc yêu cầu quên.
+  - Verified: `tests/test_memory_tools.py` (4/4 passed), `tests/test_device_boundary.py` (14/14 passed).
+- **Trụ cột 4: Hybrid Reflection & 1-Hop Graph Context Injection (`memory/reflection.py`, `memory/knowledge.py`, `server/runtime.py`)**:
+  - `EpisodicReflectionWorker`: background extractor trích xuất bộ ba thực thể `(source, relation, target)` qua rules đa ngôn ngữ (Vi/En) và LLM fallback, tự động loại bỏ lượt chat nhạy cảm.
+  - `MemoryKnowledgeProvider`: mở rộng truy vấn 1-hop subgraph quan hệ thực thể theo từ khóa câu hỏi của người dùng và định dạng vào Prompt (`knowledge - <source> <relation> <target>`).
+  - Verified: `tests/test_memory_knowledge_graph.py` (2/2 passed).
+- **Trụ cột 5: Authenticated REST Memory API (`server/routes/memory.py`, `server/main.py`)**:
+  - Các endpoints: `GET /api/memory/overview`, `GET /facts`, `POST /facts`, `DELETE /facts/{key}`, `GET /graph`, `POST /entities`, `DELETE /entities/{name}`, `POST /relations`, `DELETE /relations`, `GET /episodes`, `DELETE /episodes/{id}`, `POST /purge`.
+  - Verified: `tests/test_memory_api.py` (3/3 passed).
+- **Trụ cột 6: Android Companion Multi-Tier Memory Hub (`android/`)**:
+  - Wire DTOs `MemoryDtos.kt` & Retrofit contract `AuraApi.kt`.
+  - Repository wrapper methods `AuraRepository.kt`.
+  - `MemoryHubViewModel.kt` quản lý state độc lập, tìm kiếm thời gian thực theo từ khóa, lọc category, thêm/xóa fact, thêm/xóa thực thể, thêm/xóa quan hệ, xóa sự kiện, và tẩy sạch toàn bộ.
+  - Giao diện `MemorySection.kt` hiện đại với 4 tab: *Hồ sơ sự thật (Facts)*, *Mạng thực thể (Entity Graph)*, *Dòng thời gian (Episodic)*, và *Cấu hình & Tẩy sạch (Settings & Purge Danger Zone)*.
+  - Verified: `MemoryHubViewModelTest.kt` (6/6 passed). Toàn bộ Android Gradle suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 tasks up-to-date, 0 failures).
+- **Trụ cột 7: Full System Verification & Regression**:
+  - Python tests mới: 31/31 passed 100% trong 1.88s.
+  - Core regression: 126/126 passed 100% trong 10.46s.
+  - Device boundary invariant: 14/14 passed.
+  - Android test suite: 457 unit tests passed.
+
+---
+
 ## Settings API Coroutine Warning Fix & Desktop `open_url` Tool DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Settings API Async Restart Clean Coroutine Handling (`server/routes/settings.py`)**:
