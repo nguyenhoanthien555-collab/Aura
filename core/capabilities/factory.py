@@ -73,6 +73,25 @@ def register_core_capabilities(config=None):
     for cap_id, _, _, _, _ in android_caps:
         health.register_check(cap_id, check_android_gateway)
 
+    # Phase 5: Android Task Capabilities (SMS, Calendar, Contacts)
+    task_caps = [
+        ("android.sms", "Android SMS Messaging", "Send and read SMS messages on the device.", ["android.permission.SEND_SMS", "android.permission.READ_SMS"], "android.send_sms"),
+        ("android.calendar", "Android Calendar Management", "Create and query calendar events on the device.", ["android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"], "android.create_calendar_event"),
+        ("android.contacts", "Android Contacts Search", "Search address book and device contacts.", ["android.permission.READ_CONTACTS"], "android.search_contacts"),
+    ]
+
+    for cap_id, name, desc, perms, tool_name in task_caps:
+        registry.register(Capability(
+            capability_id=cap_id,
+            name=name,
+            description=desc,
+            category="android",
+            required_permissions=perms,
+            required_dependencies=["android.companion"],
+            discovery_metadata={"tool": tool_name}
+        ))
+        health.register_check(cap_id, check_android_gateway)
+
     def check_desktop_input():
         try:
             from tools.builtins.input import default_input_synthesizer
@@ -101,6 +120,32 @@ def register_core_capabilities(config=None):
             return {"granted": True, "reason": ""}
 
     permissions.register_check("android.accessibility", check_android_accessibility)
+
+    def check_android_perm(perm: str):
+        def _check():
+            try:
+                from server.device_gateway import get_device_gateway
+                gw = get_device_gateway()
+                status = gw.device_status()
+                if status.get("state") in {"UNAVAILABLE", "UNKNOWN", "UNHEALTHY"}:
+                    return {"granted": True, "reason": ""}
+                perms = status.get("permissions") or {}
+                granted = perms.get(perm, True)
+                if isinstance(granted, dict):
+                    return {"granted": bool(granted.get("granted", True)), "reason": str(granted.get("reason", ""))}
+                return {"granted": bool(granted), "reason": ""}
+            except Exception:
+                return {"granted": True, "reason": ""}
+        return _check
+
+    for perm in [
+        "android.permission.SEND_SMS",
+        "android.permission.READ_SMS",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.READ_CONTACTS",
+    ]:
+        permissions.register_check(perm, check_android_perm(perm))
 
     # Default grants for local PC permissions
     permissions.grant("system.time")

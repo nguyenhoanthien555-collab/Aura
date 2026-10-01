@@ -5,6 +5,7 @@ import com.aura.companion.data.settings.FakeSettings
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
@@ -322,6 +323,25 @@ class AuraStreamClientTest {
         }
 
         assertTrue(collect(client).last() is StreamEvent.Failed)
+    }
+
+    @Test
+    fun `a complete frame with verifier metadata and authoritative text is parsed`() {
+
+        val client = clientFor { socket ->
+            socket.send("""{"type":"started","session_id":"s-1","message_id":"m-1"}""")
+            socket.send(
+                """{"type":"complete","session_id":"s-1","message_id":"m-1",
+                   "total_chunks":1,"elapsed_seconds":1.2,"first_chunk_seconds":0.3,
+                   "text":"Authoritative reply",
+                   "verifier":{"decision":"pass","claims":2,"contradicted":0,"unsupported":0,"repairs":0}}"""
+            )
+        }
+
+        val events = collect(client)
+        val complete = events.last() as StreamEvent.Complete
+        assertEquals("Authoritative reply", complete.text)
+        assertEquals("pass", (complete.verifier?.get("decision") as? JsonPrimitive)?.content)
     }
 
     private companion object {

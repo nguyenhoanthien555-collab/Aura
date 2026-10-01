@@ -131,17 +131,27 @@ class AuraDaemon:
         """Main 24/7 supervisory loop."""
         while not self._stop_event.is_set():
             try:
+                if self._stop_event.is_set():
+                    break
                 # 1. Task Worker Step
                 self._step_task_worker()
+                if self._stop_event.is_set():
+                    break
 
                 # 2. Proactive Messaging Step
                 self._step_proactive_worker()
+                if self._stop_event.is_set():
+                    break
 
                 # 3. Periodic Backup Step
                 self._step_backup_worker()
+                if self._stop_event.is_set():
+                    break
 
                 # 4. Outbox / Inbox Pruning Step
                 self._step_pruning_worker()
+                if self._stop_event.is_set():
+                    break
 
                 # 5. Sleep until next poll interval or wake event
                 self._wake_event.wait(timeout=self.poll_interval)
@@ -149,7 +159,8 @@ class AuraDaemon:
 
             except Exception as e:
                 logger.error("Error in AURA 24/7 daemon loop: %s", e, exc_info=True)
-                time.sleep(self.poll_interval)
+                if not self._stop_event.is_set():
+                    time.sleep(self.poll_interval)
 
     def _step_task_worker(self) -> None:
         """Processes any ready task steps or recovers pending tasks."""

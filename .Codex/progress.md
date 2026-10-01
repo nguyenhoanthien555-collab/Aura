@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-10-01 — Phase 5 Personal Task Tools & Android Companion Verification Badges DELIVERED
+
+- **Phase 5 Personal Task Tools (`tools/providers/android_task_provider.py`)**:
+  - Implemented 5 canonical personal task tools grounded in Android companion APIs:
+    - `SendSMS` (`android.send_sms`, `ToolRisk.DANGEROUS`, `SideEffect.NON_IDEMPOTENT`, requires recipient & message).
+    - `ReadSMS` (`android.read_sms`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`, optional limit & query).
+    - `CreateCalendarEvent` (`android.create_calendar_event`, `ToolRisk.DANGEROUS`, `SideEffect.NON_IDEMPOTENT`, requires title & start_time).
+    - `ListCalendarEvents` (`android.list_calendar_events`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`, optional start_date & limit).
+    - `SearchContacts` (`android.search_contacts`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`, query name/phone/email).
+  - Wired into `server/routes/agent.py` intent runtime registry.
+  - Bridge support in `tools/providers/android_bridge.py`: mock datasets in `LoopbackDeviceBridge`, permission declarations, and verified postcondition evidence generation for mutating tools (`send_sms`, `create_calendar_event`).
+  - Capability integration in `core/capabilities/factory.py`: registered `android.sms`, `android.calendar`, and `android.contacts` with permission gates (`SEND_SMS`, `READ_SMS`, `READ_CALENDAR`, `WRITE_CALENDAR`, `READ_CONTACTS`) and companion gateway health checks.
+- **Android Companion Presets & Verification Badges**:
+  - `ConnectionSection.kt`: Added quick 1-tap preset buttons for switching between `Local (127.0.0.1:8000)` and `Render Cloud (https://aura-xwm4.onrender.com/)`.
+  - `AuraStreamClient.kt`: Extended `StreamEvent.Complete` to parse authoritative final `text` and `verifier` object from WebSocket frames.
+  - `ChatUiState.kt` & `ChatViewModel.kt`: Added `verified: Boolean?` to `ChatMessage`, setting `verified = true` when verifier decision is `"pass"` or `"repair"`.
+  - `ChatComponents.kt`: Renders a green `✓ Verified` badge in `MessageBubble` next to the timestamp for verified turns.
+- **Testing & Verification**:
+  - Python tests: `tests/test_android_task_tools.py` (13/13 PASSED), `tests/test_phase1_runtime_closure.py` (9/9 PASSED), focused android suite (63/63 PASSED), full pytest suite (3842 PASSED).
+  - Android tests: `AuraStreamClientTest.kt` (verified frame parsing) and `ChatViewModelTest.kt` (verified badge state transition). Gradle `:app:testDebugUnitTest --rerun-tasks`: **BUILD SUCCESSFUL (22 actionable tasks executed, 0 failures)**.
+
 ## 2026-10-01 — Gemini Semantic Embeddings & Cloud-Only Memory Consolidation DELIVERED
 
 - **GeminiEmbeddingProvider (`memory/embeddings.py`)**:

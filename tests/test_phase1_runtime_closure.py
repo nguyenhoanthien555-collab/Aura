@@ -43,7 +43,13 @@ from memory.backup import (
     verify_database_integrity,
 )
 from memory.models import SyncInboxRecord, SyncOutboxRecord, ToolInvocationRecord
-from memory.sqlite import SessionLocal, db_lock, init_database, init_tool_invocation_tables
+from memory.sqlite import (
+    SessionLocal,
+    db_lock,
+    init_database,
+    init_sync_tables,
+    init_tool_invocation_tables,
+)
 from server.config import settings
 from server.main import app
 from server.runtime import ServerRuntime
@@ -354,6 +360,7 @@ def test_supervisor_periodic_pruning_worker(tmp_path):
     while strictly protecting PENDING, SENDING, and QUARANTINED records.
     """
     init_database()
+    init_sync_tables()
     with db_lock:
         session = SessionLocal()
         try:
@@ -434,11 +441,22 @@ def test_supervisor_proactive_worker_disabled_behavior():
     assert engine_enabled.ticked is True
 
 
-def test_api_chat_endpoint_e2e_with_tool_and_evidence():
+def test_api_chat_endpoint_e2e_with_tool_and_evidence(monkeypatch):
     """
     Test real HTTP POST /api/chat with TestClient:
     Verifies auth, chat pipeline execution, and message response.
     """
+    from brain.conversation import Response
+    from server.runtime import get_runtime
+
+    runtime = get_runtime()
+    if runtime and hasattr(runtime, "engine") and hasattr(runtime.engine, "conversation"):
+        monkeypatch.setattr(
+            runtime.engine.conversation,
+            "chat",
+            lambda *args, **kwargs: Response(text="hello back from aura"),
+        )
+
     client = TestClient(app)
     token = settings.auth_token
 

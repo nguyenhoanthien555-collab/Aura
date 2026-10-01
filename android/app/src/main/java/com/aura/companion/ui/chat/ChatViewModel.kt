@@ -617,10 +617,21 @@ class ChatViewModel(
                 }
 
                 is StreamEvent.Complete -> {
+                    val isVerified = event.verifier?.let { v ->
+                        val dec = (v["decision"] as? JsonPrimitive)?.content
+                        dec == "pass" || dec == "repair"
+                    } ?: false
+
                     _state.update { current ->
                         current.copy(
                             messages = current.messages.map {
-                                if (it.id == messageId) it.copy(streaming = false) else it
+                                if (it.id == messageId) {
+                                    it.copy(
+                                        text = event.text?.takeIf { t -> t.isNotBlank() } ?: it.text,
+                                        streaming = false,
+                                        verified = if (isVerified) true else null,
+                                    )
+                                } else it
                             },
                             isSending = false,
                         )

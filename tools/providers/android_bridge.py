@@ -144,6 +144,16 @@ class LoopbackDeviceBridge:
         self.nodes: dict[str, dict] = {}
         self.invocations: list[tuple[str, dict]] = []
         self.installed_apps: list[dict] | None = None
+        self.sms_messages: list[dict] = [
+            {"recipient": "+1234567890", "message": "Initial test SMS", "status": "received", "timestamp": "1700000000"},
+        ]
+        self.calendar_events: list[dict] = [
+            {"id": "evt_1", "title": "Team Standup", "start_time": "2026-10-02T10:00:00", "end_time": "2026-10-02T10:30:00", "description": "Daily sync"},
+        ]
+        self.contacts: list[dict] = [
+            {"name": "Alice Smith", "phone": "+1234567890", "email": "alice@example.com"},
+            {"name": "Bob Jones", "phone": "+0987654321", "email": "bob@example.com"},
+        ]
 
     def status(self) -> dict:
         return {
@@ -153,6 +163,11 @@ class LoopbackDeviceBridge:
             "permissions": {
                 "android.accessibility": True,
                 "android.screen_capture": True,
+                "android.permission.SEND_SMS": True,
+                "android.permission.READ_SMS": True,
+                "android.permission.READ_CALENDAR": True,
+                "android.permission.WRITE_CALENDAR": True,
+                "android.permission.READ_CONTACTS": True,
             },
         }
 
@@ -213,8 +228,8 @@ class LoopbackDeviceBridge:
                 str(error),
             )
 
-        observation = (
-            {
+        if tool == "android.list_apps":
+            observation = {
                 "kind": "app_inventory",
                 "data": {
                     "count": len((result or {}).get("packages", [])),
@@ -222,15 +237,19 @@ class LoopbackDeviceBridge:
                     "device_id": (result or {}).get("device_id", ""),
                 },
             }
-            if tool == "android.list_apps"
-            else {
+        elif tool in {"android.read_sms", "android.list_calendar_events", "android.search_contacts"}:
+            observation = {
+                "kind": tool.split(".", 1)[-1],
+                "data": result or {},
+            }
+        else:
+            observation = {
                 "kind": "foreground_app",
                 "data": {
                     "package": self.foreground_package,
                     "node_count": len(self.nodes),
                 },
             }
-        )
 
         report = {
             "ok": True,
@@ -406,6 +425,95 @@ class LoopbackDeviceBridge:
                 "note": "settles asynchronously; use android.wait_for",
             },
         )
+
+    # ------------------------------------------------------------------
+    # Personal Tasks (Phase 5: SMS, Calendar, Contacts)
+    # ------------------------------------------------------------------
+
+    def _do_send_sms(self, recipient: str = "", message: str = "", **_):
+        if not (recipient or "").strip() or not (message or "").strip():
+            miss = LoopbackMiss("recipient and message are required to send SMS")
+            miss.code = "INVALID_ARGUMENTS"
+            raise miss
+
+        sent_msg = {
+            "recipient": recipient.strip(),
+            "message": message.strip(),
+            "status": "sent",
+            "sent_at": str(self._clock()),
+        }
+        self.sms_messages.append(sent_msg)
+        return (
+            sent_msg,
+            {
+                "verified": True,
+                "action": "send_sms",
+                "recipient": recipient.strip(),
+            },
+        )
+
+    def _do_read_sms(self, limit: int = 10, query: str = "", **_):
+        msgs = self.sms_messages
+        if (query or "").strip():
+            q = query.strip().lower()
+            msgs = [
+                m for m in msgs
+                if q in m.get("recipient", "").lower() or q in m.get("message", "").lower()
+            ]
+        lim = max(1, int(limit or 10))
+        return ({"messages": msgs[:lim], "count": len(msgs[:lim])}, None)
+
+    def _do_create_calendar_event(
+        self,
+        title: str = "",
+        start_time: str = "",
+        end_time: str = "",
+        description: str = "",
+        **_,
+    ):
+        if not (title or "").strip() or not (start_time or "").strip():
+            miss = LoopbackMiss("title and start_time are required to create a calendar event")
+            miss.code = "INVALID_ARGUMENTS"
+            raise miss
+
+        event_id = f"evt_{len(self.calendar_events) + 1}"
+        event = {
+            "id": event_id,
+            "title": title.strip(),
+            "start_time": start_time.strip(),
+            "end_time": (end_time or "").strip(),
+            "description": (description or "").strip(),
+        }
+        self.calendar_events.append(event)
+        return (
+            {"event": event, "status": "created"},
+            {
+                "verified": True,
+                "action": "create_calendar_event",
+                "title": title.strip(),
+            },
+        )
+
+    def _do_list_calendar_events(self, start_date: str = "", limit: int = 10, **_):
+        events = self.calendar_events
+        if (start_date or "").strip():
+            sd = start_date.strip()
+            events = [e for e in events if e.get("start_time", "") >= sd]
+        lim = max(1, int(limit or 10))
+        return ({"events": events[:lim], "count": len(events[:lim])}, None)
+
+    def _do_search_contacts(self, query: str = "", limit: int = 10, **_):
+        contacts = self.contacts
+        if (query or "").strip():
+            q = query.strip().lower()
+            contacts = [
+                c for c in contacts
+                if q in c.get("name", "").lower()
+                or q in c.get("phone", "").lower()
+                or q in c.get("email", "").lower()
+            ]
+        lim = max(1, int(limit or 10))
+        return ({"contacts": contacts[:lim], "count": len(contacts[:lim])}, None)
 
 
 # ---------------------------------------------------------------------------

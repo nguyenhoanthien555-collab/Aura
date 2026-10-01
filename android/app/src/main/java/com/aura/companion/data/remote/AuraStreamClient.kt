@@ -203,6 +203,8 @@ class AuraStreamClient(
                 totalChunks = (frame["total_chunks"] as? JsonPrimitive)?.intOrNull ?: 0,
                 elapsedSeconds = num("elapsed_seconds") ?: 0.0,
                 firstChunkSeconds = num("first_chunk_seconds"),
+                text = str("text"),
+                verifier = frame["verifier"] as? JsonObject,
             )
 
             "reaction" -> StreamEvent.Reaction(
@@ -305,6 +307,8 @@ sealed interface StreamEvent {
         val totalChunks: Int,
         val elapsedSeconds: Double,
         val firstChunkSeconds: Double?,
+        val text: String? = null,
+        val verifier: JsonObject? = null,
     ) : StreamEvent
 
     /** Terminal failure. Nothing further will arrive. */

@@ -1,12 +1,31 @@
 # Current task
 
+## Phase 5 Personal Task Tools & Android Companion Verification Badges DELIVERED (2026-10-01)
+
+- Grounded personal task tools in Android Companion bridge:
+  - `SendSMS` (`android.send_sms`), `ReadSMS` (`android.read_sms`).
+  - `CreateCalendarEvent` (`android.create_calendar_event`), `ListCalendarEvents` (`android.list_calendar_events`).
+  - `SearchContacts` (`android.search_contacts`).
+- Registered capabilities in `core/capabilities/factory.py` (`android.sms`, `android.calendar`, `android.contacts`) and wired into `server/routes/agent.py`.
+- Android Companion UI updates:
+  - 1-tap connection presets for `Local (127.0.0.1:8000)` and `Render Cloud (https://aura-xwm4.onrender.com/)`.
+  - Streaming verifier metadata parsing in `AuraStreamClient.kt` & `ChatViewModel.kt`.
+  - `✓ Verified` badge rendered on verified turns in `ChatComponents.kt`.
+- Verified test suites:
+  - `tests/test_android_task_tools.py`: 13/13 passed.
+  - Focused android suite: 63/63 passed.
+  - Full pytest suite: 3,842 passed.
+  - Android Gradle unit tests: `:app:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (22/22 executed, 0 failures).
+
+---
+
 ## Gemini Semantic Embeddings & Cloud-Only Memory Consolidation DELIVERED (2026-10-01)
 
 - Native `GeminiEmbeddingProvider` implemented in `memory/embeddings.py` (`google.genai.Client.models.embed_content`, model: `text-embedding-004`).
 - Strict privacy consent boundary (`memory.semantic.allow_remote`) enforced.
 - Excised legacy `OllamaEmbeddingProvider`, deprecated `"ollama"` provider in factory, cleaned docstrings across `core/config.py`, `config.yaml`, and `vision/processor.py`.
 - Tested and verified: 49/49 tests in `test_semantic_memory.py` passed (100%), 233/233 focused capability & provider tests passed.
-- Next steps: Phase 5 Android task tools (SMS, Calendar, Contacts), companion connection URL auto-switching, remote git push.
+- Next steps: Remote git push upon user request.
 
 ---
 

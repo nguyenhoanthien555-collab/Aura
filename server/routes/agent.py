@@ -78,6 +78,7 @@ def get_device_registry():
 
     from tools.providers.android_bridge import GatewayDeviceBridge
     from tools.providers.android_provider import AndroidProvider
+    from tools.providers.android_task_provider import AndroidTaskProvider
     from tools.registry import ToolRegistry
 
     registry = ToolRegistry()
@@ -87,6 +88,7 @@ def get_device_registry():
     # but `/api/device/invoke` does - and PART 5 forbids advertising an
     # android tool the real provider cannot execute.
     AndroidProvider(GatewayDeviceBridge()).register_into(registry)
+    AndroidTaskProvider(GatewayDeviceBridge()).register_into(registry)
 
     # Rehydrate active dynamic tools from SQLite
     try:

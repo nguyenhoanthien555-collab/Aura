@@ -231,6 +231,34 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `a stream complete with verifier sets message verified flag`() {
+
+        streamRoute = {
+            streaming { socket ->
+                socket.send("""{"type":"started","session_id":"s-1","message_id":"m-1"}""")
+                socket.send("""{"type":"chunk","chunk":"Verified action done.","index":0}""")
+                socket.send(
+                    """{"type":"complete","session_id":"s-1","message_id":"m-1",
+                       "total_chunks":1,"elapsed_seconds":1.0,
+                       "text":"Verified action done.",
+                       "verifier":{"decision":"pass","claims":1,"contradicted":0,"unsupported":0,"repairs":0}}"""
+                )
+                socket.close(1000, null)
+            }
+        }
+
+        val viewModel = send(viewModel(), "do verified action")
+
+        val state = await(viewModel, "the verified reply to settle") { settled(it) }
+
+        val reply = aura(state).single()
+        assertEquals("Verified action done.", reply.text)
+        assertEquals(true, reply.verified)
+        assertFalse(reply.streaming)
+        assertFalse(state.isSending)
+    }
+
+    @Test
     fun `a stream that fails after text is reported rather than re-asked`() {
 
         streamRoute = {

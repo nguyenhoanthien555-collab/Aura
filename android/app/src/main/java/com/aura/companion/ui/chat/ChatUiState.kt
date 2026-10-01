@@ -40,6 +40,7 @@ data class ChatMessage(
      */
     val streaming: Boolean = false,
     val reactions: Map<String, String> = emptyMap(),
+    val verified: Boolean? = null,
 ) {
     enum class Author { USER, AURA }
 }

@@ -1,7 +1,7 @@
 # AURA project state
 
-## Cloud-Only Architecture & Gemini Semantic Memory (2026-10-01)
-AURA has been completely transitioned to a Cloud-Only architecture (default provider Google Gemini, with 11 supported cloud providers). All local-learning daemons, on-device GGUF/llama runtimes, and dead training scripts/datasets have been excised from the Python backend and the Android companion app, reclaiming ~54.2 GB of disk space. Settings store maps legacy local provider identifiers seamlessly to Gemini. Native `GeminiEmbeddingProvider` is operational in `memory/embeddings.py` (via Google GenAI SDK, `text-embedding-004`), completing the cloud memory transition. Both Python backend (496+ unit/regression tests) and Android companion (`:app:testDebugUnitTest`) are 100% passing.
+## Cloud-Only Architecture, Gemini Semantic Memory & Phase 5 Task Tools (2026-10-01)
+AURA has been completely transitioned to a Cloud-Only architecture (default provider Google Gemini, with 11 supported cloud providers). Native `GeminiEmbeddingProvider` is operational in `memory/embeddings.py` (via Google GenAI SDK, `text-embedding-004`). Grounded Android personal task tools (`android.send_sms`, `android.read_sms`, `android.create_calendar_event`, `android.list_calendar_events`, `android.search_contacts`) are implemented and verified with postcondition ledger evidence. Android Companion features 1-tap connection presets (Local/Render) and inline `✓ Verified` claim verification badges in chat. Both Python backend (3,842+ passing tests) and Android companion (`:app:testDebugUnitTest --rerun-tasks`) are 100% passing.
 
 Server-side grounding, the Android companion transport, and the device-side
 dispatcher are implemented and committed. As of 2026-09-05 ALL Phase 1-5A work

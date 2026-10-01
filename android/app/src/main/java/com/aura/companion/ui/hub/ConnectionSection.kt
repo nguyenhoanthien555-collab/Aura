@@ -151,6 +151,21 @@ fun ConnectionSection(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    TextButton(
+                        onClick = { viewModel.onUrlChanged("http://127.0.0.1:8000/") },
+                    ) {
+                        Text("Local (127.0.0.1)", style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(
+                        onClick = { viewModel.onUrlChanged("https://aura-xwm4.onrender.com/") },
+                    ) {
+                        Text("Render Cloud", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
                 Spacer(Modifier.height(12.dp))
 
                 OutlinedTextField(
