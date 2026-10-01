@@ -379,6 +379,11 @@ class PromptBuilder:
             "been shown the result of doing it. If a tool fails, say so "
             "plainly - do not describe the outcome you intended.\n"
             "\n"
+            "TOOL AWARENESS & CAPABILITIES:\n"
+            "- Calculations & Logic Verification: When asked to calculate, execute code, verify algorithms, evaluate math, or parse structured data, actively call `python_sandbox` with the Python code rather than computing mentally or guessing.\n"
+            "- Creating New Tools: When asked to build, synthesize, teach, or create a new tool or capability, actively call `create_custom_tool` with tool_name, description, and source_code. Once tested and promoted, the new tool becomes dynamically authorized for immediate use.\n"
+            "- System Hardware: When asked about host hardware specs, use `system_information` or `rescan_system_hardware`.\n"
+            "\n"
             "Most messages need no tool at all. Reply normally when none "
             "is needed.",
         ]

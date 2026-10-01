@@ -37,7 +37,7 @@ def build_registry(
 
     registry = ToolRegistry()
 
-    for tool in _builtin_tools(config, memory, vision):
+    for tool in _builtin_tools(config, memory, vision, registry=registry):
 
         try:
             registry.register(tool)
@@ -58,15 +58,22 @@ def _builtin_tools(
     config: dict,
     memory=None,
     vision=None,
+    registry=None,
 ) -> list[ToolProtocol]:
 
     tools: list[ToolProtocol] = []
 
     from tools.builtins.clock import CurrentTimeTool
     from tools.builtins.chat import ReactToMessageTool
+    from tools.builtins.sandbox import (
+        ExecuteSandboxPythonTool,
+        SynthesizeCustomTool,
+    )
 
     tools.append(CurrentTimeTool())
     tools.append(ReactToMessageTool())
+    tools.append(ExecuteSandboxPythonTool())
+    tools.append(SynthesizeCustomTool(registry=registry))
 
     roots = _list_setting(config, "allowed_paths")
 
@@ -241,6 +248,7 @@ def _pc_tools() -> list[ToolProtocol]:
 
     from tools.builtins.system import (
         ListProcessesTool,
+        RescanHardwareTool,
         SystemInformationTool,
         default_process_source,
     )
@@ -249,6 +257,7 @@ def _pc_tools() -> list[ToolProtocol]:
     # answer on every platform Aura runs on. A field they cannot fill is
     # left out of the description rather than reported as a zero.
     tools.append(SystemInformationTool())
+    tools.append(RescanHardwareTool())
 
     processes = default_process_source()
 

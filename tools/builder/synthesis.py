@@ -409,7 +409,7 @@ Respond ONLY with a JSON object adhering to this schema:
         manifest = None
         validation_report = None
         synth_result = None
-        max_attempts = 3
+        max_attempts = 2
 
         for attempt in range(max_attempts):
             synth_result = self.synthesize(req)

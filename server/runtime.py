@@ -112,7 +112,8 @@ class ServerRuntime:
             "android.get_foreground_app", "android.get_ui_tree", "android.find_node",
             "android.screenshot", "android.tap", "android.long_press", "android.swipe",
             "android.type_text", "android.press_key", "android.back", "android.home",
-            "android.launch_app", "android.wait_for", "android.verify"
+            "android.launch_app", "android.wait_for", "android.verify",
+            "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware"
         ]:
             if android_tool_name not in allowed:
                 allowed.append(android_tool_name)
@@ -453,7 +454,14 @@ class ServerRuntime:
 
         return response
 
-    def chat_stream(self, message: str, session_id: str = "default", source: str = "text", context: dict | None = None):
+    def chat_stream(
+        self,
+        message: str,
+        session_id: str = "default",
+        source: str = "text",
+        context: dict | None = None,
+        offer_tools: bool = True,
+    ):
         """
         Process a chat message with streaming.
 
@@ -472,6 +480,7 @@ class ServerRuntime:
             source=source,
             context=context,
             session_id=session_id,
+            offer_tools=offer_tools,
         )
 
 

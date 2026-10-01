@@ -65,11 +65,40 @@ class SandboxRunner:
 
     def __init__(
         self,
-        default_timeout: float = 10.0,
+        default_timeout: float = 20.0,
         repo_root: Optional[str] = None,
     ):
         self.default_timeout = default_timeout
         self.repo_root = repo_root or str(Path(__file__).resolve().parents[2])
+
+    @staticmethod
+    def _terminate_process(proc: subprocess.Popen) -> tuple[str, str]:
+        """
+        Kill a subprocess and all of its children cleanly without hanging.
+        """
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=5.0,
+                )
+            except Exception as kill_err:
+                logger.debug("taskkill failed: %s", kill_err)
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        else:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        try:
+            return proc.communicate(timeout=2.0)
+        except Exception:
+            return "", ""
 
     def child_environment(self, extra_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """
@@ -146,8 +175,7 @@ class SandboxRunner:
                         error="" if proc.returncode == 0 else f"Process exited with code {proc.returncode}",
                     )
                 except subprocess.TimeoutExpired:
-                    proc.kill()
-                    stdout, stderr = proc.communicate()
+                    stdout, stderr = self._terminate_process(proc)
                     duration = time.monotonic() - start_time
                     logger.warning("Sandbox execution timed out after %.2fs", effective_timeout)
                     return SandboxResult(
@@ -210,8 +238,7 @@ class SandboxRunner:
                     error="" if proc.returncode == 0 else f"Command failed with code {proc.returncode}",
                 )
             except subprocess.TimeoutExpired:
-                proc.kill()
-                stdout, stderr = proc.communicate()
+                stdout, stderr = self._terminate_process(proc)
                 duration = time.monotonic() - start_time
                 return SandboxResult(
                     ok=False,

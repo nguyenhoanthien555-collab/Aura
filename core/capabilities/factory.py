@@ -27,6 +27,10 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="memory.write", name="Write Memory", description="Remember facts", category="memory", discovery_metadata={"tool": "remember"}))
     registry.register(Capability(capability_id="chat.react", name="Message Reactions", description="React to messages", category="chat", discovery_metadata={"tool": "react_to_message"}))
 
+    # Sandbox & Tool Synthesis capabilities
+    registry.register(Capability(capability_id="sandbox.execute", name="Sandbox Execution", description="Execute code in Python sandbox", category="sandbox", discovery_metadata={"tool": "python_sandbox"}))
+    registry.register(Capability(capability_id="tools.synthesize", name="Tool Synthesis", description="Synthesize and register custom tools", category="tools", discovery_metadata={"tool": "create_custom_tool"}))
+
     # Canonical Android capabilities (synchronized with AndroidProvider)
     android_caps = [
         ("android.foreground_app", "Android Foreground App", "The app currently in the foreground, from accessibility metadata (package, label). Answers 'what app am I in' without any vision.", ["android.accessibility"], "android.get_foreground_app"),
@@ -102,6 +106,12 @@ def register_core_capabilities(config=None):
         return {"healthy": False, "reason": "Input synthesizer unavailable on host", "state": "UNAVAILABLE"}
 
     health.register_check("desktop.input", check_desktop_input)
+
+    def check_sandbox_available():
+        return {"healthy": True, "reason": "", "state": "AVAILABLE"}
+
+    health.register_check("sandbox.execute", check_sandbox_available)
+    health.register_check("tools.synthesize", check_sandbox_available)
 
     # Permission check for android accessibility
     def check_android_accessibility():

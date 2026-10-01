@@ -1,5 +1,27 @@
 # Current task
 
+## Sandbox Execution, Autonomous Tool Synthesis, Timeout Anti-Hang Hardening, & Speculative Streaming DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Built-in Sandbox Execution & Custom Tool Creation (`tools/builtins/sandbox.py`)**:
+  - `ExecuteSandboxPythonTool` (`python_sandbox`, capability: `sandbox.execute`, `ToolRisk.SAFE`): Safely executes arbitrary Python 3 code in an isolated subprocess with scrubbed environment and captured exit codes/evidence.
+  - `SynthesizeCustomTool` (`create_custom_tool`, capability: `tools.synthesize`, `ToolRisk.SAFE`): Dynamic synthesis, validation, sandbox test execution, auto-promotion into `ToolRegistry`, dynamic authorization, and SQLite provenance tracking.
+  - Capability integration in `core/capabilities/factory.py` (`sandbox.execute`, `tools.synthesize`) and registry integration in `tools/factory.py`.
+- **Trụ cột 2: Timeout Anti-Hang Hardening & Subprocess Process Tree Termination (`tools/sandbox/runner.py`, `tools/builder/synthesis.py`)**:
+  - `SandboxRunner`: Increased `default_timeout` from 10.0s to 20.0s to accommodate Windows process launch latency.
+  - Implemented `_terminate_process` using `taskkill /F /T /PID` on Windows to cleanly purge the entire subprocess tree, avoiding pipe-locking hangs in `proc.communicate()`.
+  - Tuned `ToolSynthesisEngine`: Set `max_attempts = 2` to avoid cumulative synthesis retries exceeding client network timeouts.
+- **Trụ cột 3: Tool Awareness & Prompt Awakening (`brain/prompt_builder.py`, `prompts/system.md`)**:
+  - Enriched system instructions (`prompts/system.md`) with explicit guidance to actively call `python_sandbox` for calculations, algorithms, and logic verification instead of computing mentally, and `create_custom_tool` when asked to create or teach new capabilities.
+  - Added structured `TOOL AWARENESS & CAPABILITIES` section under `TOOLS` in `PromptBuilder`.
+- **Trụ cột 4: Speculative Buffering for Streaming Tool Calls (`brain/conversation.py`, `server/runtime.py`)**:
+  - Enabled tools in streaming chat (`chat_stream`) via `can_offer_tools` and `offer_tools: bool = True` in `server/runtime.py`.
+  - Implemented speculative buffer for stream start (up to 40 characters): detects if reply begins with `{"tool":`. If detected as tool call, silently consumes stream, resolves tools, and streams grounded answer without leaking raw JSON to UI. If normal conversation, immediately flushes buffer with zero perceptible latency.
+- **Trụ cột 5: Testing & Verification**:
+  - New test suites: `tests/test_sandbox_tools.py` (7/7 passed), `tests/test_stream_tool_calling.py` (5/5 passed).
+  - Full regression test suite: 332/332 tests passed across tools, pc tools, tool calling, hardware probe, context compaction, and dynamic synthesis.
+
+---
+
 ## First-Boot Hardware Probe, Conversational Context Compaction, & Companion Loading Bar DELIVERED (2026-10-01)
 
 - **Trụ cột 1: First-Boot Host Hardware & Environment Scan (`core/hardware_probe.py`)**:

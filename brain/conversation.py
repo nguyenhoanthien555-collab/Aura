@@ -132,6 +132,23 @@ class _Turn:
     ledger: "object | None" = None
 
 
+def _is_tool_request_prefix(text: str) -> tuple[bool, bool]:
+    """
+    Speculative detection of a tool request at stream start.
+    Returns (is_tool_call, is_decided).
+    """
+    s = text.lstrip()
+    if not s:
+        return False, False
+    if not s.startswith("{") and not s.startswith("`"):
+        return False, True
+    if '"tool"' in s or "'tool'" in s:
+        return True, True
+    if len(s) < 40:
+        return False, False
+    return False, True
+
+
 class ConversationManager:
 
     def __init__(
@@ -284,6 +301,7 @@ class ConversationManager:
         source: str = "text",
         context: dict | None = None,
         session_id: str = "default",
+        offer_tools: bool | None = None,
     ):
         """
         The same turn, delivered as it is written.
@@ -356,10 +374,21 @@ class ConversationManager:
             return
 
         machine = is_machine_turn(context)
+        if offer_tools is None:
+            offer_tools = bool((context or {}).get("offer_tools", False))
+
+        tools_available = False
+        if self.tools is not None:
+            if hasattr(self.tools, "available"):
+                tools_available = len(self.tools.available()) > 0
+            else:
+                tools_available = bool(getattr(self.tools, "catalogue", lambda: "")())
+
+        can_offer_tools = bool(offer_tools and tools_available)
 
         user_msg, prompt, turn, _task = self._prepare(
             user_message, contexts, source, context,
-            machine=machine, offer_tools=False,
+            machine=machine, offer_tools=can_offer_tools,
             session_id=session_id,
         )
 
@@ -370,17 +399,65 @@ class ConversationManager:
         pieces: list[str] = []
 
         try:
-            for index, fragment in enumerate(stream_of(self.llm, prompt, context=context)):
+            stream_gen = stream_of(self.llm, prompt, context=context)
 
-                if not fragment:
-                    continue
+            if machine or not can_offer_tools:
+                for index, fragment in enumerate(stream_gen):
+                    if not fragment:
+                        continue
+                    pieces.append(fragment)
+                    if not machine:
+                        self._emit(StreamChunkEvent(text=fragment, index=index))
+                    yield fragment
+            else:
+                buffer: list[str] = []
+                is_tool = False
+                decided = False
 
-                pieces.append(fragment)
+                for fragment in stream_gen:
+                    if not fragment:
+                        continue
 
-                if not machine:
-                    self._emit(StreamChunkEvent(text=fragment, index=index))
+                    if not decided:
+                        buffer.append(fragment)
+                        buffered_text = "".join(buffer)
+                        is_tool_call, is_decided = _is_tool_request_prefix(buffered_text)
+                        if is_decided:
+                            decided = True
+                            if is_tool_call:
+                                is_tool = True
+                            else:
+                                for idx, chunk in enumerate(buffer):
+                                    pieces.append(chunk)
+                                    self._emit(StreamChunkEvent(text=chunk, index=idx))
+                                    yield chunk
+                                buffer.clear()
+                    elif is_tool:
+                        buffer.append(fragment)
+                    else:
+                        idx = len(pieces)
+                        pieces.append(fragment)
+                        self._emit(StreamChunkEvent(text=fragment, index=idx))
+                        yield fragment
 
-                yield fragment
+                if not decided and buffer:
+                    full_buf = "".join(buffer)
+                    req = read_tool_call(full_buf)
+                    if req is not None:
+                        is_tool = True
+                    else:
+                        for idx, chunk in enumerate(buffer):
+                            pieces.append(chunk)
+                            self._emit(StreamChunkEvent(text=chunk, index=idx))
+                            yield chunk
+                        buffer.clear()
+
+                if is_tool:
+                    raw_tool_text = "".join(buffer)
+                    resolved_text = self._resolve_tools(raw_tool_text, turn)
+                    pieces = [resolved_text]
+                    self._emit(StreamChunkEvent(text=resolved_text, index=0))
+                    yield resolved_text
 
         except Exception as error:
             self._emit(ErrorEvent(message=str(error), source="llm"))
