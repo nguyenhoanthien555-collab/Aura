@@ -17,21 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Timeline
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -86,6 +72,7 @@ fun MemorySection(
     viewModel: HubViewModel,
     memoryViewModel: MemoryHubViewModel,
     onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val memState by memoryViewModel.state.collectAsStateWithLifecycle()
     val memory = state.server.config.memory
@@ -106,6 +93,7 @@ fun MemorySection(
             viewModel.refresh()
             memoryViewModel.refresh()
         },
+        bottomBar = bottomBar,
     ) {
         AnimatedNotice(text = state.notice?.text, tone = state.notice.tone())
 
@@ -114,7 +102,7 @@ fun MemorySection(
             NoticeCard(
                 text = msg,
                 tone = StatusTone.Good,
-                icon = Icons.Filled.AutoStories,
+                icon = AuraIcons.Brain,
             )
         }
 
@@ -123,7 +111,7 @@ fun MemorySection(
             NoticeCard(
                 text = err,
                 tone = StatusTone.Bad,
-                icon = Icons.Filled.Security,
+                icon = AuraIcons.Shield,
             )
         }
 
@@ -131,10 +119,10 @@ fun MemorySection(
 
         // Multi-tier Tab Selection Row
         val tabs = listOf(
-            "Hồ sơ (${memState.facts.size})" to Icons.Filled.Person,
-            "Thực thể (${memState.graph.entities.size})" to Icons.Filled.Hub,
-            "Sự kiện (${memState.episodes.size})" to Icons.Filled.Timeline,
-            "Cài đặt" to Icons.Filled.Settings,
+            "Hồ sơ (${memState.facts.size})" to AuraIcons.Face,
+            "Thực thể (${memState.graph.entities.size})" to AuraIcons.KnowledgeGraph,
+            "Sự kiện (${memState.episodes.size})" to AuraIcons.Spark,
+            "Cài đặt & Tẩy sạch" to AuraIcons.Settings,
         )
 
         TabRow(
@@ -328,7 +316,7 @@ fun MemorySection(
     if (showPurgeConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showPurgeConfirmDialog = false },
-            icon = { Icon(Icons.Filled.Security, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            icon = { Icon(AuraIcons.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Tẩy sạch toàn bộ ký ức?") },
             text = {
                 Text(
@@ -381,7 +369,7 @@ private fun FactsTabContent(
             onClick = onAddFactClick,
             shape = RoundedCornerShape(12.dp),
         ) {
-            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(AuraIcons.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
             Text("Thêm Fact", style = MaterialTheme.typography.labelMedium)
         }
@@ -395,11 +383,11 @@ private fun FactsTabContent(
         onValueChange = onSearchChange,
         modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("Tìm kiếm sự thật, sở thích...") },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        leadingIcon = { Icon(AuraIcons.Search, contentDescription = null) },
         trailingIcon = {
             if (memState.searchQuery.isNotEmpty()) {
                 IconButton(onClick = { onSearchChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear")
+                    Icon(AuraIcons.Close, contentDescription = "Clear")
                 }
             }
         },
@@ -439,7 +427,7 @@ private fun FactsTabContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Filled.Person,
+                    AuraIcons.Face,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -503,7 +491,7 @@ private fun FactItemCard(fact: MemoryFactDto, onDelete: () -> Unit) {
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    Icons.Filled.Delete,
+                    AuraIcons.Purge,
                     contentDescription = "Xóa",
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     modifier = Modifier.size(20.dp),
@@ -558,11 +546,11 @@ private fun EntityGraphTabContent(
         onValueChange = onSearchChange,
         modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("Tìm kiếm thực thể (người, địa điểm, dự án)...") },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        leadingIcon = { Icon(AuraIcons.Search, contentDescription = null) },
         trailingIcon = {
             if (memState.searchQuery.isNotEmpty()) {
                 IconButton(onClick = { onSearchChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear")
+                    Icon(AuraIcons.Close, contentDescription = "Clear")
                 }
             }
         },
@@ -581,7 +569,7 @@ private fun EntityGraphTabContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Filled.Hub,
+                    AuraIcons.KnowledgeGraph,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -641,7 +629,7 @@ private fun EntityGraphTabContent(
                             }
                             IconButton(onClick = { onDeleteEntity(entity.name) }) {
                                 Icon(
-                                    Icons.Filled.Delete,
+                                    AuraIcons.Purge,
                                     contentDescription = "Xóa thực thể",
                                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                                     modifier = Modifier.size(18.dp),
@@ -674,7 +662,7 @@ private fun EntityGraphTabContent(
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        AuraIcons.ChevronRight,
                                         contentDescription = null,
                                         modifier = Modifier.size(12.dp),
                                         tint = MaterialTheme.colorScheme.primary,
@@ -696,7 +684,7 @@ private fun EntityGraphTabContent(
                                     }
                                     Spacer(Modifier.width(4.dp))
                                     Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        AuraIcons.ChevronRight,
                                         contentDescription = null,
                                         modifier = Modifier.size(12.dp),
                                         tint = MaterialTheme.colorScheme.primary,
@@ -713,7 +701,7 @@ private fun EntityGraphTabContent(
                                         modifier = Modifier.size(24.dp),
                                     ) {
                                         Icon(
-                                            Icons.Filled.Close,
+                                            AuraIcons.Close,
                                             contentDescription = "Hủy quan hệ",
                                             modifier = Modifier.size(14.dp),
                                             tint = MaterialTheme.colorScheme.error,
@@ -753,7 +741,7 @@ private fun EpisodicTabContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Filled.Timeline,
+                    AuraIcons.Spark,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -807,7 +795,7 @@ private fun EpisodicTabContent(
                         }
                         IconButton(onClick = { onDeleteEpisode(ep.id) }) {
                             Icon(
-                                Icons.Filled.Delete,
+                                AuraIcons.Purge,
                                 contentDescription = "Xóa",
                                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                                 modifier = Modifier.size(20.dp),
@@ -834,7 +822,7 @@ private fun SettingsTabContent(
         ToggleRow(
             title = "Sử dụng ký ức khi trả lời",
             subtitle = "Truy vấn các thực thể liên quan và Facts trong các lượt chat",
-            icon = Icons.Filled.Search,
+            icon = AuraIcons.Search,
             checked = memory.recall,
             pending = "memory.recall" in state.pending,
             lockedReason = state.lockedReason("memory.recall"),
@@ -844,7 +832,7 @@ private fun SettingsTabContent(
         ToggleRow(
             title = "Tự động trích xuất ký ức mới",
             subtitle = "Tiến trình nền phản tư và phân tích thực thể. Cần khởi động lại để đổi.",
-            icon = Icons.Filled.AutoStories,
+            icon = AuraIcons.Brain,
             checked = memory.pipeline,
             pending = "memory.pipeline" in state.pending,
             lockedReason = state.lockedReason("memory.pipeline"),
@@ -854,7 +842,7 @@ private fun SettingsTabContent(
         ToggleRow(
             title = "Hồ sơ thực tế (Profile Facts)",
             subtitle = "Lưu giữ chân dung người dùng. Cần khởi động lại để đổi.",
-            icon = Icons.Filled.Person,
+            icon = AuraIcons.Face,
             checked = memory.profile,
             pending = "memory.profile" in state.pending,
             lockedReason = state.lockedReason("memory.profile"),
@@ -864,7 +852,7 @@ private fun SettingsTabContent(
         ToggleRow(
             title = "Ký ức ngữ nghĩa (Semantic Memory)",
             subtitle = "Chỉ mục vector cho tìm kiếm theo ý nghĩa",
-            icon = Icons.Filled.Psychology,
+            icon = AuraIcons.Brain,
             checked = memory.semantic.enabled,
             pending = "memory.semantic.enabled" in state.pending,
             lockedReason = state.lockedReason("memory.semantic.enabled"),

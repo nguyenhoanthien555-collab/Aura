@@ -13,9 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -177,7 +175,7 @@ fun StepperRow(
             onClick = { onCommit((value - 1).coerceIn(range)) },
             enabled = interactive && value > range.first,
         ) {
-            Icon(Icons.Filled.Remove, contentDescription = "Decrease $title")
+            Icon(AuraIcons.Remove, contentDescription = "Decrease $title")
         }
 
         Text(
@@ -192,7 +190,7 @@ fun StepperRow(
             onClick = { onCommit((value + 1).coerceIn(range)) },
             enabled = interactive && value < range.last,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Increase $title")
+            Icon(AuraIcons.Add, contentDescription = "Increase $title")
         }
     }
 }

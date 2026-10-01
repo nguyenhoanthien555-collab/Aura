@@ -8,15 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Outbox
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sync
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -75,7 +67,7 @@ fun SyncSection(
             ToggleRow(
                 title = "Background event sync",
                 subtitle = "Periodically sync events, cursors, and outbox with peer",
-                icon = Icons.Filled.Sync,
+                icon = AuraIcons.Sync,
                 checked = state.device.syncEnabled,
                 onCheckedChange = viewModel::setSyncEnabled,
             )
@@ -89,7 +81,7 @@ fun SyncSection(
                 title = "Local Node ID",
                 value = state.device.deviceId.ifBlank { "Unassigned" },
                 subtitle = "Cryptographic identity of this Android client",
-                icon = Icons.Filled.Hub,
+                icon = AuraIcons.KnowledgeGraph,
             )
 
             RowDivider()
@@ -99,7 +91,7 @@ fun SyncSection(
                 value = "RENDER",
                 subtitle = "Configured upstream server peer",
                 tone = if (state.connected) StatusTone.Good else StatusTone.Warning,
-                icon = Icons.Filled.CloudSync,
+                icon = AuraIcons.CloudSync,
             )
 
             RowDivider()
@@ -118,7 +110,7 @@ fun SyncSection(
                 value = "${syncState.pendingOutboxCount} events",
                 subtitle = "Queued client events waiting for upload",
                 tone = if (syncState.pendingOutboxCount > 0) StatusTone.Warning else StatusTone.Good,
-                icon = Icons.Filled.Outbox,
+                icon = AuraIcons.Outbox,
             )
 
             RowDivider()
@@ -128,7 +120,7 @@ fun SyncSection(
                 value = "${syncState.inboxEventCount} events",
                 subtitle = "Events successfully received and applied",
                 tone = StatusTone.Neutral,
-                icon = Icons.Filled.Inbox,
+                icon = AuraIcons.Inbox,
             )
 
             RowDivider()
@@ -144,7 +136,7 @@ fun SyncSection(
                 value = lastSyncStr,
                 subtitle = syncState.lastSyncResult ?: "Idle",
                 tone = if (syncState.lastSyncError != null) StatusTone.Bad else if (syncState.lastSyncTime > 0) StatusTone.Good else StatusTone.Neutral,
-                icon = Icons.Filled.CloudDone,
+                icon = AuraIcons.CloudDone,
             )
         }
 
@@ -153,7 +145,7 @@ fun SyncSection(
             NoticeCard(
                 text = "Sync failure: ${syncState.lastSyncError}",
                 tone = StatusTone.Bad,
-                icon = Icons.Filled.ErrorOutline,
+                icon = AuraIcons.Warning,
             )
         }
 
@@ -191,7 +183,7 @@ fun SyncSection(
                         Text("Synchronizing...")
                     } else {
                         Icon(
-                            imageVector = Icons.Filled.Refresh,
+                            imageVector = AuraIcons.Refresh,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )

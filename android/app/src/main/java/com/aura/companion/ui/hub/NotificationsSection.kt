@@ -2,11 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Schedule
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,7 +85,7 @@ fun NotificationsSection(
             ToggleRow(
                 title = "Floating Chat Bubble",
                 subtitle = "Keep a messenger-style bubble over other apps (Phase 3)",
-                icon = Icons.Filled.NotificationsActive, // TODO: ChatBubble icon
+                icon = AuraIcons.ChatBubble,
                 checked = canDrawOverlays,
                 onCheckedChange = { isChecked ->
                     if (isChecked && !canDrawOverlays) {
@@ -107,7 +103,7 @@ fun NotificationsSection(
             ToggleRow(
                 title = "Companion notifications",
                 subtitle = "Check Aura for messages and show them here",
-                icon = Icons.Filled.NotificationsActive,
+                icon = AuraIcons.Notifications,
                 checked = state.device.notificationsEnabled,
                 onCheckedChange = { enabled ->
                     viewModel.setNotifications(enabled)
@@ -132,7 +128,7 @@ fun NotificationsSection(
                 } else {
                     "Tap to allow notifications for Aura"
                 },
-                icon = Icons.Filled.PhoneAndroid,
+                icon = AuraIcons.DeviceMobile,
                 onClick = if (permissions.notificationsPermitted) {
                     onOpenSystemSettings
                 } else {
@@ -153,7 +149,7 @@ fun NotificationsSection(
             ToggleRow(
                 title = "Send companion messages",
                 subtitle = "When off, Aura keeps its remarks to itself entirely",
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 checked = companion.enabled,
                 pending = "server.companion.enabled" in state.pending,
                 lockedReason = state.lockedReason("server.companion.enabled"),
@@ -252,7 +248,7 @@ fun NotificationsSection(
                 title = "Quiet hours",
                 value = companion.quietHours.describe(),
                 subtitle = "Hours when nothing is sent",
-                icon = Icons.Filled.Schedule,
+                icon = AuraIcons.Clock,
                 lockedReason = state.lockedReason("server.companion.quiet_hours"),
                 onClick = { editingCompanionQuietHours = true },
             )
@@ -273,7 +269,7 @@ fun NotificationsSection(
                     serverEnabled = !state.settingsAvailable || companion.enabled,
                 ),
                 subtitle = "Checked every 15 minutes while the app is closed",
-                icon = Icons.Filled.Schedule,
+                icon = AuraIcons.Clock,
                 tone = if (
                     state.device.notificationsEnabled &&
                     permissions.notificationsPermitted &&
@@ -305,7 +301,7 @@ fun NotificationsSection(
                 "fifteen minutes - and Android may delay that further to save " +
                 "battery.",
             tone = StatusTone.Neutral,
-            icon = Icons.Filled.Schedule,
+            icon = AuraIcons.Clock,
         )
 
         Spacer(Modifier.height(32.dp))

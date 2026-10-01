@@ -1,5 +1,22 @@
 # AURA project state
 
+## Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock (2026-10-01)
+1. **Zero Stock Icons / Zero AI Slop (`ui/theme/AuraIcons.kt`)**:
+   - Total purge of `androidx.compose.material.icons` across the entire codebase (verified 0 references).
+   - Bespoke vector system defining 45+ static Compose `ImageVector` geometric icons with zero APK asset load overhead.
+   - 21 UI screens and components migrated completely to handcrafted icons.
+2. **Floating Cyber Dock (`ui/components/AuraCyberDock.kt`)**:
+   - 4-tab bottom navigation dock ("Trò chuyện", "Trí nhớ", "Công cụ", "Hệ thống") providing instant 1-tap switching.
+   - Spring-physics animated selection indicators and frosted glassmorphic card backdrop (`auraGlassBlur`).
+   - Seamless auto-collapsing via `AnimatedVisibility` when the soft keyboard (IME) appears, maximizing typing canvas in `ChatScreen`.
+3. **Navigation & Root Composition (`MainActivity.kt`, `HubScreen.kt`, `ChatScreen.kt`)**:
+   - Added extensible `bottomBar: @Composable () -> Unit` slot to `ChatScreen`, `HubScreen`, and `HubSection`.
+   - Wired `AuraCyberDock` into primary navigation destinations (`ROUTE_CHAT`, `HubRoutes.HUB`, `HubRoutes.MEMORY`, `HubRoutes.TOOLS`, `HubRoutes.DIAGNOSTICS`) in `MainActivity.kt`.
+4. **Verification**:
+   - Android compilation: `:app:compileDebugKotlin` BUILD SUCCESSFUL.
+   - Android Unit Test Suite: `:app:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (22 actionable tasks, 0 failures).
+   - Backend regression: 33/33 Python unit tests passed (100%).
+
 ## Comprehensive Deep Audit, Security Hardening & Performance Optimization (2026-10-01)
 1. **SSRF Defense & DoS Prevention (`tools/builtins/web.py`)**:
    - `FetchWebContentTool`: Validated redirect hops against SSRF; bounded stream reading to 2MB with 10MB Content-Length threshold.

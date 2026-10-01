@@ -27,8 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -195,15 +194,30 @@ fun MessageBubble(
             if (message.verified == true) {
                 Spacer(Modifier.width(6.dp))
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        0.75.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                    ),
                 ) {
-                    Text(
-                        text = "✓ Verified",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                    ) {
+                        Icon(
+                            imageVector = AuraIcons.Verified,
+                            contentDescription = "Verified",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(11.dp),
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = "Verified",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
 
@@ -456,8 +470,9 @@ fun Composer(
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Filled.Send,
+                        imageVector = AuraIcons.Send,
                         contentDescription = stringResource(R.string.action_send),
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

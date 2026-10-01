@@ -11,11 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Stop
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,6 +54,7 @@ import com.aura.companion.R
 fun ChatScreen(
     viewModel: ChatViewModel,
     onOpenSettings: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
 
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -96,14 +93,14 @@ fun ChatScreen(
                         context.startService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
                     }) {
                         Icon(
-                            imageVector = Icons.Filled.ChatBubble,
+                            imageVector = AuraIcons.ChatBubble,
                             contentDescription = "Floating Bubble",
                         )
                     }
                     if (state.messages.isNotEmpty()) {
                         IconButton(onClick = viewModel::newConversation) {
                             Icon(
-                                imageVector = Icons.Filled.Refresh,
+                                imageVector = AuraIcons.Refresh,
                                 contentDescription = stringResource(
                                     R.string.action_new_conversation
                                 ),
@@ -112,13 +109,14 @@ fun ChatScreen(
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(
-                            imageVector = Icons.Filled.Settings,
+                            imageVector = AuraIcons.Settings,
                             contentDescription = stringResource(R.string.action_settings),
                         )
                     }
                 },
             )
         },
+        bottomBar = bottomBar,
     ) { padding ->
 
         Column(
@@ -244,7 +242,7 @@ fun ChatScreen(
                             shape = RoundedCornerShape(8.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Stop,
+                                imageVector = AuraIcons.Stop,
                                 contentDescription = "Dừng lại",
                                 modifier = Modifier.size(16.dp),
                             )

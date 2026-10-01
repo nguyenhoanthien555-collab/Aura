@@ -2,15 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Textsms
-import androidx.compose.material.icons.filled.Visibility
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -78,7 +70,7 @@ fun PrivacySection(
             ToggleRow(
                 title = "Screen text",
                 subtitle = "What is on screen, as text, so Aura has context",
-                icon = Icons.Filled.Visibility,
+                icon = AuraIcons.Vision,
                 checked = device.screenObservationEnabled,
                 onCheckedChange = viewModel::setScreenObservation,
             )
@@ -88,7 +80,7 @@ fun PrivacySection(
             ToggleRow(
                 title = "Screenshots",
                 subtitle = "The image itself, not just the text",
-                icon = Icons.Filled.PhotoCamera,
+                icon = AuraIcons.Camera,
                 checked = device.uploadScreenshots,
                 enabled = device.screenObservationEnabled,
                 lockedReason = if (device.screenObservationEnabled) {
@@ -128,7 +120,7 @@ fun PrivacySection(
                 } else {
                     "Not encrypted - anything on the path can read it"
                 },
-                icon = Icons.Filled.Lock,
+                icon = AuraIcons.Lock,
                 tone = when {
                     !device.isConfigured -> StatusTone.Neutral
                     device.isSecure -> StatusTone.Good
@@ -144,7 +136,7 @@ fun PrivacySection(
                 subtitle = device.serverUrl.ifBlank {
                     "No server address, so nothing is sent anywhere"
                 },
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
             )
         }
 
@@ -157,7 +149,7 @@ fun PrivacySection(
                 title = "Server address and token",
                 value = "Encrypted",
                 subtitle = "Removed when you disconnect",
-                icon = Icons.Filled.PhoneAndroid,
+                icon = AuraIcons.DeviceMobile,
                 tone = StatusTone.Good,
             )
 
@@ -170,7 +162,7 @@ fun PrivacySection(
                 title = "Your conversation",
                 value = "Not stored here",
                 subtitle = "Messages live on the Aura server, not in this app",
-                icon = Icons.Filled.Textsms,
+                icon = AuraIcons.ChatBubble,
             )
         }
 
@@ -196,7 +188,7 @@ fun PrivacySection(
                             "are held in memory only."
                     }
                 },
-                icon = Icons.Filled.Key,
+                icon = AuraIcons.Key,
                 tone = when {
                     !state.settingsAvailable -> StatusTone.Neutral
                     server.keysPersistent -> StatusTone.Good
@@ -211,7 +203,7 @@ fun PrivacySection(
                 value = if (server.config.memory.pipeline) "On" else "Off",
                 subtitle = "Conversations and what it has learned about you, " +
                     "held where Aura is deployed",
-                icon = Icons.Filled.Memory,
+                icon = AuraIcons.Memory,
                 tone = if (server.config.memory.pipeline) {
                     StatusTone.Good
                 } else {
@@ -228,7 +220,7 @@ fun PrivacySection(
             NavigationRow(
                 title = "API keys",
                 subtitle = "Replace or delete a stored key",
-                icon = Icons.Filled.Key,
+                icon = AuraIcons.Key,
                 onClick = { onOpenSection(HubRoutes.MODELS) },
             )
 
@@ -237,7 +229,7 @@ fun PrivacySection(
             NavigationRow(
                 title = "Memory",
                 subtitle = "Turn recall and the profile off",
-                icon = Icons.Filled.Memory,
+                icon = AuraIcons.Memory,
                 onClick = { onOpenSection(HubRoutes.MEMORY) },
             )
 
@@ -246,7 +238,7 @@ fun PrivacySection(
             NavigationRow(
                 title = "Disconnect",
                 subtitle = "Erase the address and token from this phone",
-                icon = Icons.Filled.PhoneAndroid,
+                icon = AuraIcons.DeviceMobile,
                 onClick = { onOpenSection(HubRoutes.CONNECTION) },
             )
         }

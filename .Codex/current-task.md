@@ -1,5 +1,26 @@
 # Current task
 
+## Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Xoá bỏ 100% Stock Icons (Triệt tiêu Clipart / Zero AI Slop)**:
+  - Loại bỏ hoàn toàn thư viện `androidx.compose.material.icons` khỏi toàn bộ codebase Android (kiểm tra tự động: 0 kết quả).
+  - Xây dựng hệ thống icon độc bản `AuraIcons.kt` với 45+ vector hình học tối giản bằng `ImageVector.Builder` Compose tĩnh, biên dịch thẳng vào bytecode JVM với chi phí tải tài nguyên bằng 0.
+  - Thay thế toàn bộ icon trong tất cả 21 màn hình và components (`ChatComponents`, `ChatScreen`, `HubScreen`, `MemorySection`, `ToolsSection`, `DiagnosticsSection`, `VisionSection`, `VoiceSection`, v.v.).
+- **Trụ cột 2: Thanh điều hướng nổi AuraCyberDock (`AuraCyberDock.kt`)**:
+  - Thiết kế dock điều hướng nổi 4 tab chính ("Trò chuyện", "Trí nhớ", "Công cụ", "Hệ thống") hỗ trợ chuyển đổi 1 chạm trực tiếp giữa các module trung tâm.
+  - Hiệu ứng vật lý lò xo (spring physics) và nền kính mờ `auraGlassBlur`.
+  - Tự động co gọn mượt mà khi bàn phím ảo (IME) mở lên (`AnimatedVisibility`), tối đa hóa không gian soạn thảo văn bản trong `ChatScreen`.
+- **Trụ cột 3: Kiến trúc Navigation & Root Composition (`MainActivity.kt`, `HubScreen.kt`, `ChatScreen.kt`)**:
+  - Bổ sung slot `bottomBar: @Composable () -> Unit` có thể mở rộng vào `ChatScreen`, `HubScreen`, và `HubSection`.
+  - Kết nối trực tiếp `AuraCyberDock` vào 5 điểm điều hướng trọng tâm: `ROUTE_CHAT`, `HubRoutes.HUB`, `HubRoutes.MEMORY`, `HubRoutes.TOOLS`, và `HubRoutes.DIAGNOSTICS`.
+  - Các màn hình chi tiết (e.g. `ConnectionSection`, `PrivacySection`, v.v.) giữ được sự tập trung cao độ, không bị che khuất và có lối thoát mạch lạc về Hub.
+- **Trụ cột 4: Kiểm thử Toàn diện & Xác thực Tính toàn vẹn**:
+  - `compileDebugKotlin`: BUILD SUCCESSFUL.
+  - Android Unit Test Suite (`:app:testDebugUnitTest --rerun-tasks`): BUILD SUCCESSFUL (22/22 tasks executed, 0 failures).
+  - Backend regression: 33/33 tests passed 100%.
+
+---
+
 ## Comprehensive Deep Audit, Security Hardening & Performance Optimization DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Bảo mật & Phòng thủ SSRF / DoS Toàn diện (`tools/builtins/web.py`)**:

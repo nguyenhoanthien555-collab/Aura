@@ -2,14 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Wifi
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -55,6 +48,7 @@ fun DiagnosticsSection(
     state: HubUiState,
     viewModel: HubViewModel,
     onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val server = state.server
 
@@ -65,6 +59,7 @@ fun DiagnosticsSection(
         subtitle = "What is reachable, and why not",
         onBack = onBack,
         onRefresh = viewModel::refresh,
+        bottomBar = bottomBar,
     ) {
 
         AnimatedNotice(text = state.notice?.text, tone = state.notice.tone())
@@ -82,7 +77,7 @@ fun DiagnosticsSection(
                 title = "Server address",
                 value = if (state.device.isConfigured) "Set" else "Not set",
                 subtitle = state.device.serverUrl.ifBlank { "Nothing to connect to" },
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 tone = if (state.device.isConfigured) {
                     StatusTone.Good
                 } else {
@@ -100,7 +95,7 @@ fun DiagnosticsSection(
                 } else {
                     "No response - wrong address, or nothing listening"
                 },
-                icon = Icons.Filled.Wifi,
+                icon = AuraIcons.WifiTethering,
                 tone = reach.atLeast(ServerReach.Connected).tone(state.loading),
             )
 
@@ -119,7 +114,7 @@ fun DiagnosticsSection(
                         state.error ?: "The server did not accept this token"
                     else -> "Not reached yet"
                 },
-                icon = Icons.Filled.Lock,
+                icon = AuraIcons.Lock,
                 tone = reach.atLeast(ServerReach.Authenticated).tone(state.loading),
             )
 
@@ -139,7 +134,7 @@ fun DiagnosticsSection(
                         "Checked after the token"
                     else -> state.settingsAccess.reason
                 },
-                icon = Icons.Filled.Settings,
+                icon = AuraIcons.Settings,
                 tone = when {
                     state.settingsAvailable -> StatusTone.Good
                     !reach.atLeast(ServerReach.Authenticated) -> StatusTone.Neutral
@@ -170,7 +165,7 @@ fun DiagnosticsSection(
                     // second had happened.
                     ?: server.providersError?.userMessage
                     ?: "This server did not report its provider chain",
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
                 tone = when {
                     server.health.chain.isEmpty() && server.providersError != null ->
                         StatusTone.Warning
@@ -189,7 +184,7 @@ fun DiagnosticsSection(
                 NoticeCard(
                     text = notice,
                     tone = state.settingsAccess.tone,
-                    icon = Icons.Filled.Info,
+                    icon = AuraIcons.Info,
                 )
             }
 
@@ -204,7 +199,7 @@ fun DiagnosticsSection(
                 value = server.config.app.version
                     .ifBlank { server.version }
                     .ifBlank { "—" },
-                icon = Icons.Filled.Info,
+                icon = AuraIcons.Info,
             )
 
             RowDivider()
@@ -213,7 +208,7 @@ fun DiagnosticsSection(
                 title = "Uptime",
                 value = server.uptimeSeconds.uptimeLabel(),
                 subtitle = "Since the Aura process last started",
-                icon = Icons.Filled.Schedule,
+                icon = AuraIcons.Clock,
             )
 
             RowDivider()
@@ -224,7 +219,7 @@ fun DiagnosticsSection(
                 subtitle = server.health.requested
                     .takeIf { it.isNotBlank() && it != server.health.active }
                     ?.let { "You asked for $it" },
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
                 tone = when {
                     server.health.active.isBlank() -> StatusTone.Neutral
                     server.health.inFallback -> StatusTone.Warning

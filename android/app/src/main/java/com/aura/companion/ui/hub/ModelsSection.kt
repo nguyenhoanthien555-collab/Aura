@@ -6,12 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Tune
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -121,7 +116,7 @@ fun ModelsSection(
                 title = "Chế độ AI",
                 value = if (isOnDevice) "⚡ On-Device" else "☁️ Cloud",
                 subtitle = if (isOnDevice) "Tự host độc lập, không cần server hay laptop" else "Kết nối tới server ngoài",
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
                 onClick = {
                     viewModel.setIntelligenceMode(if (isOnDevice) "cloud" else "on_device")
                 },
@@ -134,7 +129,7 @@ fun ModelsSection(
                 subtitle = "Dự phòng cloud model khi cần xử lý tác vụ phức tạp",
                 checked = state.device.allowCloudFallback,
                 onCheckedChange = { viewModel.setAllowCloudFallback(it) },
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
             )
 
             RowDivider()
@@ -143,7 +138,7 @@ fun ModelsSection(
                 title = "Mô hình On-Device",
                 value = if (modelExists) "Qwen 1.5B" else "Chưa có",
                 subtitle = if (modelExists) "aura-1.5b.gguf ($modelSizeMb MB) · ARM64" else "Tệp weights aura-1.5b.gguf chưa tải",
-                icon = Icons.Filled.Tune,
+                icon = AuraIcons.Tune,
                 onClick = {},
             )
         }
@@ -159,7 +154,7 @@ fun ModelsSection(
             SelectRow(
                 title = "Provider",
                 value = primary?.label ?: llm.provider.ifBlank { "—" },
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
                 lockedReason = state.lockedReason("llm.provider"),
                 onClick = { picking = Picker.Provider },
             )
@@ -170,7 +165,7 @@ fun ModelsSection(
                 title = "Model",
                 value = state.activeModel.ifBlank { "Provider default" },
                 subtitle = primary?.let { "for ${it.label}" },
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 lockedReason = state.lockedReason(modelSetting),
                 onClick = { picking = Picker.Model },
             )
@@ -184,7 +179,7 @@ fun ModelsSection(
                     ?.joinToString(" → ")
                     ?: "None",
                 subtitle = "Tried in order when the primary fails",
-                icon = Icons.Filled.Tune,
+                icon = AuraIcons.Tune,
                 lockedReason = state.lockedReason("llm.fallback_providers"),
                 onClick = { picking = Picker.Fallback },
             )
@@ -261,7 +256,7 @@ fun ModelsSection(
                         "Same as primary"
                     },
                     subtitle = lane.subtitle,
-                    icon = Icons.Filled.Tune,
+                    icon = AuraIcons.Tune,
                     lockedReason = state.lockedReason(lane.path),
                     onClick = { editingLane = lane },
                 )
@@ -279,7 +274,7 @@ fun ModelsSection(
                 title = "Endpoint URL",
                 value = llm.customBaseUrl.ifBlank { "Not set" },
                 subtitle = "Must be a complete http(s) address. Needs a restart.",
-                icon = Icons.Filled.Link,
+                icon = AuraIcons.Link,
                 lockedReason = state.lockedReason("llm.custom_base_url"),
                 onClick = { editingCustomEndpoint = true },
             )
@@ -290,7 +285,7 @@ fun ModelsSection(
                 title = "Model",
                 value = llm.customModel.ifBlank { "Not set" },
                 subtitle = "The model name your gateway expects. Needs a restart.",
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 lockedReason = state.lockedReason("llm.custom_model"),
                 onClick = { editingCustomModel = true },
             )
@@ -594,7 +589,7 @@ private fun ApiKeyDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                Icons.Filled.Key,
+                AuraIcons.Key,
                 contentDescription = null,
             )
         },

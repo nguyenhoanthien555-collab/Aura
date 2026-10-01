@@ -2,11 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Speaker
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +72,7 @@ fun VoiceSection(
                 "server, turning these on will not make this phone speak or " +
                 "listen - there is no phone-side voice in this app.",
             tone = StatusTone.Neutral,
-            icon = Icons.Filled.RecordVoiceOver,
+            icon = AuraIcons.Voice,
         )
 
         Spacer(Modifier.height(4.dp))
@@ -89,7 +85,7 @@ fun VoiceSection(
             ToggleRow(
                 title = "Text to speech",
                 subtitle = "Needs a restart of Aura to change",
-                icon = Icons.AutoMirrored.Filled.VolumeUp,
+                icon = AuraIcons.VolumeUp,
                 checked = voice.tts.enabled,
                 pending = "voice.tts.enabled" in state.pending,
                 lockedReason = state.lockedReason("voice.tts.enabled"),
@@ -102,7 +98,7 @@ fun VoiceSection(
                 title = "Engine",
                 value = voice.tts.provider.ifBlank { "auto" },
                 subtitle = "Which speech engine to build. Needs a restart.",
-                icon = Icons.Filled.Speaker,
+                icon = AuraIcons.VolumeUp,
                 lockedReason = state.lockedReason("voice.tts.provider"),
                 onClick = { editing = VoiceField.Engine },
             )
@@ -113,7 +109,7 @@ fun VoiceSection(
                 title = "Voice",
                 value = voice.tts.voice.ifBlank { "Engine default" },
                 subtitle = "Takes effect on the next reply Aura speaks",
-                icon = Icons.Filled.RecordVoiceOver,
+                icon = AuraIcons.Voice,
                 lockedReason = state.lockedReason("voice.tts.voice"),
                 onClick = { editing = VoiceField.Name },
             )
@@ -136,7 +132,7 @@ fun VoiceSection(
             ToggleRow(
                 title = "Play audio",
                 subtitle = "Off synthesises silently. Needs a restart to change.",
-                icon = Icons.AutoMirrored.Filled.VolumeUp,
+                icon = AuraIcons.VolumeUp,
                 checked = voice.tts.playback,
                 pending = "voice.tts.playback" in state.pending,
                 lockedReason = state.lockedReason("voice.tts.playback"),
@@ -152,7 +148,7 @@ fun VoiceSection(
             ToggleRow(
                 title = "Speech to text",
                 subtitle = "Needs a restart of Aura to change",
-                icon = Icons.Filled.Mic,
+                icon = AuraIcons.Mic,
                 checked = voice.stt.enabled,
                 pending = "voice.stt.enabled" in state.pending,
                 lockedReason = state.lockedReason("voice.stt.enabled"),
@@ -165,7 +161,7 @@ fun VoiceSection(
                 title = "Engine",
                 value = voice.stt.provider.ifBlank { "—" },
                 subtitle = "Chosen where Aura is deployed",
-                icon = Icons.Filled.RecordVoiceOver,
+                icon = AuraIcons.Voice,
                 tone = if (voice.stt.enabled) StatusTone.Good else StatusTone.Neutral,
             )
         }

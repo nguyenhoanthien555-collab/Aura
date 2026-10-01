@@ -2,12 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Handyman
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Warning
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -57,6 +52,7 @@ fun ToolsSection(
     state: HubUiState,
     viewModel: HubViewModel,
     onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val tools = state.server.config.tools
 
@@ -67,6 +63,7 @@ fun ToolsSection(
         subtitle = "What Aura may do, and what needs your approval",
         onBack = onBack,
         onRefresh = viewModel::refresh,
+        bottomBar = bottomBar,
     ) {
 
         AnimatedNotice(text = state.notice?.text, tone = state.notice.tone())
@@ -79,7 +76,7 @@ fun ToolsSection(
             ToggleRow(
                 title = "Allow tools",
                 subtitle = "When off, Aura answers but never acts",
-                icon = Icons.Filled.Build,
+                icon = AuraIcons.Build,
                 checked = tools.enabled,
                 pending = "tools.enabled" in state.pending,
                 lockedReason = state.lockedReason("tools.enabled"),
@@ -166,7 +163,7 @@ fun ToolsSection(
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(", ")
                     ?: "No tool is permitted, so nothing can run",
-                icon = Icons.Filled.Handyman,
+                icon = AuraIcons.Build,
                 tone = if (tools.allowed.isEmpty()) {
                     StatusTone.Neutral
                 } else {
@@ -183,7 +180,7 @@ fun ToolsSection(
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(", ")
                     ?: "No folder is reachable by a file tool",
-                icon = Icons.Filled.Folder,
+                icon = AuraIcons.Folder,
             )
 
             RowDivider()
@@ -195,7 +192,7 @@ fun ToolsSection(
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(", ")
                     ?: "No application can be launched",
-                icon = Icons.Filled.Lock,
+                icon = AuraIcons.Lock,
             )
         }
 
@@ -245,7 +242,7 @@ fun ToolsSection(
                     "launching applications, writing files, clicking. Only leave " +
                     "this on for a machine you are happy for it to drive.",
                 tone = StatusTone.Warning,
-                icon = Icons.Filled.Warning,
+                icon = AuraIcons.Warning,
             )
         }
 
@@ -279,18 +276,18 @@ private enum class RiskLevel(
         id = "safe",
         title = "Safe actions",
         description = "Reading the time, doing arithmetic - nothing leaves Aura",
-        icon = Icons.Filled.Build,
+        icon = AuraIcons.Build,
     ),
     Sensitive(
         id = "sensitive",
         title = "Reading your data",
         description = "Opening files and folders on Aura's machine",
-        icon = Icons.Filled.Folder,
+        icon = AuraIcons.Folder,
     ),
     Dangerous(
         id = "dangerous",
         title = "Changing things",
         description = "Launching applications, writing files, clicking",
-        icon = Icons.Filled.Warning,
+        icon = AuraIcons.Warning,
     ),
 }

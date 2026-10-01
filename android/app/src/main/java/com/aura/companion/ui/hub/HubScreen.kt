@@ -31,24 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.RemoveRedEye
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.WifiTethering
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -115,6 +98,7 @@ fun HubScreen(
     onOpenSection: (String) -> Unit,
     onOpenChat: () -> Unit,
     onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
 
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -131,13 +115,13 @@ fun HubScreen(
                 title = { Text("Aura") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(AuraIcons.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
                         Icon(
-                            Icons.Filled.Refresh,
+                            AuraIcons.Refresh,
                             contentDescription = "Refresh",
                             tint = animateColorAsState(
                                 targetValue = if (state.loading) {
@@ -158,6 +142,7 @@ fun HubScreen(
                 ),
             )
         },
+        bottomBar = bottomBar,
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
 
@@ -482,10 +467,10 @@ private fun StatusTile(
 }
 
 private fun HubTileKind.icon(): ImageVector = when (this) {
-    HubTileKind.Provider -> Icons.Filled.Psychology
-    HubTileKind.Memory -> Icons.Filled.Memory
-    HubTileKind.Awareness -> Icons.Filled.Visibility
-    HubTileKind.Proactive -> Icons.Filled.Bolt
+    HubTileKind.Provider -> AuraIcons.Brain
+    HubTileKind.Memory -> AuraIcons.Memory
+    HubTileKind.Awareness -> AuraIcons.Vision
+    HubTileKind.Proactive -> AuraIcons.Bolt
 }
 
 /** Chat, given the weight it deserves: the reason the app exists. */
@@ -509,7 +494,7 @@ private fun ChatCard(onClick: () -> Unit) {
         ) {
 
             Icon(
-                Icons.Filled.ChatBubbleOutline,
+                AuraIcons.ChatBubbleOutline,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -568,19 +553,19 @@ private val HUB_GROUPS = listOf(
         entries = listOf(
             HubEntry(
                 "AI & Models", "Provider, model, API keys",
-                Icons.Filled.Psychology, HubRoutes.MODELS,
+                AuraIcons.Brain, HubRoutes.MODELS,
             ),
             HubEntry(
                 "Memory", "Recall, profile, history",
-                Icons.Filled.Memory, HubRoutes.MEMORY,
+                AuraIcons.Memory, HubRoutes.MEMORY,
             ),
             HubEntry(
                 "Vision", "Image understanding",
-                Icons.Filled.RemoveRedEye, HubRoutes.VISION,
+                AuraIcons.Vision, HubRoutes.VISION,
             ),
             HubEntry(
                 "Voice", "Text to speech, speech to text",
-                Icons.AutoMirrored.Filled.VolumeUp, HubRoutes.VOICE,
+                AuraIcons.VolumeUp, HubRoutes.VOICE,
             ),
         ),
     ),
@@ -590,15 +575,15 @@ private val HUB_GROUPS = listOf(
         entries = listOf(
             HubEntry(
                 "Awareness", "Screen observation",
-                Icons.Filled.Visibility, HubRoutes.AWARENESS,
+                AuraIcons.Vision, HubRoutes.AWARENESS,
             ),
             HubEntry(
                 "Proactive", "Unprompted messages",
-                Icons.Filled.Bolt, HubRoutes.PROACTIVE,
+                AuraIcons.Bolt, HubRoutes.PROACTIVE,
             ),
             HubEntry(
                 "Notifications", "Companion messages",
-                Icons.Filled.Notifications, HubRoutes.NOTIFICATIONS,
+                AuraIcons.Notifications, HubRoutes.NOTIFICATIONS,
             ),
         ),
     ),
@@ -608,19 +593,19 @@ private val HUB_GROUPS = listOf(
         entries = listOf(
             HubEntry(
                 "Agent & Tools", "What Aura may do, and what needs approval",
-                Icons.Filled.Build, HubRoutes.TOOLS,
+                AuraIcons.Build, HubRoutes.TOOLS,
             ),
             HubEntry(
                 "Sync", "Distributed events, cursors, outbox",
-                Icons.Filled.Sync, HubRoutes.SYNC,
+                AuraIcons.Sync, HubRoutes.SYNC,
             ),
             HubEntry(
                 "Privacy", "What leaves this phone, and API keys",
-                Icons.Filled.Shield, HubRoutes.PRIVACY,
+                AuraIcons.Shield, HubRoutes.PRIVACY,
             ),
             HubEntry(
                 "Diagnostics", "What is reachable, and why not",
-                Icons.Filled.MonitorHeart, HubRoutes.DIAGNOSTICS,
+                AuraIcons.MonitorHeart, HubRoutes.DIAGNOSTICS,
             ),
         ),
     ),
@@ -630,15 +615,15 @@ private val HUB_GROUPS = listOf(
         entries = listOf(
             HubEntry(
                 "Aura", "Connection, provider, version",
-                Icons.Filled.Face, HubRoutes.AURA,
+                AuraIcons.Face, HubRoutes.AURA,
             ),
             HubEntry(
                 "Connection", "Server URL, token",
-                Icons.Filled.WifiTethering, HubRoutes.CONNECTION,
+                AuraIcons.WifiTethering, HubRoutes.CONNECTION,
             ),
             HubEntry(
                 "General", "Appearance, advanced",
-                Icons.Filled.Tune, HubRoutes.GENERAL,
+                AuraIcons.Tune, HubRoutes.GENERAL,
             ),
         ),
     ),
@@ -682,6 +667,7 @@ fun HubSection(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onRefresh: (() -> Unit)? = null,
+    bottomBar: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     Scaffold(
@@ -701,14 +687,14 @@ fun HubSection(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(AuraIcons.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     if (onRefresh != null) {
                         IconButton(onClick = onRefresh) {
                             Icon(
-                                Icons.Filled.Refresh,
+                                AuraIcons.Refresh,
                                 contentDescription = "Refresh",
                             )
                         }
@@ -719,6 +705,7 @@ fun HubSection(
                 ),
             )
         },
+        bottomBar = bottomBar,
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(

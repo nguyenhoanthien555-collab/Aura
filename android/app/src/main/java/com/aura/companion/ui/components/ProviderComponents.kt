@@ -17,10 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -304,7 +301,7 @@ fun ModelCard(
 
             if (selected) {
                 Icon(
-                    imageVector = Icons.Filled.Check,
+                    imageVector = AuraIcons.Check,
                     contentDescription = "In use",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
@@ -364,7 +361,7 @@ fun ApiKeyField(
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.Lock,
+                            imageVector = AuraIcons.Lock,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(13.dp),
@@ -382,7 +379,7 @@ fun ApiKeyField(
             if (onDelete != null && keyMasked.isNotBlank() && !fromEnvironment) {
                 IconButton(onClick = { confirmingDelete = true }) {
                     Icon(
-                        imageVector = Icons.Filled.Delete,
+                        imageVector = AuraIcons.Purge,
                         contentDescription = "Delete $providerLabel key",
                         tint = MaterialTheme.colorScheme.error,
                     )

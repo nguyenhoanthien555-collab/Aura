@@ -2,13 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.WifiTethering
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -64,7 +58,7 @@ fun AuraSection(
                     state.loading -> StatusTone.Neutral
                     else -> StatusTone.Bad
                 },
-                icon = Icons.Filled.WifiTethering,
+                icon = AuraIcons.WifiTethering,
             )
 
             RowDivider()
@@ -82,7 +76,7 @@ fun AuraSection(
                     value = access.label,
                     subtitle = access.reason,
                     tone = access.tone,
-                    icon = Icons.Filled.Info,
+                    icon = AuraIcons.Info,
                 )
 
                 RowDivider()
@@ -92,7 +86,7 @@ fun AuraSection(
                 title = "Transport",
                 value = if (state.device.isSecure) "HTTPS" else "HTTP",
                 tone = if (state.device.isSecure) StatusTone.Good else StatusTone.Warning,
-                icon = Icons.Filled.Lock,
+                icon = AuraIcons.Lock,
             )
 
             RowDivider()
@@ -104,7 +98,7 @@ fun AuraSection(
                 value = server.config.app.version
                     .ifBlank { server.version }
                     .ifBlank { "—" },
-                icon = Icons.Filled.Info,
+                icon = AuraIcons.Info,
             )
         }
 
@@ -117,7 +111,7 @@ fun AuraSection(
                 title = "Requested",
                 value = server.health.requested.ifBlank { server.config.llm.provider }
                     .ifBlank { "—" },
-                icon = Icons.Filled.Psychology,
+                icon = AuraIcons.Brain,
             )
 
             RowDivider()
@@ -134,7 +128,7 @@ fun AuraSection(
                     server.health.ready -> StatusTone.Good
                     else -> StatusTone.Bad
                 },
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
             )
 
             RowDivider()
@@ -146,7 +140,7 @@ fun AuraSection(
                 // model name on a phone whose primary was Claude - a fact about
                 // Aura that was simply untrue. See `ModelSettingTest`.
                 value = state.activeModel.ifBlank { "—" },
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
             )
 
             if (server.health.chain.size > 1) {

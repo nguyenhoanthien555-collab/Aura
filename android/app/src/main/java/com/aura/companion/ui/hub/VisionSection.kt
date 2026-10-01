@@ -2,11 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.DesktopWindows
-import androidx.compose.material.icons.filled.RemoveRedEye
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +58,7 @@ fun VisionSection(
             ToggleRow(
                 title = "Vision",
                 subtitle = "Describe screenshots and images. Needs a restart to change.",
-                icon = Icons.Filled.RemoveRedEye,
+                icon = AuraIcons.Vision,
                 checked = vision.enabled,
                 pending = "vision.enabled" in state.pending,
                 lockedReason = state.lockedReason("vision.enabled"),
@@ -89,7 +85,7 @@ fun VisionSection(
             ToggleRow(
                 title = "Read desktop screen contents",
                 subtitle = "Off, Aura knows window titles only",
-                icon = Icons.Filled.DesktopWindows,
+                icon = AuraIcons.Monitor,
                 checked = vision.captureScreen,
                 pending = "vision.capture_screen" in state.pending,
                 lockedReason = state.lockedReason("vision.capture_screen"),
@@ -119,7 +115,7 @@ fun VisionSection(
                 subtitle = "Off, your screen pixels stay on the machine Aura " +
                     "runs on. Turning this on sends screenshots to the " +
                     "configured provider.",
-                icon = Icons.Filled.CloudUpload,
+                icon = AuraIcons.CloudUpload,
                 checked = vision.sendScreenToCloud,
                 pending = "vision.send_screen_to_cloud" in state.pending,
                 lockedReason = state.lockedReason("vision.send_screen_to_cloud"),
@@ -136,7 +132,7 @@ fun VisionSection(
                 title = "Cloud model",
                 value = vision.cloudModel.ifBlank { "Not set" },
                 subtitle = "Used by the server's cloud provider",
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 lockedReason = state.lockedReason("vision.cloud_model"),
                 onClick = { editing = VisionField.Cloud },
             )

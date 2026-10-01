@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Lock
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -97,7 +95,7 @@ fun ConnectionSection(
                         hub.settingsAccess.headline
                     else -> state.serverUrl.ifBlank { "No server address yet" }
                 },
-                icon = Icons.Filled.Dns,
+                icon = AuraIcons.Server,
                 tone = when {
                     hub.connected && hub.server.settingsError != null ->
                         hub.settingsAccess.tone
@@ -117,7 +115,7 @@ fun ConnectionSection(
                 } else {
                     "Not encrypted - fine on your own network"
                 },
-                icon = Icons.Filled.Lock,
+                icon = AuraIcons.Lock,
                 tone = when {
                     state.serverUrl.isBlank() -> StatusTone.Neutral
                     state.serverUrl.startsWith("https://") -> StatusTone.Good

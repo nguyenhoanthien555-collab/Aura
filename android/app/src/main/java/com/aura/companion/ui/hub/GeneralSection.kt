@@ -3,16 +3,7 @@ package com.aura.companion.ui.hub
 import android.os.Build
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Colorize
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Handyman
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Schedule
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,7 +79,7 @@ fun GeneralSection(
                 title = "Theme",
                 value = state.device.themeMode.label,
                 subtitle = "Light, dark, or whatever the phone is doing",
-                icon = Icons.Filled.DarkMode,
+                icon = AuraIcons.Moon,
                 onClick = { pickingTheme = true },
             )
 
@@ -101,7 +92,7 @@ fun GeneralSection(
                 } else {
                     "Needs Android 12 or newer"
                 },
-                icon = Icons.Filled.Colorize,
+                icon = AuraIcons.Palette,
                 checked = state.device.dynamicColour && dynamicSupported,
                 enabled = dynamicSupported,
                 lockedReason = if (dynamicSupported) {
@@ -125,7 +116,7 @@ fun GeneralSection(
             ToggleRow(
                 title = "Tools",
                 subtitle = "Let Aura use its tools rather than only talking",
-                icon = Icons.Filled.Handyman,
+                icon = AuraIcons.Build,
                 checked = state.server.config.tools.enabled,
                 pending = "tools.enabled" in state.pending,
                 lockedReason = state.lockedReason("tools.enabled"),
@@ -144,7 +135,7 @@ fun GeneralSection(
                     "Host's own zone"
                 },
                 subtitle = "What \"today\" and quiet hours mean to Aura",
-                icon = Icons.Filled.Schedule,
+                icon = AuraIcons.Clock,
                 lockedReason = state.lockedReason("temporal.timezone"),
                 onClick = { editingTimezone = true },
             )
@@ -156,7 +147,7 @@ fun GeneralSection(
                 text = "Something you changed is saved but not live yet. Restart " +
                     "Aura where it is deployed to apply it.",
                 tone = StatusTone.Warning,
-                icon = Icons.Filled.RestartAlt,
+                icon = AuraIcons.Refresh,
             )
         }
 
@@ -175,7 +166,7 @@ fun GeneralSection(
                 title = "This device",
                 value = state.device.deviceId.ifBlank { "—" },
                 subtitle = "Generated on this phone, not a hardware ID",
-                icon = Icons.Filled.Fingerprint,
+                icon = AuraIcons.Fingerprint,
             )
 
             RowDivider()
@@ -188,7 +179,7 @@ fun GeneralSection(
                 } else {
                     "Plain HTTP - fine on your own network"
                 },
-                icon = Icons.Filled.Link,
+                icon = AuraIcons.Link,
                 tone = when {
                     !state.device.isConfigured -> StatusTone.Neutral
                     state.device.isSecure -> StatusTone.Good
@@ -201,7 +192,7 @@ fun GeneralSection(
             StatusRow(
                 title = "Aura version",
                 value = state.server.config.app.version.ifBlank { "—" },
-                icon = Icons.Filled.Build,
+                icon = AuraIcons.Build,
             )
 
             RowDivider()
@@ -216,7 +207,7 @@ fun GeneralSection(
                 subtitle = state.server.keyStorageNote.ifBlank {
                     "Where changes made from this app are kept"
                 },
-                icon = Icons.Filled.Save,
+                icon = AuraIcons.Save,
                 tone = if (state.server.keysPersistent) {
                     StatusTone.Good
                 } else {

@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aura.companion.ui.chat.ChatScreen
 import com.aura.companion.ui.chat.ChatViewModel
+import com.aura.companion.ui.components.AuraCyberDock
 import com.aura.companion.ui.hub.AuraSection
 import com.aura.companion.ui.hub.AwarenessSection
 import com.aura.companion.ui.hub.ConnectionSection
@@ -122,12 +123,29 @@ class MainActivity : ComponentActivity() {
 
                 val back: () -> Unit = { navController.popBackStack() }
 
+                val navigateTab: (String) -> Unit = { targetRoute ->
+                    if (targetRoute == ROUTE_CHAT) {
+                        navController.popBackStack(ROUTE_CHAT, false)
+                    } else {
+                        navController.navigate(targetRoute) {
+                            popUpTo(ROUTE_CHAT) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+
                 NavHost(navController = navController, startDestination = ROUTE_CHAT) {
 
                     composable(ROUTE_CHAT) {
                         ChatScreen(
                             viewModel = chatViewModel,
                             onOpenSettings = { navController.navigate(HubRoutes.HUB) },
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = ROUTE_CHAT,
+                                    onNavigate = navigateTab,
+                                )
+                            },
                         )
                     }
 
@@ -149,6 +167,12 @@ class MainActivity : ComponentActivity() {
                                     container.settings.current.notificationsEnabled,
                                 )
                                 navController.popBackStack()
+                            },
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = HubRoutes.HUB,
+                                    onNavigate = navigateTab,
+                                )
                             },
                         )
                     }
@@ -178,7 +202,18 @@ class MainActivity : ComponentActivity() {
                         val memoryViewModel: MemoryHubViewModel = viewModel(
                             factory = MemoryHubViewModel.factory(container.repository)
                         )
-                        MemorySection(hubState, hubViewModel, memoryViewModel, back)
+                        MemorySection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            memoryViewModel = memoryViewModel,
+                            onBack = back,
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = HubRoutes.MEMORY,
+                                    onNavigate = navigateTab,
+                                )
+                            },
+                        )
                     }
 
                     composable(HubRoutes.PROACTIVE) {
@@ -205,7 +240,17 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(HubRoutes.TOOLS) {
-                        ToolsSection(hubState, hubViewModel, back)
+                        ToolsSection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            onBack = back,
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = HubRoutes.TOOLS,
+                                    onNavigate = navigateTab,
+                                )
+                            },
+                        )
                     }
 
                     composable(HubRoutes.PRIVACY) {
@@ -223,7 +268,17 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(HubRoutes.DIAGNOSTICS) {
-                        DiagnosticsSection(hubState, hubViewModel, back)
+                        DiagnosticsSection(
+                            state = hubState,
+                            viewModel = hubViewModel,
+                            onBack = back,
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = HubRoutes.DIAGNOSTICS,
+                                    onNavigate = navigateTab,
+                                )
+                            },
+                        )
                     }
 
                     composable(HubRoutes.GENERAL) {

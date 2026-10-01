@@ -24,9 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -282,7 +280,7 @@ fun SelectRow(
             )
             Spacer(Modifier.width(4.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = AuraIcons.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -350,7 +348,7 @@ fun NavigationRow(
                 Spacer(Modifier.width(8.dp))
             }
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = AuraIcons.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -615,9 +613,9 @@ fun ExpandableSection(
 
             Icon(
                 imageVector = if (expanded) {
-                    Icons.Filled.KeyboardArrowDown
+                    AuraIcons.ChevronDown
                 } else {
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                    AuraIcons.ChevronRight
                 },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,

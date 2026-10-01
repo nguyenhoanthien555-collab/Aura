@@ -2,12 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Visibility
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -83,7 +78,7 @@ fun AwarenessSection(
             ToggleRow(
                 title = "Screen observation",
                 subtitle = "Send what is on screen so Aura has context",
-                icon = Icons.Filled.Visibility,
+                icon = AuraIcons.Vision,
                 checked = state.device.screenObservationEnabled,
                 onCheckedChange = viewModel::setScreenObservation,
             )
@@ -93,7 +88,7 @@ fun AwarenessSection(
             ToggleRow(
                 title = "Send phone screen context",
                 subtitle = "Include phone screen images with text observations",
-                icon = Icons.Filled.PhotoCamera,
+                icon = AuraIcons.Camera,
                 checked = state.device.uploadScreenshots,
                 enabled = state.device.screenObservationEnabled,
                 lockedReason = if (state.device.screenObservationEnabled) {
@@ -109,7 +104,7 @@ fun AwarenessSection(
             ToggleRow(
                 title = "Device integration",
                 subtitle = "Allow Aura to run safe device queries (inventory, battery, network)",
-                icon = Icons.Filled.PhoneAndroid,
+                icon = AuraIcons.DeviceMobile,
                 checked = state.device.deviceIntegrationEnabled,
                 onCheckedChange = viewModel::setDeviceIntegration,
             )
@@ -134,7 +129,7 @@ fun AwarenessSection(
                 } else {
                     "AURA setting is ON. Tap to grant Accessibility in Android settings."
                 },
-                icon = Icons.Filled.PhoneAndroid,
+                icon = AuraIcons.DeviceMobile,
                 onClick = onOpenAccessibilitySettings,
             )
 
@@ -148,7 +143,7 @@ fun AwarenessSection(
                 } else {
                     "Tap to grant Accessibility in Android settings."
                 },
-                icon = Icons.Filled.TouchApp,
+                icon = AuraIcons.Tap,
                 onClick = onOpenAccessibilitySettings,
             )
         }
@@ -177,7 +172,7 @@ fun AwarenessSection(
             ToggleRow(
                 title = "Accept screen context",
                 subtitle = "When off, Aura ignores screen updates from any device",
-                icon = Icons.Filled.Cloud,
+                icon = AuraIcons.Cloud,
                 checked = serverScreen.enabled,
                 pending = "server.screen.enabled" in state.pending,
                 lockedReason = state.lockedReason("server.screen.enabled"),

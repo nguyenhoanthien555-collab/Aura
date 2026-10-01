@@ -2,12 +2,7 @@ package com.aura.companion.ui.hub
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Timer
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,7 +78,7 @@ fun ProactiveSection(
             ToggleRow(
                 title = "Let Aura start conversations",
                 subtitle = "Reminders, follow-ups and greetings it decides to send",
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
                 checked = proactive.enabled,
                 pending = "proactive.enabled" in state.pending,
                 lockedReason = state.lockedReason("proactive.enabled"),
@@ -104,7 +99,7 @@ fun ProactiveSection(
                 title = "Engine",
                 value = if (proactive.enabled) "Enabled" else "Off",
                 tone = if (proactive.enabled) StatusTone.Good else StatusTone.Neutral,
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
             )
 
             RowDivider()
@@ -121,7 +116,7 @@ fun ProactiveSection(
                     !state.device.isConfigured -> StatusTone.Warning
                     else -> StatusTone.Good
                 },
-                icon = Icons.Filled.NotificationsActive,
+                icon = AuraIcons.Notifications,
             )
         }
 
@@ -134,7 +129,7 @@ fun ProactiveSection(
                 "proactive message can arrive late, and none arrive at all " +
                 "when notifications are off.",
             tone = StatusTone.Neutral,
-            icon = Icons.Filled.Timer,
+            icon = AuraIcons.Clock,
         )
 
         if (proactive.enabled && !state.device.notificationsEnabled) {
@@ -190,7 +185,7 @@ fun ProactiveSection(
                 title = "Quiet hours",
                 value = proactive.quietHours.describe(),
                 subtitle = "Aura stays silent during these",
-                icon = Icons.Filled.Bedtime,
+                icon = AuraIcons.Moon,
                 enabled = proactive.enabled,
                 lockedReason = state.lockedReason("proactive.quiet_hours"),
                 onClick = { editingQuietHours = true },
@@ -255,7 +250,7 @@ fun ProactiveSection(
                 title = "Evening Recap (Tổng kết ngày)",
                 value = "20:00 - 22:00",
                 tone = StatusTone.Good,
-                icon = Icons.Filled.Bedtime,
+                icon = AuraIcons.Moon,
             )
 
             RowDivider()
@@ -264,7 +259,7 @@ fun ProactiveSection(
                 title = "Wellbeing & Break Care",
                 value = "Active stretches",
                 tone = StatusTone.Good,
-                icon = Icons.Filled.Timer,
+                icon = AuraIcons.Clock,
             )
 
             RowDivider()
@@ -273,7 +268,7 @@ fun ProactiveSection(
                 title = "Goal Follow-up (Theo dõi mục tiêu)",
                 value = "Tracked projects",
                 tone = StatusTone.Good,
-                icon = Icons.Filled.Bolt,
+                icon = AuraIcons.Bolt,
             )
         }
 
@@ -284,7 +279,7 @@ fun ProactiveSection(
                 "wellbeing status. When high-priority insights or reminders are ready, " +
                 "they appear as interactive notifications with a quick 'Chat' action.",
             tone = StatusTone.Neutral,
-            icon = Icons.Filled.NotificationsActive,
+            icon = AuraIcons.Notifications,
         )
 
         Spacer(Modifier.height(12.dp))
@@ -294,7 +289,7 @@ fun ProactiveSection(
                 "configured to send more than 20 messages a day, or to check " +
                 "less than five minutes apart.",
             tone = StatusTone.Neutral,
-            icon = Icons.Filled.ContentCopy,
+            icon = AuraIcons.ContentCopy,
         )
 
         SectionHeader(title = "Reset")
