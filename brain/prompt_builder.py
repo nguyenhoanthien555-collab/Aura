@@ -26,6 +26,7 @@ from brain.prompt_sections import (
     PERSONALITY,
     PERSONA,
     CONTEXT,
+    HOST_ENVIRONMENT,
     TIME,
     MEMORY,
     VISION,
@@ -116,6 +117,25 @@ class PromptBuilder:
         section = [CONTEXT]
 
         section.extend(loaded)
+
+        return section
+
+
+    def _build_host_environment(self, host_environment=None):
+        """
+        Physical machine environment facts.
+        """
+        if not host_environment:
+            return []
+
+        section = [HOST_ENVIRONMENT]
+        for line in host_environment:
+            text = str(line).strip()
+            if text:
+                section.append(text)
+
+        if len(section) == 1:
+            return []
 
         return section
 
@@ -626,12 +646,13 @@ class PromptBuilder:
         persona: str | None = None,
         plan: list[str] | None = None,
         capabilities: str | None = None,
+        host_environment: list[str] | None = None,
     ):
         """
         Render the full prompt.
 
         Section order is fixed:
-            SYSTEM, PERSONALITY, PERSONA, TOOLS, CONTEXT, TIME, MEMORY,
+            SYSTEM, PERSONALITY, PERSONA, TOOLS, CONTEXT, HOST_ENVIRONMENT, TIME, MEMORY,
             VISION, HISTORY, TOOL RESULTS, IDENTITY, STYLE, USER
 
         IDENTITY and STYLE sit between the history and the user's message
@@ -707,6 +728,11 @@ class PromptBuilder:
 
         prompt.extend(
             self._build_contexts(contexts)
+        )
+
+
+        prompt.extend(
+            self._build_host_environment(host_environment)
         )
 
 

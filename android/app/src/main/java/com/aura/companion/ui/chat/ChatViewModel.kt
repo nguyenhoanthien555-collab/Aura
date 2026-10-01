@@ -55,6 +55,8 @@ class ChatViewModel(
             messages = restored(),
             isConfigured = settings.current.isConfigured,
             connection = ConnectionState.Unknown,
+            isInitialScanning = settings.current.isConfigured,
+            scanStatusText = if (settings.current.isConfigured) "Aura đang kết nối & nhận diện hệ thống..." else "",
         )
     )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
@@ -253,14 +255,22 @@ class ChatViewModel(
 
         if (!settings.current.isConfigured) {
             _state.update {
-                it.copy(connection = ConnectionState.Unavailable("Not configured"))
+                it.copy(
+                    connection = ConnectionState.Unavailable("Not configured"),
+                    isInitialScanning = false,
+                    scanStatusText = "",
+                )
             }
             return
         }
 
         if (!isOnline()) {
             _state.update {
-                it.copy(connection = ConnectionState.Unavailable("Offline"))
+                it.copy(
+                    connection = ConnectionState.Unavailable("Offline"),
+                    isInitialScanning = false,
+                    scanStatusText = "",
+                )
             }
             return
         }
@@ -269,7 +279,14 @@ class ChatViewModel(
 
         probe = viewModelScope.launch {
 
-            _state.update { it.copy(connection = ConnectionState.Connecting) }
+            val isFirstScan = _state.value.isInitialScanning || _state.value.connection == ConnectionState.Unknown
+            _state.update {
+                it.copy(
+                    connection = ConnectionState.Connecting,
+                    isInitialScanning = isFirstScan,
+                    scanStatusText = if (isFirstScan) "Aura đang kết nối & nhận diện hệ thống..." else it.scanStatusText,
+                )
+            }
 
             val slowNotice = launch {
                 delay(WAKE_NOTICE_MS)
@@ -287,6 +304,8 @@ class ChatViewModel(
                             connection = ConnectionState.Connected(
                                 result.value.runtime["llm_provider"] ?: "aura"
                             ),
+                            isInitialScanning = false,
+                            scanStatusText = "",
                             error = null,
                         )
                     }
@@ -299,6 +318,8 @@ class ChatViewModel(
                             connection = ConnectionState.Unavailable(
                                 result.error.userMessage
                             ),
+                            isInitialScanning = false,
+                            scanStatusText = "",
                             // A failing probe is not worth an error banner on
                             // its own; the connection line already says it.
                             // Only an auth failure gets promoted, because it

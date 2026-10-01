@@ -1,6 +1,25 @@
 # Current task
 
-## Master Upgrade: Android Native Tasks, 24/7 Proactive Daemon, & Hybrid Retrieval DELIVERED (2026-10-01)
+## First-Boot Hardware Probe, Conversational Context Compaction, & Companion Loading Bar DELIVERED (2026-10-01)
+
+- **Trụ cột 1: First-Boot Host Hardware & Environment Scan (`core/hardware_probe.py`)**:
+  - `HostEnvironment`: comprehensive scan of hostname, manufacturer, model, OS release/build, CPU name/threads/cores, RAM total/available, GPU model(s), storage free/total, machine UUID, active network adapters, username.
+  - Windows CIM/PowerShell deep inspection with cross-platform fallback.
+  - Hardcoded persistence into SQLite `ProfileStore` (`category="system"`). Runs automatically on first startup, or on demand via `--rescan-hardware` / `/rescan-hardware` / `rescan_system_hardware` tool.
+  - Rich CLI banner and prompt injection section (`HOST ENVIRONMENT`) in `brain/prompt_builder.py` and `brain/prompt_sections.py`.
+- **Trụ cột 2: Conversational Context Compaction (`brain/compaction.py`, `brain/conversation.py`)**:
+  - `ConversationCompactor`: condenses older conversational turns beyond threshold into an AI-synthesized/rule-based synopsis (`[COMPACTED CONTEXT]`) while preserving recent $N=6$ turns verbatim.
+  - Reduces token usage, API latency, and reasoning confusion on long chats.
+  - Manual trigger via `/compact` CLI and chat command, plus automatic background compaction in `ConversationManager._prepare()`.
+- **Trụ cột 3: Android Companion Initial Loading Bar**:
+  - Added `isInitialScanning` and `scanStatusText` to `ChatUiState.kt`.
+  - Added `LinearProgressIndicator` in `ChatScreen.kt` indicating system connection and device inspection state.
+  - Wired lifecycle in `ChatViewModel.kt` to display during initial probe and dismiss upon health completion.
+- **Trụ cột 4: Testing & Verification**:
+  - Python tests: `tests/test_hardware_probe.py` (5/5 passed), `tests/test_conversation_compaction.py` (6/6 passed).
+  - Regression: `tests/test_tools.py` + `tests/test_memory_v2.py` (114/114 passed).
+
+---
 
 - **Trụ cột 1: Android Companion Native Task Tools & Permissions Hub**:
   - Implemented `DeviceTaskDispatcher.kt` with `DeviceTaskToolCatalog`, `DeviceTaskHandler`, `AndroidDeviceTaskHandler`, and `DeviceTaskDispatcher`.

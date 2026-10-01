@@ -50,6 +50,7 @@ from brain.ports import (
     VisionContextLike,
     VisionProvider,
 )
+from brain.compaction import ConversationCompactor
 from brain.consistency import IdentityAnchor, anchor_of
 from brain.persona import PersonaState, persona_of, render_of
 from brain.persona_validator import validate
@@ -111,6 +112,7 @@ class _Turn:
     vision: VisionContextLike | None = None
     knowledge: list[str] = field(default_factory=list)
     temporal: list[str] = field(default_factory=list)
+    host_environment: list[str] = field(default_factory=list)
     task: TaskClass = TaskClass.CHAT
 
     # The register this turn is in, resolved once.
@@ -190,6 +192,7 @@ class ConversationManager:
         # same idea, and it is what lets an agent tick ask what the last
         # tick already accomplished.
         self.cognitive = cognitive
+        self.compactor = ConversationCompactor(llm=llm)
 
 
     def chat(
@@ -214,6 +217,26 @@ class ConversationManager:
         announced on the bus. See `_machine_turn_notes` for why each of
         those three would be a bug.
         """
+
+        if (user_message or "").strip().lower() == "/compact":
+            history = self.history(session_id=session_id)
+            compacted, changed = self.compactor.compact(history, force=True)
+            if changed:
+                if hasattr(self.memory, "clear") and hasattr(self.memory, "save"):
+                    try:
+                        self.memory.clear(session_id=session_id)
+                    except TypeError:
+                        self.memory.clear()
+                    for msg in compacted:
+                        try:
+                            self.memory.save(msg.role, msg.content, session_id=session_id)
+                        except TypeError:
+                            self.memory.save(msg.role, msg.content)
+                reply = "✓ Đã hoàn tất nén ngữ cảnh (Context Compaction)! Aura đã đúc kết các lượt trò chuyện trước đó thành bản tóm lược súc tích và giải phóng token cho các lượt trò chuyện tiếp theo."
+            else:
+                reply = "Ngữ cảnh hội thoại hiện tại còn rất ngắn (chưa vượt quá ngưỡng nén), Aura đang lưu giữ trọn vẹn từng câu nói của anh."
+            self._emit(ResponseEvent(text=reply))
+            return Response(text=reply)
 
         machine = is_machine_turn(context)
 
@@ -307,6 +330,30 @@ class ConversationManager:
         asked for them, but publishes nothing and saves nothing - see
         `chat`.
         """
+
+        if (user_message or "").strip().lower() == "/compact":
+            history = self.history(session_id=session_id)
+            compacted, changed = self.compactor.compact(history, force=True)
+            if changed:
+                if hasattr(self.memory, "clear") and hasattr(self.memory, "save"):
+                    try:
+                        self.memory.clear(session_id=session_id)
+                    except TypeError:
+                        self.memory.clear()
+                    for msg in compacted:
+                        try:
+                            self.memory.save(msg.role, msg.content, session_id=session_id)
+                        except TypeError:
+                            self.memory.save(msg.role, msg.content)
+                reply = "✓ Đã hoàn tất nén ngữ cảnh (Context Compaction)! Aura đã đúc kết các lượt trò chuyện trước đó thành bản tóm lược súc tích và giải phóng token cho các lượt trò chuyện tiếp theo."
+            else:
+                reply = "Ngữ cảnh hội thoại hiện tại còn rất ngắn (chưa vượt quá ngưỡng nén), Aura đang lưu giữ trọn vẹn từng câu nói của anh."
+            self._emit(StreamStartedEvent())
+            self._emit(StreamChunkEvent(fragment=reply))
+            self._emit(StreamFinishedEvent(text=reply))
+            self._emit(ResponseEvent(text=reply, streamed=True))
+            yield reply
+            return
 
         machine = is_machine_turn(context)
 
@@ -462,6 +509,10 @@ class ConversationManager:
 
         history = self.history(session_id=session_id)
 
+        # Apply conversational context compaction if history exceeds threshold
+        if self.compactor.should_compact(history):
+            history, _ = self.compactor.compact(history)
+
         # Phase 4: the request-scoped ledger. Built once per turn, when a
         # verifier is wired up, so the final reply is checked against the
         # evidence this exact turn gathered - never a previous turn's.
@@ -477,6 +528,7 @@ class ConversationManager:
             vision=self._vision_context(context),
             knowledge=self._knowledge_for(user_msg.content),
             temporal=self._temporal_lines(),
+            host_environment=self._host_environment_lines(),
             task=classify_task(
                 user_message,
                 context,
@@ -550,6 +602,7 @@ class ConversationManager:
             history=turn.history,
             user_message=turn.user_msg,
             contexts=turn.contexts,
+            host_environment=turn.host_environment,
             vision=turn.vision,
             knowledge=turn.knowledge,
             identity=anchor_of(self.identity, len(turn.history)),
@@ -1429,6 +1482,29 @@ class ConversationManager:
             return self.clock.context().render()
         except Exception as error:
             logger.debug("Temporal context unavailable: %s", error)
+            return []
+
+    def _host_environment_lines(self) -> list[str]:
+        """
+        The HOST ENVIRONMENT section, read from ProfileStore system facts.
+        """
+        profile = getattr(self.knowledge, "profile", None)
+        if profile is None and hasattr(self.knowledge, "durable"):
+            profile = getattr(self.knowledge.durable, "profile", None)
+
+        if profile is None:
+            return []
+
+        try:
+            facts = profile.by_category("system")
+            if not facts:
+                return []
+            return [
+                f"- {fact.key.replace('system_', '').replace('_', ' ').title()}: {fact.value}"
+                for fact in facts
+            ]
+        except Exception as error:  # noqa: BLE001
+            logger.debug("Host environment facts unreadable: %s", error)
             return []
 
     def _voiced(self, text: str, turn: "_Turn | None") -> str:

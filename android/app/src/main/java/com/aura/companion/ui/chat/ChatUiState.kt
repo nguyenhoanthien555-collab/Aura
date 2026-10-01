@@ -17,6 +17,8 @@ data class ChatUiState(
     val isSending: Boolean = false,
     val isAgentRunning: Boolean = false,
     val agentStatusText: String = "",
+    val isInitialScanning: Boolean = false,
+    val scanStatusText: String = "",
     val error: AuraError? = null,
     val isConfigured: Boolean = false,
 ) {

@@ -15,6 +15,8 @@ PERSONA = "===== PERSONA ====="
 
 CONTEXT = "===== CONTEXT ====="
 
+HOST_ENVIRONMENT = "===== HOST ENVIRONMENT ====="
+
 # When "now" is. Two lines, above MEMORY because a recalled event dated
 # "yesterday" is meaningless until the reader knows what today is.
 TIME = "===== CURRENT TIME ====="

@@ -31,6 +31,9 @@ HELP = """
   /remember key value   store a fact about you
   /forget key           remove a fact
   /profile              show what Aura knows about you
+  /hardware             show host machine specifications
+  /rescan-hardware      re-scan and update machine hardware facts
+  /compact              compact conversation history to save tokens
   /tools                list permitted tools
   /run name [k=v ...]   run a tool
   /state                current avatar state
@@ -125,6 +128,9 @@ class AuraCLI:
             "remember": self._remember,
             "forget": self._forget,
             "profile": self._profile,
+            "hardware": self._hardware,
+            "rescan-hardware": self._rescan_hardware,
+            "compact": self._compact,
             "tools": self._tools,
             "run": self._run_tool,
             "state": self._state,
@@ -313,6 +319,51 @@ class AuraCLI:
 
         for line in lines:
             console.print(f"  {line}")
+
+    def _hardware(self, _rest: str) -> None:
+        profile = getattr(self.runtime.services, "profile", None)
+        if profile is None:
+            console.print("[dim]profile storage is disabled[/dim]")
+            return
+        facts = profile.by_category("system")
+        if not facts:
+            console.print("[dim]no hardware specifications recorded yet. Run /rescan-hardware[/dim]")
+            return
+        console.print("[bold cyan]Host Hardware Specifications:[/bold cyan]")
+        for f in facts:
+            key_name = f.key.replace("system_", "").replace("_", " ").title()
+            console.print(f"  [bold]{key_name}:[/bold] {f.value}")
+
+    def _rescan_hardware(self, _rest: str) -> None:
+        profile = getattr(self.runtime.services, "profile", None)
+        if profile is None:
+            console.print("[yellow]profile storage is disabled[/yellow]")
+            return
+        try:
+            from core.hardware_probe import probe_and_persist
+
+            console.print("[dim]Re-probing host hardware specifications...[/dim]")
+            probe_and_persist(profile, force=True, show_ui=True)
+            console.print("[green]Hardware facts updated in persistent memory.[/green]")
+        except Exception as error:
+            console.print(f"[red]Re-scan failed:[/red] {error}")
+
+    def _compact(self, _rest: str) -> None:
+        engine = getattr(self.runtime.services, "engine", None)
+        conv = getattr(engine, "conversation", None)
+        compactor = getattr(conv, "compactor", None)
+        if compactor is None or conv is None:
+            console.print("[yellow]Context compactor not available[/yellow]")
+            return
+        history = conv.history()
+        compacted, changed = compactor.compact(history, force=True)
+        if not changed:
+            console.print("[dim]Ngữ cảnh hiện tại còn ngắn, chưa cần nén.[/dim]")
+            return
+        conv.memory.clear()
+        for msg in compacted:
+            conv.memory.save(msg.role, msg.content)
+        console.print("[green]✓ Đã hoàn tất nén ngữ cảnh (Context Compaction)! Đã giải phóng token.[/green]")
 
     def _tools(self, _rest: str) -> None:
 

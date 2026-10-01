@@ -95,6 +95,12 @@ def parse_arguments(argv=None):
         help="server port (default from AURA_SERVER_PORT)",
     )
 
+    parser.add_argument(
+        "--rescan-hardware",
+        action="store_true",
+        help="force re-scan of host hardware and machine specifications into memory",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -120,6 +126,9 @@ def apply_overrides(config: dict, arguments) -> dict:
 
     if arguments.provider:
         config["llm"]["provider"] = arguments.provider
+
+    if getattr(arguments, "rescan_hardware", False):
+        config["rescan_hardware"] = True
 
     return config
 

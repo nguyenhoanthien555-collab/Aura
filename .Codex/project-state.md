@@ -1,5 +1,22 @@
 # AURA project state
 
+## First-Boot Hardware Probe, Context Compaction, & Companion Loading Bar (2026-10-01)
+1. **First-Boot Host Hardware & Environment Scan (`core/hardware_probe.py`)**:
+   - `HostEnvironment`: comprehensive scan of hostname, manufacturer, model, OS release/build, CPU name/threads/cores, RAM total/available, GPU model(s), storage free/total, machine UUID, active network adapters, username.
+   - Windows CIM/PowerShell deep inspection with cross-platform fallback.
+   - Hardcoded persistence into SQLite `ProfileStore` (`category="system"`). Runs automatically on first startup, or on demand via `--rescan-hardware` / `/rescan-hardware` / `rescan_system_hardware` tool.
+   - Rich CLI banner and prompt injection section (`HOST ENVIRONMENT`) in `brain/prompt_builder.py` and `brain/prompt_sections.py`.
+2. **Conversational Context Compaction (`brain/compaction.py`, `brain/conversation.py`)**:
+   - `ConversationCompactor`: condenses older conversational turns beyond threshold into an AI-synthesized/rule-based synopsis (`[COMPACTED CONTEXT]`) while preserving recent $N=6$ turns verbatim.
+   - Reduces token usage, API latency, and reasoning confusion on long chats.
+   - Manual trigger via `/compact` CLI and chat command, plus automatic background compaction in `ConversationManager._prepare()`.
+3. **Android Companion Initial Loading Bar**:
+   - Added `isInitialScanning` and `scanStatusText` to `ChatUiState.kt`.
+   - Added `LinearProgressIndicator` in `ChatScreen.kt` indicating system connection and device inspection state.
+   - Wired lifecycle in `ChatViewModel.kt` to display during initial probe and dismiss upon health completion.
+4. **Verification & Stability**:
+   - 100% test pass rate: 11 new tests (`test_hardware_probe.py`, `test_conversation_compaction.py`), 114 regression tests (`test_tools.py`, `test_memory_v2.py`), 451 Android unit tests. All tests passing.
+
 ## Master Upgrade: Android Native Task Dispatcher, 24/7 Proactive Daemon, & Hybrid Retrieval (2026-10-01)
 AURA has completed the comprehensive master upgrade across four core pillars:
 1. **Android Companion Native Task Tools & Permissions Hub**:

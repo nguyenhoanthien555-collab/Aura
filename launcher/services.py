@@ -110,6 +110,16 @@ def build_services(
 
     profile, knowledge, companion = _build_knowledge(config, memory)
 
+    # Hardware and host environment probe (first boot or forced re-scan)
+    rescan_hw = bool(config.get("rescan_hardware", False))
+    if profile is not None:
+        try:
+            from core.hardware_probe import probe_and_persist
+
+            probe_and_persist(profile, force=rescan_hw, show_ui=True)
+        except Exception as error:  # noqa: BLE001
+            logger.debug("Hardware probe initialization deferred or failed: %s", error)
+
     # The clock before anything that reads a time. One clock for the whole
     # process, so the memory pipeline, the proactive engine and the prompt
     # all agree on what "now" is - and so pinning it in a test pins all

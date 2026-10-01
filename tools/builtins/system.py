@@ -80,6 +80,9 @@ class SystemFacts:
     release: str = ""
     version: str = ""
     machine: str = ""
+    model: str = ""
+    gpu: str = ""
+    uuid: str = ""
     processors: int = 0
     memory_total_gb: float = 0.0
     memory_available_gb: float = 0.0
@@ -104,11 +107,17 @@ class SystemFacts:
         if self.version:
             lines.append(f"version: {self.version}")
 
+        if self.model:
+            lines.append(f"model: {self.model}")
+
         if self.machine:
             lines.append(f"architecture: {self.machine}")
 
         if self.processors:
             lines.append(f"processors: {self.processors}")
+
+        if self.gpu:
+            lines.append(f"graphics: {self.gpu}")
 
         if self.memory_total_gb:
 
@@ -127,6 +136,9 @@ class SystemFacts:
                 f"disk{where}: {self.disk_total_gb:.1f} GB total, "
                 f"{self.disk_free_gb:.1f} GB free"
             )
+
+        if self.uuid:
+            lines.append(f"machine uuid: {self.uuid}")
 
         if self.uptime_hours:
             lines.append(f"uptime: {self.uptime_hours:.1f} hours")
@@ -208,11 +220,26 @@ class LocalSystemFacts:
             logger.debug("Disk usage unreadable: %s", error)
             where = ""
 
+        model = ""
+        gpu = ""
+        uuid_str = ""
+        try:
+            from core.hardware_probe import probe_host_environment
+            env = probe_host_environment()
+            model = f"{env.manufacturer} {env.model}".strip()
+            gpu = ", ".join(env.gpus) if env.gpus else ""
+            uuid_str = env.machine_uuid
+        except Exception as error:
+            logger.debug("Hardware probe auxiliary read failed: %s", error)
+
         return SystemFacts(
             system=platform.system(),
             release=platform.release(),
             version=platform.version(),
             machine=platform.machine(),
+            model=model,
+            gpu=gpu,
+            uuid=uuid_str,
             processors=os.cpu_count() or 0,
             memory_total_gb=total,
             memory_available_gb=available,
@@ -351,6 +378,29 @@ class SystemInformationTool(Tool):
             )
 
         return ok(facts.render(), tool=self.name)
+
+
+class RescanHardwareTool(Tool):
+
+    name = "rescan_system_hardware"
+    description = "Re-scan host hardware specifications and update persistent memory facts"
+    risk = ToolRisk.SAFE
+    capability = "system.info"
+
+    parameters: tuple[Parameter, ...] = ()
+
+    def __init__(self, profile=None):
+        self.profile = profile
+
+    def execute(self) -> ToolResult:
+        try:
+            from core.hardware_probe import probe_and_persist
+
+            env = probe_and_persist(self.profile, force=True, show_ui=False)
+            lines = env.summary_lines()
+            return ok("Hardware facts updated:\n" + "\n".join(lines), tool=self.name)
+        except Exception as error:  # noqa: BLE001
+            return fail(f"hardware re-scan failed: {error}", tool=self.name)
 
 
 # ----------------------------------------------------------------------
@@ -679,6 +729,7 @@ __all__ = [
     "ProcessSource",
     "SystemFacts",
     "SystemFactsSource",
+    "RescanHardwareTool",
     "SystemInformationTool",
     "default_process_source",
 ]
