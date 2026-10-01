@@ -93,8 +93,8 @@ memory:
   #   provider: hashing  local, dependency-free, deterministic n-gram
   #                      hashing. Honest about its limit: it generalizes
   #                      token overlap, it does NOT understand paraphrase.
-  #           ollama     a local model server - set base_url and model.
-  #                      Nothing leaves the machine.
+  #           gemini     Google Gemini embeddings (text-embedding-004)
+  #                      via Google GenAI SDK. Requires allow_remote: true.
   #           remote     an OpenAI-compatible /embeddings endpoint. This
   #                      sends memory content OFF this machine, so it
   #                      stays inert until allow_remote is true. The

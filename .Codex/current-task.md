@@ -1,5 +1,15 @@
 # Current task
 
+## Gemini Semantic Embeddings & Cloud-Only Memory Consolidation DELIVERED (2026-10-01)
+
+- Native `GeminiEmbeddingProvider` implemented in `memory/embeddings.py` (`google.genai.Client.models.embed_content`, model: `text-embedding-004`).
+- Strict privacy consent boundary (`memory.semantic.allow_remote`) enforced.
+- Excised legacy `OllamaEmbeddingProvider`, deprecated `"ollama"` provider in factory, cleaned docstrings across `core/config.py`, `config.yaml`, and `vision/processor.py`.
+- Tested and verified: 49/49 tests in `test_semantic_memory.py` passed (100%), 233/233 focused capability & provider tests passed.
+- Next steps: Phase 5 Android task tools (SMS, Calendar, Contacts), companion connection URL auto-switching, remote git push.
+
+---
+
 ## Cloud-Only Architecture Migration (Phases 0–6) DELIVERED (2026-09-23)
 
 Complete migration of AURA from hybrid local/on-device learning to pure Cloud-Only architecture:

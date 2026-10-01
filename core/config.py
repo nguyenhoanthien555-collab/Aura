@@ -167,8 +167,8 @@ DEFAULT_CONFIG = {
         #            hashing. Generalizes token overlap a little; it is
         #            NOT paraphrase understanding (documented in
         #            memory/embeddings.py).
-        #   ollama   local model server (base_url, model). Nothing
-        #            leaves the machine.
+        #   gemini   Google Gemini embeddings (text-embedding-004) via
+        #            Google GenAI SDK. Requires `allow_remote: true`.
         #   remote   an OpenAI-compatible /embeddings endpoint. Sends
         #            memory content OFF the machine, so it is inert
         #            until `allow_remote` is explicitly true - the

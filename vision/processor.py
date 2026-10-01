@@ -6,10 +6,10 @@ Turns a raw observation into one sentence a language model can use.
 The cheapest processor reads the foreground window title, because that
 single string is the cheapest honest answer to "what is the user doing"
 - no pixels, no OCR, no model, no privacy surprise. Pixel processors
-live beside it (`OllamaVisionProcessor`, `CloudVisionProcessor`) and
-implement the same `describe()` method; `ProcessorChain` puts one in
-front of the other so a description degrades to the title rather than
-disappearing when the image model cannot answer.
+live beside it (`CloudVisionProcessor`) and implement the same
+`describe()` method; `ProcessorChain` puts one in front of the other so
+a description degrades to the title rather than disappearing when the
+image model cannot answer.
 """
 
 import os
@@ -248,14 +248,10 @@ class ProcessorChain:
     """
     Ask each processor in turn; the first real description wins.
 
-    Two ways a processor can decline, and both advance the chain,
-    because the bundled implementations genuinely use both.
-    `OllamaVisionProcessor` returns "" for every failure it has - dead
-    daemon, HTTP error, model not pulled, unencodable frame - while
-    `CloudVisionProcessor` raises `ProviderUnavailableError`. A chain
-    that caught only one of those would fall through for one backend and
-    go silent for the other, which is this phase's bug reintroduced one
-    layer up.
+    Two ways a processor can decline, and both advance the chain.
+    A processor may return "" for failures or unencodable frames, or
+    `CloudVisionProcessor` may raise `ProviderUnavailableError`. A chain
+    catches both and falls through cleanly to the next processor.
 
     Deliberately not a `FallbackProvider`. That class is the same shape
     for text providers, and reusing it would mean `vision/` importing

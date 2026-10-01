@@ -32,6 +32,7 @@ from memory.embeddings import (
     EmbeddingProvider,
     EmbeddingUnavailableError,
     HashingEmbeddingProvider,
+    GeminiEmbeddingProvider,
     RemoteEmbeddingProvider,
     build_embedding_provider,
 )
@@ -375,6 +376,94 @@ def test_a_malformed_remote_response_is_a_typed_failure(monkeypatch):
         remote.embed("python")
 
 
+def test_a_gemini_provider_refuses_without_explicit_consent():
+    gemini = GeminiEmbeddingProvider(
+        api_key="test-key",
+        model="text-embedding-004",
+        allow_remote=False,
+    )
+    with pytest.raises(EmbeddingUnavailableError, match="allow_remote"):
+        gemini.embed("test text")
+
+    assert not gemini.health_check()
+
+
+def test_a_gemini_provider_requires_api_key_when_consent_given(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    gemini = GeminiEmbeddingProvider(
+        api_key="",
+        model="text-embedding-004",
+        allow_remote=True,
+    )
+    with pytest.raises(EmbeddingUnavailableError, match="missing GEMINI_API_KEY"):
+        gemini.embed("test text")
+
+
+def test_a_gemini_provider_embed_batch_success(monkeypatch):
+    class FakeEmbedding:
+        def __init__(self, values):
+            self.values = values
+
+    class FakeResponse:
+        def __init__(self, embeddings):
+            self.embeddings = embeddings
+
+    class FakeModels:
+        def __init__(self):
+            self.captured_model = None
+            self.captured_contents = None
+
+        def embed_content(self, model, contents):
+            self.captured_model = model
+            self.captured_contents = contents
+            return FakeResponse([
+                FakeEmbedding([0.1, 0.2, 0.3]),
+                FakeEmbedding([0.4, 0.5, 0.6]),
+            ])
+
+    class FakeClient:
+        def __init__(self, api_key):
+            self.api_key = api_key
+            self.models = FakeModels()
+
+    fake_client_instance = FakeClient("test-key")
+
+    gemini = GeminiEmbeddingProvider(
+        api_key="test-key",
+        model="text-embedding-004",
+        allow_remote=True,
+    )
+    gemini._client = fake_client_instance
+
+    vectors = gemini.embed_batch(["text 1", "text 2"])
+    assert vectors == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    assert fake_client_instance.models.captured_model == "text-embedding-004"
+    assert fake_client_instance.models.captured_contents == ["text 1", "text 2"]
+    assert gemini.metadata().dimensions == 3
+    assert gemini.metadata().provider == "gemini"
+
+
+def test_a_gemini_provider_empty_batch():
+    gemini = GeminiEmbeddingProvider(api_key="k", allow_remote=True)
+    assert gemini.embed_batch([]) == []
+
+
+def test_a_gemini_provider_error_handling(monkeypatch):
+    class FailingModels:
+        def embed_content(self, model, contents):
+            raise RuntimeError("429 ResourceExhausted: Quota exceeded")
+
+    class FakeClient:
+        def __init__(self):
+            self.models = FailingModels()
+
+    gemini = GeminiEmbeddingProvider(api_key="k", allow_remote=True)
+    gemini._client = FakeClient()
+
+    with pytest.raises(EmbeddingUnavailableError, match="quota/rate limit"):
+        gemini.embed("sample")
+
+
 def test_the_factory_returns_none_rather_than_raising_on_bad_config():
     # Startup must not fail because embeddings are unavailable - the
     # deal the factory makes, for every wrong way to configure it.
@@ -386,6 +475,12 @@ def test_the_factory_returns_none_rather_than_raising_on_bad_config():
     assert build_embedding_provider(
         {"semantic": {"enabled": True, "provider": "hashing"}}
     ) is not None
+    assert build_embedding_provider(
+        {"semantic": {"enabled": True, "provider": "gemini", "allow_remote": True}}
+    ) is not None
+    assert build_embedding_provider(
+        {"semantic": {"enabled": True, "provider": "ollama"}}
+    ) is None
 
 # ======================================================================
 # Indexing

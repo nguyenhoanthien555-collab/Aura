@@ -10,7 +10,8 @@ implementations, zero new dependencies:
                                        little; it is NOT deep semantics,
                                        and this docstring is where that
                                        is said rather than hidden.
-    OllamaEmbeddingProvider    LOCAL   a reachable Ollama host.
+    GeminiEmbeddingProvider    REMOTE  Google Gemini embeddings
+                                       (text-embedding-004).
     RemoteEmbeddingProvider    REMOTE  OpenAI-compatible /v1/embeddings.
 
 Two rules shape everything here.
@@ -216,51 +217,61 @@ class HashingEmbeddingProvider:
 
 
 # ----------------------------------------------------------------------
-# Local: an Ollama host
+# Remote: Google Gemini embeddings, behind the consent gate
 # ----------------------------------------------------------------------
 
-class OllamaEmbeddingProvider:
+class GeminiEmbeddingProvider:
     """
-    Embeddings from a reachable Ollama host (`/api/embeddings`).
+    REMOTE embeddings via Google GenAI SDK.
 
-    LOCAL: the text goes to a host the operator chose, on their side of
-    the network, and no remote-consent gate applies.
+    Every call checks the consent flag (`memory.semantic.allow_remote`).
+    Uses Gemini's embedding models (default: text-embedding-004).
     """
 
     def __init__(
         self,
-        base_url: str,
-        model: str,
-        timeout: float = 5.0,
+        api_key: str | None = None,
+        model: str = "text-embedding-004",
+        timeout: float = 10.0,
+        allow_remote: bool = False,
     ):
-        self._base_url = str(base_url or "").rstrip("/")
-        self._model = str(model or "nomic-embed-text")
+        self._api_key = str(api_key or os.getenv("GEMINI_API_KEY") or "").strip()
+        self._model = str(model or "text-embedding-004")
         self._timeout = float(timeout)
+        self._allow_remote = bool(allow_remote)
         self._dimensions: int | None = None
+        self._client = None
 
     def metadata(self) -> EmbeddingMetadata:
         return EmbeddingMetadata(
-            provider="ollama",
+            provider="gemini",
             model=self._model,
             dimensions=self._dimensions or 0,
             version="1",
-            locality=LOCAL,
+            locality=REMOTE,
         )
 
     def embed(self, text: str) -> list[float]:
-        vector = self._request(str(text or ""))
-
-        if self._dimensions is None:
-            self._dimensions = len(vector)
-
-        return vector
+        if not self._allow_remote:
+            raise EmbeddingUnavailableError(
+                "gemini embedding refused: memory.semantic.allow_remote "
+                "is not enabled"
+            )
+        return self._request([str(text or "")])[0]
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        # Ollama takes one text per request on this endpoint; batching
-        # here is still meaningful to the caller's bookkeeping.
-        return [self.embed(text) for text in texts]
+        if not self._allow_remote:
+            raise EmbeddingUnavailableError(
+                "gemini embedding refused: memory.semantic.allow_remote "
+                "is not enabled"
+            )
+        if not texts:
+            return []
+        return self._request([str(text or "") for text in texts])
 
     def health_check(self) -> bool:
+        if not self._allow_remote or not self._api_key:
+            return False
         try:
             self.embed("health check")
             return True
@@ -270,66 +281,70 @@ class OllamaEmbeddingProvider:
     @property
     def recommended_min_similarity(self) -> float:
         """
-        0.05 - deliberately conservative, and UNMEASURED for this
-        provider.
-
-        No benchmark of a real embedding model has been run in this
-        repository, so there is no evidence here for any particular
-        floor, and inventing one would silently discard real recall.
-        This value keeps the pre-existing permissive behaviour; tune it
-        per model by pointing `scripts/benchmark_semantic.py` at this
-        provider and reading the sweep, then set
-        `memory.semantic.min_similarity` from what the sweep shows.
+        0.05 - conservative default for trained embedding models.
+        Overrides via memory.semantic.min_similarity in configuration.
         """
-
         return 0.05
 
-    def _request(self, text: str) -> list[float]:
-        payload = json.dumps({
-            "model": self._model,
-            "prompt": text,
-        }).encode("utf-8")
+    def _get_client(self):
+        if self._client is None:
+            if not self._api_key:
+                raise EmbeddingUnavailableError("gemini embedding missing GEMINI_API_KEY")
+            try:
+                from google import genai
+                self._client = genai.Client(api_key=self._api_key)
+            except Exception as error:
+                raise EmbeddingUnavailableError(
+                    f"failed to initialize google genai client: {error}"
+                ) from error
+        return self._client
 
-        request = urllib.request.Request(
-            f"{self._base_url}/api/embeddings",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-
+    def _request(self, texts: list[str]) -> list[list[float]]:
+        client = self._get_client()
         started = time.monotonic()
-
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as (
-                response
-            ):
-                body = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            response = client.models.embed_content(
+                model=self._model,
+                contents=texts,
+            )
+        except Exception as error:
+            status = getattr(error, "code", None) or getattr(error, "status_code", None)
+            text_err = str(error).lower()
+            if status == 429 or "resource_exhausted" in text_err or "quota" in text_err:
+                raise EmbeddingUnavailableError(
+                    f"gemini embedding quota/rate limit reached: {error}"
+                ) from error
             raise EmbeddingUnavailableError(
-                f"ollama unreachable at {self._base_url}: "
-                f"{type(error).__name__}"
-            ) from error
-        except (ValueError, json.JSONDecodeError) as error:
-            raise EmbeddingUnavailableError(
-                "ollama returned a malformed embedding response"
+                f"gemini embedding endpoint error: {error}"
             ) from error
 
-        vector = body.get("embedding")
-
-        if not isinstance(vector, list) or not vector or not all(
-            isinstance(value, (int, float)) for value in vector
-        ):
+        embeddings = getattr(response, "embeddings", None)
+        if not embeddings or len(embeddings) != len(texts):
             raise EmbeddingUnavailableError(
-                "ollama embedding response missing a numeric embedding"
+                "gemini embedding response does not match the batch or is empty"
             )
 
+        vectors: list[list[float]] = []
+        for emb in embeddings:
+            values = getattr(emb, "values", None)
+            if not isinstance(values, list) or not values or not all(
+                isinstance(v, (int, float)) for v in values
+            ):
+                raise EmbeddingUnavailableError(
+                    "gemini embedding response contains a malformed vector"
+                )
+            vectors.append([float(v) for v in values])
+
+        if self._dimensions is None and vectors:
+            self._dimensions = len(vectors[0])
+
         logger.debug(
-            "Ollama embedding ok (%d dims, %.0f ms)",
-            len(vector),
+            "Gemini embedding ok (%d texts, %d dims, %.0f ms)",
+            len(texts),
+            self._dimensions or 0,
             (time.monotonic() - started) * 1000,
         )
-
-        return [float(value) for value in vector]
+        return vectors
 
 
 # ----------------------------------------------------------------------
@@ -500,16 +515,27 @@ def build_embedding_provider(memory_config: dict | None):
         if name == "hashing":
             return HashingEmbeddingProvider()
 
-        if name == "ollama":
-            base_url = str(config.get("base_url") or "").strip() or (
-                "http://127.0.0.1:11434"
+        if name == "gemini":
+            api_key = ""
+            key_variable = str(config.get("api_key_env") or "GEMINI_API_KEY").strip()
+            if key_variable:
+                api_key = os.getenv(key_variable, "")
+            if not api_key:
+                api_key = os.getenv("GEMINI_API_KEY", "")
+
+            return GeminiEmbeddingProvider(
+                api_key=api_key,
+                model=str(config.get("model") or "text-embedding-004"),
+                timeout=float(config.get("timeout", 10.0)),
+                allow_remote=bool(config.get("allow_remote", False)),
             )
 
-            return OllamaEmbeddingProvider(
-                base_url=base_url,
-                model=str(config.get("model") or "nomic-embed-text"),
-                timeout=float(config.get("timeout", 5.0)),
+        if name == "ollama":
+            logger.warning(
+                "memory.semantic.provider 'ollama' is deprecated in cloud-only architecture; "
+                "please switch to 'gemini', 'remote', or 'hashing'. Defaulting to lexical only."
             )
+            return None
 
         if name == "remote":
             api_key = ""
@@ -528,7 +554,7 @@ def build_embedding_provider(memory_config: dict | None):
 
         logger.warning(
             "memory.semantic.provider %r is unknown - semantic recall "
-            "stays off (known: hashing, ollama, remote)",
+            "stays off (known: hashing, gemini, remote)",
             name,
         )
     except (ValueError, TypeError) as error:

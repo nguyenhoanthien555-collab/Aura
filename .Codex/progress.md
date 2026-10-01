@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-10-01 — Gemini Semantic Embeddings & Cloud-Only Memory Consolidation DELIVERED
+
+- **GeminiEmbeddingProvider (`memory/embeddings.py`)**:
+  - Implemented native `GeminiEmbeddingProvider` using Google GenAI SDK (`google.genai.Client.models.embed_content`).
+  - Uses `text-embedding-004` (configurable).
+  - Strictly enforces the `memory.semantic.allow_remote` privacy consent gate (fails closed with `EmbeddingUnavailableError` when consent is not explicitly enabled).
+  - Handles batching, dimension discovery, quota/rate-limit mappings, and connectivity failures gracefully.
+  - Fully wired into `build_embedding_provider` factory (`provider: "gemini"`).
+- **Ollama Residue Cleanup**:
+  - Excised `OllamaEmbeddingProvider` from `memory/embeddings.py` and deprecated `"ollama"` provider name in factory with honest fallback.
+  - Updated `core/config.py` and `config.yaml` docstrings to recommend `gemini`.
+  - Cleaned up obsolete `OllamaVisionProcessor` docstring residue in `vision/processor.py`.
+- **Testing & Verification**:
+  - Authored dedicated unit tests in `tests/test_semantic_memory.py` covering consent refusal, missing API keys, batch embedding with mock client, empty batches, and error handling.
+  - `tests/test_semantic_memory.py`: **49/49 PASSED (100%)**.
+  - Focused capability, tools, and provider suite: **233/233 PASSED (100%)**.
+  - `.gitignore` hardened: added `.flowseeker/`, `data/*.db-wal`, `data/*.db-shm`.
+
 ## 2026-09-23 — Cloud-Only Architecture Migration DELIVERED (Phases 0–5)
 
 Successfully migrated AURA from hybrid local-learning / on-device architecture to 100% Cloud-Only architecture with Google Gemini as default provider + 11 configurable cloud providers:

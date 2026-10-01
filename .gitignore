@@ -17,6 +17,8 @@ venv/
 # Aura runtime data
 data/*.db
 data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 # Provider API keys, encrypted at rest (core/credentials.py), and the
 # Control Hub's settings overlay (core/settings_store.py). Neither is
 # source: both are written by the running server from the phone. The
@@ -127,3 +129,4 @@ scratch_p4_prompt.txt
 system.tmp
 tiny.dat
 data/screenshots/
+.flowseeker/
