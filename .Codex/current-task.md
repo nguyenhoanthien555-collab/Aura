@@ -18,6 +18,12 @@
   - `compileDebugKotlin`: BUILD SUCCESSFUL.
   - Android Unit Test Suite (`:app:testDebugUnitTest --rerun-tasks`): BUILD SUCCESSFUL (22/22 tasks executed, 0 failures).
   - Backend regression: 33/33 tests passed 100%.
+- **Trụ cột 5: Đóng gói & Xác thực Trực tiếp Trên Thiết bị Vật lý (Live Hardware `IBCQMB4PTGNZJVTO`)**:
+  - Biên dịch và đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (19.8 MB).
+  - Cài đặt thành công qua ADB Package Manager: `pm install -r -d` -> `Success` (`lastUpdateTime=2026-10-01 23:33:43`).
+  - Đã khởi chạy `MainActivity` (`am start`) vào foreground, PID `25806` hoạt động ổn định.
+  - Cổng reverse tunnel `adb reverse tcp:8000 tcp:8000` sẵn sàng.
+  - Logcat kiểm tra `Aura:V AndroidRuntime:E`: 0 crashes, 0 errors.
 
 ---
 
