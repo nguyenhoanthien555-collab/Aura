@@ -70,10 +70,9 @@ yet implemented.
       (kept, explicitly unwired; the file records what must be true first)
 - [x] AURA-P2-004 `DEEPSEEK_API_KEY` is read by no code (documented as
       having no effect; no DeepSeek provider invented)
-- [ ] AURA-P2-008 three different answers to "which local model"
-      (reported in progress.md; `llm.ollama_model` now exists and holds
-      the value the provider always used. The other qwen values configure
-      the external coding agent, not Aura, and were left alone)
+- [x] AURA-P2-008 three different answers to "which local model" — Superseded
+      by Cloud-Only architecture migration (Ollama removed from AURA runtime;
+      only external coding agent references local Qwen per AGENTS.md)
 - [x] AURA-P2-009 Ollama model selected by a `startswith("gemini")` hack
 - [x] AURA-P2-010 dead `fallback_provider` key reads as authoritative
       (was a LIVE bug: legacy-only config silently produced no failover)
