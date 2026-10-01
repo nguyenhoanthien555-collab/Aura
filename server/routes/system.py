@@ -64,28 +64,40 @@ async def check_integrity() -> Dict[str, Any]:
 @router.get("/telemetry")
 async def host_telemetry() -> Dict[str, Any]:
     """Retrieve comprehensive live host hardware and environment telemetry."""
-    import psutil
+    try:
+        import psutil
+    except ImportError:
+        psutil = None
     from core.hardware_probe import probe_host_environment
     from server.runtime import get_runtime
 
     runtime = get_runtime()
     env = probe_host_environment()
 
-    cpu_percent = psutil.cpu_percent(interval=None)
-    ram = psutil.virtual_memory()
-    disk = psutil.disk_usage(os.path.abspath(os.sep))
+    cpu_percent = psutil.cpu_percent(interval=None) if psutil else 0.0
+    ram = psutil.virtual_memory() if psutil else None
+    try:
+        disk = psutil.disk_usage(os.path.abspath(os.sep)) if psutil else None
+    except Exception:
+        disk = None
 
     battery_info = None
-    try:
-        battery = psutil.sensors_battery()
-        if battery is not None:
-            battery_info = {
-                "percent": round(battery.percent, 1),
-                "power_plugged": battery.power_plugged,
-                "secs_left": battery.secsleft if battery.secsleft != getattr(psutil, "POWER_TIME_UNLIMITED", -1) else -1,
-            }
-    except Exception:
-        pass
+    if psutil:
+        try:
+            battery = psutil.sensors_battery()
+            if battery is not None:
+                battery_info = {
+                    "percent": round(battery.percent, 1),
+                    "power_plugged": battery.power_plugged,
+                    "secs_left": battery.secsleft if battery.secsleft != getattr(psutil, "POWER_TIME_UNLIMITED", -1) else -1,
+                }
+        except Exception:
+            pass
+
+    ram_avail = round(ram.available / (1024**3), 2) if ram else 0.0
+    ram_used_pct = round(ram.percent, 1) if ram else 0.0
+    disk_free = round(disk.free / (1024**3), 2) if disk else 0.0
+    disk_used_pct = round(disk.percent, 1) if disk else 0.0
 
     return {
         "host": {
@@ -96,11 +108,11 @@ async def host_telemetry() -> Dict[str, Any]:
             "cpu_cores": env.cpu_cores_logical,
             "cpu_percent": cpu_percent,
             "ram_total_gb": env.ram_total_gb,
-            "ram_available_gb": round(ram.available / (1024**3), 2),
-            "ram_used_percent": round(ram.percent, 1),
+            "ram_available_gb": ram_avail,
+            "ram_used_percent": ram_used_pct,
             "storage_total_gb": env.primary_storage_total_gb,
-            "storage_free_gb": round(disk.free / (1024**3), 2),
-            "storage_used_percent": round(disk.percent, 1),
+            "storage_free_gb": disk_free,
+            "storage_used_percent": disk_used_pct,
             "gpus": env.gpus,
             "battery": battery_info,
             "uptime_seconds": runtime.uptime,

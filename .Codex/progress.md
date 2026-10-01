@@ -20,6 +20,11 @@
   - Live screenshots captured and visually verified across Chat, Telemetry Sheet, Memory Hub, Diagnostics, and Tools Hub.
   - Android unit test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
   - Python tests: 23/23 targeted tests passed.
+- **Pillar 5: Cloud Container & CI Dependency Resolution (Render & GitHub Actions)**:
+  - Resolved `ModuleNotFoundError: No module named 'psutil'` in CI suite (`tests/test_hardware_probe.py`).
+  - Added `psutil>=5.9.0` to `requirements.txt` and `psutil==7.2.2` to `requirements-server.txt`.
+  - Added graceful try-except import fallback in `core/hardware_probe.py` and `server/routes/system.py` guaranteeing fault-tolerance even if `psutil` is absent.
+  - 100% test pass rate: Python 90 passed / 1 skipped; Android `:app:testDebugUnitTest` 22/22 tasks passed.
 
 ## 2026-10-01 — Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock DELIVERED
 

@@ -16,6 +16,7 @@ sqlalchemy>=2.0.51
 google-genai
 pillow
 pytest
+psutil>=5.9.0
 
 # ----------------------------------------------------------------------
 # Server mode (launcher.py --server, Docker, the Android companion)

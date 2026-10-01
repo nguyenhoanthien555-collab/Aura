@@ -20,6 +20,12 @@
   - Chụp màn hình và xác thực giao diện thực tế trên máy Oppo: Chat, Bottom Sheet, Memory Hub, Diagnostics, và Tools Hub.
   - Android Unit Test Suite: `:app:testDebugUnitTest` BUILD SUCCESSFUL (22/22 tasks passed).
   - Python tests: 23/23 tests passed.
+- **Trụ cột 5: Cloud Container & CI Dependency Resolution (Render & GitHub Actions)**:
+  - Khắc phục `ModuleNotFoundError: No module named 'psutil'` trong CI suite (`tests/test_hardware_probe.py`).
+  - Khai báo bổ sung `psutil>=5.9.0` trong `requirements.txt` và `psutil==7.2.2` trong `requirements-server.txt`.
+  - Tăng cường khả năng chịu lỗi (fault-tolerance) trong `core/hardware_probe.py` và `server/routes/system.py`: tự động fallback an toàn qua `try...except ImportError` và `None` check khi môi trường thiếu `psutil`.
+  - Xác minh vượt qua toàn bộ test: Python 90 passed / 1 skipped; Android `:app:testDebugUnitTest` 22/22 tasks passed.
+
 
 ## Android Companion Cyber-Minimalist Redesign, Bespoke Vector System & Cyber Dock DELIVERED (2026-10-01)
 

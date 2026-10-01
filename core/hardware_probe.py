@@ -15,7 +15,10 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 from core.logger import logger
 
@@ -102,35 +105,49 @@ def probe_host_environment() -> HostEnvironment:
     username = getpass.getuser()
 
     # CPU info
-    cpu_cores_logical = psutil.cpu_count(logical=True) or 1
-    cpu_cores_physical = psutil.cpu_count(logical=False) or 1
+    if psutil is not None:
+        cpu_cores_logical = psutil.cpu_count(logical=True) or 1
+        cpu_cores_physical = psutil.cpu_count(logical=False) or 1
+    else:
+        cpu_cores_logical = os.cpu_count() or 1
+        cpu_cores_physical = 1
     cpu_name = platform.processor() or "Unknown CPU"
 
     # Memory info
-    mem = psutil.virtual_memory()
-    ram_total_gb = round(mem.total / (1024**3), 1)
-    ram_available_gb = round(mem.available / (1024**3), 1)
+    if psutil is not None:
+        mem = psutil.virtual_memory()
+        ram_total_gb = round(mem.total / (1024**3), 1)
+        ram_available_gb = round(mem.available / (1024**3), 1)
+    else:
+        ram_total_gb = 0.0
+        ram_available_gb = 0.0
 
     # Storage info
     primary_drive = "C:\\" if os.name == "nt" else "/"
-    try:
-        disk = psutil.disk_usage(primary_drive)
-        storage_total_gb = round(disk.total / (1024**3), 1)
-        storage_free_gb = round(disk.free / (1024**3), 1)
-    except Exception:
+    if psutil is not None:
+        try:
+            disk = psutil.disk_usage(primary_drive)
+            storage_total_gb = round(disk.total / (1024**3), 1)
+            storage_free_gb = round(disk.free / (1024**3), 1)
+        except Exception:
+            storage_total_gb = 0.0
+            storage_free_gb = 0.0
+    else:
         storage_total_gb = 0.0
         storage_free_gb = 0.0
 
     # Network adapters
-    try:
-        net_addrs = psutil.net_if_addrs()
-        net_stats = psutil.net_if_stats()
-        active_nets = [
-            nic for nic, stat in net_stats.items()
-            if stat.isup and nic in net_addrs and not nic.startswith("Loopback")
-        ]
-    except Exception:
-        active_nets = []
+    active_nets = []
+    if psutil is not None:
+        try:
+            net_addrs = psutil.net_if_addrs()
+            net_stats = psutil.net_if_stats()
+            active_nets = [
+                nic for nic, stat in net_stats.items()
+                if stat.isup and nic in net_addrs and not nic.startswith("Loopback")
+            ]
+        except Exception:
+            active_nets = []
 
     manufacturer = ""
     model = ""
