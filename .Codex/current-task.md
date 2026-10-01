@@ -1,5 +1,38 @@
 # Current task
 
+## Live Web Search, Workspace/Git Pair-Programming & Proactive Context Engine DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Live Web Search & Content Reader (`tools/builtins/web.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:
+  - `WebSearchTool` (`search_web`, capability `web.search`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Tìm kiếm DuckDuckGo Lite keyless zero-config mặc định, trích xuất title, snippet, URL; tự động nâng cấp sang Tavily API khi có key.
+  - `FetchWebContentTool` (`fetch_web_content`, capability `web.fetch`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Phân giải DNS và kiểm tra an toàn SSRF chống pivot mạng nội bộ/loopback, làm sạch các thẻ HTML non-content (`<script>`, `<style>`, `<nav>`, v.v.), chuyển đổi sang Markdown chuẩn, giới hạn độ dài `max_length`.
+  - Hỗ trợ tham số `data: dict` trong `ok()` helper (`tools/base.py`).
+  - Đăng ký capabilities và health checks trong `core/capabilities/factory.py`, thêm vào `_builtin_tools` trong `tools/factory.py`, gắn vào runtime allowlist trong `server/runtime.py`.
+  - Hướng dẫn chi tiết tại Mục 6 trong `prompts/system.md`.
+  - Verified: `tests/test_web_tools.py` (10/10 passed).
+- **Trụ cột 2: Safe Workspace & Git Pair-Programming Tools (`tools/builtins/workspace.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:
+  - `_verify_safe_workspace_path`: Kiểm soát ranh giới nghiêm ngặt, chặn đứng mọi hành vi path traversal (`../`) vượt ra ngoài `PROJECT_ROOT` hoặc các đường dẫn được cấu hình.
+  - `WorkspaceGitStatusTool` (`workspace_git_status`, capability `workspace.git`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Đọc và phân tích nhánh Git, commit gần nhất, thống kê staged changes, unstaged modifications, và untracked files bằng subprocess cách ly với mã hóa UTF-8 an toàn trên Windows.
+  - `WorkspaceGitDiffTool` (`workspace_git_diff`, capability `workspace.git`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Xem diff thay đổi (staged hoặc unstaged, toàn bộ dự án hoặc theo file chỉ định) với giới hạn `max_lines` chống context blowout.
+  - `WorkspaceSearchFilesTool` (`workspace_search_files`, capability `workspace.search`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Tìm kiếm tệp tin theo từ khóa, glob pattern, hoặc extension; tự động bỏ qua thư mục rác (`.git`, `.venv`, `node_modules`, `__pycache__`, `.gradle`, `build`, `.codegraph`).
+  - Hướng dẫn tại Mục 7 trong `prompts/system.md`.
+  - Verified: `tests/test_workspace_tools.py` (10/10 passed).
+- **Trụ cột 3: Proactive Context Engine & Android Hub Integration (`proactive/`, `android/`)**:
+  - Mở rộng `Category` enum: bổ sung `EVENING_RECAP` ("evening_recap") và `GOAL_FOLLOWUP` ("goal_followup").
+  - Mở rộng `ProactiveContext`: bổ sung `daily_topics`, `active_goals`, và `session_duration_seconds`.
+  - `should_proactively_message` trong `proactive/decision.py`: Kích hoạt `EVENING_RECAP` trong khung giờ tối khi có tiến độ trong ngày; kích hoạt `GOAL_FOLLOWUP` khi người dùng vắng mặt sau thời gian làm việc; kích hoạt `WELLBEING` khi làm việc liên tục kéo dài.
+  - `DEFAULT_CATEGORY_COOLDOWN` trong `proactive/policy.py`: Thiết lập cooldown 12h cho recap và 8h cho goal follow-up.
+  - `MessageComposer` trong `proactive/messages.py`: Bộ mẫu câu song ngữ (Vi/En) tự nhiên, tôn trọng persona Aura.
+  - Android Companion Hub (`ProactiveSection.kt`): Bổ sung giao diện thẻ danh mục chủ động ("Proactive Categories & Insights") và thông báo Unprompted Insights.
+  - Verified: `tests/test_proactive_upgrade.py` (8/8 passed). Android Gradle unit tests: BUILD SUCCESSFUL (22 actionable tasks, 0 failures).
+- **Trụ cột 4: Toàn diện Kiểm thử & Bảo toàn Ranh giới (Verification & Invariant Assurance)**:
+  - 100% test pass rate trên các bài test mới: 28/28 passed (`test_web_tools.py`, `test_workspace_tools.py`, `test_proactive_upgrade.py`).
+  - Device Boundary Invariant (`tests/test_device_boundary.py`): 14/14 passed.
+  - Combined suites: 66/66 passed.
+  - Core regression (`test_tools.py`, `test_tool_output_contract.py`, `test_response_verifier.py`, `test_pc_tools.py`): 271 passed, 1 skipped.
+  - Android Gradle suite: 457 unit tests passed (`:app:testDebugUnitTest`).
+
+---
+
 ## Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:

@@ -82,6 +82,20 @@ def _builtin_tools(
     tools.append(RememberFactTool())
     tools.append(ForgetFactTool())
 
+    from tools.builtins.web import FetchWebContentTool, WebSearchTool
+    tools.append(WebSearchTool())
+    tools.append(FetchWebContentTool())
+
+    from tools.builtins.workspace import (
+        WorkspaceGitDiffTool,
+        WorkspaceGitStatusTool,
+        WorkspaceSearchFilesTool,
+    )
+    workspace_roots = _list_setting(config, "allowed_paths")
+    tools.append(WorkspaceGitStatusTool(workspace_roots))
+    tools.append(WorkspaceGitDiffTool(workspace_roots))
+    tools.append(WorkspaceSearchFilesTool(workspace_roots))
+
     roots = _list_setting(config, "allowed_paths")
 
     if roots:

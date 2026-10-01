@@ -63,6 +63,17 @@ TASK = (
     "{task} - want to pick that back up?",
 )
 
+EVENING_RECAP = (
+    "Tổng kết buổi tối: hôm nay chúng ta đã tập trung vào {subject}. Anh đã hoàn thành tốt rồi, nhớ nghỉ ngơi nhé!",
+    "Evening recap: you worked on {subject} today. Great job, make sure to get some rest!",
+    "Hôm nay tiến triển rất tốt với {subject}. Anh có muốn ghi chú gì thêm trước khi kết thúc ngày không?",
+)
+
+GOAL_FOLLOWUP = (
+    "Về mục tiêu '{goal}', tiến độ hôm nay của anh thế nào rồi? Cần tớ hỗ trợ gì thêm không?",
+    "Checking in on your goal '{goal}' - how is that progressing?",
+)
+
 
 def _pick(options: tuple, index: int) -> str:
     """Rotation, deterministic. `index` comes from the caller."""
@@ -124,6 +135,18 @@ class MessageComposer:
                 return ""
 
             return _pick(TASK, rotation).format(task=_shorten(task))
+
+        if category == Category.EVENING_RECAP.value:
+            subject = decision.detail.strip()
+            if not subject:
+                return ""
+            return _pick(EVENING_RECAP, rotation).format(subject=_shorten(subject))
+
+        if category == Category.GOAL_FOLLOWUP.value:
+            goal = decision.detail.strip()
+            if not goal:
+                return ""
+            return _pick(GOAL_FOLLOWUP, rotation).format(goal=_shorten(goal))
 
         return ""
 

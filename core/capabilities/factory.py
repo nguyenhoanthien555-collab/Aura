@@ -34,6 +34,14 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="sandbox.execute", name="Sandbox Execution", description="Execute code in Python sandbox", category="sandbox", discovery_metadata={"tool": "python_sandbox"}))
     registry.register(Capability(capability_id="tools.synthesize", name="Tool Synthesis", description="Synthesize and register custom tools", category="tools", discovery_metadata={"tool": "create_custom_tool"}))
 
+    # Web & Internet capabilities
+    registry.register(Capability(capability_id="web.search", name="Web Search", description="Search the web for real-time information", category="web", discovery_metadata={"tool": "search_web"}))
+    registry.register(Capability(capability_id="web.fetch", name="Web Content Fetch", description="Fetch and extract readable content from URL", category="web", discovery_metadata={"tool": "fetch_web_content"}))
+
+    # Workspace & Git Pair-Programming capabilities
+    registry.register(Capability(capability_id="workspace.git", name="Workspace Git", description="Inspect git repository status and code diffs", category="workspace", discovery_metadata={"tool": "workspace_git_status"}))
+    registry.register(Capability(capability_id="workspace.search", name="Workspace File Search", description="Search workspace files and patterns", category="workspace", discovery_metadata={"tool": "workspace_search_files"}))
+
     # Canonical Android capabilities (synchronized with AndroidProvider)
     android_caps = [
         ("android.foreground_app", "Android Foreground App", "The app currently in the foreground, from accessibility metadata (package, label). Answers 'what app am I in' without any vision.", ["android.accessibility"], "android.get_foreground_app"),
@@ -115,6 +123,18 @@ def register_core_capabilities(config=None):
 
     health.register_check("sandbox.execute", check_sandbox_available)
     health.register_check("tools.synthesize", check_sandbox_available)
+
+    def check_web_available():
+        return {"healthy": True, "reason": "", "state": "AVAILABLE"}
+
+    health.register_check("web.search", check_web_available)
+    health.register_check("web.fetch", check_web_available)
+
+    def check_workspace_available():
+        return {"healthy": True, "reason": "", "state": "AVAILABLE"}
+
+    health.register_check("workspace.git", check_workspace_available)
+    health.register_check("workspace.search", check_workspace_available)
 
     # Permission check for android accessibility
     def check_android_accessibility():

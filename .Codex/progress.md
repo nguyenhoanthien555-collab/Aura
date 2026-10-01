@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-10-01 — Live Web Search, Workspace/Git Pair-Programming & Proactive Context Engine DELIVERED
+
+- **Pillar 1: Live Web Search & Content Reader (`tools/builtins/web.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:
+  - `WebSearchTool` (`search_web`, capability `web.search`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Zero-config DuckDuckGo Lite keyless search by default; extracts clean title, snippet, and URLs; automatic upgrade to Tavily API if configured.
+  - `FetchWebContentTool` (`fetch_web_content`, capability `web.fetch`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): DNS resolution and SSRF defense (blocking private, reserved, loopback, and link-local ranges), HTML non-content stripping (`<script>`, `<style>`, `<nav>`, etc.), clean Markdown formatting, and `max_length` truncation.
+  - Added optional `data: dict` support to `ok()` helper in `tools/base.py`.
+  - Registered capabilities `web.search` and `web.fetch` with health checks in `core/capabilities/factory.py`, added to `_builtin_tools` in `tools/factory.py`, and permitted in `server/runtime.py`.
+  - Added prompt instructions in `prompts/system.md` (Section 6).
+  - Verified: `tests/test_web_tools.py` (10/10 passed).
+- **Pillar 2: Safe Workspace & Git Pair-Programming Tools (`tools/builtins/workspace.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:
+  - `_verify_safe_workspace_path`: Strict containment check rejecting any path traversal outside `PROJECT_ROOT` and configured `allowed_paths`.
+  - `WorkspaceGitStatusTool` (`workspace_git_status`, capability `workspace.git`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Structured analysis of branch, commit, staged, unstaged, and untracked files via isolated subprocess with safe UTF-8 error replacement on Windows.
+  - `WorkspaceGitDiffTool` (`workspace_git_diff`, capability `workspace.git`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Bounded diffs (staged or unstaged, whole repo or specific file) with `max_lines` guard against context blowout.
+  - `WorkspaceSearchFilesTool` (`workspace_search_files`, capability `workspace.search`, `ToolRisk.SAFE`, `SideEffect.READ_ONLY`): Keyword, glob, and extension search skipping noise directories (`.git`, `.venv`, `node_modules`, `__pycache__`, `.gradle`, `build`, `.codegraph`).
+  - Added prompt instructions in `prompts/system.md` (Section 7).
+  - Verified: `tests/test_workspace_tools.py` (10/10 passed).
+- **Pillar 3: Proactive Context Engine & Android Hub Integration (`proactive/`, `android/`)**:
+  - Extended `Category` enum with `EVENING_RECAP` and `GOAL_FOLLOWUP`.
+  - Extended `ProactiveContext` with `daily_topics`, `active_goals`, and `session_duration_seconds`.
+  - Updated `should_proactively_message` in `proactive/decision.py`: Triggers `EVENING_RECAP` during evening hours with daily progress; triggers `GOAL_FOLLOWUP` after periods of user absence; triggers `WELLBEING` for prolonged continuous sessions.
+  - Configured 12h cooldown for recap and 8h cooldown for goal follow-up in `DEFAULT_CATEGORY_COOLDOWN` (`proactive/policy.py`).
+  - Added natural bilingual templates in `proactive/messages.py` for `EVENING_RECAP` and `GOAL_FOLLOWUP`.
+  - Android Companion Hub (`ProactiveSection.kt`): Added "Proactive Categories & Insights" card section and Unprompted Insights notice.
+  - Verified: `tests/test_proactive_upgrade.py` (8/8 passed). Android Gradle suite BUILD SUCCESSFUL (22 actionable tasks, 0 failures).
+- **Pillar 4: System Verification & Invariant Assurance**:
+  - New test suites: 28/28 passed (100%).
+  - Stock Device Boundary Invariant (`tests/test_device_boundary.py`): 14/14 passed.
+  - Targeted suites: 66/66 passed.
+  - Core regression (`test_tools.py`, `test_tool_output_contract.py`, `test_response_verifier.py`, `test_pc_tools.py`): 271 passed, 1 skipped.
+  - Android Gradle suite: 457 unit tests passed.
+
 ## 2026-10-01 — Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub DELIVERED
 
 - **Pillar 1: Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:

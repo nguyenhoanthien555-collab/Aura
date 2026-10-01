@@ -48,6 +48,8 @@ DEFAULT_CATEGORY_COOLDOWN = {
     Category.APPRECIATION.value: 24 * 3600.0,
     Category.WELLBEING.value: 12 * 3600.0,
     Category.TASK.value: 4 * 3600.0,
+    Category.EVENING_RECAP.value: 12 * 3600.0,
+    Category.GOAL_FOLLOWUP.value: 8 * 3600.0,
 }
 
 # The closed set, derived from the one authority on it rather than

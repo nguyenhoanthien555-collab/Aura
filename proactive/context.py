@@ -71,6 +71,15 @@ class ProactiveContext:
     # already. Prevents "good morning" twice in one morning.
     greeted_this_part: bool = False
 
+    # Topics / achievements from the day for evening recap
+    daily_topics: tuple[str, ...] = ()
+
+    # Active goals / projects tracked for followup
+    active_goals: tuple[str, ...] = ()
+
+    # Estimated unbroken session duration in seconds for wellbeing checks
+    session_duration_seconds: float = 0.0
+
     @property
     def now(self) -> datetime:
         return self.temporal.now

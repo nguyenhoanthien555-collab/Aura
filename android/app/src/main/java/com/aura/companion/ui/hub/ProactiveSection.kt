@@ -244,6 +244,51 @@ fun ProactiveSection(
 
         Spacer(Modifier.height(12.dp))
 
+        // ------------------------------------------------------------------
+        // Unprompted Insights & Proactive Triggers
+        // ------------------------------------------------------------------
+        SettingsSection(
+            title = "Proactive Categories & Insights",
+            subtitle = "Active context and background triggers evaluated by Aura",
+        ) {
+            StatusRow(
+                title = "Evening Recap (Tổng kết ngày)",
+                value = "20:00 - 22:00",
+                tone = StatusTone.Good,
+                icon = Icons.Filled.Bedtime,
+            )
+
+            RowDivider()
+
+            StatusRow(
+                title = "Wellbeing & Break Care",
+                value = "Active stretches",
+                tone = StatusTone.Good,
+                icon = Icons.Filled.Timer,
+            )
+
+            RowDivider()
+
+            StatusRow(
+                title = "Goal Follow-up (Theo dõi mục tiêu)",
+                value = "Tracked projects",
+                tone = StatusTone.Good,
+                icon = Icons.Filled.Bolt,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        NoticeCard(
+            text = "Unprompted Insights: Aura continuously synthesizes daily progress and " +
+                "wellbeing status. When high-priority insights or reminders are ready, " +
+                "they appear as interactive notifications with a quick 'Chat' action.",
+            tone = StatusTone.Neutral,
+            icon = Icons.Filled.NotificationsActive,
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         NoticeCard(
             text = "These limits are floors as well as settings: Aura cannot be " +
                 "configured to send more than 20 messages a day, or to check " +

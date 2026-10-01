@@ -114,7 +114,9 @@ class ServerRuntime:
             "android.type_text", "android.press_key", "android.back", "android.home",
             "android.launch_app", "android.wait_for", "android.verify",
             "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware",
-            "open_url", "remember_fact", "forget_fact"
+            "open_url", "remember_fact", "forget_fact",
+            "search_web", "fetch_web_content",
+            "workspace_git_status", "workspace_git_diff", "workspace_search_files"
         ]:
             if android_tool_name not in allowed:
                 allowed.append(android_tool_name)

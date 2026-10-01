@@ -259,8 +259,8 @@ class ToolResult:
         return json.dumps(structured)
 
 
-def ok(output: str = "", tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "completed", status: str = "", side_effect: str = "") -> ToolResult:
-    return ToolResult(ok=True, output=output, tool=tool, capability=capability, authorization=authorization, execution=execution, status=status or ToolStatus.SUCCESS.value, side_effect=side_effect)
+def ok(output: str = "", tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "completed", status: str = "", side_effect: str = "", data: dict | None = None) -> ToolResult:
+    return ToolResult(ok=True, output=output, tool=tool, capability=capability, authorization=authorization, execution=execution, status=status or ToolStatus.SUCCESS.value, side_effect=side_effect, data=data or {})
 
 
 def fail(error: str, tool: str = "", capability: str = "unknown", authorization: str = "granted", execution: str = "not_attempted", status: str = "", error_code: str = "", side_effect: str = "", evidence: tuple = ()) -> ToolResult:

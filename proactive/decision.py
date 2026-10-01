@@ -44,6 +44,8 @@ class Category(str, Enum):
     APPRECIATION = "appreciation"
     WELLBEING = "wellbeing"
     TASK = "task"
+    EVENING_RECAP = "evening_recap"
+    GOAL_FOLLOWUP = "goal_followup"
 
 
 # How long the user must have been away before a greeting is a greeting
@@ -172,17 +174,41 @@ def should_proactively_message(context: ProactiveContext) -> ProactiveDecision:
             detail=context.relevant_memories[0],
         )
 
+    # Evening recap: summary of achievements and topics when winding down the day
+    if (
+        context.daily_topics
+        and context.part_of_day in ("evening", "night")
+        and since_user >= 1800
+    ):
+        return ProactiveDecision(
+            send=True,
+            reason=f"evening recap window ({context.part_of_day}) + daily progress to summarize",
+            category=Category.EVENING_RECAP.value,
+            priority=Priority.LOW,
+            detail=context.daily_topics[0],
+        )
+
+    # Goal followup: check in on ongoing goals when user has stepped away
+    if context.active_goals and since_user >= 3600:
+        return ProactiveDecision(
+            send=True,
+            reason=f"goal followup: checking in on '{context.active_goals[0]}'",
+            category=Category.GOAL_FOLLOWUP.value,
+            priority=Priority.LOW,
+            detail=context.active_goals[0],
+        )
+
     # Wellbeing, last and most throttled. Fires on a long stretch of
     # continuous presence, which is why it reads `last_user_message_at`
     # as a session start rather than an absence.
     if (
         context.last_user_message_at is not None
         and ACTIVE_CONVERSATION_SECONDS <= since_user < GREETING_AWAY_SECONDS
-        and context.temporal.part_of_day == "night"
+        and (context.temporal.part_of_day == "night" or context.session_duration_seconds >= WELLBEING_SESSION_SECONDS)
     ):
         return ProactiveDecision(
             send=True,
-            reason="late night + active session + wellbeing cooldown satisfied",
+            reason="active session + wellbeing check",
             category=Category.WELLBEING.value,
             priority=Priority.LOW,
         )
