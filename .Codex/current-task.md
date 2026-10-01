@@ -1,5 +1,26 @@
 # Current task
 
+## Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:
+  - `CompanionGoalSource` (`proactive/goals.py`): Kết nối trực tiếp vào `CompanionMemory` và `GoalStore`, trích xuất các mục tiêu đang kích hoạt (`priority in ("now", "soon")`), phục vụ nhánh nhắc nhở `GOAL_FOLLOWUP`. Xử lý lỗi an toàn không làm crash tiến trình.
+  - `DailyTopicSource` (`proactive/topics.py`): Thu thập chủ đề và tiến độ công việc trong ngày từ 3 nguồn theo thứ tự ưu tiên: Highlights trong ngày của Companion, Episodic memories diễn ra hôm nay (`category in ("project", "plan", "event", "learning")`), và các lượt chat đáng chú ý trong ngày từ `messages` table. Phục vụ nhánh tổng kết `EVENING_RECAP`.
+  - Đo lường và tích luỹ `session_duration_seconds` liên tục từ thời điểm tương tác chat đầu tiên trong `note_chat()`, giải quyết điều kiện kích hoạt `WELLBEING` khi làm việc liên tục kéo dài.
+  - Đấu nối toàn diện vào `_build_proactive()` trong composition root (`launcher/services.py`), truyền `companion` instance thực tế vào bộ máy proactive.
+  - Verified: `tests/test_proactive_upgrade.py` (12/12 passed bao gồm test nguồn, gathering layer và composition root wiring).
+- **Trụ cột 2: Bền vững hoá Bảng Companion Memory SQLite (`memory/sqlite.py`, `memory/companion_sqlite.py`)**:
+  - Bổ sung hàm khởi tạo bảng idempotent `init_companion_tables()` cho `CompanionMemoryRecord` trong `memory/sqlite.py`.
+  - Tự động gọi `init_companion_tables()` khi khởi tạo `build_sqlite_companion_stores()`, loại bỏ nguy cơ `OperationalError: no such table: companion_memory`.
+- **Trụ cột 3: Chat History & Full Memory Backup Export API (`server/routes/chat.py`, `server/routes/memory.py`)**:
+  - `GET /api/chat/history`: Endpoint truy vấn lịch sử hội thoại có phân trang (`limit`, `offset`, `session_id`, `order="asc"|"desc"`), trả về danh sách tin nhắn cùng tổng số lượng.
+  - `GET /api/memory/export`: Endpoint xuất dữ liệu sao lưu toàn diện: UserFacts, Entity Knowledge Graph (`entities`, `relations`, `stats`), Episodic Memories, Companion Records (goals, projects, style, highlights), và tuỳ chọn `include_messages=true` để xuất toàn bộ transcript.
+  - Verified: `tests/test_memory_api.py` (5/5 passed).
+- **Trụ cột 4: Toàn diện Kiểm thử & Xác minh Tính đúng đắn (Regression Verification)**:
+  - 177 unit tests passed 100% không lỗi (`test_memory_api.py`, `test_proactive_upgrade.py`, `test_proactive.py`, `test_device_boundary.py`, `test_web_tools.py`, `test_workspace_tools.py`).
+  - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks up-to-date, 0 failures).
+
+---
+
 ## Live Web Search, Workspace/Git Pair-Programming & Proactive Context Engine DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Live Web Search & Content Reader (`tools/builtins/web.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:

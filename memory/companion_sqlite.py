@@ -31,7 +31,7 @@ from memory.companion import (
     Project,
 )
 from memory.models import CompanionMemoryRecord, timestamp_now
-from memory.sqlite import SessionLocal, db_lock
+from memory.sqlite import SessionLocal, db_lock, init_companion_tables
 
 
 def _tuple(value) -> tuple:
@@ -257,6 +257,7 @@ class SqliteHighlights(_KindStore):
 
 def build_sqlite_companion_stores() -> dict:
     """The six durable stores, ready to hand to CompanionMemory(**stores)."""
+    init_companion_tables()
     return {
         "facts": SqliteFacts(),
         "preferences": SqlitePreferences(),

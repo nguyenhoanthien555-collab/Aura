@@ -3,7 +3,7 @@ Chat endpoints (non-streaming).
 """
 import time
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 from server.runtime import get_runtime
 from server.session import session_manager
@@ -138,3 +138,57 @@ async def delete_session(session_id: str, token: str = Depends(verify_token)):
     if session_manager.delete_session(session_id):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.get("/chat/history")
+def get_chat_history(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session_id: str | None = None,
+    order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    token: str = Depends(verify_token),
+) -> dict:
+    """
+    Get conversation transcript history.
+    """
+    from sqlalchemy import func, select
+    from memory.models import Message
+    from memory.sqlite import SessionLocal, db_lock
+
+    with db_lock:
+        session = SessionLocal()
+        try:
+            stmt = select(Message)
+            if session_id:
+                stmt = stmt.where(Message.session_id == session_id)
+
+            count_stmt = select(func.count(Message.id))
+            if session_id:
+                count_stmt = count_stmt.where(Message.session_id == session_id)
+            total = session.scalar(count_stmt) or 0
+
+            if order == "desc":
+                stmt = stmt.order_by(Message.id.desc())
+            else:
+                stmt = stmt.order_by(Message.id.asc())
+
+            stmt = stmt.offset(offset).limit(limit)
+            rows = session.execute(stmt).scalars().all()
+
+            return {
+                "messages": [
+                    {
+                        "id": m.id,
+                        "role": m.role,
+                        "content": m.content,
+                        "timestamp": m.timestamp,
+                        "session_id": m.session_id,
+                    }
+                    for m in rows
+                ],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        finally:
+            session.close()

@@ -1,5 +1,32 @@
 # AURA project state
 
+## Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export (2026-10-01)
+1. **Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:
+   - `CompanionGoalSource` (`proactive/goals.py`): Extracting active goals (`priority in ("now", "soon")`) from `CompanionMemory` to trigger `GOAL_FOLLOWUP`.
+   - `DailyTopicSource` (`proactive/topics.py`): Multi-tier daily topic harvesting from Companion highlights, Episodic store (`category in ("project", "plan", "event", "learning")`), and today's transcript messages to trigger `EVENING_RECAP`.
+   - Real-time `session_duration_seconds` tracking starting from first user message in `note_chat()`.
+   - Composition root wiring in `launcher/services.py:build_services` passing real `companion` to `_build_proactive()`.
+2. **Durable SQLite Companion Memory Tables (`memory/sqlite.py`, `memory/companion_sqlite.py`)**:
+   - Additive idempotent `init_companion_tables()` for `CompanionMemoryRecord`.
+   - Guaranteed table readiness via `build_sqlite_companion_stores()`.
+3. **Chat History & Full Memory Backup Export API (`server/routes/chat.py`, `server/routes/memory.py`)**:
+   - `GET /api/chat/history`: Paginated conversation transcript retrieval (`limit`, `offset`, `session_id`, `order`).
+   - `GET /api/memory/export`: Complete JSON export of UserFacts, Entity Knowledge Graph, Episodic memories, Companion records, and transcripts (`include_messages=true`).
+4. **Testing & Verification**:
+   - 177 Python unit tests passed across proactive, memory, tools, and boundary suites in 38.20s.
+   - Stock Device Boundary Invariant (`tests/test_device_boundary.py`): 14/14 passed.
+   - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
+
+## Live Web Search, Workspace/Git Pair-Programming & Proactive Context Engine (2026-10-01)
+1. **Live Web Search & Content Reader (`tools/builtins/web.py`)**:
+   - `WebSearchTool` (`search_web`, `web.search`): Zero-config DuckDuckGo Lite keyless search by default; Tavily API fallback.
+   - `FetchWebContentTool` (`fetch_web_content`, `web.fetch`): SSRF protection, clean Markdown formatting.
+2. **Safe Workspace & Git Pair-Programming Tools (`tools/builtins/workspace.py`)**:
+   - `WorkspaceGitStatusTool` (`workspace_git_status`), `WorkspaceGitDiffTool` (`workspace_git_diff`), `WorkspaceSearchFilesTool` (`workspace_search_files`).
+3. **Proactive Categories & Android Hub Integration (`proactive/`, `android/`)**:
+   - `Category.EVENING_RECAP` and `Category.GOAL_FOLLOWUP`, cooldown policies, bilingual message templates.
+   - Android Companion Hub UI (`ProactiveSection.kt`).
+
 ## Deep Entity Knowledge Graph & Android Companion Transparent Memory Hub (2026-10-01)
 1. **Deep Entity Knowledge Graph Store & Schema (`memory/models.py`, `memory/graph.py`, `memory/sqlite.py`)**:
    - `EntityNode` (`entity_nodes`) and `EntityRelation` (`entity_relations`) models with composite unique constraints on `(source_id, relation, target_id)`.

@@ -273,3 +273,18 @@ def init_graph_tables(bind=None):
         ],
     )
 
+
+def init_companion_tables(bind=None):
+    """
+    Create companion memory tables (CompanionMemoryRecord), if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            CompanionMemoryRecord.__table__,
+        ],
+    )
+
+

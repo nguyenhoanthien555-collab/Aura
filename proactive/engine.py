@@ -60,6 +60,8 @@ class ProactiveEngine:
         pending_tasks=None,
         memories=None,
         last_user_message=None,
+        active_goals=None,
+        daily_topics=None,
     ):
         self.policy = policy or ProactivePolicy()
         self.composer = composer or MessageComposer()
@@ -78,7 +80,15 @@ class ProactiveEngine:
         # restart stops reading as "away forever" (sections 8, 19, 21).
         self.last_user_message = last_user_message
 
+        # Sources for the extended proactive categories. Same contract as
+        # pending_tasks: callable returning a sequence or None, failures
+        # produce silence. `active_goals` feeds GOAL_FOLLOWUP;
+        # `daily_topics` feeds EVENING_RECAP.
+        self.active_goals_source = active_goals
+        self.daily_topics_source = daily_topics
+
         self._last_user_message_at = None
+        self._session_started_at: datetime | None = None
         self._rotation = 0
 
     # ------------------------------------------------------------------
@@ -88,7 +98,10 @@ class ProactiveEngine:
     def note_chat(self) -> None:
         """The user just said something. Called by the chat path."""
 
-        self._last_user_message_at = self.clock.now()
+        now = self.clock.now()
+        if self._session_started_at is None:
+            self._session_started_at = now
+        self._last_user_message_at = now
 
     # ------------------------------------------------------------------
 
@@ -102,6 +115,13 @@ class ProactiveEngine:
 
         temporal = self.clock.context()
 
+        # Session duration: how long since the first note_chat() in this
+        # process. Zero when no chat has happened, which is correct - a
+        # process that has never spoken to anyone has no session to check.
+        session_secs = 0.0
+        if self._session_started_at is not None:
+            session_secs = (temporal.now - self._session_started_at).total_seconds()
+
         return ProactiveContext(
             temporal=temporal,
             last_user_message_at=self._presence(),
@@ -112,6 +132,9 @@ class ProactiveEngine:
             sent_today=self.policy.sent_today(temporal.now),
             recent_messages=self.policy.recent_messages(),
             greeted_this_part=self._greeted_this_part(temporal),
+            daily_topics=self._gather_daily_topics(),
+            active_goals=self._gather_active_goals(),
+            session_duration_seconds=session_secs,
         )
 
     def _presence(self) -> datetime | None:
@@ -180,6 +203,41 @@ class ProactiveEngine:
             return tuple(str(line) for line in (self.memories() or []) if line)
         except Exception as error:
             logger.warning("Memory source failed: %s", error)
+            return ()
+
+    def _gather_daily_topics(self) -> tuple:
+        """
+        Topics discussed today, for the evening recap.
+
+        Same contract as _gather_tasks: the source is a callable that
+        returns an iterable of strings or None, and a failure is silence.
+        """
+
+        if self.daily_topics_source is None:
+            return ()
+
+        try:
+            topics = self.daily_topics_source() or []
+            return tuple(str(t) for t in topics if t)
+        except Exception as error:
+            logger.warning("Daily topics source failed: %s", error)
+            return ()
+
+    def _gather_active_goals(self) -> tuple:
+        """
+        Active goals the user is working on, for goal followup.
+
+        Same contract: callable → iterable of strings → tuple, or silence.
+        """
+
+        if self.active_goals_source is None:
+            return ()
+
+        try:
+            goals = self.active_goals_source() or []
+            return tuple(str(g) for g in goals if g)
+        except Exception as error:
+            logger.warning("Active goals source failed: %s", error)
             return ()
 
     # ------------------------------------------------------------------
@@ -294,6 +352,8 @@ def build_proactive_engine(
     clock: TemporalClock | None = None,
     ledger=None,
     last_user_message=None,
+    active_goals=None,
+    daily_topics=None,
 ) -> ProactiveEngine:
     """
     Composition helper.
@@ -325,4 +385,6 @@ def build_proactive_engine(
         pending_tasks=pending_tasks,
         memories=memories,
         last_user_message=last_user_message,
+        active_goals=active_goals,
+        daily_topics=daily_topics,
     )

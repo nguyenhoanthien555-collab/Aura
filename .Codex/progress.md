@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-10-01 — Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export DELIVERED
+
+- **Pillar 1: Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:
+  - `CompanionGoalSource` (`proactive/goals.py`): Connects directly to `CompanionMemory` and `GoalStore` (`active(limit)`), extracting active goals (`priority in ("now", "soon")`) to feed the `GOAL_FOLLOWUP` proactive trigger.
+  - `DailyTopicSource` (`proactive/topics.py`): Multi-tiered gathering for `EVENING_RECAP` checking: (1) Companion highlights recorded today, (2) Episodic memories occurred today (`category in ("project", "plan", "event", "learning")`), (3) Notable user messages from transcript today.
+  - Monotonic `session_duration_seconds` tracking calculated from first `note_chat()` interaction, satisfying the `WELLBEING` long-session check.
+  - Composition root wiring: `launcher/services.py` passes `companion` to `_build_proactive()`, constructing real `CompanionGoalSource` and `DailyTopicSource`.
+  - Verified: `tests/test_proactive_upgrade.py` (12/12 passed).
+- **Pillar 2: Durable SQLite Companion Memory Tables (`memory/sqlite.py`, `memory/companion_sqlite.py`)**:
+  - Added additive idempotent `init_companion_tables()` creating `CompanionMemoryRecord` in `memory/sqlite.py`.
+  - Automatically invoked on `build_sqlite_companion_stores()`, eliminating table initialization drift.
+- **Pillar 3: Chat History & Full Memory Backup Export API (`server/routes/chat.py`, `server/routes/memory.py`)**:
+  - `GET /api/chat/history`: Paginated conversation transcript retrieval (`limit`, `offset`, `session_id`, `order="asc"|"desc"`), returning messages list and total message count.
+  - `GET /api/memory/export`: Comprehensive JSON backup export covering UserFacts, Entity Knowledge Graph (`entities`, `relations`, `stats`), Episodic Memories, Companion Records (goals, projects, style, highlights), and full transcript with `include_messages=true`.
+  - Verified: `tests/test_memory_api.py` (5/5 passed).
+- **Pillar 4: System Verification & Regression**:
+  - 177 Python unit tests passed across proactive, memory, tools, and boundary suites in 38.20s.
+  - Stock Device Boundary Invariant (`tests/test_device_boundary.py`): 14/14 passed.
+  - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
+
 ## 2026-10-01 — Live Web Search, Workspace/Git Pair-Programming & Proactive Context Engine DELIVERED
 
 - **Pillar 1: Live Web Search & Content Reader (`tools/builtins/web.py`, `core/capabilities/factory.py`, `tools/factory.py`, `server/runtime.py`)**:

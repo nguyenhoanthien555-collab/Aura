@@ -109,3 +109,55 @@ def test_memory_graph_and_overview(auth_client):
     res_purge = client.post("/api/memory/purge", json={"target": "graph"}, headers=headers)
     assert res_purge.status_code == 200
     assert res_purge.json()["purged"] == "graph"
+
+
+def test_memory_export_endpoint(auth_client):
+    client, headers = auth_client
+
+    # 1. Seed a fact
+    client.post(
+        "/api/memory/facts",
+        json={"key": "export_test_key", "value": "export_value", "category": "profile"},
+        headers=headers,
+    )
+
+    # 2. Call export
+    res = client.get("/api/memory/export?include_messages=true", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["version"] == "1.0"
+    assert "facts" in data
+    assert any(f["key"] == "export_test_key" for f in data["facts"])
+    assert "graph" in data
+    assert "episodes" in data
+    assert "companion" in data
+    assert "counts" in data
+    assert data["counts"]["facts"] >= 1
+
+
+def test_chat_history_endpoint(auth_client):
+    client, headers = auth_client
+    from memory.models import Message
+    from memory.sqlite import SessionLocal, db_lock
+
+    # Insert a test message
+    with db_lock:
+        session = SessionLocal()
+        try:
+            session.add(
+                Message(
+                    role="user",
+                    content="Hello from test_chat_history",
+                    session_id="test_hist_session",
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+    res = client.get("/api/chat/history?session_id=test_hist_session", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] >= 1
+    assert any(m["content"] == "Hello from test_chat_history" for m in data["messages"])
+

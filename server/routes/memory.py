@@ -7,6 +7,8 @@ Entity Knowledge Graph, and Episodic Memories.
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,7 +20,7 @@ from memory.graph import EntityGraphStore
 from memory.models import EpisodicMemory, UserFact
 from memory.profile import ProfileStore, normalise_key
 from memory.sanitizer import SensitiveDataSanitizer
-from memory.sqlite import SessionLocal, db_lock, init_pipeline_tables, init_graph_tables
+from memory.sqlite import SessionLocal, db_lock, init_pipeline_tables, init_graph_tables, init_companion_tables
 from server.auth import verify_token
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
@@ -359,3 +361,99 @@ def purge_memories(
 
     logger.info("Purged memories with target=%s, category=%s", target, req.category)
     return {"ok": True, "purged": target, "category": req.category}
+
+
+@router.get("/export")
+def export_memory(
+    include_messages: bool = Query(default=False),
+    include_companion: bool = Query(default=True),
+    token: str = Depends(verify_token),
+) -> dict[str, Any]:
+    """
+    Export all memory stores for backup, transparency, or migration.
+    """
+    profile = get_profile_store()
+    graph = get_graph_store()
+
+    facts = [
+        {"key": f.key, "value": f.value, "category": f.category, "updated_at": f.updated_at}
+        for f in profile.all()
+    ]
+
+    graph_data = {
+        "entities": graph.list_entities(limit=1000),
+        "relations": graph.list_relations(limit=2000),
+        "stats": graph.stats(),
+    }
+
+    with db_lock:
+        session = SessionLocal()
+        try:
+            episodes = [
+                {
+                    "id": ep.id,
+                    "content": ep.content,
+                    "category": ep.category,
+                    "source": ep.source,
+                    "importance": ep.importance,
+                    "confidence": ep.confidence,
+                    "occurred_at": ep.occurred_at,
+                    "created_at": ep.created_at,
+                }
+                for ep in session.execute(
+                    select(EpisodicMemory).order_by(EpisodicMemory.occurred_at.asc())
+                ).scalars().all()
+            ]
+
+            companion_data: dict[str, list[dict[str, Any]]] = {}
+            if include_companion:
+                init_companion_tables()
+                from memory.models import CompanionMemoryRecord
+
+                records = session.execute(select(CompanionMemoryRecord)).scalars().all()
+                for r in records:
+                    companion_data.setdefault(r.kind, []).append({
+                        "key": r.key,
+                        "payload": json.loads(r.payload or "{}"),
+                        "updated_at": r.updated_at,
+                    })
+
+            messages_data = None
+            total_messages = 0
+            from memory.models import Message
+
+            total_messages = session.scalar(select(func.count(Message.id))) or 0
+            if include_messages:
+                msg_rows = session.execute(
+                    select(Message).order_by(Message.id.asc())
+                ).scalars().all()
+                messages_data = [
+                    {
+                        "id": m.id,
+                        "role": m.role,
+                        "content": m.content,
+                        "timestamp": m.timestamp,
+                        "session_id": m.session_id,
+                    }
+                    for m in msg_rows
+                ]
+
+            return {
+                "version": "1.0",
+                "exported_at": datetime.now().isoformat(),
+                "facts": facts,
+                "graph": graph_data,
+                "episodes": episodes,
+                "companion": companion_data,
+                "messages": messages_data,
+                "counts": {
+                    "facts": len(facts),
+                    "entities": len(graph_data.get("entities", [])),
+                    "relations": len(graph_data.get("relations", [])),
+                    "episodes": len(episodes),
+                    "messages": total_messages,
+                },
+            }
+        finally:
+            session.close()
+

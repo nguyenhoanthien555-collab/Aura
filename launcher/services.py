@@ -160,7 +160,7 @@ def build_services(
     )
 
     # After the pipeline, which is where its pending work comes from.
-    proactive = _build_proactive(config, bus, pipeline, clock, memory)
+    proactive = _build_proactive(config, bus, pipeline, clock, memory, companion=companion)
 
     tts = _build_tts(config, bus)
 
@@ -400,7 +400,7 @@ def _build_pipeline(config: dict, memory, clock):
     return pipeline
 
 
-def _build_proactive(config: dict, bus, pipeline, clock, memory):
+def _build_proactive(config: dict, bus, pipeline, clock, memory, companion=None):
     """
     The proactive engine.
 
@@ -422,23 +422,31 @@ def _build_proactive(config: dict, bus, pipeline, clock, memory):
     fire in a real process however well its own tests passed.
     """
 
-    from proactive import build_proactive_engine
+    from proactive import (
+        CompanionGoalSource,
+        DailyTopicSource,
+        build_proactive_engine,
+    )
     from proactive.ledger import SendLedger
     from proactive.memories import EpisodicMemorySource
     from proactive.tasks import EpisodicTaskSource
 
     tasks = None
     memories = None
+    episodic_store = None
 
     if pipeline is not None:
-        tasks = EpisodicTaskSource(pipeline.episodic, clock=clock.now)
+        episodic_store = pipeline.episodic
+        tasks = EpisodicTaskSource(episodic_store, clock=clock.now)
+        memories = EpisodicMemorySource(episodic_store, clock=clock.now)
 
-        # And the source without which one of the four categories could
-        # not fire at all. `memories` was never passed here, so
-        # `relevant_memories` was empty in every real process and the
-        # appreciation branch was dead code that three tests covered
-        # (sections 21, 44).
-        memories = EpisodicMemorySource(pipeline.episodic, clock=clock.now)
+    active_goals = CompanionGoalSource(companion) if companion is not None else None
+    daily_topics = DailyTopicSource(
+        episodic_store=episodic_store,
+        companion=companion,
+        memory=memory,
+        clock=clock.now,
+    )
 
     # Every limit the owner sets on proactive messaging - how many a day,
     # how long between them, no repeats - was enforced from a deque that
@@ -458,6 +466,8 @@ def _build_proactive(config: dict, bus, pipeline, clock, memory):
         # it a restart reads as "away forever" and Aura greets somebody
         # who was mid-conversation a minute ago (sections 8, 19, 21).
         last_user_message=memory.last_said_at,
+        active_goals=active_goals,
+        daily_topics=daily_topics,
     )
 
 

@@ -35,12 +35,16 @@ working on.
 from proactive.context import PendingTask, ProactiveContext
 from proactive.decision import Category, ProactiveDecision, should_proactively_message
 from proactive.engine import ProactiveEngine, build_proactive_engine
+from proactive.goals import CompanionGoalSource
 from proactive.messages import MessageComposer
 from proactive.policy import ProactivePolicy, ProactiveSettings, similarity
 from proactive.tasks import EpisodicTaskSource
+from proactive.topics import DailyTopicSource
 
 __all__ = [
     "Category",
+    "CompanionGoalSource",
+    "DailyTopicSource",
     "EpisodicTaskSource",
     "MessageComposer",
     "PendingTask",
