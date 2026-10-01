@@ -1,5 +1,27 @@
 # Current task
 
+## Comprehensive Deep Audit, Security Hardening & Performance Optimization DELIVERED (2026-10-01)
+
+- **Trụ cột 1: Bảo mật & Phòng thủ SSRF / DoS Toàn diện (`tools/builtins/web.py`)**:
+  - `FetchWebContentTool`: Khắc phục lỗ hổng bypass SSRF thông qua HTTP 301/302 Redirect. Kiểm tra `_is_safe_url` ở mọi bước nhảy redirect (`max_redirects = 4`), chặn đứng mọi hành vi pivot về loopback/mạng nội bộ sau khi bypass DNS ban đầu.
+  - Phòng chống cạn kiệt bộ nhớ (OOM/DoS): Giới hạn kiểm tra `Content-Length` (< 10MB) và bounded stream reading tối đa 2MB.
+  - Bổ sung `is_unspecified` (`0.0.0.0`) và `is_multicast` vào bộ lọc IP.
+  - `WebSearchTool`: Tự động unquote và làm sạch các link chuyển hướng DuckDuckGo Lite tracking (`/l/?uddg=...`) để trả về URL đích trực tiếp. Khắc phục lỗi bất tương thích độ dài giữa danh sách thẻ liên kết và danh sách thẻ tóm tắt snippet.
+- **Trụ cột 2: Tối ưu hoá Truy vấn Graph $O(N) \to O(1)$ Memory (`memory/graph.py`)**:
+  - `list_relations`: Thay thế việc quét toàn bộ bảng thực thể vào RAM bằng SQL Join kép trên aliased `EntityNode` (`rel_src` và `rel_tgt`), cho phép mở rộng đến hàng triệu quan hệ với bộ nhớ $O(1)$.
+  - `query_subgraph`: Giảm từ 2 truy vấn và 1 vòng lặp ánh xạ xuống 1 câu lệnh SQL Join duy nhất.
+- **Trụ cột 3: Chống Rò rỉ Dữ liệu Nhạy cảm (`memory/sanitizer.py`)**:
+  - Bổ sung phát hiện mã CVV 3 số (`cvv là 123`, `cvv: 789`) và mã PIN ngắn.
+  - Sử dụng phép cắt chuỗi chính xác theo match span trong `redact()` thay vì substring replace, tránh thay thế nhầm lẫn khi từ khoá trùng lặp.
+- **Trụ cột 4: Sửa lỗi Session Duration Idle Reset & Ngữ pháp Tự nhiên (`proactive/`)**:
+  - Khắc phục lỗi `session_duration_seconds` tiếp tục tăng vô tận khi người dùng đã vắng mặt nhiều giờ/ngày. Bổ sung idle threshold 45 phút trong `note_chat()` để khởi động lại phiên mới, ngăn chặn cảnh báo `WELLBEING` sai ngữ cảnh.
+  - `_shorten` trong `proactive/messages.py`: Loại bỏ các tiền tố đại từ ngôi thứ nhất tiếng Việt ("anh đang", "tôi đang", "em đang", "mình đang", v.v.) giúp câu thông báo tiếng Việt mượt mà, đúng chuẩn ngữ pháp tự nhiên.
+- **Trụ cột 5: Kiểm thử Toàn diện & Xác thực Tính toàn vẹn**:
+  - 191/191 unit tests passed 100% không một cảnh báo hay lỗi.
+  - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks up-to-date, 0 failures).
+
+---
+
 ## Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export DELIVERED (2026-10-01)
 
 - **Trụ cột 1: Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:

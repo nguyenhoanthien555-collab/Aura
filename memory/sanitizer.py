@@ -25,9 +25,9 @@ _SECRET_PATTERNS = [
     re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
 ]
 
-# Patterns for Passwords, PINs, OTPs in text
+# Patterns for Passwords, PINs, OTPs, CVVs in text (supports 3+ chars)
 _PASSWORD_PATTERNS = [
-    re.compile(r"(?:password|mật khẩu|mat khau|secret|mã pin|cvv|otp)\s*(?:là|is)?\s*[:=]?\s*([^\s,;]{4,})", re.IGNORECASE),
+    re.compile(r"(?:password|mật khẩu|mat khau|secret|mã pin|cvv|otp)\s*(?:là|is)?\s*[:=]?\s*([^\s,;]{3,})", re.IGNORECASE),
 ]
 
 # Credit Card Pattern (13-19 digits, possibly with dashes or spaces)
@@ -92,8 +92,9 @@ class SensitiveDataSanitizer:
         for pattern in _PASSWORD_PATTERNS:
             def _replace_pw(m):
                 full = m.group(0)
-                val = m.group(1)
-                return full.replace(val, "[REDACTED_SECRET]")
+                start_val = m.start(1) - m.start(0)
+                end_val = m.end(1) - m.start(0)
+                return full[:start_val] + "[REDACTED_SECRET]" + full[end_val:]
             result = pattern.sub(_replace_pw, result)
 
         for match in _CARD_PATTERN.finditer(result):

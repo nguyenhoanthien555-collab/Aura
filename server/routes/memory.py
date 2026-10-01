@@ -412,9 +412,13 @@ def export_memory(
 
                 records = session.execute(select(CompanionMemoryRecord)).scalars().all()
                 for r in records:
+                    try:
+                        payload_data = json.loads(r.payload or "{}")
+                    except Exception:
+                        payload_data = {"raw": r.payload}
                     companion_data.setdefault(r.kind, []).append({
                         "key": r.key,
-                        "payload": json.loads(r.payload or "{}"),
+                        "payload": payload_data,
                         "updated_at": r.updated_at,
                     })
 

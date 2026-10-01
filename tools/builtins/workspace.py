@@ -223,7 +223,7 @@ class WorkspaceGitDiffTool(Tool):
         **kwargs: Any,
     ) -> ToolResult:
         repo_dir = self.roots[0]
-        cmd = ["git", "diff"]
+        cmd = ["git", "diff", "--no-color"]
         if staged:
             cmd.append("--cached")
 
@@ -381,7 +381,10 @@ class WorkspaceSearchFilesTool(Tool):
                         except ValueError:
                             rel = full_file.as_posix()
 
-                        size_bytes = full_file.stat().st_size if full_file.exists() else 0
+                        try:
+                            size_bytes = full_file.stat().st_size if full_file.exists() else 0
+                        except OSError:
+                            size_bytes = 0
                         matches.append({"path": rel, "size": size_bytes})
 
                         if len(matches) >= limit:

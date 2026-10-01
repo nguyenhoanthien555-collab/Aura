@@ -14,7 +14,7 @@ import os
 import re
 import socket
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
@@ -47,8 +47,15 @@ def _is_safe_url(url: str) -> tuple[bool, str]:
         try:
             ip_str = socket.gethostbyname(host)
             ip = ipaddress.ip_address(ip_str)
-            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
-                return False, f"Access to private/local network address ({ip_str}) is forbidden."
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_reserved
+                or ip.is_link_local
+                or ip.is_unspecified
+                or ip.is_multicast
+            ):
+                return False, f"Access to private/local/reserved network address ({ip_str}) is forbidden."
         except socket.gaierror:
             return False, f"Unable to resolve hostname '{host}'."
 
@@ -174,10 +181,21 @@ class WebSearchTool(Tool):
 
                 results = []
                 lines = [f"Found web search results for '{query_str}':\n"]
-                for idx, ((raw_url, raw_title), s) in enumerate(zip(links[:n_limit], snippets[:n_limit]), 1):
+                for idx, (raw_url, raw_title) in enumerate(links[:n_limit], 1):
                     clean_title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
-                    clean_snippet = html.unescape(re.sub(r"<[^>]+>", "", s).strip())
+                    s = snippets[idx - 1] if idx - 1 < len(snippets) else ""
+                    clean_snippet = html.unescape(re.sub(r"<[^>]+>", "", s).strip()) or "(No preview snippet available)"
+
+                    # Clean tracking redirects like /l/?kh=-1&uddg=https%3A%2F%2F...
                     clean_url = raw_url.strip()
+                    if "/l/?" in clean_url or "uddg=" in clean_url:
+                        try:
+                            parsed_q = parse_qs(urlparse(clean_url).query)
+                            if "uddg" in parsed_q:
+                                clean_url = parsed_q["uddg"][0]
+                        except Exception:
+                            pass
+
                     results.append({"title": clean_title, "url": clean_url, "snippet": clean_snippet})
                     lines.append(f"{idx}. {clean_title}\n   URL: {clean_url}\n   Snippet: {clean_snippet}\n")
 
@@ -218,32 +236,75 @@ class FetchWebContentTool(Tool):
         except (ValueError, TypeError):
             n_max = 4000
 
+        current_url = trimmed_url
+        max_redirects = 4
+        headers = {"User-Agent": DEFAULT_USER_AGENT}
+        MAX_RESPONSE_BYTES = 2_000_000  # 2MB max download limit
+
         try:
-            headers = {"User-Agent": DEFAULT_USER_AGENT}
-            with httpx.Client(timeout=12.0, headers=headers, follow_redirects=True) as client:
-                resp = client.get(trimmed_url)
-                if resp.status_code >= 400:
-                    return fail(
-                        f"HTTP request to '{trimmed_url}' failed with status code {resp.status_code}",
-                        tool=self.name,
-                    )
+            with httpx.Client(timeout=12.0, headers=headers, follow_redirects=False) as client:
+                for redirect_hop in range(max_redirects + 1):
+                    # Validate each hop before requesting
+                    hop_safe, hop_reason = _is_safe_url(current_url)
+                    if not hop_safe:
+                        return fail(
+                            f"Refused to follow redirect to unsafe URL '{current_url}': {hop_reason}",
+                            tool=self.name,
+                        )
 
-                content_type = resp.headers.get("content-type", "").lower()
-                if "application/json" in content_type:
-                    raw_text = resp.text
-                    extracted = raw_text[:n_max]
-                else:
-                    extracted = _extract_readable_text(resp.text, max_length=n_max)
+                    with client.stream("GET", current_url) as resp:
+                        # Handle HTTP redirects safely
+                        if resp.status_code in (301, 302, 303, 307, 308):
+                            location = resp.headers.get("location")
+                            if not location:
+                                return fail(f"Redirect from '{current_url}' had no Location header.", tool=self.name)
+                            current_url = urljoin(current_url, location)
+                            continue
 
-                summary = (
-                    f"Successfully fetched content from {trimmed_url} ({len(extracted)} characters):\n\n"
-                    f"{extracted}"
-                )
-                return ok(
-                    summary,
-                    tool=self.name,
-                    data={"url": trimmed_url, "content_length": len(extracted), "status_code": resp.status_code},
-                )
+                        if resp.status_code >= 400:
+                            return fail(
+                                f"HTTP request to '{current_url}' failed with status code {resp.status_code}",
+                                tool=self.name,
+                            )
+
+                        # Check Content-Length upfront if available
+                        cl = resp.headers.get("content-length")
+                        if cl and cl.isdigit() and int(cl) > 10_000_000:
+                            return fail(f"Refused to fetch content: size ({cl} bytes) exceeds 10MB limit.", tool=self.name)
+
+                        # Bounded stream reading
+                        chunks = []
+                        total_bytes = 0
+                        for chunk in resp.iter_bytes():
+                            chunks.append(chunk)
+                            total_bytes += len(chunk)
+                            if total_bytes >= MAX_RESPONSE_BYTES:
+                                break
+
+                        raw_bytes = b"".join(chunks)
+                        encoding = resp.encoding or "utf-8"
+                        try:
+                            body_text = raw_bytes.decode(encoding, errors="replace")
+                        except Exception:
+                            body_text = raw_bytes.decode("utf-8", errors="replace")
+
+                        content_type = resp.headers.get("content-type", "").lower()
+                        if "application/json" in content_type:
+                            extracted = body_text[:n_max]
+                        else:
+                            extracted = _extract_readable_text(body_text, max_length=n_max)
+
+                        summary = (
+                            f"Successfully fetched content from {current_url} ({len(extracted)} characters):\n\n"
+                            f"{extracted}"
+                        )
+                        return ok(
+                            summary,
+                            tool=self.name,
+                            data={"url": current_url, "content_length": len(extracted), "status_code": resp.status_code},
+                        )
+
+                return fail(f"Exceeded maximum redirects ({max_redirects}) for '{trimmed_url}'.", tool=self.name)
 
         except Exception as error:
             logger.error("FetchWebContentTool failed on '%s': %s", trimmed_url, error)

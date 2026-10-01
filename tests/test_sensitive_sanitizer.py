@@ -29,9 +29,16 @@ def test_sensitive_passwords():
     assert SensitiveDataSanitizer.is_sensitive("mật khẩu là: 12345678") is True
     assert SensitiveDataSanitizer.is_sensitive("password: secretpassword123") is True
     assert SensitiveDataSanitizer.is_sensitive("Mã PIN: 9988") is True
+    assert SensitiveDataSanitizer.is_sensitive("cvv là 890") is True
+    assert SensitiveDataSanitizer.is_sensitive("cvv: 123") is True
 
     redacted = SensitiveDataSanitizer.redact("Mật khẩu là: SuperSecret99!")
     assert "SuperSecret99!" not in redacted
+    assert "[REDACTED_SECRET]" in redacted
+
+    redacted_cvv = SensitiveDataSanitizer.redact("Mã CVV: 789 phía sau thẻ")
+    assert "789" not in redacted_cvv
+    assert "[REDACTED_SECRET]" in redacted_cvv
 
 
 def test_validate_for_storage():

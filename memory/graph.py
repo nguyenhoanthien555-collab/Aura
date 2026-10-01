@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from core.logger import logger
 from memory.models import EntityNode, EntityRelation, timestamp_now
@@ -303,13 +303,18 @@ class EntityGraphStore:
 
                 seed_ids = {node.id for node in seed_nodes}
 
-                # Find edges where seed is either source or target
+                src_node = aliased(EntityNode, name="sub_src")
+                tgt_node = aliased(EntityNode, name="sub_tgt")
+
+                # Find edges where seed is either source or target, resolving names in one query
                 stmt_edges = (
                     select(
                         EntityRelation,
-                        EntityNode.name.label("source_name"),
+                        src_node.name.label("source_name"),
+                        tgt_node.name.label("target_name"),
                     )
-                    .join(EntityNode, EntityRelation.source_id == EntityNode.id)
+                    .join(src_node, EntityRelation.source_id == src_node.id)
+                    .join(tgt_node, EntityRelation.target_id == tgt_node.id)
                     .where(
                         or_(
                             EntityRelation.source_id.in_(seed_ids),
@@ -319,25 +324,17 @@ class EntityGraphStore:
                     .limit(limit)
                 )
 
-                # Collect results
                 edges = session.execute(stmt_edges).all()
 
-                # Get all target names in one lookup
-                target_ids = {edge[0].target_id for edge in edges}
-                stmt_targets = select(EntityNode.id, EntityNode.name).where(EntityNode.id.in_(target_ids))
-                target_map = dict(session.execute(stmt_targets).all())
-
-                results = []
-                for rel, src_name in edges:
-                    tgt_name = target_map.get(rel.target_id, "Unknown")
-                    results.append({
+                return [
+                    {
                         "source": src_name,
                         "relation": rel.relation,
                         "target": tgt_name,
                         "confidence": rel.confidence,
-                    })
-
-                return results
+                    }
+                    for rel, src_name, tgt_name in edges
+                ]
             except Exception as e:
                 logger.error("EntityGraphStore.query_subgraph failed: %s", e)
                 return []
@@ -387,18 +384,21 @@ class EntityGraphStore:
                     session.close()
 
     def list_relations(self, limit: int = 100) -> list[dict[str, Any]]:
-        """List relations with resolved source and target names."""
+        """List relations with resolved source and target names via single SQL join."""
         with db_lock:
             session = self._get_session()
             try:
-                # Aliases for source and target
-                src_alias = EntityNode
-                tgt_stmt = select(EntityNode.id, EntityNode.name)
-                tgt_map = dict(session.execute(tgt_stmt).all())
+                src_node = aliased(EntityNode, name="rel_src")
+                tgt_node = aliased(EntityNode, name="rel_tgt")
 
                 stmt = (
-                    select(EntityRelation, EntityNode.name)
-                    .join(EntityNode, EntityRelation.source_id == EntityNode.id)
+                    select(
+                        EntityRelation,
+                        src_node.name.label("src_name"),
+                        tgt_node.name.label("tgt_name"),
+                    )
+                    .join(src_node, EntityRelation.source_id == src_node.id)
+                    .join(tgt_node, EntityRelation.target_id == tgt_node.id)
                     .order_by(EntityRelation.created_at.desc())
                     .limit(limit)
                 )
@@ -409,12 +409,12 @@ class EntityGraphStore:
                         "id": rel.id,
                         "source": src_name,
                         "relation": rel.relation,
-                        "target": tgt_map.get(rel.target_id, "Unknown"),
+                        "target": tgt_name,
                         "confidence": rel.confidence,
                         "source_type": rel.source,
                         "created_at": rel.created_at,
                     }
-                    for rel, src_name in rows
+                    for rel, src_name, tgt_name in rows
                 ]
             finally:
                 if self._owns_session:

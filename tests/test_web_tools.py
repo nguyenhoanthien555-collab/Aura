@@ -174,11 +174,12 @@ def test_fetch_web_content_success():
     with patch("socket.gethostbyname", return_value="93.184.216.34"):
         with patch("httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.headers = {"content-type": "text/html"}
-            mock_resp.text = html_sample
-            mock_client.get.return_value = mock_resp
+            mock_stream_resp = MagicMock()
+            mock_stream_resp.status_code = 200
+            mock_stream_resp.headers = {"content-type": "text/html"}
+            mock_stream_resp.encoding = "utf-8"
+            mock_stream_resp.iter_bytes.return_value = [html_sample.encode("utf-8")]
+            mock_client.stream.return_value.__enter__.return_value = mock_stream_resp
             mock_client_cls.return_value.__enter__.return_value = mock_client
 
             res = tool.execute(url="https://example.com/doc", max_length=2000)
@@ -186,3 +187,46 @@ def test_fetch_web_content_success():
             assert "Doc Heading" in res.output
             assert "Doc Content paragraph" in res.output
             assert res.data["status_code"] == 200
+
+
+def test_fetch_web_content_ssrf_redirect_block():
+    tool = FetchWebContentTool()
+
+    # Initial URL is public, but redirects to localhost
+    with patch("socket.gethostbyname", side_effect=["93.184.216.34", "127.0.0.1"]):
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_redirect_resp = MagicMock()
+            mock_redirect_resp.status_code = 302
+            mock_redirect_resp.headers = {"location": "http://127.0.0.1:8000/api/memory/purge"}
+            mock_client.stream.return_value.__enter__.return_value = mock_redirect_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+
+            res = tool.execute(url="https://example.com/redirect-to-internal")
+            assert not res.ok
+            assert "refused" in res.error.lower()
+            assert "127.0.0.1" in res.error
+
+
+def test_web_search_ddg_unquotes_tracking_redirect():
+    mock_html = """
+    <html><body>
+        <a class="result-link" href="/l/?kh=-1&uddg=https%3A%2F%2Fpython.org%2Fdownload">Python Downloads</a>
+        <table><tr><td class="result-snippet">Download Python here.</td></tr></table>
+    </body></html>
+    """
+    tool = WebSearchTool(tavily_api_key=None)
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = mock_html
+        mock_client.post.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+
+        res = tool.execute(query="python download", limit=1)
+        assert res.ok
+        # Must have extracted the clean destination URL
+        assert res.data["results"][0]["url"] == "https://python.org/download"
+

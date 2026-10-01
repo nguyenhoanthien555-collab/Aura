@@ -156,9 +156,15 @@ def _shorten(text: str, limit: int = 90) -> str:
 
     clean = " ".join(str(text).split())
 
-    # Strip a leading "I " so the sentence reads in the second person -
-    # "you left I finished the migration" is not a sentence.
-    for prefix in ("i've ", "i have ", "i'm ", "i am ", "i "):
+    # Strip leading first-person markers (English and Vietnamese) so the sentence
+    # reads naturally in the second person ("tập trung vào refactor" instead of
+    # "tập trung vào anh đang refactor").
+    for prefix in (
+        "i've ", "i have ", "i'm ", "i am ", "i ",
+        "tôi đang ", "anh đang ", "em đang ", "mình đang ",
+        "tôi đã ", "anh đã ", "em đã ", "mình đã ",
+        "tôi ", "anh ", "em ", "mình ",
+    ):
         if clean.lower().startswith(prefix):
             clean = clean[len(prefix):]
             break

@@ -1,5 +1,20 @@
 # AURA project state
 
+## Comprehensive Deep Audit, Security Hardening & Performance Optimization (2026-10-01)
+1. **SSRF Defense & DoS Prevention (`tools/builtins/web.py`)**:
+   - `FetchWebContentTool`: Validated redirect hops against SSRF; bounded stream reading to 2MB with 10MB Content-Length threshold.
+   - `WebSearchTool`: DuckDuckGo tracking redirect unquoting (`/l/?uddg=...`), snippet mismatch resilience.
+2. **Graph Memory Query Optimization $O(N) \to O(1)$ (`memory/graph.py`)**:
+   - Replaced full table loading with dual aliased SQL joins for `list_relations` and `query_subgraph`.
+3. **Sensitive Data Sanitizer Hardening (`memory/sanitizer.py`)**:
+   - Added 3-digit CVV / short PIN pattern detection and exact match span slicing in `redact()`.
+4. **Session Idle Reset & Natural Vietnamese Messages (`proactive/`)**:
+   - Added 45-minute idle threshold to reset `session_started_at` in `ProactiveEngine.note_chat()`.
+   - Added Vietnamese first-person aspect prefixes to `_shorten` in `proactive/messages.py`.
+5. **Testing & Verification**:
+   - 191/191 Python unit tests passed with 0 failures in 36.72s.
+   - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
+
 ## Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export (2026-10-01)
 1. **Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:
    - `CompanionGoalSource` (`proactive/goals.py`): Extracting active goals (`priority in ("now", "soon")`) from `CompanionMemory` to trigger `GOAL_FOLLOWUP`.

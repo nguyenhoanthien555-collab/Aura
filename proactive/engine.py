@@ -99,8 +99,15 @@ class ProactiveEngine:
         """The user just said something. Called by the chat path."""
 
         now = self.clock.now()
-        if self._session_started_at is None:
+        # If user was absent for more than 45 minutes, reset the session start
+        # so prolonged absence is not counted as an active continuous work session.
+        if self._last_user_message_at is not None:
+            idle_seconds = (now - self._last_user_message_at).total_seconds()
+            if idle_seconds > 2700:  # 45 minutes idle
+                self._session_started_at = now
+        elif self._session_started_at is None:
             self._session_started_at = now
+
         self._last_user_message_at = now
 
     # ------------------------------------------------------------------

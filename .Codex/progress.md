@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-10-01 — Comprehensive Deep Audit, Security Hardening & Performance Optimization DELIVERED
+
+- **Pillar 1: SSRF Defense & DoS Prevention (`tools/builtins/web.py`)**:
+  - Validated each redirect hop in `FetchWebContentTool` against `_is_safe_url`, completely eliminating the SSRF bypass via 3xx redirect.
+  - Added bounded stream reader (2MB max) and early `Content-Length` (<10MB) checks to prevent OOM/memory exhaustion attacks.
+  - Added `ip.is_unspecified` (`0.0.0.0`) and `ip.is_multicast` to private IP address filtering.
+  - `WebSearchTool`: Unquoted DuckDuckGo Lite tracking URLs (`/l/?uddg=...`) to return clean direct links; handled snippet list length mismatches cleanly.
+- **Pillar 2: Graph Memory Query Optimization $O(N) \to O(1)$ (`memory/graph.py`)**:
+  - Replaced full-table scan in `list_relations` with dual aliased SQL joins on `EntityNode` (`rel_src`, `rel_tgt`), providing $O(1)$ memory usage.
+  - Streamlined `query_subgraph` into a single SQL join query.
+- **Pillar 3: Sensitive Data Sanitizer Hardening (`memory/sanitizer.py`)**:
+  - Added 3-digit CVV / short PIN pattern detection.
+  - Replaced substring matching with exact regex match span slicing in `redact()` to prevent mis-redaction.
+- **Pillar 4: Session Idle Reset & Natural Vietnamese Messages (`proactive/`)**:
+  - Fixed `session_duration_seconds` unbounded accumulation by adding a 45-minute idle threshold in `ProactiveEngine.note_chat()`.
+  - Added Vietnamese first-person aspect prefixes to `_shorten` in `proactive/messages.py`.
+- **Pillar 5: Comprehensive Verification**:
+  - 191 Python unit tests passed with 0 failures in 36.72s.
+  - Android Gradle test suite (`:app:testDebugUnitTest`): BUILD SUCCESSFUL (22/22 actionable tasks, 0 failures).
+
 ## 2026-10-01 — Proactive Context Gathering Layer, Companion Memory Durable Tables & Chat/Memory Export DELIVERED
 
 - **Pillar 1: Proactive Context Gathering Layer (`proactive/`, `launcher/services.py`)**:

@@ -317,3 +317,43 @@ def test_the_composition_root_wires_proactive_sources():
     assert isinstance(services.proactive.daily_topics_source, DailyTopicSource)
 
 
+def test_proactive_engine_session_reset_after_extended_idle():
+    from proactive.engine import ProactiveEngine
+    from core.temporal import TemporalClock
+
+    clock_now = NOW_EVENING
+    clock = TemporalClock(now=lambda: clock_now)
+    engine = ProactiveEngine(clock=clock)
+
+    # 1. First chat at 21:00
+    engine.note_chat()
+
+    # 2. Advance clock by 20 minutes (active work session)
+    clock_now = NOW_EVENING + timedelta(minutes=20)
+    engine.note_chat()
+    ctx = engine.build_context()
+    assert ctx.session_duration_seconds == 1200.0
+
+    # 3. User is away for 2 hours (120 minutes > 45 minutes threshold)
+    clock_now = NOW_EVENING + timedelta(minutes=140)
+    # User sends a new message -> session starts fresh
+    engine.note_chat()
+    ctx_fresh = engine.build_context()
+    assert ctx_fresh.session_duration_seconds == 0.0
+
+    # 4. 10 minutes into the new session
+    clock_now = NOW_EVENING + timedelta(minutes=150)
+    ctx_new = engine.build_context()
+    assert ctx_new.session_duration_seconds == 600.0
+
+
+def test_shorten_strips_vietnamese_prefixes():
+    from proactive.messages import _shorten
+
+    assert _shorten("anh đang refactor module memory") == "refactor module memory"
+    assert _shorten("tôi đã hoàn thành backend") == "hoàn thành backend"
+    assert _shorten("mình đang thử nghiệm tools mới") == "thử nghiệm tools mới"
+    assert _shorten("I finished the migration") == "finished the migration"
+
+
+
