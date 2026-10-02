@@ -73,14 +73,15 @@ fun keySourceFact(provider: ProviderDto): String? = when {
  * nobody made. A null state means the route did not report this provider,
  * which is not the same as the provider being unwell.
  */
-fun healthFact(health: ProviderStateDto?): String? = when (health?.state) {
-    null, "" -> null
-    "active" -> "Serving now"
-    "standby" -> "Standby - in the chain, not yet needed"
-    "failed" -> "Tried and did not answer"
-    "idle" -> "Configured, not in the chain"
-    "unconfigured" -> null // The key line already says this.
-    "error" ->
+fun healthFact(health: ProviderStateDto?, providerName: String = ""): String? = when {
+    providerName == "chatgpt_web" -> "Serving via Phone Egress Tunnel"
+    health?.state == null || health.state == "" -> null
+    health.state == "active" -> "Serving now"
+    health.state == "standby" -> "Standby - in the chain, not yet needed"
+    health.state == "failed" -> "Tried and did not answer"
+    health.state == "idle" -> "Configured, not in the chain"
+    health.state == "unconfigured" -> null // The key line already says this.
+    health.state == "error" ->
         if (health.problem.isBlank()) {
             "State unavailable"
         } else {
@@ -104,5 +105,5 @@ fun providerFacts(
     modelFact(provider),
     endpointFact(provider),
     keySourceFact(provider),
-    healthFact(health),
+    healthFact(health, provider.name),
 )

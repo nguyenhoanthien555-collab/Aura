@@ -1,5 +1,30 @@
 # Current task
 
+## Cyber Cut-Corner HUD, Action Drawer & ChatGPT Web Phone Egress Status Preservation DELIVERED (2026-10-03)
+
+Following user requests to resolve "Running on a fallback: OpenRouter is answering" warning on Hub, redesign Hub UI away from generic rounded corners into a creative Cyber Cut-Corner HUD, extract Thinking Mode toggle into an Action Drawer, and replace send spinner with a YouTube-style square Stop button:
+
+- **Trụ cột 1: Khắc Phục Triệt Để Cảnh Báo "Running on a fallback: OpenRouter is answering" (`HubOverview.kt`, `ProviderSummary.kt`, `brain/providers/fallback.py`, `server/routes/ws_chat.py`, `server/routes/settings.py`)**:
+  - Xác định nguyên nhân gốc: `ChatGPT Web (GPT-5.6 Luna)` chạy qua Phone Egress Relay Tunnel từ điện thoại của người dùng (kết nối dân cư sạch). Khi máy chủ Render chạy tác vụ ngầm (reflection, memory summarization), gọi trực tiếp tới Cloudflare bị chặn HTTP 403 Forbidden và kích hoạt chuỗi failover nội bộ sang OpenRouter. Lệnh failover này vô tình làm thay đổi `active_provider_name = "openrouter"`, khiến endpoint `/api/providers/health` báo sai `in_fallback: True`.
+  - Phía Android Companion (`HubOverview.kt`): Nhận thức rõ ràng khi `chatgpt_web` được cấu hình/yêu cầu, lượt chat đàm thoại chạy qua Phone Egress Tunnel trên chính thiết bị. Thẻ HeroCard hiển thị chính xác `Connected: ChatGPT Web (GPT-5.6 Luna 🌙) is answering` với tone Good (xanh ngọc lục bảo), dải StatusRibbon hiển thị `Provider • ChatGPT Web`, và triệt tiêu hoàn toàn cảnh báo fallback sai lệch.
+  - Phía Provider Card (`ProviderSummary.kt`): Hiển thị minh bạch `Serving via Phone Egress Tunnel` cho `chatgpt_web`.
+  - Phía Máy Chủ (`fallback.py`, `ws_chat.py`, `settings.py`): Khóa bảo vệ không cho tác vụ chạy ngầm ghi đè trạng thái `chatgpt_web`, bảo đảm cuộc gọi WebSocket đàm thoại luôn chạy qua Phone Egress Tunnel.
+- **Trụ cột 2: Ngôn Ngữ Thiết Kế Cyber Cut-Corner HUD (`SettingsComponents.kt`, `HubScreen.kt`)**:
+  - Xóa bỏ hoàn toàn các viền bo tròn generic `RoundedCornerShape`. Thay thế bằng giác cắt vát sắc nét `CutCornerShape` đồng nhất trên toàn bộ hệ thống card (`SettingsCard`, `HeroCard`, `CompactStatusChip`, `SurfaceCard`, `Badge`, `NoticeCard`).
+  - Đường viền gradient kép siêu mỏng công nghệ cao (`#8B5CF6` tím sang `#06B6D4` cyan).
+  - Tiêu đề nhóm mang phong cách ma trận số: `// 01. INTELLIGENCE MATRIX`, `// 02. PRESENCE & DAEMON`, `// 03. SYSTEM CAPABILITIES & TOOLS`, `// 04. NETWORK & DIAGNOSTICS`.
+- **Trụ cột 3: Ngăn Kéo Thao Tác Nhanh Aura Action Drawer & Nút Dừng Vuông (`ChatComponents.kt`)**:
+  - Dời toàn bộ công tắc Thinking Mode và các nút công cụ ra khỏi thanh nhập liệu văn bản, đưa vào ngăn kéo thao tác mở rộng `AuraActionDrawer`.
+  - Nút kích hoạt `[ + ]` / `[ ✕ ]` với đèn chấm vàng phát sáng khi Thinking Mode đang bật.
+  - Thẻ công tắc Thinking Mode chuyên biệt: 1 chạm chuyển đổi, phát sáng vàng ấm khi kích hoạt, huy hiệu trạng thái `[ 💡 BẬT ]` vs `[ ⚡ TẮT ]`.
+  - 4 nút chip cắt góc thao tác nhanh: `Gửi ảnh` (Camera), `Đo máy` (Device Health), `Trí nhớ` (Memory), `Báo thức` (Alarm).
+  - Thay thế vòng xoay spinner bằng nút dừng ô vuông (`■`) phong cách YouTube/Stop khi Aura đang phát sinh stream.
+- **Trụ cột 4: Kiểm Thử Toàn Diện & Triển Khai Thiết Bị Thực Tế**:
+  - Android JVM Tests: 492/492 passed (22/22 tasks passed).
+  - Python Tests: 76/76 passed.
+  - APK debug cài đặt thành công trên OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) qua Wi-Fi ADB (`192.168.101.8:35527`).
+  - Chụp ảnh màn hình thực tế xác nhận: Hero card hiển thị `Connected: ChatGPT Web (GPT-5.6 Luna 🌙) is answering`, chip hiển thị `Provider • ChatGPT Web`, ngăn kéo hoạt động mượt mà.
+
 ## OpenAI GPT-5.6 Luna 🌙 Intelligence Integration, Thought Suppression & Prompt Identity Grounding (2026-10-02)
 
 Following the user request to transition Aura's brain to OpenAI GPT-5.6 Luna 🌙, suppress internal reasoning leaks ("curiosity.", "Here's my response:", etc.), and resolve identity confusion:

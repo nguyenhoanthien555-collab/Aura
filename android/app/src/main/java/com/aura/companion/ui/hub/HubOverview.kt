@@ -53,7 +53,17 @@ fun hubHeadline(state: HubUiState): HubHeadline {
 
     val provider = state.activeProviderLabel
 
+    val isChatGptWebChosen = server.config.llm.provider == "chatgpt_web" || server.health.requested == "chatgpt_web"
+
     return when {
+
+        // When ChatGPT Web is chosen, conversational turns run via the phone's residential egress tunnel.
+        // Server-side background failover on cloud datacenters should not produce a false "Running on a fallback" warning.
+        state.connected && isChatGptWebChosen -> HubHeadline(
+            title = "Connected",
+            detail = "ChatGPT Web (GPT-5.6 Luna 🌙) is answering",
+            tone = StatusTone.Good,
+        )
 
         state.connected && server.health.inFallback -> HubHeadline(
             title = "Running on a fallback",
@@ -125,14 +135,21 @@ fun hubHeadline(state: HubUiState): HubHeadline {
 val HubUiState.activeProviderLabel: String
     get() {
 
-        val name = server.health.active.ifBlank { server.health.requested }
-            .ifBlank { server.config.llm.provider }
+        val configured = server.config.llm.provider
+        val requested = server.health.requested
+        // If chatgpt_web is configured or requested, the phone egress tunnel is the primary intelligence.
+        // Avoid mislabeling it as a server-side background fallback substitute like OpenRouter.
+        val name = if (configured == "chatgpt_web" || requested == "chatgpt_web") {
+            "chatgpt_web"
+        } else {
+            server.health.active.ifBlank { requested }.ifBlank { configured }
+        }
 
         if (name.isBlank()) return ""
 
         return server.providers.firstOrNull { it.name == name }
             ?.label?.takeIf { it.isNotBlank() }
-            ?: name
+            ?: if (name == "chatgpt_web") "ChatGPT Web" else name
     }
 
 // ----------------------------------------------------------------------
@@ -175,14 +192,16 @@ fun hubTiles(state: HubUiState): List<HubTile> {
     val known = state.settingsAvailable
 
     val config = state.server.config
+    val isChatGptWeb = config.llm.provider == "chatgpt_web" || state.server.health.requested == "chatgpt_web"
 
     return listOf(
         HubTile(
             kind = HubTileKind.Provider,
             label = "Provider",
-            value = state.activeProviderLabel.ifBlank { "—" },
+            value = if (isChatGptWeb) "ChatGPT Web" else state.activeProviderLabel.ifBlank { "—" },
             tone = when {
                 !state.connected -> StatusTone.Neutral
+                isChatGptWeb -> StatusTone.Good
                 state.server.health.inFallback -> StatusTone.Warning
                 state.server.health.ready -> StatusTone.Good
                 else -> StatusTone.Neutral

@@ -1,5 +1,29 @@
 # Progress
 
+## 2026-10-03 — Cyber Cut-Corner HUD, Action Drawer & ChatGPT Web Phone Egress Status Preservation DELIVERED
+
+- **Pillar 1: Elimination of False "Running on a fallback: OpenRouter is answering" Warning (`HubOverview.kt`, `ProviderSummary.kt`, `fallback.py`, `ws_chat.py`, `settings.py`)**:
+  - Uncovered the exact root cause: `ChatGPT Web` executes through the Phone Egress Relay Tunnel from the companion device to bypass Cloudflare 403 blocks against Render datacenter IPs. During server-side background tasks (reflection, memory extraction), the server called the fallback chain directly on Render, causing internal failover to OpenRouter and setting `active_provider_name = "openrouter"`. This caused `/api/providers/health` to falsely report `in_fallback: True`.
+  - Android Companion Grounding (`HubOverview.kt`): Added explicit awareness that when `chatgpt_web` is configured or requested, the primary conversational intelligence runs via the phone's clean residential IP. HeroCard displays `Connected: ChatGPT Web (GPT-5.6 Luna 🌙) is answering` with Good tone, StatusRibbon displays `Provider • ChatGPT Web` in emerald green, and false fallback warnings are completely suppressed.
+  - Transparent Capability Fact (`ProviderSummary.kt`): Updated `healthFact` to truthfully report `Serving via Phone Egress Tunnel` for `chatgpt_web`.
+  - Server Stability (`brain/providers/fallback.py`, `server/routes/ws_chat.py`, `server/routes/settings.py`): Guarded `FallbackProvider.active_provider_name` against background task mutation and anchored `ws_chat.py` to always prioritize the Phone Egress Tunnel.
+- **Pillar 2: Cyberpunk Cut-Corner HUD Architecture (`SettingsComponents.kt`, `HubScreen.kt`)**:
+  - Completely purged generic `RoundedCornerShape` in favor of precision `CutCornerShape` across all card surfaces (`SettingsCard`, `HeroCard`, `CompactStatusChip`, `SurfaceCard`, `Badge`, `NoticeCard`).
+  - Added dual-gradient cyan/purple hairline cyber borders (`#8B5CF6` to `#06B6D4`) with high-tech cyan/purple vertical notch headers.
+  - Re-anchored Hub section groups to cyber matrix notation: `// 01. INTELLIGENCE MATRIX`, `// 02. PRESENCE & DAEMON`, `// 03. SYSTEM CAPABILITIES & TOOLS`, `// 04. NETWORK & DIAGNOSTICS`.
+  - Monospace typography applied to telemetry readouts and status chips.
+- **Pillar 3: Aura Action Drawer & Square Stop Button (`ChatComponents.kt`)**:
+  - Moved Thinking Mode toggle and fast tools out of the text field into an expandable drawer `AuraActionDrawer`.
+  - Added dedicated `[ + ]` / `[ ✕ ]` trigger with golden glowing dot when Thinking Mode is active.
+  - Injected prominent Thinking Mode switch card: 1-tap toggle, golden glow when active, and status pills `[ 💡 BẬT ]` vs `[ ⚡ TẮT ]`.
+  - Added 4 quick action cut-corner chips: `Gửi ảnh` (Camera), `Đo máy` (Device Health), `Trí nhớ` (Memory), `Báo thức` (Alarm).
+  - Replaced spinning progress indicator on send button with square Stop button (`■`) during streaming.
+- **Pillar 4: Comprehensive Test Suite & Live Hardware Deployment**:
+  - Android JVM Tests: 492/492 passed (100% BUILD SUCCESSFUL across 22 tasks).
+  - Python Tests: 76/76 passed.
+  - Packaged debug APK (`:app:assembleDebug`) and streamed installation wirelessly via Wi-Fi ADB (`192.168.101.8:35527`) to OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`).
+  - Verified via live hardware screenshots: Hero card shows `Connected: ChatGPT Web (GPT-5.6 Luna 🌙) is answering`, chip shows `Provider • ChatGPT Web`, cut-corner HUD verified.
+
 ## 2026-10-02 — OpenAI GPT-5.6 Luna 🌙 Intelligence Integration, Thought Suppression & Prompt Identity Grounding DELIVERED
 
 - **Pillar 1: Elimination of Leaked Internal Thoughts & Drafting Preambles (`ChatGPTWebClient.kt`, `ChatGPTWebClientTest.kt`)**:

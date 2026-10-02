@@ -148,6 +148,47 @@ class HubOverviewTest {
     }
 
     @Test
+    fun `chatgpt_web provider displays connected and uses phone egress tunnel without false fallback warning`() {
+
+        val headline = hubHeadline(
+            state(
+                reach = ServerReach.ProviderHealthy,
+                loaded = true,
+                providers = listOf(provider("chatgpt_web", label = "ChatGPT Web")),
+                health = ProviderHealthDto(
+                    requested = "chatgpt_web",
+                    active = "openrouter",
+                    inFallback = true,
+                    ready = true,
+                ),
+                llm = LlmConfigDto(provider = "chatgpt_web"),
+            )
+        )
+
+        assertEquals("Connected", headline.title)
+        assertTrue(headline.detail.contains("ChatGPT Web"))
+        assertEquals(StatusTone.Good, headline.tone)
+
+        val tile = hubTiles(
+            state(
+                ServerReach.ProviderHealthy,
+                loaded = true,
+                providers = listOf(provider("chatgpt_web", label = "ChatGPT Web")),
+                health = ProviderHealthDto(
+                    requested = "chatgpt_web",
+                    active = "openrouter",
+                    inFallback = true,
+                    ready = true,
+                ),
+                llm = LlmConfigDto(provider = "chatgpt_web"),
+            )
+        ).first { it.kind == HubTileKind.Provider }
+
+        assertEquals("ChatGPT Web", tile.value)
+        assertEquals(StatusTone.Good, tile.tone)
+    }
+
+    @Test
     fun `a healthy server names its provider`() {
 
         val headline = hubHeadline(
