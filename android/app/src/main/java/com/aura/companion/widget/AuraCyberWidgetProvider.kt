@@ -82,11 +82,7 @@ class AuraCyberWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        fun updateAppWidget(
-            context: Context,
-            appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
-        ) {
+        fun buildRemoteViews(context: Context): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_aura_cyber_hud)
 
             // 1. Handset Battery
@@ -144,7 +140,15 @@ class AuraCyberWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_btn_refresh, refreshPending)
 
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            return views
+        }
+
+        fun updateAppWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int
+        ) {
+            appWidgetManager.updateAppWidget(appWidgetId, buildRemoteViews(context))
         }
 
         fun updateAll(context: Context) {
@@ -153,9 +157,8 @@ class AuraCyberWidgetProvider : AppWidgetProvider() {
                 val componentName = ComponentName(context, AuraCyberWidgetProvider::class.java)
                 val ids = appWidgetManager.getAppWidgetIds(componentName)
                 if (ids != null && ids.isNotEmpty()) {
-                    for (id in ids) {
-                        updateAppWidget(context, appWidgetManager, id)
-                    }
+                    val views = buildRemoteViews(context)
+                    appWidgetManager.updateAppWidget(ids, views)
                 }
             } catch (_: Exception) {
                 // Ignore in non-widget environments

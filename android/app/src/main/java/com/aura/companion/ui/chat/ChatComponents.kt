@@ -93,6 +93,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 
@@ -590,6 +595,9 @@ fun Composer(
     onClearAttachment: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isProcessingImage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -604,50 +612,21 @@ fun Composer(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            try {
-                val stream = context.contentResolver.openInputStream(uri)
-                val originalBitmap = BitmapFactory.decodeStream(stream)
-                stream?.close()
-                if (originalBitmap != null) {
-                    val maxDim = 1024
-                    val width = originalBitmap.width
-                    val height = originalBitmap.height
-                    val scaledBitmap = if (width > maxDim || height > maxDim) {
-                        val ratio = width.toFloat() / height.toFloat()
-                        val (targetW, targetH) = if (ratio > 1f) {
-                            maxDim to (maxDim / ratio).toInt()
-                        } else {
-                            (maxDim * ratio).toInt() to maxDim
-                        }
-                        Bitmap.createScaledBitmap(originalBitmap, targetW, targetH, true)
+            isProcessingImage = true
+            scope.launch {
+                try {
+                    val result = processImageUri(context, uri)
+                    if (result != null) {
+                        onAttachImage?.invoke(result.first, result.second)
                     } else {
-                        originalBitmap
+                        Toast.makeText(context, "Không thể đọc hình ảnh", Toast.LENGTH_SHORT).show()
                     }
-                    val outputStream = ByteArrayOutputStream()
-                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-                    val bytes = outputStream.toByteArray()
-                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                    onAttachImage?.invoke(scaledBitmap.asImageBitmap(), base64)
+                } finally {
+                    isProcessingImage = false
                 }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Không thể đọc hình ảnh", Toast.LENGTH_SHORT).show()
             }
         }
     }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-    val dynamicMicScale = if (isListening) {
-        (1f + (speechRmsDb.coerceIn(0f, 10f) / 35f) * pulseScale).coerceIn(1f, 1.4f)
-    } else 1f
 
     val composerShape = RoundedCornerShape(26.dp)
     Box(
@@ -724,21 +703,31 @@ fun Composer(
             ) {
                 IconButton(
                     onClick = {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        if (!isProcessingImage) {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
                     },
                     modifier = Modifier
                         .size(38.dp)
                         .background(Color(0xFF1E1B4B).copy(alpha = 0.6f), CircleShape)
                         .border(1.dp, Color(0xFF06B6D4).copy(alpha = 0.35f), CircleShape),
                 ) {
-                    Icon(
-                        imageVector = AuraIcons.Camera,
-                        contentDescription = "Đính kèm ảnh",
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(18.dp),
-                    )
+                    if (isProcessingImage) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFF38BDF8),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AuraIcons.Camera,
+                            contentDescription = "Đính kèm ảnh",
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))
@@ -773,19 +762,7 @@ fun Composer(
                         modifier = Modifier.size(42.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (isListening) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .scale(dynamicMicScale)
-                                    .background(
-                                        Brush.radialGradient(
-                                            listOf(Color(0xFFE11D48).copy(alpha = 0.6f), Color.Transparent)
-                                        ),
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
+                        ListeningMicGlow(isListening = isListening, speechRmsDb = speechRmsDb)
                         IconButton(
                             onClick = {
                                 if (isListening) {
@@ -816,7 +793,7 @@ fun Composer(
                                 ),
                         ) {
                             Icon(
-                                imageVector = if (isListening) AuraIcons.Mic else AuraIcons.Mic,
+                                imageVector = AuraIcons.Mic,
                                 contentDescription = if (isListening) "Đang nghe" else "Nói chuyện",
                                 tint = if (isListening) Color.White else Color(0xFFA78BFA),
                                 modifier = Modifier.size(18.dp),
@@ -859,3 +836,93 @@ fun Composer(
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
 private fun formatTime(millis: Long): String = timeFormat.format(Date(millis))
+
+@Composable
+private fun ListeningMicGlow(isListening: Boolean, speechRmsDb: Float) {
+    if (!isListening) return
+
+    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    val dynamicScale = (1f + (speechRmsDb.coerceIn(0f, 10f) / 35f) * pulseScale).coerceIn(1f, 1.4f)
+
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .graphicsLayer {
+                scaleX = dynamicScale
+                scaleY = dynamicScale
+            }
+            .background(
+                Brush.radialGradient(
+                    listOf(Color(0xFFE11D48).copy(alpha = 0.6f), Color.Transparent)
+                ),
+                shape = CircleShape
+            )
+    )
+}
+
+private suspend fun processImageUri(
+    context: android.content.Context,
+    uri: android.net.Uri
+): Pair<androidx.compose.ui.graphics.ImageBitmap, String>? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val maxDim = 1024
+            val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, boundsOptions)
+            }
+            val rawW = boundsOptions.outWidth
+            val rawH = boundsOptions.outHeight
+            if (rawW <= 0 || rawH <= 0) return@withContext null
+
+            var sampleSize = 1
+            while ((rawW / (sampleSize * 2)) >= maxDim && (rawH / (sampleSize * 2)) >= maxDim) {
+                sampleSize *= 2
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            val sampledBitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, decodeOptions)
+            } ?: return@withContext null
+
+            val curW = sampledBitmap.width
+            val curH = sampledBitmap.height
+            val finalBitmap = if (curW > maxDim || curH > maxDim) {
+                val ratio = curW.toFloat() / curH.toFloat()
+                val (targetW, targetH) = if (ratio > 1f) {
+                    maxDim to (maxDim / ratio).toInt()
+                } else {
+                    (maxDim * ratio).toInt() to maxDim
+                }
+                val scaled = Bitmap.createScaledBitmap(sampledBitmap, targetW, targetH, true)
+                if (scaled != sampledBitmap) {
+                    sampledBitmap.recycle()
+                }
+                scaled
+            } else {
+                sampledBitmap
+            }
+
+            val outputStream = ByteArrayOutputStream()
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val bytes = outputStream.toByteArray()
+            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            Pair(finalBitmap.asImageBitmap(), base64)
+        } catch (_: Exception) {
+            null
+        }
+    }
+}

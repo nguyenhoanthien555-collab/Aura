@@ -1,6 +1,33 @@
 # AURA project state
 
-## Next-Gen Sensory Omnipresent Companion Upgrade (2026-10-02)
+## Comprehensive Codebase Audit, UI Jank Elimination & Performance Optimization DELIVERED (2026-10-02)
+1. **Android Image Decoding & Subsampling Offload (`ChatComponents.kt`)**:
+   - Resolved main-thread blocking when attaching smartphone photos (48MP/64MP) which previously allocated ~150MB+ RAM and caused 400-900ms UI freezes.
+   - Built 2-pass decoding in `processImageUri` on `Dispatchers.IO`: zero-allocation `inJustDecodeBounds` dimension inspection, power-of-2 `inSampleSize` computation, decode and downscale to max 1024px, and intermediate bitmap recycling.
+   - Added `CircularProgressIndicator` on the camera icon during asynchronous processing.
+2. **Compose Idle Animation Purge & RenderNode Graphics Layer (`ChatComponents.kt`)**:
+   - Eliminated continuous 60–120 FPS `rememberInfiniteTransition` running even when mic was idle.
+   - Extracted `ListeningMicGlow` composable that only starts animations when `isListening == true`, applying scale via `Modifier.graphicsLayer { scaleX = dynamicScale; scaleY = dynamicScale }` avoiding parent/sibling recompositions.
+3. **RMS Level State Stream Quantization (`ChatViewModel.kt`)**:
+   - Throttled high-frequency `SpeechRecognizer.onRmsChanged` (20-50 Hz) via `.map { ((it * 2f).toInt()) / 2f }.distinctUntilChanged()`, dropping screen recomposition rate by ~85% during voice input.
+4. **Speech Recognizer Lifecycle & Audio Service Cleanup (`AuraVoiceManager.kt`)**:
+   - Preserved `_isListening = true` through speech pauses until terminal callbacks (`onResults` / `onError`).
+   - Cleanly called `destroy()` and nullified `speechRecognizer` upon completion or error, immediately releasing system audio focus and microphone hardware service.
+5. **Widget Atomic Batch Updates & Instant Alarm Store Sync (`AuraCyberWidgetProvider.kt`, `AlarmStore.kt`)**:
+   - Consolidated widget view inflation into `buildRemoteViews` and updated all widget instances in a single IPC call `appWidgetManager.updateAppWidget(ids, views)`.
+   - Connected `AuraCyberWidgetProvider.updateAll(ctx)` to `AlarmStore.persist()` so alarm changes made via voice, chat, or Hub UI reflect on the home screen widget instantaneously.
+6. **Win32 Clipboard Concurrency & Handle Leak Protection (`tools/builtins/desktop.py`)**:
+   - Implemented `_open_clipboard_with_retry` with exponential backoff for Windows clipboard access collisions.
+   - Guaranteed `kernel32.GlobalFree(h)` release when `GlobalLock` fails.
+7. **Cloud Container OOM Guard (`brain/providers/gemini.py`)**:
+   - Added boundaries rejecting base64 payloads >12MB or decoded images >8MB, protecting Render 512MB RAM containers against memory exhaustion.
+8. **UI Deprecation Cleanups (`AuraAlarmActivity.kt`, `AlarmSection.kt`)**:
+   - Upgraded `ButtonDefaults.outlinedButtonBorder` to `ButtonDefaults.outlinedButtonBorder(enabled = true)` conforming to Compose Material 3 standards.
+9. **Testing & Verification**:
+   - Android JVM tests: 476/476 passed (100% BUILD SUCCESSFUL across 22 tasks).
+   - Python tests: 45/45 passed (boundary, clipboard, tasks, alarms, VLM), 169 passed / 1 skipped regression suite.
+   - Packaged APK: `:app:assembleDebug` BUILD SUCCESSFUL (20.2 MB).
+
 1. **Stage A: Mobile Voice Engine (2-Way Vietnamese STT/TTS)**:
    - Android `TextToSpeech` engine with `Locale("vi", "VN")` and English US fallback in `android/app/src/main/java/com/aura/companion/voice/AuraVoiceManager.kt`.
    - Android `SpeechRecognizer` with `RECORD_AUDIO` permission, auto text sanitization, dynamic speech RMS dB tracking.

@@ -387,7 +387,7 @@ private fun CyberAlarmRingingView(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = AuraNeonCyan
                     ),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                         brush = Brush.horizontalGradient(listOf(AuraNeonCyan, AuraNeonPink))
                     )
                 ) {

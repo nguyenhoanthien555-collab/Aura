@@ -33,7 +33,8 @@ class AlarmStore(
 ) : IAlarmStore {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val prefs: SharedPreferences? = customPrefs ?: context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext: Context? = context?.applicationContext
+    private val prefs: SharedPreferences? = customPrefs ?: appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _alarms = MutableStateFlow<List<AuraAlarm>>(loadAlarms())
     override val alarms: StateFlow<List<AuraAlarm>> = _alarms.asStateFlow()
@@ -50,6 +51,13 @@ class AlarmStore(
     private fun persist(list: List<AuraAlarm>) {
         _alarms.value = list
         prefs?.edit()?.putString(KEY_ALARMS, json.encodeToString(list))?.apply()
+        appContext?.let { ctx ->
+            try {
+                com.aura.companion.widget.AuraCyberWidgetProvider.updateAll(ctx)
+            } catch (_: Exception) {
+                // Ignore in testing or non-widget contexts
+            }
+        }
     }
 
     override fun getAll(): List<AuraAlarm> = _alarms.value

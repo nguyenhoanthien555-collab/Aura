@@ -101,9 +101,12 @@ class ChatViewModel(
                 }
             }
             viewModelScope.launch {
-                voiceManager.rmsDb.collect { rms ->
-                    _state.update { it.copy(speechRmsDb = rms) }
-                }
+                voiceManager.rmsDb
+                    .map { ((it * 2f).toInt()) / 2f }
+                    .distinctUntilChanged()
+                    .collect { rms ->
+                        _state.update { it.copy(speechRmsDb = rms) }
+                    }
             }
         }
 

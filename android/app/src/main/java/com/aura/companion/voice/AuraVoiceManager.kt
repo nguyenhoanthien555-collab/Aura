@@ -194,12 +194,16 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
                         override fun onBufferReceived(buffer: ByteArray?) {}
 
                         override fun onEndOfSpeech() {
-                            _isListening.value = false
+                            _rmsDb.value = 0f
                         }
 
                         override fun onError(error: Int) {
                             _isListening.value = false
                             _rmsDb.value = 0f
+                            try {
+                                speechRecognizer?.destroy()
+                            } catch (_: Exception) {}
+                            speechRecognizer = null
                             val errorMsg = mapSpeechError(error)
                             // Ignore benign "NO_MATCH" if silence
                             if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
@@ -212,6 +216,10 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
                             _rmsDb.value = 0f
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             val recognized = matches?.firstOrNull()?.trim()
+                            try {
+                                speechRecognizer?.destroy()
+                            } catch (_: Exception) {}
+                            speechRecognizer = null
                             if (!recognized.isNullOrBlank()) {
                                 onResult(recognized)
                             }

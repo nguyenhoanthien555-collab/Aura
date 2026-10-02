@@ -807,6 +807,15 @@ def _ensure_clipboard_signatures():
         logger.debug("Failed to bind clipboard signatures: %s", e)
 
 
+def _open_clipboard_with_retry(user32, max_attempts: int = 5, delay: float = 0.015) -> bool:
+    import time
+    for attempt in range(max_attempts):
+        if user32.OpenClipboard(None):
+            return True
+        time.sleep(delay)
+    return False
+
+
 def _win32_set_clipboard(text: str) -> bool:
     import ctypes
 
@@ -817,7 +826,7 @@ def _win32_set_clipboard(text: str) -> bool:
     CF_UNICODETEXT = 13
     GMEM_MOVEABLE = 0x0002
 
-    if not user32.OpenClipboard(None):
+    if not _open_clipboard_with_retry(user32):
         return False
     try:
         user32.EmptyClipboard()
@@ -827,6 +836,7 @@ def _win32_set_clipboard(text: str) -> bool:
             return False
         p = kernel32.GlobalLock(h)
         if not p:
+            kernel32.GlobalFree(h)
             return False
         ctypes.memmove(p, encoded, len(encoded))
         kernel32.GlobalUnlock(h)
@@ -845,7 +855,7 @@ def _win32_get_clipboard() -> str:
 
     CF_UNICODETEXT = 13
 
-    if not user32.OpenClipboard(None):
+    if not _open_clipboard_with_retry(user32):
         return ""
     try:
         if not user32.IsClipboardFormatAvailable(CF_UNICODETEXT):

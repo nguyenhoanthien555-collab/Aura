@@ -91,8 +91,14 @@ class GeminiProvider(BaseProvider):
         from google.genai import types
         try:
             raw_b64 = context["image"]
+            if not isinstance(raw_b64, str) or len(raw_b64) > 12 * 1024 * 1024:
+                logger.warning("Image base64 exceeds memory threshold (>12MB), skipping")
+                return None
             mime = context.get("image_mime") or "image/jpeg"
             img_bytes = base64.b64decode(raw_b64)
+            if len(img_bytes) > 8 * 1024 * 1024:
+                logger.warning("Decoded image exceeds 8MB limit, skipping")
+                return None
             return types.Part.from_bytes(data=img_bytes, mime_type=mime)
         except Exception as e:
             logger.warning("Failed to decode image part for Gemini: %s", e)
