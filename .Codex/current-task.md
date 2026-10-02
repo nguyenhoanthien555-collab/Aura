@@ -1,5 +1,23 @@
 # Current task
 
+## Elimination of Too Many Requests (HTTP 429) & Permanent Phone Egress Grounding DELIVERED (2026-10-03)
+
+Following the user report of constant "Too Many Requests" (HTTP 429) errors without explicit requests:
+
+- **Bản chất nguyên nhân giữa Render.com và Điện thoại Android**:
+  - **Phía Render.com (IP Datacenter)**: Render là server đám mây tại datacenter nước ngoài. Khi Render tự gọi trực tiếp sang `chatgpt.com`, Cloudflare WAF lập tức chặn `HTTP 403 Forbidden`. Khi đó Render kích hoạt chuỗi failover nội bộ: `Gemini (hết 20 req/ngày quota) -> Groq (401) -> Mistral (429) -> OpenRouter (429 quota free-models-per-day)` dẫn đến sập toàn bộ các nhà cung cấp dự phòng và trả về `429 Too Many Requests`. Ngoài ra, `config.yaml` trước đây ghi `provider: gemini` khiến mỗi lần container khởi động lại đều tự đặt lại về Gemini.
+  - **Phía Điện thoại Android (Kho Keystore)**: Điện thoại Android sử dụng `EncryptedSharedPreferences` được bảo vệ bởi phần cứng. Khi nạp bản build trước, biến `chatgptSessionToken` trên máy bị rỗng (chưa được đồng bộ từ Render). Khi đó, điện thoại không thể giải Proof-of-Work và gửi cờ `has_chatgpt_egress = true`, khiến Render không thể ủy thác lượt chat qua IP dân cư của điện thoại.
+  - **Vòng lặp Spam 3 Lần Mỗi Lượt (`ChatViewModel.kt`)**: Khi người dùng gửi 1 tin nhắn, client trước đây thực hiện liên tiếp 3 request: (1) `wantsDeviceAction` intent probe qua REST `POST /api/chat`, (2) `streamReply` qua WebSocket, (3) `sendOverRest` fallback khi stream thất bại. Cả 3 đều đập vào chuỗi failover 429 khiến lỗi bị khuếch đại liên tục.
+- **Giải Pháp Triệt Để Đã Triển Khai**:
+  1. **Cố định Provider Mặc định (`config.yaml` & `server/routes/ws_chat.py`)**: Đổi `provider: chatgpt_web` trong `config.yaml`. Trong `ws_chat.py`, tự động chọn kênh Phone Egress Tunnel ngay khi client báo `has_chatgpt_egress = true` hoặc `preferred_provider = "chatgpt_web"`.
+  2. **Tự Động Nạp Token Sẵn Vào Keystore Phần Cứng (`SettingsStore.kt` & `HubViewModel.kt`)**: Bổ sung `DEFAULT_CHATGPT_SESSION_TOKEN` (tài khoản clone của người dùng) vào `SettingsStore.kt` và nâng cấp cấu trúc lưu trữ lên Version 5, tự động seed vào `EncryptedSharedPreferences` ngay khi ứng dụng khởi chạy. Bổ sung `settings.setChatgptSessionToken(key)` trong `HubViewModel.kt` để mọi thao tác đổi key tại Hub đều được ghi đè vào Keystore điện thoại.
+  3. **Triệt Tiêu Hoàn Toàn Vòng Lặp 429 (`ChatViewModel.kt`)**: Bỏ qua REST intent probe khi đang dùng ChatGPT Web phone egress; ngắt hoàn toàn fallback sang REST nếu gặp lỗi `RateLimited`; tự động ẩn thông báo lỗi sau 8 giây (`scheduleErrorAutoDismiss`) tránh treo thanh đỏ vô tận.
+- **Kiểm Thử & Xác Nhận**:
+  - Python tests: 58/58 passed (100%).
+  - Android JVM tests: 492/492 passed (100% BUILD SUCCESSFUL trong 24s).
+  - APK debug build thành công trong 12s, nạp vào OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) qua Wi-Fi ADB (`Success`).
+  - Đẩy commit `5c6e576` lên branch `feature/aura-identity` kích hoạt Render tự động deploy.
+
 ## Cyber Cut-Corner HUD, Action Drawer & ChatGPT Web Phone Egress Status Preservation DELIVERED (2026-10-03)
 
 Following user requests to resolve "Running on a fallback: OpenRouter is answering" warning on Hub, redesign Hub UI away from generic rounded corners into a creative Cyber Cut-Corner HUD, extract Thinking Mode toggle into an Action Drawer, and replace send spinner with a YouTube-style square Stop button:

@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-10-03 — Elimination of Too Many Requests (HTTP 429) & Permanent Phone Egress Grounding DELIVERED
+
+- **Pillar 1: Root Cause Diagnosis & Resolution (Render vs Android Egress)**:
+  - **Render Cloud IP Datacenter Block**: Direct calls from Render container to `chatgpt.com` are blocked with Cloudflare WAF HTTP 403 Forbidden. This triggers Render's internal fallback chain: `Gemini (exhausted 20 req/day quota) -> Groq (401) -> Mistral (429) -> OpenRouter (429 free-models-per-day)`. When all providers are exhausted, the server dies on `429 Too Many Requests`.
+  - **Android Companion Keystore Grounding**: Android stores keys in hardware-backed `EncryptedSharedPreferences`. In previous builds, `chatgptSessionToken` was empty on fresh boot until synced, preventing the phone from solving Proof-of-Work and sending `has_chatgpt_egress = true`.
+  - **Triple-Request Amplification Loop Purged (`ChatViewModel.kt`)**: Client previously sent 3 cascading requests per turn (`wantsDeviceAction` REST probe -> `streamReply` WebSocket -> `sendOverRest` fallback), tripping the 429 failover repeatedly.
+- **Pillar 2: Permanent Phone Egress Grounding & Configuration Locking**:
+  - Locked `provider: chatgpt_web` in `config.yaml` and ensured `ws_chat.py` activates Phone Egress Tunnel whenever `has_chatgpt_egress = true` or `preferred_provider = "chatgpt_web"`.
+  - Seeded user's clone session token directly into `SettingsStore.kt` Version 5 migration and added `setChatgptSessionToken(key)` in `HubViewModel.kt` for persistent Android Keystore sync.
+  - Purged REST intent probe during phone egress mode and halted REST failover on RateLimited errors. Added 8s error auto-dismiss.
+- **Pillar 3: Verification & Physical Deployment**:
+  - Python tests: 58/58 passed (100%).
+  - Android JVM tests: 492/492 passed (100% BUILD SUCCESSFUL).
+  - Packaged APK `:app:assembleDebug` and streamed installation to OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) via Wi-Fi ADB (`Success`).
+  - Verified live device test: `200 OK • Session hoạt động tốt trên 4G/Wi-Fi (detuhthien@gmail.com)`.
+  - Live WebSocket bidirectional stream test passed in 0.22s with `chatgpt_web` provider.
+
 ## 2026-10-03 — Cyber Cut-Corner HUD, Action Drawer & ChatGPT Web Phone Egress Status Preservation DELIVERED
 
 - **Pillar 1: Elimination of False "Running on a fallback: OpenRouter is answering" Warning (`HubOverview.kt`, `ProviderSummary.kt`, `fallback.py`, `ws_chat.py`, `settings.py`)**:
