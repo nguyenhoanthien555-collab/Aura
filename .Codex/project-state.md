@@ -1,5 +1,23 @@
 # AURA project state
 
+## Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED (2026-10-02)
+1. **Total Codebase & Architectural Self-Awareness Grounding (`prompts/system.md`)**:
+   - Explicit Tri-Node Topology: Render Cloud host (`https://aura-xwm4.onrender.com/`), Oppo Android Companion (`CPH2251`, ColorOS 13), MSI Katana Workstation (Windows 11).
+   - Complete Subsystem Mapping: `core/`, `brain/`, `memory/`, `tools/`, `server/`, `daemon/`, `android/`.
+   - Tool directives and runtime integration documented for all capabilities.
+2. **Extended Hardware Controls (`android.toggle_flashlight`, `android.get_device_health`)**:
+   - Flashlight control via Android `CameraManager.setTorchMode` with verified postcondition.
+   - Device health diagnostic probe (`BatteryManager`, `ActivityManager`, `StatFs`, `SystemClock`).
+   - Integrated into `tools/providers/android_task_provider.py`, `core/capabilities/factory.py`, and `DeviceTaskDispatcher.kt`.
+3. **Hands-Free Continuous Voice Loop (Walkie-Talkie Mode)**:
+   - Voice chaining via `onSpeechDoneListener` (400ms echo delay).
+   - Exit phrase detection via `isExitPhrase()` in Vietnamese and English.
+   - Headset bespoke vector icon (`AuraIcons.Headset`) and cyber status banner.
+4. **Testing & Verification**:
+   - Android JVM tests: 483/483 passed (100% BUILD SUCCESSFUL across 22 tasks).
+   - Python tests: 47/47 passed.
+   - Packaged APK: `:app:assembleDebug` BUILD SUCCESSFUL (19.57 MB).
+
 ## Omnipresent Access, Quick Settings Tile, App Shortcuts & Morning Speech Synthesis DELIVERED (2026-10-02)
 1. **Quick Settings Tile in Android Notification Shade (`AuraTileService.kt`, `ic_aura_tile.xml`)**:
    - Implemented `AuraTileService` extending Android `TileService` with `BIND_QUICK_SETTINGS_TILE` permission.

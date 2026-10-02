@@ -96,6 +96,8 @@ def register_core_capabilities(config=None):
         ("android.contacts", "Android Contacts Search", "Search address book and device contacts.", ["android.permission.READ_CONTACTS"], "android.search_contacts"),
         ("android.alarm", "Android Cyber Alarm System", "Set, list, and cancel alarms on the device.", [], "android.set_alarm"),
         ("android.clipboard", "Android Clipboard Sync", "Set or get text from device system clipboard.", [], "android.set_clipboard"),
+        ("android.flashlight", "Android Flashlight Control", "Turn on or off the device camera flashlight / torch.", [], "android.toggle_flashlight"),
+        ("android.device_health", "Android Device Health & Diagnostics", "Inspect device battery, thermals, memory, and storage metrics.", [], "android.get_device_health"),
     ]
 
 

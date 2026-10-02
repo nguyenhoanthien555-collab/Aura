@@ -141,6 +141,27 @@ class DeviceTaskDispatcherTest {
                 put("length", 22)
             }
         )
+
+        override suspend fun toggleFlashlight(enabled: Boolean?): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("flashlight_enabled", enabled ?: true)
+                put("status", if (enabled == false) "off" else "on")
+            }
+        )
+
+        override suspend fun getDeviceHealth(): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("battery_level", 85)
+                put("is_charging", true)
+                put("available_ram_mb", 3500)
+                put("total_ram_mb", 8192)
+                put("low_memory", false)
+                put("storage_free_gb", 45.2)
+                put("storage_total_gb", 128.0)
+                put("uptime_seconds", 36000L)
+                put("status", "healthy")
+            }
+        )
     }
 
     private fun directive(tool: String, arguments: JsonObject): ToolCallDirective =
@@ -315,5 +336,40 @@ class DeviceTaskDispatcherTest {
         assertTrue(report.ok)
         assertEquals(true, report.result?.get("has_clip")?.jsonPrimitive?.contentOrNull?.toBoolean())
         assertEquals("mock_clipboard_content", report.result?.get("text")?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun `toggle_flashlight executes with verified postcondition`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.toggle_flashlight", buildJsonObject {
+            put("enabled", "true")
+        })
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals("on", report.result?.get("status")?.jsonPrimitive?.contentOrNull)
+        assertEquals(true, report.result?.get("flashlight_enabled")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertNotNull(report.postcondition)
+        assertEquals(true, report.postcondition?.get("verified")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals("toggle_flashlight", report.postcondition?.get("action")?.jsonPrimitive?.contentOrNull)
+        assertEquals(true, report.postcondition?.get("flashlight_enabled")?.jsonPrimitive?.contentOrNull?.toBoolean())
+    }
+
+    @Test
+    fun `get_device_health executes and returns health metrics`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.get_device_health", buildJsonObject {})
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals(85, report.result?.get("battery_level")?.jsonPrimitive?.contentOrNull?.toInt())
+        assertEquals(true, report.result?.get("is_charging")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals(3500, report.result?.get("available_ram_mb")?.jsonPrimitive?.contentOrNull?.toInt())
+        assertEquals(8192, report.result?.get("total_ram_mb")?.jsonPrimitive?.contentOrNull?.toInt())
+        assertEquals("healthy", report.result?.get("status")?.jsonPrimitive?.contentOrNull)
     }
 }

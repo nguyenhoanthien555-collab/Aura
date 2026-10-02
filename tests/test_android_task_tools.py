@@ -38,6 +38,8 @@ EXPECTED_TASK_TOOLS = {
     "android.cancel_alarm",
     "android.set_clipboard",
     "android.get_clipboard",
+    "android.toggle_flashlight",
+    "android.get_device_health",
 }
 
 
@@ -247,3 +249,44 @@ def test_task_capabilities_registered_in_factory():
     contacts_cap = cap_registry.get("android.contacts")
     assert contacts_cap is not None
     assert "android.permission.READ_CONTACTS" in contacts_cap.required_permissions
+
+    flashlight_cap = cap_registry.get("android.flashlight")
+    assert flashlight_cap is not None
+
+    health_cap = cap_registry.get("android.device_health")
+    assert health_cap is not None
+
+
+def test_toggle_flashlight_execution():
+    bridge, _, executor, _ = make_task_executor()
+
+    result = executor.execute("android.toggle_flashlight", {"enabled": True})
+    assert result.ok is True
+    assert result.status == ToolStatus.SUCCESS
+    assert result.side_effect == str(SideEffect.IDEMPOTENT)
+    assert result.data["result"]["enabled"] is True
+    assert result.data["result"]["status"] == "torch_on"
+    assert result.evidence[0].verified is True
+    assert bridge.flashlight_enabled is True
+
+    result_off = executor.execute("android.toggle_flashlight", {"enabled": False})
+    assert result_off.ok is True
+    assert result_off.data["result"]["enabled"] is False
+    assert result_off.data["result"]["status"] == "torch_off"
+    assert bridge.flashlight_enabled is False
+
+
+def test_get_device_health_execution():
+    _, _, executor, _ = make_task_executor()
+
+    result = executor.execute("android.get_device_health", {})
+    assert result.ok is True
+    assert result.status == ToolStatus.SUCCESS
+    assert result.side_effect == str(SideEffect.READ_ONLY)
+    data = result.data["result"]
+    assert "battery_level" in data
+    assert "is_charging" in data
+    assert "temperature_c" in data
+    assert "memory_available_mb" in data
+    assert "storage_free_gb" in data
+    assert result.evidence[0].kind == EvidenceKind.RETURN_VALUE

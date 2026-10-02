@@ -165,6 +165,7 @@ class LoopbackDeviceBridge:
             },
         ]
         self.clipboard: str = ""
+        self.flashlight_enabled: bool = False
 
 
     def status(self) -> dict:
@@ -249,7 +250,7 @@ class LoopbackDeviceBridge:
                     "device_id": (result or {}).get("device_id", ""),
                 },
             }
-        elif tool in {"android.read_sms", "android.list_calendar_events", "android.search_contacts", "android.list_alarms"}:
+        elif tool in {"android.read_sms", "android.list_calendar_events", "android.search_contacts", "android.list_alarms", "android.get_device_health", "android.get_clipboard"}:
             observation = {
                 "kind": tool.split(".", 1)[-1],
                 "data": result or {},
@@ -615,6 +616,35 @@ class LoopbackDeviceBridge:
         text = getattr(self, "clipboard", "")
         return (
             {"text": text, "length": len(text)},
+            None,
+        )
+
+    def _do_toggle_flashlight(self, enabled: bool = True, **_):
+        self.flashlight_enabled = bool(enabled)
+        return (
+            {
+                "enabled": self.flashlight_enabled,
+                "status": "torch_on" if self.flashlight_enabled else "torch_off",
+                "action": "toggle_flashlight",
+            },
+            {
+                "verified": True,
+                "action": "toggle_flashlight",
+                "enabled": self.flashlight_enabled,
+            },
+        )
+
+    def _do_get_device_health(self, **_):
+        return (
+            {
+                "battery_level": 85,
+                "is_charging": False,
+                "temperature_c": 32.5,
+                "memory_available_mb": 4096,
+                "memory_total_mb": 8192,
+                "storage_free_gb": 45.2,
+                "storage_total_gb": 128.0,
+            },
             None,
         )
 

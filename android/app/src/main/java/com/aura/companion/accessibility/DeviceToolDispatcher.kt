@@ -236,6 +236,20 @@ class AccessibilityToolDispatcher(
             permissions = emptyMap(),
         )
 
+        statuses["android.flashlight"] = DeviceCapabilityStatusDto(
+            state = "AVAILABLE",
+            healthy = true,
+            reason = "CameraManager torch mode hardware control is available",
+            permissions = emptyMap(),
+        )
+
+        statuses["android.device_health"] = DeviceCapabilityStatusDto(
+            state = "AVAILABLE",
+            healthy = true,
+            reason = "On-device battery, RAM, and storage telemetry is available",
+            permissions = emptyMap(),
+        )
+
         return statuses
     }
 

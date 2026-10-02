@@ -1,5 +1,31 @@
 # Progress
 
+## 2026-10-02 — Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED
+
+- **Pillar 1: Complete Codebase & Feature Self-Awareness Grounding (`prompts/system.md`)**:
+  - Infused Aura with total cognitive self-awareness of her entire codebase structure, architecture, and deployment topology.
+  - Documented Tri-Node Topology: Render Cloud host (`https://aura-xwm4.onrender.com/`), Oppo Android Companion (`CPH2251`, ColorOS 13), and MSI Katana Dev Workstation (Windows 11).
+  - Explicitly mapped all 9 core subsystems: `core/` (kernel & capabilities), `brain/` (LLM, vision, streaming & conversation), `memory/` (hybrid retrieval, entity graph, sanitizer, sqlite), `tools/` (built-in providers, sandbox runner, dynamic synthesis), `server/` (FastAPI routes & WebSocket streaming), `daemon/` (24/7 proactive supervisor & outbox), `android/` (native Compose app, voice engine, accessibility agent, offline alarms, app shortcuts, quick settings tile, cyber HUD widget).
+  - Defined explicit tool directives for every capability: alarms, tasks (SMS, calendar, contacts), clipboard synchronization, flashlight, device health, sandbox code execution, dynamic tool creation, memory retention, web search, and workspace pair-programming.
+- **Pillar 2: Extended Hardware Directives (`android.toggle_flashlight`, `android.get_device_health`)**:
+  - Python Backend: Implemented `ToggleFlashlight` and `GetDeviceHealth` in `tools/providers/android_task_provider.py`, registered in `android_bridge.py` and `core/capabilities/factory.py`.
+  - Android Companion: Added tool specs in `DeviceTaskToolCatalog`, added methods to `DeviceTaskHandler` interface and `AndroidDeviceTaskHandler` in `DeviceTaskDispatcher.kt`.
+  - `toggleFlashlight`: Uses Android `CameraManager.setTorchMode` to toggle phone torch on/off with verified postcondition.
+  - `getDeviceHealth`: Probes phone battery % and charging state via `BatteryManager`, RAM availability via `ActivityManager`, free storage via `StatFs`, and uptime via `SystemClock.elapsedRealtime()`.
+  - Capability reporting: Added `android.flashlight` and `android.device_health` status to `AccessibilityToolDispatcher` in `DeviceToolDispatcher.kt`.
+  - Tested: `DeviceTaskDispatcherTest.kt` (unit tests for both tools), `tests/test_android_task_tools.py` (15/15 passed).
+- **Pillar 3: Hands-Free Continuous Voice Loop / Walkie-Talkie Mode (`AuraVoiceManager.kt`, `ChatViewModel.kt`, `ChatScreen.kt`)**:
+  - `AuraVoiceManager.kt`: Added `onSpeechDoneListener` triggered on TTS `onDone` with a 400ms echo-mitigation delay. Implemented `isExitPhrase()` detecting standard Vietnamese and English goodbye/stop phrases ("tạm biệt", "dừng lại", "nghỉ thôi", "goodbye", "stop").
+  - `ChatUiState.kt`: Added `isHandsFreeMode: Boolean = false`.
+  - `ChatViewModel.kt`: Implemented `toggleHandsFreeMode()` and `startHandsFreeListening()`. Automatically chains Speech-to-Text when Aura finishes speaking. Automatically sends recognized user input. Automatically exits and bids farewell upon detecting exit phrases.
+  - Bespoke Vector Icon: Designed `AuraIcons.Headset` with 100% pure Compose geometric vector linework (cyber communicator headset with boom mic, zero stock icons).
+  - Cyber UI Integration: Added Walkie-talkie toggle icon in `ChatScreen.kt` TopAppBar (glowing cyan `#00E5FF` when active), along with a pulsing cyber status banner below the HUD capsule displaying real-time listening/speaking states.
+  - Tested: `AuraVoiceManagerTest.kt` (`isExitPhrase identifies Vietnamese and English exit commands`).
+- **Pillar 4: Comprehensive Verification & Release**:
+  - Android JVM Tests: 483/483 passed (100% BUILD SUCCESSFUL across 22 tasks).
+  - Python Tests: 47/47 passed across boundary, clipboard, task tools, alarms, and multimodal VLM.
+  - Packaged APK: `:app:assembleDebug` BUILD SUCCESSFUL (19.57 MB).
+
 ## 2026-10-02 — Omnipresent Access, Quick Settings Tile, App Shortcuts & Morning Speech Synthesis DELIVERED
 
 - **Pillar 1: Quick Settings Tile in Android Notification Shade (`AuraTileService.kt`, `ic_aura_tile.xml`)**:

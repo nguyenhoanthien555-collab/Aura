@@ -471,6 +471,41 @@ object AuraIcons {
         }
     }
 
+    /** Cyber communicator headset with boom mic for hands-free audio loop. */
+    val Headset: ImageVector by lazy {
+        icon("Headset") {
+            // Headband arc
+            moveTo(12.0f, 2.0f)
+            curveTo(6.48f, 2.0f, 2.0f, 6.48f, 2.0f, 12.0f)
+            lineTo(2.0f, 17.0f)
+            curveTo(2.0f, 18.66f, 3.34f, 20.0f, 5.0f, 20.0f)
+            lineTo(6.5f, 20.0f)
+            curveTo(7.33f, 20.0f, 8.0f, 19.33f, 8.0f, 18.5f)
+            lineTo(8.0f, 13.5f)
+            curveTo(8.0f, 12.67f, 7.33f, 12.0f, 6.5f, 12.0f)
+            lineTo(4.0f, 12.0f)
+            curveTo(4.0f, 7.58f, 7.58f, 4.0f, 12.0f, 4.0f)
+            curveTo(16.42f, 4.0f, 20.0f, 7.58f, 20.0f, 12.0f)
+            lineTo(17.5f, 12.0f)
+            curveTo(16.67f, 12.0f, 16.0f, 12.67f, 16.0f, 13.5f)
+            lineTo(16.0f, 18.5f)
+            curveTo(16.0f, 19.33f, 16.67f, 20.0f, 17.5f, 20.0f)
+            lineTo(19.0f, 20.0f)
+            curveTo(20.66f, 20.0f, 22.0f, 18.66f, 22.0f, 17.0f)
+            lineTo(22.0f, 12.0f)
+            curveTo(22.0f, 6.48f, 17.52f, 2.0f, 12.0f, 2.0f)
+            close()
+            // Boom mic
+            moveTo(18.0f, 20.0f)
+            lineTo(14.0f, 22.0f)
+            lineTo(12.0f, 22.0f)
+            lineTo(12.0f, 20.5f)
+            lineTo(13.5f, 20.5f)
+            lineTo(17.0f, 18.7f)
+            close()
+        }
+    }
+
 
     /** Dual break lightning spark: proactive unprompted insight. */
     val Bolt: ImageVector by lazy {

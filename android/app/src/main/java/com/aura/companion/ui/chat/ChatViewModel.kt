@@ -90,6 +90,11 @@ class ChatViewModel(
         checkConnection()
 
         if (voiceManager != null) {
+            voiceManager.onSpeechDoneListener = {
+                if (_state.value.isHandsFreeMode && !_state.value.isSending && !_state.value.isSpeaking) {
+                    startHandsFreeListening()
+                }
+            }
             viewModelScope.launch {
                 voiceManager.isSpeaking.collect { speaking ->
                     _state.update { it.copy(isSpeaking = speaking) }
@@ -920,13 +925,14 @@ class ChatViewModel(
             it.copy(
                 isSending = false,
                 isAgentRunning = false,
+                isHandsFreeMode = false,
                 agentStatusText = "Tớ dừng lại theo lời cậu rồi nè!",
             )
         }
     }
 
     // ------------------------------------------------------------------
-    // Voice Engine Controls (TTS & STT)
+    // Voice Engine Controls (TTS & STT & Hands-Free Loop)
     // ------------------------------------------------------------------
 
     fun toggleTts() {
@@ -935,6 +941,49 @@ class ChatViewModel(
         if (!next && voiceManager?.isSpeaking?.value == true) {
             voiceManager.stopSpeaking()
         }
+    }
+
+    fun toggleHandsFreeMode() {
+        val next = !_state.value.isHandsFreeMode
+        _state.update {
+            it.copy(
+                isHandsFreeMode = next,
+                isTtsEnabled = if (next) true else it.isTtsEnabled,
+            )
+        }
+        if (next) {
+            startHandsFreeListening()
+        } else {
+            voiceManager?.stopListening()
+            voiceManager?.stopSpeaking()
+        }
+    }
+
+    fun startHandsFreeListening() {
+        if (!_state.value.isHandsFreeMode) return
+        voiceManager?.startListening(
+            onResult = { recognized ->
+                if (!_state.value.isHandsFreeMode) return@startListening
+                if (AuraVoiceManager.isExitPhrase(recognized)) {
+                    _state.update { it.copy(isHandsFreeMode = false) }
+                    speak("Tạm biệt cậu! Khi nào cần tớ cứ gọi nhé.")
+                } else {
+                    _state.update { it.copy(draft = recognized) }
+                    send()
+                }
+            },
+            onError = { _ ->
+                // In hands-free loop, if timeout occurs on silence, gently resume listening if still active
+                if (_state.value.isHandsFreeMode && !_state.value.isSpeaking && !_state.value.isSending) {
+                    viewModelScope.launch {
+                        delay(600L)
+                        if (_state.value.isHandsFreeMode && !_state.value.isSpeaking && !_state.value.isSending) {
+                            startHandsFreeListening()
+                        }
+                    }
+                }
+            }
+        )
     }
 
     fun speak(text: String) {
@@ -969,6 +1018,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        voiceManager?.onSpeechDoneListener = null
         voiceManager?.stopSpeaking()
         voiceManager?.stopListening()
     }

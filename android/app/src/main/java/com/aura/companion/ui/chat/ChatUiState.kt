@@ -30,6 +30,7 @@ data class ChatUiState(
     val isListening: Boolean = false,
     val speechRmsDb: Float = 0f,
     val isTtsEnabled: Boolean = false,
+    val isHandsFreeMode: Boolean = false,
     val attachedImageBase64: String? = null,
     val attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
 ) {

@@ -1,5 +1,30 @@
 # Current task
 
+## Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Nhận thức Toàn diện Codebase & Kiến trúc Ba Node (`prompts/system.md`)**:
+  - Tích hợp tri thức toàn vẹn về cấu trúc codebase, kiến trúc hệ thống, và hạ tầng triển khai vào lõi suy nghĩ của Aura (`prompts/system.md`).
+  - Định hình mô hình 3 Node: Render Cloud Host (`https://aura-xwm4.onrender.com/`), Oppo Android Companion (`CPH2251`, ColorOS 13), và MSI Katana Dev Workstation (Windows 11).
+  - Bản đồ 9 phân hệ cốt lõi: `core/`, `brain/`, `memory/`, `tools/`, `server/`, `daemon/`, `android/`.
+  - Hướng dẫn cụ thể về mọi tool directive: báo thức, tác vụ di động (SMS, calendar, contacts), đồng bộ clipboard, đèn pin, sức khỏe thiết bị, sandbox python, tổng hợp tool động, ghi nhớ tri thức, tìm kiếm web, và hỗ trợ lập trình workspace.
+- **Trụ cột 2: Mở rộng Điều khiển Phần cứng Di động (`android.toggle_flashlight`, `android.get_device_health`)**:
+  - Python backend: `ToggleFlashlight` và `GetDeviceHealth` trong `tools/providers/android_task_provider.py`, kết nối `android_bridge.py` và `core/capabilities/factory.py`.
+  - Android client: `DeviceTaskToolCatalog`, `DeviceTaskHandler`, và `AndroidDeviceTaskHandler` trong `DeviceTaskDispatcher.kt`.
+  - Bật/tắt đèn pin qua `CameraManager.setTorchMode` với verified postcondition.
+  - Đo lường sức khỏe thiết bị: pin %, sạc nhanh/chậm (`BatteryManager`), RAM trống/tổng (`ActivityManager`), dung lượng bộ nhớ trống (`StatFs`), và uptime máy.
+  - Báo cáo trạng thái năng lực trong `DeviceToolDispatcher.kt`.
+  - Kiểm thử: `DeviceTaskDispatcherTest.kt`, `tests/test_android_task_tools.py` (15/15 passed).
+- **Trụ cột 3: Đàm thoại Liên tục Rảnh tay / Walkie-Talkie Mode (`AuraVoiceManager.kt`, `ChatViewModel.kt`, `ChatScreen.kt`)**:
+  - Chaining giọng nói: Tự động kích hoạt nhận diện giọng nói khi Aura đọc xong câu trả lời qua `onSpeechDoneListener` (với độ trễ 400ms chống phản hồi âm thanh từ loa ngoài).
+  - Nhận diện câu lệnh kết thúc thông minh `isExitPhrase()` cho tiếng Việt và tiếng Anh ("tạm biệt", "dừng lại", "nghỉ thôi", "goodbye", "stop"): Aura tự động chào tạm biệt và thoát chế độ rảnh tay.
+  - Biểu tượng độc bản `AuraIcons.Headset` thiết kế bằng vector hình học Compose thuần túy.
+  - Tích hợp giao diện: Nút bật/tắt Walkie-talkie phát sáng neon cyan `#00E5FF` trên thanh TopAppBar của `ChatScreen.kt`, cùng thanh trạng thái cyber hiển thị trực quan trạng thái đang nghe/đang trả lời.
+  - Kiểm thử: `AuraVoiceManagerTest.kt`.
+- **Trụ cột 4: Kiểm thử Toàn diện & Đóng gói Sẵn sàng**:
+  - Android JVM Tests: 483/483 passed (100% BUILD SUCCESSFUL across 22 tasks).
+  - Python Tests: 47/47 passed.
+  - Đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (19.57 MB).
+
 ## Omnipresent Access, Quick Settings Tile, App Shortcuts & Morning Speech Synthesis DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Quick Settings Tile Trên Thanh Trạng Thái Hệ Thống (`AuraTileService.kt`, `ic_aura_tile.xml`)**:

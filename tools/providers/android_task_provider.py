@@ -229,10 +229,40 @@ class AndroidGetClipboard(_Read):
     parameters = ()
 
 
+class ToggleFlashlight(_Mutation):
+    name = "android.toggle_flashlight"
+    capability = "android.flashlight"
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.IDEMPOTENT
+    description = (
+        "Turn on or off the device camera flashlight / torch."
+    )
+    parameters = (
+        Parameter(
+            name="enabled",
+            type="boolean",
+            required=False,
+            description="True to turn flashlight on, False to turn off. Defaults to True.",
+        ),
+    )
+
+
+class GetDeviceHealth(_Read):
+    name = "android.get_device_health"
+    capability = "android.device_health"
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.READ_ONLY
+    description = (
+        "Retrieve real-time hardware health telemetry from the Android device "
+        "(battery %, charging state, temperature, RAM usage, and storage free/total)."
+    )
+    parameters = ()
+
+
 class AndroidTaskProvider(CapabilityProvider):
     """
     Capability provider for Android personal task management tools
-    (SMS, Calendar, Contacts, Alarms, Clipboard).
+    (SMS, Calendar, Contacts, Alarms, Clipboard, Flashlight, Device Health).
     """
 
     namespace = "android"
@@ -248,6 +278,8 @@ class AndroidTaskProvider(CapabilityProvider):
         CancelAlarm,
         AndroidSetClipboard,
         AndroidGetClipboard,
+        ToggleFlashlight,
+        GetDeviceHealth,
     )
 
     _CAPABILITY_NAMES = {
@@ -256,6 +288,8 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.contacts": "Android Contacts Search",
         "android.alarm": "Android Cyber Alarm System",
         "android.clipboard": "Android Clipboard Sync",
+        "android.flashlight": "Android Flashlight Control",
+        "android.device_health": "Android Device Health & Diagnostics",
     }
 
     _CAPABILITY_KEYWORDS = {
@@ -264,6 +298,8 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.contacts": ["contact", "person", "phone", "number", "email", "address", "danh bạ"],
         "android.alarm": ["alarm", "wake", "wake up", "timer", "báo thức", "đánh thức", "gọi dậy", "hẹn giờ"],
         "android.clipboard": ["clipboard", "copy", "paste", "clip", "khay nhớ tạm", "sao chép", "dán"],
+        "android.flashlight": ["flashlight", "torch", "light", "flash", "đèn pin", "soi đèn", "đèn"],
+        "android.device_health": ["health", "battery", "temp", "temperature", "memory", "ram", "storage", "pin", "nhiệt độ", "dung lượng", "bộ nhớ"],
     }
 
     _CAPABILITY_PERMISSIONS = {
@@ -272,6 +308,8 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.contacts": ["android.permission.READ_CONTACTS"],
         "android.alarm": [],
         "android.clipboard": [],
+        "android.flashlight": [],
+        "android.device_health": [],
     }
 
     def __init__(self, bridge: DeviceBridge | None = None):
@@ -407,5 +445,7 @@ __all__ = [
     "CancelAlarm",
     "AndroidSetClipboard",
     "AndroidGetClipboard",
+    "ToggleFlashlight",
+    "GetDeviceHealth",
 ]
 

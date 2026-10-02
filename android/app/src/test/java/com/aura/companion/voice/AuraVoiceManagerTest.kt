@@ -47,4 +47,15 @@ class AuraVoiceManagerTest {
         assertEquals("", AuraVoiceManager.cleanForSpeech("   \n\t  "))
         assertEquals("", AuraVoiceManager.cleanForSpeech("```\n```"))
     }
+
+    @Test
+    fun `isExitPhrase identifies Vietnamese and English exit commands`() {
+        assertTrue(AuraVoiceManager.isExitPhrase("tạm biệt nhé Aura"))
+        assertTrue(AuraVoiceManager.isExitPhrase("Dừng lại"))
+        assertTrue(AuraVoiceManager.isExitPhrase("nghỉ thôi em"))
+        assertTrue(AuraVoiceManager.isExitPhrase("goodbye"))
+        assertTrue(AuraVoiceManager.isExitPhrase("stop now"))
+        org.junit.Assert.assertFalse(AuraVoiceManager.isExitPhrase("hãy bật đèn pin lên giùm anh"))
+        org.junit.Assert.assertFalse(AuraVoiceManager.isExitPhrase("thời tiết hôm nay thế nào"))
+    }
 }

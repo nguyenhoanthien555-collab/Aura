@@ -44,6 +44,17 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
                 .replace(Regex("\\s+"), " ")
                 .trim()
         }
+
+        /** Detects standard exit/goodbye phrases in Vietnamese and English. */
+        fun isExitPhrase(phrase: String): Boolean {
+            val p = phrase.lowercase(Locale.ROOT).trim()
+            val exits = listOf(
+                "tạm biệt", "dừng lại", "nghỉ thôi", "dừng cuộc gọi",
+                "kết thúc", "goodbye", "stop", "bye bye", "tắt micro",
+                "hẹn gặp lại", "thôi nhé", "nghỉ ngơi đi"
+            )
+            return exits.any { p.contains(it) }
+        }
     }
 
 
@@ -56,6 +67,9 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
 
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
+
+    /** Callback invoked when Aura finishes speaking an utterance (with echo mitigation delay). */
+    var onSpeechDoneListener: (() -> Unit)? = null
 
     // --- Speech-to-Text (STT) ---
     private var speechRecognizer: SpeechRecognizer? = null
@@ -105,6 +119,9 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
 
                 override fun onDone(utteranceId: String?) {
                     _isSpeaking.value = false
+                    mainHandler.postDelayed({
+                        onSpeechDoneListener?.invoke()
+                    }, 400L)
                 }
 
                 @Deprecated("Deprecated in Java")
@@ -296,6 +313,7 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
     }
 
     fun destroy() {
+        onSpeechDoneListener = null
         stopSpeaking()
         stopListening()
         try {

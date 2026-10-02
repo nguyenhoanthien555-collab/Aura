@@ -1,14 +1,23 @@
 package com.aura.companion.accessibility
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
+import android.os.SystemClock
 import android.provider.CalendarContract
 import android.provider.ContactsContract
 import android.provider.Telephony
@@ -119,6 +128,20 @@ object DeviceTaskToolCatalog {
             mutating = false,
             requiredPermission = "",
         ),
+        TaskToolSpec(
+            name = "android.toggle_flashlight",
+            required = emptySet(),
+            optional = setOf("enabled"),
+            mutating = true,
+            requiredPermission = "",
+        ),
+        TaskToolSpec(
+            name = "android.get_device_health",
+            required = emptySet(),
+            optional = emptySet(),
+            mutating = false,
+            requiredPermission = "",
+        ),
     ).associateBy { it.name }
 
     fun isTaskTool(tool: String): Boolean = tool in TOOLS
@@ -165,6 +188,8 @@ interface DeviceTaskHandler {
     suspend fun cancelAlarm(alarmId: String): Result<JsonObject>
     suspend fun setClipboard(text: String): Result<JsonObject>
     suspend fun getClipboard(): Result<JsonObject>
+    suspend fun toggleFlashlight(enabled: Boolean?): Result<JsonObject>
+    suspend fun getDeviceHealth(): Result<JsonObject>
 }
 
 /**
@@ -459,6 +484,62 @@ class AndroidDeviceTaskHandler(
         }
     }
 
+    private var isTorchOn: Boolean = false
+
+    override suspend fun toggleFlashlight(enabled: Boolean?): Result<JsonObject> = runCatching {
+        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
+            val chars = cameraManager.getCameraCharacteristics(id)
+            val hasFlash = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            val facing = chars.get(CameraCharacteristics.LENS_FACING)
+            hasFlash && facing == CameraCharacteristics.LENS_FACING_BACK
+        } ?: cameraManager.cameraIdList.firstOrNull { id ->
+            cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: throw IllegalStateException("Không tìm thấy đèn flash trên thiết bị này")
+
+        val targetState = enabled ?: !isTorchOn
+        cameraManager.setTorchMode(cameraId, targetState)
+        isTorchOn = targetState
+
+        buildJsonObject {
+            put("flashlight_enabled", targetState)
+            put("status", if (targetState) "on" else "off")
+        }
+    }
+
+    override suspend fun getDeviceHealth(): Result<JsonObject> = runCatching {
+        val batteryStatus = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPct = if (level >= 0 && scale > 0) (level * 100) / scale else -1
+        val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memInfo)
+
+        val stat = StatFs(Environment.getDataDirectory().path)
+        val freeBytes = stat.availableBytes
+        val totalBytes = stat.totalBytes
+        val freeGb = (freeBytes * 100 / (1024L * 1024 * 1024)).toDouble() / 100.0
+        val totalGb = (totalBytes * 100 / (1024L * 1024 * 1024)).toDouble() / 100.0
+
+        val uptimeSec = SystemClock.elapsedRealtime() / 1000
+
+        buildJsonObject {
+            put("battery_level", batteryPct)
+            put("is_charging", isCharging)
+            put("available_ram_mb", (memInfo.availMem / (1024 * 1024)).toInt())
+            put("total_ram_mb", (memInfo.totalMem / (1024 * 1024)).toInt())
+            put("low_memory", memInfo.lowMemory)
+            put("storage_free_gb", freeGb)
+            put("storage_total_gb", totalGb)
+            put("uptime_seconds", uptimeSec)
+            put("status", "healthy")
+        }
+    }
+
     private fun parseTimeToMillis(isoOrEpoch: String): Long {
         return try {
             isoOrEpoch.toLong()
@@ -600,6 +681,26 @@ class DeviceTaskDispatcher(
 
                 "android.get_clipboard" -> {
                     val res = handler.getClipboard().getOrThrow()
+                    success(directive = directive, result = res)
+                }
+
+                "android.toggle_flashlight" -> {
+                    val enabled = directive.arguments["enabled"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
+                    val res = handler.toggleFlashlight(enabled).getOrThrow()
+                    val newState = res["flashlight_enabled"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false
+                    success(
+                        directive = directive,
+                        result = res,
+                        postcondition = buildJsonObject {
+                            put("verified", true)
+                            put("action", "toggle_flashlight")
+                            put("flashlight_enabled", newState)
+                        },
+                    )
+                }
+
+                "android.get_device_health" -> {
+                    val res = handler.getDeviceHealth().getOrThrow()
                     success(directive = directive, result = res)
                 }
 

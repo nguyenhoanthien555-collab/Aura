@@ -1,6 +1,7 @@
 package com.aura.companion.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -101,7 +103,14 @@ fun ChatScreen(
                         Icon(
                             imageVector = if (state.isTtsEnabled) AuraIcons.VolumeUp else AuraIcons.VolumeOff,
                             contentDescription = if (state.isTtsEnabled) "Tắt đọc giọng nói" else "Bật đọc giọng nói",
-                            tint = if (state.isTtsEnabled) androidx.compose.ui.graphics.Color(0xFF38BDF8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.isTtsEnabled) Color(0xFF38BDF8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = viewModel::toggleHandsFreeMode) {
+                        Icon(
+                            imageVector = AuraIcons.Headset,
+                            contentDescription = if (state.isHandsFreeMode) "Tắt chế độ rảnh tay (Hands-Free)" else "Bật chế độ rảnh tay (Hands-Free)",
+                            tint = if (state.isHandsFreeMode) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (state.messages.isNotEmpty()) {
@@ -169,6 +178,39 @@ fun ChatScreen(
                 state = state,
                 onRefreshTelemetry = viewModel::refreshTelemetry,
             )
+
+            AnimatedVisibility(visible = state.isHandsFreeMode) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .background(
+                            color = Color(0x2200E5FF),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Headset,
+                        contentDescription = null,
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = if (state.isListening) "Đang lắng nghe bạn nói..." else if (state.isSpeaking) "Aura đang trả lời..." else "Chế độ rảnh tay (Hands-Free) sẵn sàng",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF00E5FF),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "Nói 'tạm biệt' để tắt",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
             Box(modifier = Modifier.weight(1f)) {
 
