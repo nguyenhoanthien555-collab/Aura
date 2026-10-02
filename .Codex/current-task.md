@@ -1,5 +1,36 @@
 # Current task
 
+## Forensic Security & Architectural Hardening PASS COMPLETED (2026-10-02)
+
+Following the forensic audit (`AURA_FORENSIC_AUDIT.md`), all identified security vulnerabilities and architectural gaps have been resolved without rewriting core systems:
+
+- **Mục 1: Khắc phục Triệt để Lỗ hổng Tự động Duyệt Tool Nguy hiểm (`SEC-MCP-001`, `server/routes/mcp.py`)**:
+  - Chuyển `auto_approve` trong fallback của `execute_mcp_tool()` từ `{SAFE, SENSITIVE, DANGEROUS}` về duy nhất `{ToolRisk.SAFE}`.
+  - Các công cụ SENSITIVE và DANGEROUS khi chạy ở chế độ standalone không có interactive confirmation channel sẽ tự động bị từ chối (`ToolStatus.DENIED`, error code `CONFIRMATION_REQUIRED`, execution `not_attempted`).
+  - Sửa lỗi truyền đối số từ `executor.execute(name, **arguments)` thành `executor.execute(name, arguments)` đúng hợp đồng của `ToolExecutor`.
+- **Mục 2: Chống Rò rỉ Token & Giới hạn Tham số Query (`SEC-AUTH-002`, `server/routes/mcp.py`)**:
+  - Xóa bỏ hoàn toàn việc nhận token qua query parameter trên các endpoint `POST /api/mcp`, `GET /api/mcp/tools`, và `POST /api/mcp/messages`. Toàn bộ các endpoint này bắt buộc phải sử dụng header chuẩn `Authorization: Bearer <token>`, ngăn chặn triệt để việc ghi lộ token vào nhật ký Render/Cloudflare/reverse proxy logs.
+  - Giới hạn tham số query token duy nhất trên endpoint vận chuyển `GET /api/mcp/sse` (do chuẩn browser EventSource không gửi được custom header).
+  - So sánh token bằng hàm chống timing attacks `secrets.compare_digest`.
+- **Mục 3: Cơ chế Xác thực Fail-Closed Tuyệt đối (`SEC-AUTH-003`, `server/routes/mcp.py`)**:
+  - Khắc phục lỗ hổng fail-open: Khi `settings.auth_token` bị rỗng trên server, hệ thống không còn trả về `"dev"` mặc định mà fail-closed ném ra lỗi HTTP 500 Internal Server Error, trừ khi người vận hành chủ động bật cờ phát triển cục bộ `AURA_ALLOW_INSECURE=1`.
+- **Mục 4: Làm Rõ & Thẩm định Bằng chứng Trung thực Cho MCP Clients (`ARCH-VERIF-004`, `server/routes/mcp.py`)**:
+  - Trong `_format_mcp_result()`: Khi tool bị từ chối hoặc thất bại, trả về banner cảnh báo máy học rõ ràng `[AURA EXECUTION REFUSED/FAILED]` và khuyến cáo mô hình không được nhận vơ là đã thành công.
+  - Khi tool có bằng chứng postcondition xác nhận thực tế từ thiết bị (`EvidenceKind.POSTCONDITION`, `verified=True`), đính kèm rõ ràng `[AURA EVIDENCE: Verified physical postcondition on device]` giúp mô hình ngoại suy phản hồi dựa trên sự thật vật lý.
+- **Mục 5: Tương thích Đầy đủ Dòng Mô hình Suy luận (`LLM-COMPAT-005`, `brain/providers/chatgpt.py`)**:
+  - Nhận diện các mô hình suy luận `o1`, `o3` (`is_reasoning_model`).
+  - Tự động loại bỏ tham số `temperature` (do OpenAI reasoning models từ chối nhận custom temperature) và chuyển đổi vai trò chỉ thị hệ thống từ `system` sang `developer`.
+  - Tự động phát hiện và từ chối các mô hình reasoning không hỗ trợ function calling (`o1-preview`, `o1-mini`) kèm thông báo `ProviderUnavailableError` rõ ràng.
+  - Thêm ghi chú kỹ thuật minh bạch: `ChatGPTProvider` là REST API client giao tiếp trực tiếp với `api.openai.com` sử dụng `OPENAI_API_KEY`, không phải phiên duyệt web tiêu dùng hay desktop reverse-engineering.
+- **Mục 6: Dọn dẹp Hàng đợi SSE Tránh Rò rỉ Bộ nhớ (`RES-LEAK-006`, `server/routes/mcp.py`)**:
+  - Gắn timestamp hoạt động cuối cho từng phiên SSE trong `_sse_sessions`. Tự động dọn dẹp các session không hoạt động quá 30 phút.
+- **Mục 7: Kiểm thử & Xác nhận Toàn diện**:
+  - `tests/test_mcp_gateway.py`: 11/11 passed (100%).
+  - `tests/test_chatgpt_provider.py`: 10/10 passed (100%).
+  - `tests/test_chatgpt_evidence_verification.py`: 4/4 passed (100%).
+  - Tổng thể suite liên quan: 153/153 passed (100%).
+  - Android JVM suite: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+
 ## MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Cổng kết nối Giao thức Ngữ cảnh Mô hình (MCP Gateway - `server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:

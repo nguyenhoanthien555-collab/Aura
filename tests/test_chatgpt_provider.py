@@ -126,3 +126,46 @@ def test_chatgpt_error_mapping():
     # 500 Server error
     err_500 = classify_failure(provider.label, 500, '{"error": {"message": "Internal error"}}')
     assert isinstance(err_500, ProviderUnavailableError)
+
+
+def test_chatgpt_reasoning_model_payload_adaptation():
+    """LLM-COMPAT-005: Reasoning models (o1, o3) omit temperature and map system to developer role."""
+    provider = ChatGPTProvider(model="o3-mini")
+    assert provider.is_reasoning_model is True
+
+    payload = provider._payload("System instructions here", "User query")
+    assert "temperature" not in payload
+    assert payload["messages"][0]["role"] == "developer"
+    assert payload["messages"][0]["content"] == "System instructions here"
+    assert payload["messages"][1]["role"] == "user"
+
+
+def test_chatgpt_reasoning_model_send_adaptation():
+    """LLM-COMPAT-005: _send ensures reasoning payload has no temperature and maps system to developer."""
+    provider = ChatGPTProvider(model="o1")
+    assert provider.is_reasoning_model is True
+
+    mock_resp = {
+        "choices": [{"message": {"role": "assistant", "content": "Reasoning response"}}]
+    }
+
+    with patch("brain.providers.http_chat.HttpChatProvider._send", return_value=mock_resp) as mock_super_send:
+        raw_payload = {
+            "model": "o1",
+            "messages": [{"role": "system", "content": "Rules"}, {"role": "user", "content": "Question"}],
+            "temperature": 0.7,
+        }
+        res = provider._send(raw_payload)
+        assert res == mock_resp
+        dispatched_payload = mock_super_send.call_args[0][0]
+        assert "temperature" not in dispatched_payload
+        assert dispatched_payload["messages"][0]["role"] == "developer"
+
+
+def test_chatgpt_unsupported_reasoning_tools_rejected():
+    """LLM-COMPAT-005: Models without tool support (o1-mini, o1-preview) fail with ProviderUnavailableError."""
+    provider = ChatGPTProvider(model="o1-mini")
+    with pytest.raises(ProviderUnavailableError) as exc_info:
+        provider.generate_with_tools("System", [{"role": "user", "content": "test"}], [{"name": "tool"}])
+    assert "does not support tools" in str(exc_info.value)
+

@@ -138,12 +138,12 @@ def test_mcp_tools_call_unknown():
 
 
 def test_mcp_endpoint_auth(client):
-    """Test endpoint rejects unauthenticated calls and accepts valid bearer."""
-    # 1. Reject without token
+    """Test endpoint authentication and query parameter restrictions."""
+    # 1. Reject POST without token
     resp = client.post("/api/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
     assert resp.status_code == 401
 
-    # 2. Reject with bad token
+    # 2. Reject POST with bad token
     resp = client.post(
         "/api/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
@@ -151,7 +151,7 @@ def test_mcp_endpoint_auth(client):
     )
     assert resp.status_code == 401
 
-    # 3. Accept with valid token
+    # 3. Accept POST with valid Bearer header
     resp = client.post(
         "/api/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
@@ -160,17 +160,40 @@ def test_mcp_endpoint_auth(client):
     assert resp.status_code == 200
     assert resp.json()["result"] == {}
 
-    # 4. Accept with query token (?token=...)
+    # 4. SEC-AUTH-002: Reject query token on POST /api/mcp (prevent credential logging)
     resp = client.post(
         "/api/mcp?token=test-mcp-secret",
         json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["result"] == {}
+    assert resp.status_code == 401
+
+    # 5. SEC-AUTH-002: Reject query token on GET /api/mcp/tools
+    resp = client.get("/api/mcp/tools?token=test-mcp-secret")
+    assert resp.status_code == 401
+
+    # 6. SEC-AUTH-002: Strictly allow query token on transports with allow_query_token=True (e.g. GET /api/mcp/sse)
+    from fastapi import Request
+    from server.routes.mcp import _authenticate_mcp_request
+    req = Request({"type": "http", "headers": []})
+    tok = _authenticate_mcp_request(req, allow_query_token=True, token_query="test-mcp-secret")
+    assert tok == "test-mcp-secret"
+
+
+def test_mcp_auth_fail_closed(client, monkeypatch):
+    """SEC-AUTH-003: Auth fails closed (HTTP 500) if AURA_AUTH_TOKEN is unset."""
+    monkeypatch.delenv("AURA_ALLOW_INSECURE", raising=False)
+    orig_token = settings.auth_token
+    try:
+        settings.auth_token = ""
+        resp = client.post("/api/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        assert resp.status_code == 500
+        assert "not configured" in resp.json().get("detail", "")
+    finally:
+        settings.auth_token = orig_token
 
 
 def test_mcp_tools_rest_endpoint(client):
-    """Test GET /api/mcp/tools endpoint."""
+    """Test GET /api/mcp/tools endpoint with valid Bearer token."""
     resp = client.get(
         "/api/mcp/tools",
         headers={"Authorization": "Bearer test-mcp-secret"},
@@ -179,3 +202,53 @@ def test_mcp_tools_rest_endpoint(client):
     data = resp.json()
     assert "tools" in data
     assert data["count"] > 0
+
+
+def test_mcp_dangerous_tool_denied_in_fallback(monkeypatch):
+    """SEC-MCP-001: Fallback ToolPolicy in execute_mcp_tool refuses DANGEROUS tools."""
+    from tools.base import Tool, ToolRisk, ok
+    from server.routes import mcp
+
+    # Ensure get_runtime returns None to force standalone fallback
+    monkeypatch.setattr("server.runtime.get_runtime", lambda: None)
+
+    class TestDangerousTool(Tool):
+        name = "dangerous_wipe"
+        risk = ToolRisk.DANGEROUS
+        capability = "system.time"  # existing available capability
+        def execute(self, **kwargs):
+            return ok("wiped")
+
+    from tools.factory import build_registry as orig_build
+    def mock_build():
+        reg = orig_build()
+        reg.register(TestDangerousTool())
+        return reg
+
+    monkeypatch.setattr("tools.factory.build_registry", mock_build)
+
+    result = mcp.execute_mcp_tool("dangerous_wipe", {})
+    assert result.ok is False
+    assert result.status == "DENIED"
+    assert result.error_code == "CONFIRMATION_REQUIRED"
+
+    formatted = mcp._format_mcp_result(result)
+    assert formatted["isError"] is True
+    assert "[AURA EXECUTION REFUSED/FAILED]" in formatted["content"][0]["text"]
+    assert "CONFIRMATION_REQUIRED" in formatted["content"][0]["text"]
+
+
+
+def test_mcp_evidence_formatting():
+    """ARCH-VERIF-004: Evidence is clearly grounded in CallToolResult text and metadata."""
+    from tools.base import ToolResult
+    from tools.outcome import Evidence, EvidenceKind, ToolStatus
+    from server.routes.mcp import _format_mcp_result
+
+    ev = Evidence(kind=EvidenceKind.POSTCONDITION, source="android.postcondition", verified=True)
+    res = ToolResult(ok=True, output="Launched YouTube", evidence=(ev,), status=ToolStatus.SUCCESS.value)
+    formatted = _format_mcp_result(res)
+    assert formatted["isError"] is False
+    assert "[AURA EVIDENCE: Verified physical postcondition on device]" in formatted["content"][0]["text"]
+    assert formatted["_aura_meta"]["evidence"][0]["verified"] is True
+

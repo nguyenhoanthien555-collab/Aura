@@ -1,5 +1,32 @@
 # Progress
 
+## 2026-10-02 — Forensic Security & Architectural Hardening PASS COMPLETED
+
+- **Pillar 1: Remediate Dangerous Tool Auto-Approval in Standalone MCP Bridge (`SEC-MCP-001`, `server/routes/mcp.py`)**:
+  - Replaced overly permissive fallback policy `auto_approve={SAFE, SENSITIVE, DANGEROUS}` with strictly fail-safe `auto_approve=frozenset({ToolRisk.SAFE})`.
+  - In headless standalone mode without interactive confirmation channels, all `SENSITIVE` and `DANGEROUS` tools fail closed and return `ToolStatus.DENIED` with `error_code="CONFIRMATION_REQUIRED"`.
+  - Fixed argument passing bug: changed `executor.execute(name, **arguments)` to `executor.execute(name, arguments)`.
+- **Pillar 2: Prevent Token Exposure via Query Strings (`SEC-AUTH-002`, `server/routes/mcp.py`)**:
+  - Purged query token acceptance on `POST /api/mcp`, `GET /api/mcp/tools`, and `POST /api/mcp/messages`. Enforced mandatory `Authorization: Bearer <token>` to protect reverse proxies and Render access logs.
+  - Restricted query parameter authentication exclusively to `GET /api/mcp/sse` (required by standard browser `EventSource`).
+  - Switched token validation to constant-time `secrets.compare_digest`.
+- **Pillar 3: Fail-Closed Authentication (`SEC-AUTH-003`, `server/routes/mcp.py`)**:
+  - Eliminated auth fail-open bug when `AURA_AUTH_TOKEN` is unset. Now raises HTTP 500 Internal Server Error unless explicitly configured for local development via `AURA_ALLOW_INSECURE=1`.
+- **Pillar 4: Truthful Evidence & Denial Grounding for External MCP Clients (`ARCH-VERIF-004`, `server/routes/mcp.py`)**:
+  - Updated `_format_mcp_result()` to inject explicit notice banners: `[AURA EXECUTION REFUSED/FAILED]` on tool refusal/denial, and `[AURA EVIDENCE: Verified physical postcondition on device]` on verified postconditions.
+- **Pillar 5: Reasoning Model Adaptation & Disambiguation (`LLM-COMPAT-005`, `brain/providers/chatgpt.py`)**:
+  - Added reasoning model detection (`is_reasoning_model`). Automatically strips `temperature` parameter and converts `system` messages to `developer` role for `o1` and `o3` series.
+  - Rejects models lacking tool calling (`o1-preview`, `o1-mini`) with clear `ProviderUnavailableError`.
+  - Added transparent docstring documenting that `ChatGPTProvider` communicates via OpenAI REST API using `OPENAI_API_KEY` and is not a browser automation wrapper.
+- **Pillar 6: SSE In-Memory Queue TTL Eviction (`RES-LEAK-006`, `server/routes/mcp.py`)**:
+  - Added timestamp tracking to `_sse_sessions` and automatic pruning of sessions idle for over 30 minutes.
+- **Pillar 7: Verification & Test Suite**:
+  - `tests/test_mcp_gateway.py`: 11/11 passed (100%).
+  - `tests/test_chatgpt_provider.py`: 10/10 passed (100%).
+  - `tests/test_chatgpt_evidence_verification.py`: 4/4 passed (100%).
+  - Full related regression: 153/153 passed (100%).
+  - Android JVM test suite: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+
 ## 2026-10-02 — MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED
 
 - **Pillar 1: Model Context Protocol (MCP) Cloud Gateway (`server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:
