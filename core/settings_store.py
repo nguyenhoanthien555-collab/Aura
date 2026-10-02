@@ -449,6 +449,7 @@ ALLOWED: dict[str, object] = {
     "llm.openai_model": _non_empty_text(120),
     "llm.chatgpt_model": _non_empty_text(120),
     "llm.chatgpt_web_model": _non_empty_text(120),
+    "llm.chatgpt_web_base_url": _endpoint_url,
     "llm.anthropic_model": _non_empty_text(120),
     "llm.cerebras_model": _non_empty_text(120),
     "llm.xai_model": _non_empty_text(120),

@@ -37,6 +37,7 @@ class FakeSettings(
     syncEnabled: Boolean = true,
     deviceIntegrationEnabled: Boolean = true,
     intelligenceMode: String = "cloud",
+    chatgptSessionToken: String = "",
 ) : DeviceSettings {
 
     private val _settings = MutableStateFlow(
@@ -50,6 +51,7 @@ class FakeSettings(
             syncEnabled = syncEnabled,
             deviceIntegrationEnabled = deviceIntegrationEnabled,
             intelligenceMode = intelligenceMode,
+            chatgptSessionToken = chatgptSessionToken,
         )
     )
 
@@ -95,5 +97,9 @@ class FakeSettings(
 
     override fun setAllowCloudFallback(enabled: Boolean) {
         current = current.copy(allowCloudFallback = enabled)
+    }
+
+    override fun setChatgptSessionToken(token: String) {
+        current = current.copy(chatgptSessionToken = token)
     }
 }

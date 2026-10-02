@@ -1,5 +1,22 @@
 # AURA project state
 
+## Phone Egress Relay Tunnel for ChatGPT Web, Tool Policy Preservation & Residential IP Verification DELIVERED (2026-10-02)
+1. **Phone Egress Relay Tunnel (`server/routes/ws_chat.py`, `ChatGPTWebClient.kt`, `AuraStreamClient.kt`)**:
+   - Zero-cost ChatGPT Web operation without Cloudflare WAF HTTP 403 Forbidden blocks against cloud datacenters.
+   - When ChatGPT Web is active, server coordinates conversational turns via WebSocket frame `chatgpt_egress_request` to the user's Android phone.
+   - The phone executes the stream request via its clean residential Vietnamese IP (4G/Wi-Fi), solving OpenAI Sentinel Proof-of-Work in Kotlin, and streams chunk deltas (`chatgpt_egress_chunk`) back to Render.
+   - Cloud server executes tool calls, records memories, runs response verification, and emits the final `complete` response.
+   - Automatic fallback degrades to Gemini 2.5 Flash if phone loses connectivity.
+2. **Device-Native Session Verification & Keystore Encryption (`ChatGPTWebClient.kt`, `HubViewModel.kt`, `SettingsStore.kt`)**:
+   - Hub -> AI & Models "Kiểm tra kết nối" for ChatGPT Web tests directly from the phone's network.
+   - Session token stored in hardware-backed `EncryptedSharedPreferences`.
+3. **Android Hardware Tool Policy Retention (`server/settings_service.py`)**:
+   - Preserves `executor.policy.allowed` and `executor.policy.auto_approve` across settings reapplication, fixing `android.get_device_health` policy rejection.
+4. **Verification & Deployment**:
+   - Python tests: 257/257 passed in 231s (100% PASS RATE).
+   - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+   - APK built and deployed to physical OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) via ADB (`Success`, PID 16451).
+
 ## MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED (2026-10-02)
 1. **MCP (Model Context Protocol) Cloud Gateway (`server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:
    - Full MCP 2024-11-05 protocol gateway exposing Aura tools (PC, Workspace, Memory, Android Companion) to external reasoning engines (ChatGPT, Claude, Cursor).

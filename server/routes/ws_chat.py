@@ -10,6 +10,7 @@ generator is synchronous (it ultimately calls a blocking provider), so it
 is pumped through a worker thread rather than run on the event loop; a
 long generation must not stall `/api/health`.
 """
+import asyncio
 import json
 import time
 import uuid
@@ -190,6 +191,65 @@ async def chat_stream(
             if request.get("image"):
                 stream_context["image"] = request.get("image")
                 stream_context["image_mime"] = request.get("image_mime") or "image/jpeg"
+
+            # ------------------------------------------------------------------
+            # Phone Egress Relay Tunnel (Residential IP for ChatGPT Web)
+            # ------------------------------------------------------------------
+            conv = getattr(getattr(runtime, "engine", None), "conversation", None)
+            active_llm = getattr(conv, "llm", None) if conv else None
+            active_provider = getattr(active_llm, "active_provider_name", getattr(active_llm, "provider_name", ""))
+
+            if active_provider == "chatgpt_web" and stream_context.get("has_chatgpt_egress") and conv:
+                try:
+                    user_msg, prompt, turn, _task = conv._prepare(
+                        message, None, "text", stream_context, session_id=session_id
+                    )
+                    await websocket.send_json({
+                        "type": "chatgpt_egress_request",
+                        "prompt": prompt,
+                        "model": getattr(active_llm, "model", "auto"),
+                        "session_id": session_id,
+                        "message_id": message_id,
+                    })
+                    egress_chunks = []
+                    while True:
+                        raw_client = await asyncio.wait_for(websocket.receive_text(), timeout=45.0)
+                        client_msg = json.loads(raw_client)
+                        ftype = client_msg.get("type")
+                        if ftype == "chatgpt_egress_chunk":
+                            chunk = client_msg.get("chunk", "")
+                            if chunk:
+                                egress_chunks.append(chunk)
+                                delivered_fragments.append(chunk)
+                                produced_fragments.append(chunk)
+                                if first_chunk_at is None:
+                                    first_chunk_at = time.time()
+                                chunk_index += 1
+                        elif ftype == "chatgpt_egress_done":
+                            full_text = client_msg.get("text", "".join(egress_chunks))
+                            full_text = conv._resolve_tools(full_text, turn)
+                            verifier_summary = None
+                            if getattr(conv, "verifier", None):
+                                full_text, verifier_summary = conv._verify_final(
+                                    conv._voiced(conv._styled(full_text), turn), turn
+                                )
+                            conv._remember(user_msg, full_text, session_id=session_id)
+                            elapsed = time.time() - received_at
+                            await websocket.send_json({
+                                "type": "complete",
+                                "session_id": session_id,
+                                "message_id": message_id,
+                                "total_chunks": chunk_index,
+                                "elapsed_seconds": elapsed,
+                                "first_chunk_seconds": (first_chunk_at - received_at) if first_chunk_at else None,
+                                "text": full_text,
+                                "verifier": verifier_summary,
+                            })
+                            return
+                        elif ftype == "chatgpt_egress_error":
+                            raise RuntimeError(f"Phone egress error: {client_msg.get('error')}")
+                except Exception as egress_err:
+                    logger.warning("Phone egress relay failed (%s); falling back to server LLM chain", egress_err)
 
             fragments = runtime.chat_stream(
                 message,

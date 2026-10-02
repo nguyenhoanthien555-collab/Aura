@@ -593,14 +593,21 @@ private fun ApiKeyDialog(
                 contentDescription = null,
             )
         },
-        title = { Text("API key") },
+        title = {
+            Text(if (provider?.name == "chatgpt_web") "ChatGPT Web Session Token" else "API key")
+        },
         text = {
             Column {
 
                 Text(
-                    text = "Sent once, over the same encrypted connection as " +
-                        "everything else, and stored encrypted on the Aura " +
-                        "server. It is never sent back to this app.",
+                    text = if (provider?.name == "chatgpt_web") {
+                        "Dán cookie __Secure-next-auth.session-token từ tài khoản clone ChatGPT Web của bạn. " +
+                            "Token được mã hóa an toàn trong Android Keystore và dùng để kết nối trực tiếp qua mạng 4G/Wi-Fi của điện thoại mà không bị Cloudflare chặn."
+                    } else {
+                        "Sent once, over the same encrypted connection as " +
+                            "everything else, and stored encrypted on the Aura " +
+                            "server. It is never sent back to this app."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

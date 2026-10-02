@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-10-02 — Phone Egress Relay Tunnel for ChatGPT Web, Tool Policy Preservation & Residential IP Verification DELIVERED
+
+- **Pillar 1: Phone Egress Relay Tunnel (`server/routes/ws_chat.py`, `ChatGPTWebClient.kt`, `AuraStreamClient.kt`)**:
+  - Eliminated Cloudflare WAF HTTP 403 Forbidden blocks against Render cloud datacenters by routing ChatGPT Web conversation streams through the Android phone's clean residential IP.
+  - Implemented bidirectional relay: Render emits `chatgpt_egress_request` over WebSocket; phone executes conversation API with local pure-Kotlin Sentinel Proof-of-Work solver; streams `chatgpt_egress_chunk` back to cloud; Render executes tool calls and returns final verified response.
+  - Fail-safe fallback: Automatically degrades to Gemini 2.5 Flash if phone loses connectivity.
+- **Pillar 2: Hardware-Backed Session Storage & In-App Direct Verification (`ChatGPTWebClient.kt`, `HubViewModel.kt`, `SettingsStore.kt`)**:
+  - Connection test for ChatGPT Web runs directly on device network via `verifySession()`.
+  - Stored securely in Android Keystore `EncryptedSharedPreferences`.
+- **Pillar 3: Tool Policy Retention on Settings Reapplication (`server/settings_service.py`)**:
+  - Fixed `_reapply_tools()` to preserve `executor.policy.allowed` and `executor.policy.auto_approve` across settings updates, fixing the `android.get_device_health` policy error.
+- **Pillar 4: Comprehensive Verification & Physical Deployment**:
+  - Python tests: 257/257 passed in 231s (100% PASS RATE).
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+  - Deployed debug APK to OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) via ADB (`Success`, PID 16451).
+
 ## 2026-10-02 — ChatGPT Web Provider, Resilient Web Search & Runtime Hardening DELIVERED
 
 - **Pillar 1: Zero-Cost ChatGPT Web Provider Integration (`brain/providers/chatgpt_web.py`, `brain/router.py`)**:

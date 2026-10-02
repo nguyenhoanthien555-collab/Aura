@@ -2,6 +2,8 @@ package com.aura.companion.data.remote
 
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.settings.SettingsProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -75,18 +77,62 @@ class AuraStreamClient(
                     webSocketRef.set(webSocket)
                     // The server reads exactly one frame, then replies.
                     // `context` rides along when the caller has one - the
-                    // frame schema already carried the field, and the
-                    // route forwards it into the same conversation
-                    // pipeline a REST turn uses.
+                    val augmentedContext = JsonObject(
+                        context + mapOf(
+                            "has_chatgpt_egress" to JsonPrimitive(settings.current.chatgptSessionToken.isNotBlank()),
+                            "client" to JsonPrimitive("android"),
+                        )
+                    )
                     webSocket.send(
                         ApiFactory.json.encodeToString(
                             StreamRequestDto.serializer(),
-                            StreamRequestDto(message = message, context = context),
+                            StreamRequestDto(message = message, context = augmentedContext),
                         )
                     )
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
+
+                    // Check for Phone Egress Relay request from server
+                    val parsedJson = runCatching { ApiFactory.json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+                    if (parsedJson != null && (parsedJson["type"] as? JsonPrimitive)?.content == "chatgpt_egress_request") {
+                        val prompt = (parsedJson["prompt"] as? JsonPrimitive)?.content.orEmpty()
+                        val model = (parsedJson["model"] as? JsonPrimitive)?.content ?: "auto"
+                        val sessionToken = settings.current.chatgptSessionToken
+                        if (sessionToken.isBlank()) {
+                            val errFrame = JsonObject(mapOf(
+                                "type" to JsonPrimitive("chatgpt_egress_error"),
+                                "error" to JsonPrimitive("ChatGPT Web Session Token chưa được cấu hình trên điện thoại")
+                            ))
+                            webSocket.send(errFrame.toString())
+                        } else {
+                            launch(Dispatchers.IO) {
+                                var chunkIndex = 0
+                                val res = ChatGPTWebClient.streamConversation(prompt, sessionToken, model) { chunk ->
+                                    trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
+                                    val frame = JsonObject(mapOf(
+                                        "type" to JsonPrimitive("chatgpt_egress_chunk"),
+                                        "chunk" to JsonPrimitive(chunk)
+                                    ))
+                                    webSocket.send(frame.toString())
+                                }
+                                res.onSuccess { fullText ->
+                                    val doneFrame = JsonObject(mapOf(
+                                        "type" to JsonPrimitive("chatgpt_egress_done"),
+                                        "text" to JsonPrimitive(fullText)
+                                    ))
+                                    webSocket.send(doneFrame.toString())
+                                }.onFailure { error ->
+                                    val errFrame = JsonObject(mapOf(
+                                        "type" to JsonPrimitive("chatgpt_egress_error"),
+                                        "error" to JsonPrimitive(error.localizedMessage ?: "Egress stream error")
+                                    ))
+                                    webSocket.send(errFrame.toString())
+                                }
+                            }
+                        }
+                        return
+                    }
 
                     val event = parse(text)
 

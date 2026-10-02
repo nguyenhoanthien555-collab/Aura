@@ -65,6 +65,7 @@ DEFAULT_CONFIG = {
         "openai_model": "gpt-5.1",
         "chatgpt_model": "gpt-4o",
         "chatgpt_web_model": "auto",
+        "chatgpt_web_base_url": "",
         "anthropic_model": "claude-sonnet-5",
         "cerebras_model": "llama-3.3-70b",
         "xai_model": "grok-4",

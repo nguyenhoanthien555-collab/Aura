@@ -751,29 +751,52 @@ class HubViewModel(
 
         viewModelScope.launch {
 
-            val outcome = when (val result = repository.testProvider(name)) {
-
-                is AuraResult.Ok -> {
-
-                    val body = result.value
-
-                    if (body.ok) {
+            val outcome = if (name == "chatgpt_web") {
+                val token = settings.current.chatgptSessionToken
+                if (token.isBlank()) {
+                    TestOutcome(
+                        ok = false,
+                        message = "Chưa lưu Session Token. Hãy bấm 'Đổi key' để nhập cookie token.",
+                    )
+                } else {
+                    val res = com.aura.companion.data.remote.ChatGPTWebClient.verifySession(token)
+                    if (res.ok) {
                         TestOutcome(
                             ok = true,
-                            message = "Answered in ${body.latencyMs} ms" +
-                                if (body.model.isNotBlank()) " (${body.model})" else "",
+                            message = "200 OK · Session hoạt động tốt trên 4G/Wi-Fi (${res.email})",
                         )
                     } else {
-                        // `error` is a category and `detail` an exception
-                        // class name at most - see the route's docstring.
                         TestOutcome(
                             ok = false,
-                            message = body.error.ifBlank { "Did not respond" },
+                            message = res.error ?: "Lỗi xác thực",
                         )
                     }
                 }
+            } else {
+                when (val result = repository.testProvider(name)) {
 
-                is AuraResult.Failed -> TestOutcome(false, result.error.userMessage)
+                    is AuraResult.Ok -> {
+
+                        val body = result.value
+
+                        if (body.ok) {
+                            TestOutcome(
+                                ok = true,
+                                message = "Answered in ${body.latencyMs} ms" +
+                                    if (body.model.isNotBlank()) " (${body.model})" else "",
+                            )
+                        } else {
+                            // `error` is a category and `detail` an exception
+                            // class name at most - see the route's docstring.
+                            TestOutcome(
+                                ok = false,
+                                message = body.error.ifBlank { "Did not respond" },
+                            )
+                        }
+                    }
+
+                    is AuraResult.Failed -> TestOutcome(false, result.error.userMessage)
+                }
             }
 
             _state.update {
@@ -801,6 +824,10 @@ class HubViewModel(
     fun saveProviderKey(provider: String, key: String) {
 
         if (key.isBlank()) return
+
+        if (provider == "chatgpt_web") {
+            settings.setChatgptSessionToken(key)
+        }
 
         _state.update {
             it.copy(
@@ -855,6 +882,10 @@ class HubViewModel(
     }
 
     fun deleteProviderKey(provider: String) {
+
+        if (provider == "chatgpt_web") {
+            settings.setChatgptSessionToken("")
+        }
 
         _state.update {
             it.copy(providerAction = it.providerAction.copy(savingKey = provider))

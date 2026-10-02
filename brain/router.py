@@ -161,6 +161,12 @@ class BrainRouter:
         # providers whenever `llm.offline`/AURA_OFFLINE was set - was
         # removed with the local LLM subsystem.
         fallback_names = self._fallback_names(config)
+        if (
+            name != "gemini"
+            and "gemini" not in fallback_names
+            and os.getenv("GEMINI_API_KEY")
+        ):
+            fallback_names.insert(0, "gemini")
 
         # The primary is built through the same guarded path as a
         # fallback. It used to be built inline and a `None` raised
@@ -462,10 +468,16 @@ class BrainRouter:
             if not os.getenv("CHATGPT_SESSION_TOKEN"):
                 return None
             from brain.providers.chatgpt_web import ChatGPTWebProvider
+            base_url = (
+                config.get("chatgpt_web_base_url")
+                or os.getenv("CHATGPT_BASE_URL")
+                or "https://chatgpt.com"
+            )
             return ChatGPTWebProvider(
                 session_token=os.getenv("CHATGPT_SESSION_TOKEN"),
                 model=config.get("chatgpt_web_model") or "auto",
                 timeout=float(config.get("timeout", 60.0)),
+                base_url=base_url,
             )
 
         spec = HTTP_CHAT_PROVIDERS.get(name)

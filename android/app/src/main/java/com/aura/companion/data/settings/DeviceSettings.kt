@@ -38,4 +38,6 @@ interface DeviceSettings : SettingsProvider {
     fun setIntelligenceMode(mode: String)
 
     fun setAllowCloudFallback(enabled: Boolean)
+
+    fun setChatgptSessionToken(token: String)
 }

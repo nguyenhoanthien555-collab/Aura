@@ -1,5 +1,26 @@
 # Current task
 
+## Phone Egress Relay Tunnel for ChatGPT Web, Tool Policy Preservation & Residential IP Verification DELIVERED (2026-10-02)
+
+Following the user requirement to utilize ChatGPT Web (free clone account with zero-token usage cost) as Aura's always-on brain without VPN blocks or keeping the PC on:
+
+- **Trụ cột 1: Cầu nối Egress Dân cư Qua Điện thoại (Phone Egress Relay Tunnel - `server/routes/ws_chat.py`, `ChatGPTWebClient.kt`, `AuraStreamClient.kt`)**:
+  - Giải quyết triệt để vấn đề Cloudflare WAF HTTP 403 Forbidden ("Unable to load site / VPN block") khi container Render Cloud truy cập `chatgpt.com`.
+  - Không yêu cầu VPN bên thứ ba, không đòi hỏi laptop PC phải bật liên tục.
+  - Khi `active_provider == "chatgpt_web"`, server Render khởi tạo lượt trò chuyện và gửi frame `chatgpt_egress_request` qua kênh WebSocket hai chiều `/api/chat/stream` xuống điện thoại Android.
+  - Điện thoại (OPPO Reno6 5G kết nối 4G/Wi-Fi với địa chỉ IP dân cư Việt Nam sạch) tự động giải Proof-of-Work của OpenAI Sentinel bằng Kotlin thuần, kết nối trực tiếp `https://chatgpt.com/backend-api/conversation`, và truyền ngược stream chunk (`chatgpt_egress_chunk`) về máy chủ.
+  - Server thực thi tool calls, ghi nhớ ngữ cảnh, thẩm định phản hồi và gửi kết quả hoàn tất `complete` cho người dùng.
+  - Cơ chế bọc lót an toàn (Fail-safe Fallback): Nếu điện thoại ngắt kết nối hoặc mất sóng, hệ thống tự động giáng cấp mượt mà về Google Gemini 2.5 Flash trên Render mà không gián đoạn cuộc trò chuyện.
+- **Trụ cột 2: Xác thực Phiên Trực tiếp & Lưu trữ Keystore Phần cứng (`ChatGPTWebClient.kt`, `HubViewModel.kt`, `ModelsSection.kt`, `SettingsStore.kt`)**:
+  - Tính năng "Kiểm tra kết nối" cho ChatGPT Web tại Hub -> AI & Models được chuyển sang thực thi trực tiếp từ IP dân cư của điện thoại (`ChatGPTWebClient.verifySession()`), loại bỏ hoàn toàn lỗi báo sai do IP datacenter của Render bị chặn.
+  - Session token được mã hóa an toàn bằng `EncryptedSharedPreferences` bảo vệ bởi phần cứng Android Keystore.
+- **Trụ cột 3: Bảo toàn Quyền Tool Phần cứng Android (`server/settings_service.py`)**:
+  - Sửa lỗi trong `_reapply_tools()`: Bảo toàn `executor.policy.allowed` và `executor.policy.auto_approve` khi cập nhật cài đặt qua PATCH, khắc phục triệt để lỗi `tool not allowed by policy: android.get_device_health` sau khi chuyển đổi mô hình hoặc cấu hình.
+- **Trụ cột 4: Kiểm thử Toàn diện & Triển khai Phần cứng**:
+  - Python tests: 257/257 passed in 231s (100% PASS RATE).
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+  - Đóng gói APK `:app:assembleDebug` và nạp thành công vào điện thoại OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) qua ADB (`Success`, PID 16451).
+
 ## ChatGPT Web Provider, Resilient Web Search & Runtime Hardening DELIVERED (2026-10-02)
 
 Following the user requirement to utilize ChatGPT Web (free clone account with zero-token usage cost) as Aura's always-on brain and fix web search timeouts:

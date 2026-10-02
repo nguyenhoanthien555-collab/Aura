@@ -125,6 +125,7 @@ class SettingsStore(context: Context) : DeviceSettings {
         dynamicColour = prefs.getBoolean(KEY_DYNAMIC, false),
         intelligenceMode = prefs.getString(KEY_INTELLIGENCE_MODE, "cloud") ?: "cloud",
         allowCloudFallback = prefs.getBoolean(KEY_ALLOW_CLOUD_FALLBACK, false),
+        chatgptSessionToken = prefs.getString(KEY_CHATGPT_SESSION_TOKEN, "") ?: "",
     )
 
     /**
@@ -208,10 +209,16 @@ class SettingsStore(context: Context) : DeviceSettings {
         _settings.value = read()
     }
 
+    override fun setChatgptSessionToken(token: String) {
+        prefs.edit().putString(KEY_CHATGPT_SESSION_TOKEN, token.trim()).apply()
+        _settings.value = read()
+    }
+
     fun clear() {
         prefs.edit()
             .putString(KEY_URL, "")
             .remove(KEY_TOKEN)
+            .remove(KEY_CHATGPT_SESSION_TOKEN)
             .apply()
         _settings.value = read()
     }
@@ -238,6 +245,7 @@ class SettingsStore(context: Context) : DeviceSettings {
         private const val KEY_DYNAMIC_REVEAL = "dynamic_colour_reveal_v2"
         private const val KEY_INTELLIGENCE_MODE = "intelligence_mode"
         private const val KEY_ALLOW_CLOUD_FALLBACK = "allow_cloud_fallback"
+        private const val KEY_CHATGPT_SESSION_TOKEN = "chatgpt_session_token"
         private const val KEY_TOKEN_SEED = "token_seed_v4"
 
         /**
@@ -316,6 +324,7 @@ data class AuraSettings(
     val dynamicColour: Boolean = false,
     val intelligenceMode: String = "cloud",
     val allowCloudFallback: Boolean = false,
+    val chatgptSessionToken: String = "",
 ) {
     val isOnDevice: Boolean get() = intelligenceMode == "on_device"
 

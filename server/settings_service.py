@@ -123,6 +123,7 @@ LIVE_PATHS = {
     "llm.provider", "llm.gemini_model",
     "llm.fallback_providers", "llm.fallback_model",
     "llm.groq_model", "llm.mistral_model",
+    "llm.chatgpt_model", "llm.chatgpt_web_model", "llm.chatgpt_web_base_url",
     "llm.temperature", "llm.max_output_tokens", "llm.timeout",
     "proactive.enabled", "proactive.cooldown_seconds",
     "proactive.max_per_day", "proactive.quiet_hours",
@@ -648,9 +649,13 @@ class SettingsService:
         from tools.executor import ToolPolicy
 
         try:
-            executor.policy = ToolPolicy.from_config(
-                load_config().get("tools") or {}
-            )
+            tools_cfg = dict(load_config().get("tools") or {})
+            if executor.policy and executor.policy.allowed:
+                if not tools_cfg.get("allowed"):
+                    tools_cfg["allowed"] = list(executor.policy.allowed)
+                if not tools_cfg.get("auto_approve"):
+                    tools_cfg["auto_approve"] = [r.value for r in executor.policy.auto_approve]
+            executor.policy = ToolPolicy.from_config(tools_cfg)
         except Exception as error:                 # pragma: no cover
             logger.warning(
                 "Tool policy could not be rebuilt (%s); the running policy "
