@@ -176,3 +176,22 @@ def test_chatgpt_web_error_mapping():
             mock_stream_ctx.return_value.__enter__.return_value = resp_500
             with pytest.raises(ProviderUnavailableError):
                 provider.generate("test")
+
+
+def test_format_chatgpt_cookie():
+    from brain.providers.chatgpt_web import format_chatgpt_cookie
+
+    # Direct cookie string
+    raw = "__Secure-next-auth.session-token.0=part0; __Secure-next-auth.session-token.1=part1"
+    assert format_chatgpt_cookie(raw) == raw
+
+    # Semicolon separated chunks
+    chunks_semi = "val0;val1"
+    formatted = format_chatgpt_cookie(chunks_semi)
+    assert "__Secure-next-auth.session-token.0=val0" in formatted
+    assert "__Secure-next-auth.session-token.1=val1" in formatted
+    assert "__Secure-next-auth.session-token=val0val1" in formatted
+
+    # Single short token
+    assert format_chatgpt_cookie("short_token") == "__Secure-next-auth.session-token=short_token"
+

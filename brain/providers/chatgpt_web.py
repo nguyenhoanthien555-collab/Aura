@@ -60,6 +60,48 @@ def solve_sentinel_pow(seed: str, difficulty: str, max_iterations: int = 500_000
     return "0"
 
 
+def format_chatgpt_cookie(raw_token: str) -> str:
+    """
+    Formats the Cookie header for ChatGPT NextAuth session token.
+    Handles:
+    1. Full cookie string (e.g. '__Secure-next-auth.session-token.0=...; __Secure-next-auth.session-token.1=...')
+    2. Chunked tokens joined with ';' or '\n'
+    3. Single unchunked JWT string (or merged chunked string)
+    """
+    raw = (raw_token or "").strip()
+    if not raw:
+        return ""
+    if "__Secure-next-auth.session-token" in raw and "=" in raw:
+        return raw
+
+    if ";" in raw:
+        parts = [p.strip() for p in raw.split(";") if p.strip()]
+    elif "\n" in raw:
+        parts = [p.strip() for p in raw.splitlines() if p.strip()]
+    else:
+        parts = [raw]
+
+    if len(parts) >= 2:
+        cookies = []
+        for idx, part in enumerate(parts):
+            cookies.append(f"__Secure-next-auth.session-token.{idx}={part}")
+        merged = "".join(parts)
+        cookies.append(f"__Secure-next-auth.session-token={merged}")
+        return "; ".join(cookies)
+
+    single = parts[0]
+    if len(single) > 3800:
+        c0 = single[:3800]
+        c1 = single[3800:]
+        return (
+            f"__Secure-next-auth.session-token={single}; "
+            f"__Secure-next-auth.session-token.0={c0}; "
+            f"__Secure-next-auth.session-token.1={c1}"
+        )
+
+    return f"__Secure-next-auth.session-token={single}"
+
+
 class ChatGPTWebProvider(LLM, StreamingLLM):
     """
     LLM provider connecting Aura Cloud directly to ChatGPT Web backend.
@@ -104,7 +146,7 @@ class ChatGPTWebProvider(LLM, StreamingLLM):
         headers = {
             "User-Agent": DEFAULT_CHATGPT_USER_AGENT,
             "Accept": "application/json",
-            "Cookie": f"__Secure-next-auth.session-token={self.session_token}",
+            "Cookie": format_chatgpt_cookie(self.session_token),
         }
 
         try:
