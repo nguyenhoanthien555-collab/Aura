@@ -1,5 +1,38 @@
 # Current task
 
+## Multi-Provider Cloud Failover Resilience, Android UI Ergonomic Redesign & Spacious 4-Tab Cyber Dock DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Xử lý Triệt để Lỗi Sập Render Server & Cloud Failover Chịu Lỗi Cao (`brain/providers/`)**:
+  - `brain/providers/groq.py`: Thêm `User-Agent: Aura/1.0 (Linux; Android Companion Client)` trong `_request()` tránh bị Cloudflare edge block 403 Forbidden. Xử lý HTTP 401/403 thành `ProviderUnavailableError` để kích hoạt failover sang provider tiếp theo.
+  - `brain/providers/openrouter.py`: Bổ sung model candidates miễn phí còn sống (`google/gemma-4-31b-it:free`, `nvidia/nemotron-nano-12b-v2-vl:free`, `google/gemma-4-26b-a4b-it:free`, `qwen/qwen3.8-27b:free`, `nvidia/nemotron-3.5-lightning:free`). Xử lý HTTP 400/404 như `ProviderUnavailableError`, bọc `except Exception` trong vòng lặp thử model, và bổ sung headers chuẩn OpenRouter (`HTTP-Referer`, `X-Title`, `User-Agent`).
+  - `brain/providers/fallback.py`: Tự động retry nhanh 1 lần (delay 1s) cho provider chính khi gặp lỗi transient `ProviderUnavailableError` trước khi chuyển tiếp trong chuỗi failover (cả `generate` và `stream`).
+  - Kiểm thử: 44 tests passed (`tests/test_cloud_failover.py`, `tests/test_fallback_stream.py`).
+- **Trụ cột 2: Tái cấu trúc TopAppBar Tối giản, Chống chen chúc Chật chội (`ChatScreen.kt`, `AuraIcons.kt`)**:
+  - Thiết kế vector icon độc bản `AuraIcons.MoreVert` (ba chấm kim cương cyber dọc).
+  - Thu gọn thanh TopAppBar từ 6 nút icon dày đặc thành đúng 2 công tắc chức năng (`Headset` Walkie-Talkie neon cyan, `Volume` TTS sky blue) cùng 1 nút menu mở rộng `MoreVert`.
+  - Toàn bộ các lối tắt ("Đoạn chat mới", "Bong bóng chat nổi", "Báo thức Aura", "Trung tâm điều khiển") được tích hợp vào `DropdownMenu` kính mờ, loại bỏ nguy cơ bấm nhầm và mở rộng tối đa không gian hiển thị tiêu đề và trạng thái kết nối.
+- **Trụ cột 3: Dải Trạng thái Tinh gọn Slim Cyber Status Strip (`AuraCyberCore.kt`)**:
+  - Tối ưu `AuraCyberCoreCapsule` từ hộp 2 tầng chiếm ~80dp thành dải cyber strip đơn tầng thanh lịch chỉ ~34-36dp.
+  - Trái: Mini pulsing core 24dp + nhãn `AURA` monospace + đèn trạng thái + trạng thái kết nối ngắn gọn.
+  - Phải: Hai badge telemetry mini `[☁️ 220ms]` và `[📱 85%⚡]` kèm mũi tên chevron `>`.
+  - Tiết kiệm ~45dp chiều dọc màn hình, nhường toàn bộ không gian cho khung hội thoại tin nhắn. Chạm vào dải vẫn mở đầy đủ bảng thông số `DualDeviceTelemetrySheet`.
+- **Trụ cột 4: Thanh Điều hướng Ergonomic 4 Tab Thoáng đãng (`AuraCyberDock.kt`)**:
+  - Thu gọn từ 5 tab chật chội (~60dp) thành 4 tab rộng rãi công thái học (~85dp):
+    1. 💬 `Trò chuyện` (`chat`)
+    2. ⏰ `Báo thức` (`HubRoutes.ALARMS`)
+    3. 🧠 `Trí nhớ` (`HubRoutes.MEMORY`)
+    4. ⚙️ `Trung tâm` (`HubRoutes.HUB` / hợp nhất các phân hệ cài đặt & công cụ)
+  - Tab được chọn hiển thị viên thuốc phát sáng neon gradient, không gian bấm cực kỳ thoải mái và vừa vặn ngón tay.
+- **Trụ cột 5: Tối ưu Giao diện Trung tâm HubScreen (`HubScreen.kt`)**:
+  - Loại bỏ hoàn toàn `ChatCard` trùng lặp ("Talk to Aura") vì màn hình chat đã có sẵn ngay tại Tab 1 của dock.
+  - Thay thế khối lưới 2x2 vuông cồng kềnh `TileGrid` bằng thanh ruy-băng trạng thái cuộn ngang siêu mỏng `StatusRibbon` (`Provider`, `Memory`, `Awareness`, `Proactive`).
+  - Đưa toàn bộ nhóm thiết lập cốt lõi (AI & Models, Memory, Vision, Voice) lên ngay nửa trên màn hình mà không cần phải cuộn chuột dài.
+- **Trụ cột 6: Kiểm thử Toàn diện & Triển khai Trực tiếp Thiết bị Oppo CPH2251**:
+  - Python tests: 81/81 passed (100%).
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+  - Đóng gói APK `:app:assembleDebug` và cài đặt trực tiếp qua ADB lên thiết bị Oppo CPH2251 (`IBCQMB4PTGNZJVTO`).
+  - Chụp ảnh màn hình thực tế và xác minh giao diện trực tiếp trên 4 màn hình: ChatScreen, DropdownMenu, HubScreen, AlarmScreen, MemoryScreen.
+
 ## Cloud Failover Stream, Semantic Memory Tables, High-Fidelity Edge TTS & Alarm Quick-Access Hub DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Chế độ Streaming Đa Provider & Failover Mượt mà (`brain/providers/fallback.py`, `brain/router.py`)**:

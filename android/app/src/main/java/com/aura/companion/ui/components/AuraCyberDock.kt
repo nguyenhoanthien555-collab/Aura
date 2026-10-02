@@ -117,17 +117,10 @@ fun AuraCyberDock(
                     modifier = Modifier.weight(1f),
                 )
                 DockTabItem(
-                    label = "Công cụ",
-                    icon = AuraIcons.Build,
-                    selected = currentRoute == HubRoutes.HUB || currentRoute == HubRoutes.TOOLS,
+                    label = "Trung tâm",
+                    icon = AuraIcons.Settings,
+                    selected = currentRoute == HubRoutes.HUB || currentRoute == HubRoutes.TOOLS || currentRoute == HubRoutes.DIAGNOSTICS || currentRoute == HubRoutes.AURA,
                     onClick = { onNavigate(HubRoutes.HUB) },
-                    modifier = Modifier.weight(1f),
-                )
-                DockTabItem(
-                    label = "Hệ thống",
-                    icon = AuraIcons.MonitorHeart,
-                    selected = currentRoute == HubRoutes.DIAGNOSTICS || currentRoute == HubRoutes.AURA,
-                    onClick = { onNavigate(HubRoutes.DIAGNOSTICS) },
                     modifier = Modifier.weight(1f),
                 )
             }

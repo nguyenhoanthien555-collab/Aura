@@ -29,6 +29,8 @@ def _failure(status: int, body: str, retry_after: str | None = None):
             is_account_limit = True
 
         return ProviderRateLimitError(message, retry_after=wait, is_account_limit=is_account_limit)
+    if status in (401, 403):
+        return ProviderUnavailableError(f"Groq authentication or access denied: HTTP {status}")
     if status >= 500 or status in (408, 409):
         return ProviderUnavailableError(message)
     return RuntimeError(message)
@@ -75,7 +77,8 @@ class GroqProvider(BaseProvider):
             data=payload,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "Aura/1.0 (Linux; Android Companion Client)",
             },
             method="POST",
         )

@@ -183,6 +183,30 @@ object AuraIcons {
         }
     }
 
+    /** Vertical triple cyber diamond nodes (menu overflow). */
+    val MoreVert: ImageVector by lazy {
+        icon("MoreVert") {
+            // Top node
+            moveTo(12.0f, 4.0f)
+            lineTo(13.8f, 5.8f)
+            lineTo(12.0f, 7.6f)
+            lineTo(10.2f, 5.8f)
+            close()
+            // Middle node
+            moveTo(12.0f, 10.2f)
+            lineTo(13.8f, 12.0f)
+            lineTo(12.0f, 13.8f)
+            lineTo(10.2f, 12.0f)
+            close()
+            // Bottom node
+            moveTo(12.0f, 16.4f)
+            lineTo(13.8f, 18.2f)
+            lineTo(12.0f, 20.0f)
+            lineTo(10.2f, 18.2f)
+            close()
+        }
+    }
+
     // ----------------------------------------------------------------------
     // Intelligence & Memory System Icons
     // ----------------------------------------------------------------------

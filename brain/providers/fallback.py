@@ -73,6 +73,19 @@ class FallbackProvider:
                 self.attempts.append((p_name, "ok", ""))
                 return reply
             except Exception as error:
+                # If primary provider had a transient error, retry once after 1s before failing over
+                if index == 0 and isinstance(error, ProviderUnavailableError):
+                    logger.info("Primary provider %s encountered transient error; retrying once after 1s...", p_name)
+                    import time
+                    time.sleep(1.0)
+                    try:
+                        reply = provider.generate(prompt)
+                        self.active_provider_name = p_name
+                        self.attempts.append((p_name, "ok", ""))
+                        return reply
+                    except Exception as retry_err:
+                        error = retry_err
+
                 last_error = error
 
                 category = _category_of(error)
@@ -171,6 +184,23 @@ class FallbackProvider:
                     # If we already yielded chunks to the client, we cannot rewind the stream
                     if chunks_yielded > 0:
                         raise
+                    # If primary provider transient blip before any chunks, quick retry once
+                    if index == 0 and isinstance(error, ProviderUnavailableError):
+                        logger.info("Primary stream provider %s encountered transient error; retrying once after 1s...", p_name)
+                        import time
+                        time.sleep(1.0)
+                        try:
+                            stream_iter = provider.stream(prompt, **kwargs) if kwargs else provider.stream(prompt)
+                            for chunk in stream_iter:
+                                if chunk:
+                                    chunks_yielded += 1
+                                    yield chunk
+                            if chunks_yielded > 0:
+                                self.active_provider_name = p_name
+                                self.attempts.append((p_name, "ok", ""))
+                                return
+                        except Exception as retry_err:
+                            error = retry_err
                     if category == ACCOUNT_LIMIT:
                         break
                     continue

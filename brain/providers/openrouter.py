@@ -78,6 +78,8 @@ def _failure(status: int, body: str, retry_after: str | None = None, model: str 
         )
 
         return ProviderRateLimitError(message, retry_after=wait, is_account_limit=is_account_limit)
+    if status in (400, 404):
+        return ProviderUnavailableError(f"OpenRouter model {model} unavailable: HTTP {status}")
     if status >= 500 or status in (408, 409):
         return ProviderUnavailableError(message)
     return RuntimeError(message)
@@ -99,20 +101,18 @@ class OpenRouterProvider(BaseProvider):
         self.url = os.getenv("OPENROUTER_BASE_URL", DEFAULT_URL)
 
     def generate(self, prompt: str) -> str:
+        free_candidates = [
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-nano-12b-v2-vl:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "qwen/qwen3.8-27b:free",
+            "nvidia/nemotron-3.5-lightning:free",
+        ]
         models_to_try = [self.model]
-        if self.model == "openrouter/free":
-            models_to_try = [
-                "google/gemma-4-31b-it:free",
-                "nvidia/nemotron-nano-12b-v2-vl:free",
-                "google/gemma-4-26b-a4b-it:free",
-                "openrouter/free",
-            ]
-        elif self.model in ("google/gemma-4-31b-it:free", "nvidia/nemotron-nano-12b-v2-vl:free", "google/gemma-4-26b-a4b-it:free"):
-            models_to_try = [self.model] + [m for m in [
-                "google/gemma-4-31b-it:free",
-                "nvidia/nemotron-nano-12b-v2-vl:free",
-                "google/gemma-4-26b-a4b-it:free",
-            ] if m != self.model]
+        if self.model in ("openrouter/free", "auto", ""):
+            models_to_try = free_candidates
+        elif ":free" in self.model:
+            models_to_try = [self.model] + [m for m in free_candidates if m != self.model]
 
         last_error = None
         for model in models_to_try:
@@ -135,12 +135,14 @@ class OpenRouterProvider(BaseProvider):
                 except (KeyError, IndexError, TypeError) as error:
                     raise ProviderUnavailableError("OpenRouter returned an invalid response") from error
             except ProviderRateLimitError as error:
-
                 if getattr(error, "is_account_limit", False):
                     raise
                 last_error = error
                 continue
             except ProviderUnavailableError as error:
+                last_error = error
+                continue
+            except Exception as error:
                 last_error = error
                 continue
 
@@ -157,7 +159,13 @@ class OpenRouterProvider(BaseProvider):
         request = Request(
             self.url,
             data=payload,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://aura-xwm4.onrender.com",
+                "X-Title": "Aura AI Companion",
+                "User-Agent": "Aura/1.0 (Linux; Android Companion Client)",
+            },
             method="POST",
         )
         try:

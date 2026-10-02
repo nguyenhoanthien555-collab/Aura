@@ -101,179 +101,141 @@ fun AuraCyberCoreCapsule(
         else -> Color(0xFFEF4444) // Cyber Red
     }
 
-    val capsuleShape = RoundedCornerShape(20.dp)
+    val capsuleShape = RoundedCornerShape(16.dp)
     val borderGradient = Brush.horizontalGradient(
         colors = listOf(
-            Color(0xFF8B5CF6).copy(alpha = 0.45f), // Neon Violet
-            Color(0xFF06B6D4).copy(alpha = 0.45f), // Neon Cyan
+            Color(0xFF8B5CF6).copy(alpha = 0.35f), // Neon Violet
+            Color(0xFF06B6D4).copy(alpha = 0.35f), // Neon Cyan
         )
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = 14.dp, vertical = 3.dp)
             .clip(capsuleShape)
-            .border(1.dp, borderGradient, capsuleShape)
+            .border(0.75.dp, borderGradient, capsuleShape)
             .auraGlassBlur(
                 shape = capsuleShape,
-                tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.60f),
             )
             .clickable { showSheet = true }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            // Animated Glowing Cyber Core Emblem
+            // Mini Pulsing Cyber Core
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(24.dp)
                     .scale(pulseScale),
                 contentAlignment = Alignment.Center,
             ) {
-                // Ambient Radial Glow
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(22.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFF8B5CF6).copy(alpha = glowAlpha * 0.6f),
-                                    Color(0xFF06B6D4).copy(alpha = glowAlpha * 0.2f),
+                                    Color(0xFF8B5CF6).copy(alpha = glowAlpha * 0.7f),
+                                    Color(0xFF06B6D4).copy(alpha = glowAlpha * 0.3f),
                                     Color.Transparent,
                                 )
                             )
                         )
                 )
-                // Core Hex Icon Container
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF1E1B4B).copy(alpha = 0.85f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.7f)),
-                    modifier = Modifier.size(32.dp),
+                    shape = RoundedCornerShape(7.dp),
+                    color = Color(0xFF1E1B4B).copy(alpha = 0.9f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF8B5CF6).copy(alpha = 0.8f)),
+                    modifier = Modifier.size(18.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = AuraIcons.Brain,
                             contentDescription = "Aura Core",
                             tint = Color(0xFFC084FC),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(11.dp),
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
 
-            // Main Telemetry Info Column
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                // Top Line: AURA CYBER-CORE + Status Pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "AURA CORE",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp,
-                        ),
-                        color = Color(0xFFE0E7FF),
-                    )
-
-                    Spacer(Modifier.width(8.dp))
-
-                    // Status Indicator Dot
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-
-                    Spacer(Modifier.width(4.dp))
-
-                    val statusText = when (val c = state.connection) {
-                        is ConnectionState.Connected -> "Sẵn sàng"
-                        is ConnectionState.Connecting -> "Đang kết nối..."
-                        is ConnectionState.WakingUp -> "Đang đánh thức..."
-                        is ConnectionState.OnDevice -> "On-Device"
-                        is ConnectionState.Unavailable -> "Mất kết nối"
-                        is ConnectionState.Unknown -> "Chưa khởi tạo"
-                    }
-                    Text(
-                        text = if (state.isSending) "Đang suy nghĩ..." else statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                Spacer(Modifier.height(4.dp))
-
-                // Bottom Line: Micro Device Telemetry Badges
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Host Node Badge (Render Cloud or Host PC)
-                    val host = state.hostTelemetry
-                    val isWindows = host?.os?.contains("Windows", ignoreCase = true) == true
-                    val hostIcon = if (isWindows) AuraIcons.Laptop else AuraIcons.Cloud
-                    val hostLabel = when {
-                        host != null && host.model.isNotBlank() && host.model != "Standard PC" -> "${host.model} • ${state.pingMs}ms"
-                        isWindows -> "Host PC • ${state.pingMs}ms"
-                        state.pingMs > 0 -> "Render Cloud • ${state.pingMs}ms"
-                        else -> "Render Cloud"
-                    }
-                    CyberMiniBadge(
-                        icon = hostIcon,
-                        text = hostLabel,
-                        tint = Color(0xFF38BDF8), // Sky Blue
-                    )
-
-                    // Client Phone Badge
-                    val phone = state.phoneTelemetry
-                    val phoneLabel = if (phone != null) {
-                        "${phone.model} • ${phone.batteryPercent}%${if (phone.isCharging) " ⚡" else ""}"
-                    } else {
-                        "Phone Handset"
-                    }
-                    CyberMiniBadge(
-                        icon = AuraIcons.DeviceMobile,
-                        text = phoneLabel,
-                        tint = Color(0xFF34D399), // Emerald
-                    )
-
-                    // LLM Model Badge
-                    val providerName = when (val c = state.connection) {
-                        is ConnectionState.Connected -> c.provider.replace("provider_", "")
-                        else -> "Gemini"
-                    }
-                    CyberMiniBadge(
-                        icon = AuraIcons.Spark,
-                        text = providerName,
-                        tint = Color(0xFFA78BFA), // Lavender
-                    )
-                }
-            }
+            // Brand & Status Dot
+            Text(
+                text = "AURA",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.0.sp,
+                    fontSize = 11.sp,
+                ),
+                color = Color(0xFFE0E7FF),
+            )
 
             Spacer(Modifier.width(6.dp))
 
-            // Expand HUD Chevron
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+
+            Spacer(Modifier.width(4.dp))
+
+            val statusText = when (val c = state.connection) {
+                is ConnectionState.Connected -> "Sẵn sàng"
+                is ConnectionState.Connecting -> "Đang kết nối..."
+                is ConnectionState.WakingUp -> "Đang đánh thức..."
+                is ConnectionState.OnDevice -> "On-Device"
+                is ConnectionState.Unavailable -> "Mất kết nối"
+                is ConnectionState.Unknown -> "Chưa khởi tạo"
+            }
+            Text(
+                text = if (state.isSending) "Đang suy nghĩ..." else statusText,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Right-side Compact Telemetry Badges
+            val host = state.hostTelemetry
+            val isWindows = host?.os?.contains("Windows", ignoreCase = true) == true
+            val hostIcon = if (isWindows) AuraIcons.Laptop else AuraIcons.Cloud
+            val hostLabel = if (state.pingMs > 0) "${state.pingMs}ms" else if (isWindows) "PC" else "Cloud"
+            CyberMiniBadge(
+                icon = hostIcon,
+                text = hostLabel,
+                tint = Color(0xFF38BDF8),
+            )
+
+            Spacer(Modifier.width(5.dp))
+
+            val phone = state.phoneTelemetry
+            val phoneLabel = if (phone != null) "${phone.batteryPercent}%${if (phone.isCharging) "⚡" else ""}" else "Phone"
+            CyberMiniBadge(
+                icon = AuraIcons.DeviceMobile,
+                text = phoneLabel,
+                tint = Color(0xFF34D399),
+            )
+
+            Spacer(Modifier.width(4.dp))
+
             Icon(
                 imageVector = AuraIcons.ChevronRight,
                 contentDescription = "Chi tiết Telemetry",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(14.dp),
             )
         }
     }

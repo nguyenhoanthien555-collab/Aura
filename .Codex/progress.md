@@ -1,5 +1,38 @@
 # Progress
 
+## 2026-10-02 — Multi-Provider Cloud Failover Resilience, Android UI Ergonomic Redesign & Spacious 4-Tab Cyber Dock DELIVERED
+
+- **Pillar 1: Render Cloud Multi-Provider Failover Hardening (`brain/providers/`)**:
+  - `brain/providers/groq.py`: Injected `User-Agent: Aura/1.0 (Linux; Android Companion Client)` in `_request()`, completely eliminating 403 Forbidden Cloudflare WAF rejections. Mapped 401/403 to `ProviderUnavailableError` allowing continuous failover down the chain.
+  - `brain/providers/openrouter.py`: Replaced stale model names with verified active free candidates (`google/gemma-4-31b-it:free`, `nvidia/nemotron-nano-12b-v2-vl:free`, `google/gemma-4-26b-a4b-it:free`, `qwen/qwen3.8-27b:free`, `nvidia/nemotron-3.5-lightning:free`). Added standard OpenRouter headers (`HTTP-Referer`, `X-Title`, `User-Agent`). Treated 400/404 as `ProviderUnavailableError` and guarded model candidate iterations with `except Exception`.
+  - `brain/providers/fallback.py`: Implemented 1s transient retry for primary provider before triggering failover in `generate()` and `stream()`.
+  - Tested: `tests/test_cloud_failover.py`, `tests/test_fallback_stream.py` (44/44 passed).
+- **Pillar 2: TopAppBar Ergonomic Streamlining & Overflow Menu (`ChatScreen.kt`, `AuraIcons.kt`)**:
+  - Designed bespoke vector icon `AuraIcons.MoreVert` (vertical triple cyber diamond nodes, 100% Compose geometry).
+  - Streamlined TopAppBar actions from 6 crowded icon buttons down to exactly 2 active state toggles (`Headset` Walkie-Talkie, `Volume` Voice Reading) + 1 `MoreVert` overflow dropdown.
+  - Embedded "Đoạn chat mới", "Bong bóng chat nổi", "Báo thức Aura", and "Trung tâm điều khiển" inside the dropdown menu, restoring spacious visual breathing room and eliminating title crowding.
+- **Pillar 3: Slim Cyber Status Strip (`AuraCyberCore.kt`)**:
+  - Redesigned `AuraCyberCoreCapsule` from a bulky ~80dp 2-tier card into a sleek, minimalist ~36dp single-row status strip.
+  - Left: 24dp pulsing cyber core emblem + `AURA` monospace title + live status dot + state text.
+  - Right: Micro telemetry badges `[☁️ 220ms]`, `[📱 85%⚡]`, and subtle expand chevron `>`.
+  - Saved ~45dp of vertical space for chat messages while keeping full access to `DualDeviceTelemetrySheet`.
+- **Pillar 4: 4-Tab Ergonomic Bottom Cyber Dock (`AuraCyberDock.kt`)**:
+  - Transitioned from 5 narrow tabs (~60dp) to 4 spacious ergonomic tabs (~85dp):
+    1. 💬 `Trò chuyện` (`chat`)
+    2. ⏰ `Báo thức` (`HubRoutes.ALARMS`)
+    3. 🧠 `Trí nhớ` (`HubRoutes.MEMORY`)
+    4. ⚙️ `Trung tâm` (`HubRoutes.HUB`)
+  - Wider tap targets, no text clipping, glowing neon indicator pill under the active selection.
+- **Pillar 5: Hub Screen Clean-Up & Status Ribbon (`HubScreen.kt`)**:
+  - Purged redundant `ChatCard` ("Talk to Aura").
+  - Replaced the large 2x2 square `TileGrid` with a sleek 1-row horizontal scrolling `StatusRibbon` (`Provider`, `Memory`, `Awareness`, `Proactive`).
+  - Brought all primary capability groups (AI & Models, Memory, Vision, Voice) immediately into view without initial scrolling.
+- **Pillar 6: Comprehensive Verification & Physical Device Deployment (Oppo CPH2251)**:
+  - Python tests: 81/81 passed (100%).
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+  - Packaged debug APK (`:app:assembleDebug`) and installed to physical Oppo CPH2251 (`IBCQMB4PTGNZJVTO`) via ADB (`Success`).
+  - Captured live device screenshots across all screens and verified sleek visual presentation.
+
 ## 2026-10-02 — Cloud Failover Stream, Semantic Memory Tables, High-Fidelity Edge TTS & Alarm Quick-Access Hub DELIVERED
 
 - **Pillar 1: Render Cloud Multi-Provider Fallback Streaming (`brain/providers/fallback.py`, `brain/router.py`)**:

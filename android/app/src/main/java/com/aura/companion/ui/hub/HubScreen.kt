@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -209,16 +210,12 @@ fun HubScreen(
                     }
                 }
 
-                item(key = "tiles") {
-                    TileGrid(
+                item(key = "ribbon") {
+                    StatusRibbon(
                         tiles = hubTiles(state),
                         reduced = reduced,
                         onOpen = onOpenSection,
                     )
-                }
-
-                item(key = "chat") {
-                    ChatCard(onClick = onOpenChat)
                 }
 
                 items(HUB_GROUPS, key = { it.title }) { group ->
@@ -511,96 +508,86 @@ private fun StatusRing(tone: StatusTone, busy: Boolean, reduced: Boolean) {
 }
 
 // ----------------------------------------------------------------------
-// The glance
+// The glance: Sleek horizontal status ribbon
 // ----------------------------------------------------------------------
 
-/** Two rows of two, because four tiles across a phone is four illegible tiles. */
+/** Sleek horizontal status ribbon replacing the bulky 2x2 tile grid. */
 @Composable
-private fun TileGrid(
+private fun StatusRibbon(
     tiles: List<HubTile>,
     reduced: Boolean,
     onOpen: (String) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-
-        tiles.chunked(2).forEach { pair ->
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                pair.forEach { tile ->
-                    StatusTile(
-                        tile = tile,
-                        reduced = reduced,
-                        onClick = { onOpen(tile.route) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                // An odd number of tiles must not stretch the last one to
-                // double width; the layout is a grid, not a flow.
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tiles.forEach { tile ->
+            CompactStatusChip(
+                tile = tile,
+                reduced = reduced,
+                onClick = { onOpen(tile.route) },
+            )
         }
     }
 }
 
-/**
- * One compact status tile.
- *
- * Tappable, and it opens the section that owns the value it displays -
- * because the point of showing "Awareness · Watching" on the front page is
- * that the user can do something about it in one more tap.
- */
+/** One compact cyber status chip. */
 @Composable
-private fun StatusTile(
+private fun CompactStatusChip(
     tile: HubTile,
     reduced: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(18.dp)
-
+    val shape = RoundedCornerShape(14.dp)
     val colour = animateColorAsState(
         targetValue = tile.tone.contentColour(),
         animationSpec = tween(AuraMotion.scaled(AuraMotion.Standard, reduced)),
-        label = "tileTone",
+        label = "chipTone",
     ).value
 
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .clip(shape)
             .auraGlassBlur(
                 shape = shape,
-                tint = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                tint = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
             )
-            .background(brush = auraTileBrush(), shape = shape, alpha = 0.6f)
-            .clickable(onClick = onClick),
+            .background(brush = auraTileBrush(), shape = shape, alpha = 0.5f)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-
-                Icon(
-                    imageVector = tile.kind.icon(),
-                    contentDescription = null,
-                    tint = colour,
-                    modifier = Modifier.size(16.dp),
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Text(
-                    text = tile.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = tile.kind.icon(),
+                contentDescription = null,
+                tint = colour,
+                modifier = Modifier.size(15.dp),
+            )
+            Text(
+                text = tile.label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
             Text(
                 text = tile.value,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
                 color = colour,
+                maxLines = 1,
             )
         }
     }
@@ -611,49 +598,6 @@ private fun HubTileKind.icon(): ImageVector = when (this) {
     HubTileKind.Memory -> AuraIcons.Memory
     HubTileKind.Awareness -> AuraIcons.Vision
     HubTileKind.Proactive -> AuraIcons.Bolt
-}
-
-/** Chat, given the weight it deserves: the reason the app exists. */
-@Composable
-private fun ChatCard(onClick: () -> Unit) {
-
-    val shape = RoundedCornerShape(28.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .auraGlassBlur(
-                shape = shape,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-            )
-            .clickable(onClick = onClick),
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-
-            Icon(
-                AuraIcons.ChatBubbleOutline,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-
-            Spacer(Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Talk to Aura",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = "Conversation, streaming replies",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
 }
 
 // ----------------------------------------------------------------------
