@@ -260,7 +260,18 @@ object ChatGPTWebClient {
                         try {
                             val dataObj = json.parseToJsonElement(dataStr).jsonObject
                             val msg = dataObj["message"]?.jsonObject
+                            val author = msg?.get("author")?.jsonObject
+                            val authorName = author?.get("name")?.jsonPrimitive?.content
+                            if (authorName == "thought") {
+                                line = reader.readLine()
+                                continue
+                            }
                             val content = msg?.get("content")?.jsonObject
+                            val contentType = content?.get("content_type")?.jsonPrimitive?.content
+                            if (contentType != null && contentType != "text") {
+                                line = reader.readLine()
+                                continue
+                            }
                             val parts = content?.get("parts")?.jsonArray
                             if (parts != null && parts.isNotEmpty()) {
                                 val fullPart = parts[0].jsonPrimitive.content
@@ -278,9 +289,47 @@ object ChatGPTWebClient {
                     line = reader.readLine()
                 }
             }
-            Result.success(fullTextBuilder.toString())
+            val cleaned = cleanLunaResponse(fullTextBuilder.toString())
+            Result.success(cleaned)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Cleans up any leaked chain-of-thought, drafting preambles, or self-reconsideration
+     * markers from GPT-5.6 Luna's response.
+     */
+    fun cleanLunaResponse(raw: String): String {
+        var text = raw.trim()
+
+        // 1. Strip meta-commentary like "Here's my response: \"...\""
+        val responseMarker = Regex(
+            """(?:Here's my response|Here is my response|My response is)[:\s]*\n*["“]?([^"”]+)["”]?""",
+            RegexOption.IGNORE_CASE
+        )
+        val match = responseMarker.find(text)
+        if (match != null && match.groupValues.size > 1) {
+            val extracted = match.groupValues[1].trim()
+            if (extracted.isNotBlank()) {
+                return extracted
+            }
+        }
+
+        // 2. Strip trailing reconsideration like "Actually, let me reconsider..."
+        val reconsiderIdx = text.indexOf("Actually, let me reconsider", ignoreCase = true)
+        if (reconsiderIdx > 0) {
+            text = text.substring(0, reconsiderIdx).trim()
+        }
+
+        // 3. Strip leading curiosity or thought keywords
+        text = text.replace(Regex("""^(?:curiosity|thought|thinking)\.?\s*""", RegexOption.IGNORE_CASE), "")
+
+        // 4. If text is wrapped in outer quotes, unwrap
+        if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("“") && text.endsWith("”"))) {
+            text = text.substring(1, text.length - 1).trim()
+        }
+
+        return text
     }
 }

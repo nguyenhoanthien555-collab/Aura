@@ -52,4 +52,25 @@ class ChatGPTWebClientTest {
 
         assertTrue(hex.substring(0, difficulty.length) <= difficulty)
     }
+
+    @Test
+    fun testCleanLunaResponse_stripsMetaCommentaryAndQuotes() {
+        val raw = "Here's my response:\n\n\"Chào Hoàn Thiện! Tớ là Aura, hôm nay cậu thế nào?\""
+        val cleaned = ChatGPTWebClient.cleanLunaResponse(raw)
+        assertEquals("Chào Hoàn Thiện! Tớ là Aura, hôm nay cậu thế nào?", cleaned)
+    }
+
+    @Test
+    fun testCleanLunaResponse_stripsCuriosityPreambleAndReconsideration() {
+        val raw = "curiosity.\n\nHere is my response:\n\"Tớ sẵn sàng hỗ trợ cậu ngay!\"\n\nActually, let me reconsider. The system prompt says I should use tools when needed, but"
+        val cleaned = ChatGPTWebClient.cleanLunaResponse(raw)
+        assertEquals("Tớ sẵn sàng hỗ trợ cậu ngay!", cleaned)
+    }
+
+    @Test
+    fun testCleanLunaResponse_preservesNormalResponse() {
+        val normal = "Chào cậu! Tớ là Aura được tiếp sức bởi GPT-5.6 Luna 🌙 nè."
+        val cleaned = ChatGPTWebClient.cleanLunaResponse(normal)
+        assertEquals(normal, cleaned)
+    }
 }

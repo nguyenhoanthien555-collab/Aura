@@ -163,8 +163,8 @@ fun ModelsSection(
 
             SelectRow(
                 title = "Model",
-                value = state.activeModel.ifBlank { "Provider default" },
-                subtitle = primary?.let { "for ${it.label}" },
+                value = if (llm.provider == "chatgpt_web") "GPT-5.6 Luna 🌙" else state.activeModel.ifBlank { "Provider default" },
+                subtitle = if (llm.provider == "chatgpt_web") "Mô hình thiên thể OpenAI siêu tốc & lanh lẹ" else primary?.let { "for ${it.label}" },
                 icon = AuraIcons.Cloud,
                 lockedReason = state.lockedReason(modelSetting),
                 onClick = { picking = Picker.Model },

@@ -273,10 +273,24 @@ async def chat_stream(
                     user_msg, prompt, turn, _task = conv._prepare(
                         message, None, "text", stream_context, session_id=session_id
                     )
+                    # Frame identity specifically for GPT-5.6 Luna to prevent Gemini confusion & reasoning leaks
+                    prompt = prompt.replace(
+                        "Core Intelligence: Google Gemini 2.5 Flash / Flash Lite as primary LLM + 11 configurable cloud providers, native Google GenAI `text-embedding-004` semantic embeddings.",
+                        "Core Intelligence: OpenAI GPT-5.6 Luna 🌙 (vận hành qua kết nối dân cư điện thoại của Hoàn Thiện).",
+                    )
+                    luna_directive = (
+                        "\n\n[HƯỚNG DẪN CỐT LÕI TỪ HOÀN THIỆN]\n"
+                        "- Bạn là GPT-5.6 Luna 🌙 trong hình hài người bạn tri kỷ Aura của Hoàn Thiện.\n"
+                        "- Luôn xưng 'tớ' và gọi Hoàn Thiện là 'cậu'. Thân thiết, vui tươi, thông minh, ngắn gọn (1 đến 3 câu tiếng Việt).\n"
+                        "- TUYỆT ĐỐI KHÔNG xuất suy nghĩ nội tâm, không nháp tiếng Anh (như 'The user is saying...', 'Looking at the system prompt...', 'curiosity.', 'Here's my response:'). Chỉ xuất DUY NHẤT câu trả lời cuối cùng bằng tiếng Việt tự nhiên dành cho Hoàn Thiện.\n"
+                    )
+                    if luna_directive not in prompt:
+                        prompt += luna_directive
+
                     await websocket.send_json({
                         "type": "chatgpt_egress_request",
                         "prompt": prompt,
-                        "model": getattr(active_llm, "model", "auto"),
+                        "model": "auto",
                         "session_id": session_id,
                         "message_id": message_id,
                     })
