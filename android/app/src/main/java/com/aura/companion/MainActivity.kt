@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
      */
     private var pendingMessage by mutableStateOf<String?>(null)
     private var pendingStartVoice by mutableStateOf(false)
+    private var pendingInitialRoute by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,6 +131,18 @@ class MainActivity : ComponentActivity() {
                     if (pendingStartVoice) {
                         pendingStartVoice = false
                         chatViewModel.startVoiceInput()
+                    }
+                }
+
+                LaunchedEffect(pendingInitialRoute) {
+                    pendingInitialRoute?.let { targetRoute ->
+                        pendingInitialRoute = null
+                        if (targetRoute != ROUTE_CHAT) {
+                            navController.navigate(targetRoute) {
+                                popUpTo(ROUTE_CHAT) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        }
                     }
                 }
 
@@ -354,6 +367,12 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(EXTRA_START_VOICE)
             pendingStartVoice = true
         }
+
+        val route = intent?.getStringExtra(EXTRA_INITIAL_ROUTE)
+        if (route != null) {
+            intent.removeExtra(EXTRA_INITIAL_ROUTE)
+            pendingInitialRoute = route
+        }
     }
 
     /**
@@ -407,5 +426,6 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_CHAT = "chat"
         const val EXTRA_MESSAGE = "aura_message"
         const val EXTRA_START_VOICE = "start_voice"
+        const val EXTRA_INITIAL_ROUTE = "initial_route"
     }
 }

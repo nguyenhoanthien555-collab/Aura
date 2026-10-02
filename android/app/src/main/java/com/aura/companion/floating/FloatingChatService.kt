@@ -25,9 +25,9 @@ import androidx.compose.foundation.layout.size
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
+import com.aura.companion.ui.theme.AuraIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -290,14 +290,15 @@ fun CloseTargetUI() {
             modifier = Modifier
                 .size(60.dp)
                 .clip(CircleShape)
-                .background(Color.Red.copy(alpha = 0.8f)),
+                .background(Color(0xFFE11D48).copy(alpha = 0.85f))
+                .border(2.dp, Color(0xFFFDA4AF), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = AuraIcons.Close,
                 contentDescription = "Close",
                 tint = Color.White,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -308,32 +309,50 @@ fun MiniChatUI(viewModel: com.aura.companion.ui.chat.ChatViewModel, onClose: () 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
+            .background(Color.Black.copy(alpha = 0.6f))
             .clickable(onClick = onClose), // Dismiss on outside click
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.85f)
                 .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.background)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF00E5FF), Color(0xFFB388FF))),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF0A0E17))
                 .clickable(enabled = false, onClick = {}) // Prevent click-through
         ) {
             androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
                 androidx.compose.foundation.layout.Row(
-                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF0D1117))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    androidx.compose.material3.Text("Aura", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+                    androidx.compose.material3.Text(
+                        "AURA CYBER CHAT",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFF00E5FF)
+                    )
                     androidx.compose.material3.IconButton(onClick = onClose) {
-                        Icon(androidx.compose.material.icons.Icons.Filled.Close, contentDescription = "Close")
+                        Icon(
+                            imageVector = AuraIcons.Close,
+                            contentDescription = "Close",
+                            tint = Color(0xFFA78BFA),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     com.aura.companion.ui.chat.ChatScreen(
                         viewModel = viewModel,
-                        onOpenSettings = onClose // Or whatever is appropriate
+                        onOpenSettings = onClose
                     )
                 }
             }
@@ -350,9 +369,14 @@ fun FloatingBubbleUI(
 ) {
     Box(
         modifier = Modifier
-            .size(60.dp)
+            .size(56.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.8f))
+            .background(Color(0xFF0D1117).copy(alpha = 0.92f))
+            .border(
+                width = 1.5.dp,
+                brush = Brush.sweepGradient(listOf(Color(0xFF00E5FF), Color(0xFFB388FF), Color(0xFF00E5FF))),
+                shape = CircleShape
+            )
             .clickable(onClick = onClick)
             .pointerInput(Unit) {
                 detectDragGestures(
@@ -368,10 +392,10 @@ fun FloatingBubbleUI(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Filled.ChatBubble,
+            imageVector = AuraIcons.ChatBubble,
             contentDescription = "Aura",
-            tint = Color(0xFF6B4EE6), // Aura Violet
-            modifier = Modifier.size(30.dp)
+            tint = Color(0xFF00E5FF),
+            modifier = Modifier.size(26.dp)
         )
     }
 }

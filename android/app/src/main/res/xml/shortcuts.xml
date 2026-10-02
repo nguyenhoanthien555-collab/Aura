@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="shortcut_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_chat"
+        android:shortcutShortLabel="@string/shortcut_chat_short"
+        android:shortcutLongLabel="@string/shortcut_chat_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aura.companion"
+            android:targetClass="com.aura.companion.MainActivity">
+            <extra
+                android:name="initial_route"
+                android:value="chat" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_voice"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_voice"
+        android:shortcutShortLabel="@string/shortcut_voice_short"
+        android:shortcutLongLabel="@string/shortcut_voice_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aura.companion"
+            android:targetClass="com.aura.companion.MainActivity">
+            <extra
+                android:name="start_voice"
+                android:value="true" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_alarm"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_alarm"
+        android:shortcutShortLabel="@string/shortcut_alarm_short"
+        android:shortcutLongLabel="@string/shortcut_alarm_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aura.companion"
+            android:targetClass="com.aura.companion.MainActivity">
+            <extra
+                android:name="initial_route"
+                android:value="hub/alarms" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_memory"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_memory"
+        android:shortcutShortLabel="@string/shortcut_memory_short"
+        android:shortcutLongLabel="@string/shortcut_memory_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aura.companion"
+            android:targetClass="com.aura.companion.MainActivity">
+            <extra
+                android:name="initial_route"
+                android:value="hub/memory" />
+        </intent>
+    </shortcut>
+</shortcuts>

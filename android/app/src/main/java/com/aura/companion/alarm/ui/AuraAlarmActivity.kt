@@ -37,12 +37,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +69,9 @@ import com.aura.companion.ui.theme.AuraIcons
 import com.aura.companion.ui.theme.AuraNeonCyan
 import com.aura.companion.ui.theme.AuraNeonPink
 import com.aura.companion.ui.theme.AuraTheme
+import com.aura.companion.voice.AuraVoiceManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,8 +83,10 @@ import java.util.Locale
 class AuraAlarmActivity : ComponentActivity() {
 
     private var audioPlayer: AlarmAudioPlayer? = null
+    private var voiceManager: AuraVoiceManager? = null
     private var alarmId: String = ""
     private var alarmLabel: String = "Báo thức Aura"
+    private val morningBriefingText = "Chào buổi sáng anh! Aura chúc anh một ngày mới tràn đầy năng lượng và hiệu quả. Hệ thống đã thức dậy cùng anh và sẵn sàng đồng hành!"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,8 +99,11 @@ class AuraAlarmActivity : ComponentActivity() {
         audioPlayer = AlarmAudioPlayer(this).apply {
             start(stage1TimeoutSeconds = 180) // 3-minute escalation ladder
         }
+        voiceManager = AuraVoiceManager(this)
 
         setContent {
+            val isSpeaking by (voiceManager?.isSpeaking ?: MutableStateFlow(false)).collectAsState()
+
             AuraTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -102,6 +111,7 @@ class AuraAlarmActivity : ComponentActivity() {
                 ) {
                     AlarmActivityScreen(
                         alarmLabel = alarmLabel,
+                        isSpeaking = isSpeaking,
                         onStopAlarm = {
                             handleStopAlarm()
                         },
@@ -110,6 +120,13 @@ class AuraAlarmActivity : ComponentActivity() {
                         },
                         onOpenChat = {
                             handleOpenChat()
+                        },
+                        onToggleSpeaking = {
+                            if (isSpeaking) {
+                                voiceManager?.stopSpeaking()
+                            } else {
+                                voiceManager?.speak(morningBriefingText)
+                            }
                         }
                     )
                 }
@@ -149,10 +166,14 @@ class AuraAlarmActivity : ComponentActivity() {
                 AlarmScheduler(this, store).schedule(alarm)
             }
         }
+
+        // Trigger morning briefing speech synthesis
+        voiceManager?.speak(morningBriefingText)
     }
 
     private fun handleSnooze() {
         audioPlayer?.stop()
+        voiceManager?.stopSpeaking()
         val nm = getSystemService(NOTIFICATION_SERVICE) as? NotificationManager
         nm?.cancel(alarmId.hashCode())
 
@@ -161,6 +182,7 @@ class AuraAlarmActivity : ComponentActivity() {
     }
 
     private fun handleOpenChat() {
+        voiceManager?.stopSpeaking()
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -171,15 +193,19 @@ class AuraAlarmActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         audioPlayer?.stop()
+        voiceManager?.destroy()
+        voiceManager = null
     }
 }
 
 @Composable
 private fun AlarmActivityScreen(
     alarmLabel: String,
+    isSpeaking: Boolean,
     onStopAlarm: () -> Unit,
     onSnooze: () -> Unit,
-    onOpenChat: () -> Unit
+    onOpenChat: () -> Unit,
+    onToggleSpeaking: () -> Unit
 ) {
     var isBriefing by remember { mutableStateOf(false) }
 
@@ -195,7 +221,9 @@ private fun AlarmActivityScreen(
             )
         } else {
             CyberMorningBriefingView(
-                onOpenChat = onOpenChat
+                isSpeaking = isSpeaking,
+                onOpenChat = onOpenChat,
+                onToggleSpeaking = onToggleSpeaking
             )
         }
     }
@@ -410,7 +438,9 @@ private fun CyberAlarmRingingView(
 
 @Composable
 private fun CyberMorningBriefingView(
-    onOpenChat: () -> Unit
+    isSpeaking: Boolean,
+    onOpenChat: () -> Unit,
+    onToggleSpeaking: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("EEEE, dd 'tháng' MM", Locale("vi", "VN"))
     val todayDate = remember { dateFormat.format(Date()).replaceFirstChar { it.uppercase() } }
@@ -455,12 +485,41 @@ private fun CyberMorningBriefingView(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                text = "Chào buổi sáng anh!",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Chào buổi sáng anh!",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                IconButton(
+                    onClick = onToggleSpeaking,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isSpeaking) Color(0xFF10B981).copy(alpha = 0.25f)
+                            else Color(0xFF1F2937).copy(alpha = 0.5f)
+                        )
+                        .border(
+                            1.dp,
+                            if (isSpeaking) Color(0xFF34D399)
+                            else Color(0xFF4B5563),
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = if (isSpeaking) AuraIcons.VolumeUp else AuraIcons.VolumeOff,
+                        contentDescription = if (isSpeaking) "Tắt đọc" else "Đọc lại",
+                        tint = if (isSpeaking) Color(0xFF34D399) else Color(0xFF9CA3AF),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
             Text(
                 text = todayDate,

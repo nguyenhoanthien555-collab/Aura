@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-10-02 — Omnipresent Access, Quick Settings Tile, App Shortcuts & Morning Speech Synthesis DELIVERED
+
+- **Pillar 1: Quick Settings Tile in Android Notification Shade (`AuraTileService.kt`, `ic_aura_tile.xml`)**:
+  - Implemented `AuraTileService` extending Android `TileService` with `BIND_QUICK_SETTINGS_TILE` permission.
+  - Displayed directly in the system pull-down Quick Settings panel with title "Aura AI", subtitle "Sẵn sàng lắng nghe", and cyber core mask vector drawable `ic_aura_tile.xml`.
+  - Supports `unlockAndRun` when locked, collapses system shade via `startActivityAndCollapse`, and launches into native Vietnamese speech recognition (`EXTRA_START_VOICE = true`).
+  - Tested: `AuraTileServiceTest.kt`.
+- **Pillar 2: Android Launcher App Shortcuts (`shortcuts.xml`, `MainActivity.kt`)**:
+  - Defined 4 static launcher shortcuts available on long-press of the Aura home-screen app icon:
+    - 💬 **Trò chuyện**: Direct entry into chat (`MainActivity.ROUTE_CHAT`).
+    - 🎙️ **Nói chuyện**: Direct trigger into instant voice input (`EXTRA_START_VOICE = true`).
+    - ⏰ **Báo thức**: Direct navigation to Aura Alarm Hub (`HubRoutes.ALARMS`).
+    - 🧠 **Trí nhớ**: Direct navigation to Entity Knowledge Graph & Memory Hub (`HubRoutes.MEMORY`).
+  - Created 4 bespoke vector drawables: `ic_shortcut_chat.xml`, `ic_shortcut_voice.xml`, `ic_shortcut_alarm.xml`, `ic_shortcut_memory.xml`.
+  - Added `EXTRA_INITIAL_ROUTE` handling in `MainActivity.kt` with `LaunchedEffect(pendingInitialRoute)` supporting both cold start (`onCreate`) and background re-entry (`onNewIntent`).
+  - Tested: `AppShortcutsContractTest.kt`.
+- **Pillar 3: Morning Briefing Voice Synthesis & Speech Controls (`AuraAlarmActivity.kt`)**:
+  - Integrated `AuraVoiceManager` into lockscreen `AuraAlarmActivity`.
+  - On dismissing the alarm, Aura automatically synthesizes an energetic, warm Vietnamese morning greeting and briefing out loud.
+  - Added interactive emerald glowing speaker button (`AuraIcons.VolumeUp` / `VolumeOff`) to silence speech or replay the greeting on demand.
+  - Automatically cleans up audio and releases TTS hardware on navigation or destroy.
+  - Tested: `MorningBriefingContractTest.kt`.
+- **Pillar 4: 100% Elimination of Heavy Stock Icons Library (`build.gradle.kts`)**:
+  - Migrated all remaining 4 instances of `androidx.compose.material.icons` in `FloatingChatService.kt` to `AuraIcons.ChatBubble` and `AuraIcons.Close`.
+  - Completely purged `implementation(libs.androidx.compose.material.icons)` (`material-icons-extended`) from `android/app/build.gradle.kts`.
+  - Verified 0 references to stock icons across the entire repository.
+- **Pillar 5: Comprehensive Verification & Release**:
+  - Android JVM Tests: 481/481 passed (100% BUILD SUCCESSFUL across 22 tasks).
+  - Python Tests: 45/45 passed.
+  - Packaged APK: `:app:assembleDebug` BUILD SUCCESSFUL (20.2 MB).
+
 ## 2026-10-02 — Comprehensive Codebase Audit, UI Jank Elimination & Performance Optimization DELIVERED
 
 - **Pillar 1: Android Image Decoding & Subsampling Offload (`ChatComponents.kt`)**:

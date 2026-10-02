@@ -60,4 +60,14 @@
     <string name="accessibility_agent_label">Aura Jarvis Agent</string>
     <string name="accessibility_agent_description">Allows Aura to observe the screen, understand the UI structure, and perform safe actions on your behalf using accessibility actions like click, scroll, and input text.</string>
 
+    <!-- App Shortcuts -->
+    <string name="shortcut_chat_short">Trò chuyện</string>
+    <string name="shortcut_chat_long">Trò chuyện với Aura</string>
+    <string name="shortcut_voice_short">Nói chuyện</string>
+    <string name="shortcut_voice_long">Nói chuyện với Aura</string>
+    <string name="shortcut_alarm_short">Báo thức</string>
+    <string name="shortcut_alarm_long">Báo thức Aura</string>
+    <string name="shortcut_memory_short">Trí nhớ</string>
+    <string name="shortcut_memory_long">Trung tâm Trí nhớ Aura</string>
+
 </resources>

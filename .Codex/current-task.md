@@ -1,5 +1,36 @@
 # Current task
 
+## Omnipresent Access, Quick Settings Tile, App Shortcuts & Morning Speech Synthesis DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Quick Settings Tile Trên Thanh Trạng Thái Hệ Thống (`AuraTileService.kt`, `ic_aura_tile.xml`)**:
+  - Triển khai `AuraTileService` kế thừa `TileService` với quyền `BIND_QUICK_SETTINGS_TILE`.
+  - Hiển thị trực tiếp trên thanh Quick Settings kéo xuống từ đỉnh màn hình Android: tiêu đề "Aura AI", phụ đề "Sẵn sàng lắng nghe", biểu tượng cyber core mask vector `ic_aura_tile.xml`.
+  - Hỗ trợ mở khóa và kích hoạt ngay cả khi đang khóa màn hình (`unlockAndRun`), tự động thu gọn bảng thông báo (`startActivityAndCollapse`), và chuyển tiếp trực tiếp vào chế độ nhận diện giọng nói tiếng Việt tức thì (`EXTRA_START_VOICE = true`).
+  - Kiểm thử: `AuraTileServiceTest.kt`.
+- **Trụ cột 2: Android Launcher App Shortcuts (`shortcuts.xml`, `MainActivity.kt`)**:
+  - Thiết kế 4 lối tắt tĩnh khi nhấn giữ icon ứng dụng Aura trên màn hình chính:
+    - 💬 **Trò chuyện**: Vào thẳng màn hình chat (`MainActivity.ROUTE_CHAT`).
+    - 🎙️ **Nói chuyện**: Kích hoạt thu âm giọng nói tức thì (`EXTRA_START_VOICE = true`).
+    - ⏰ **Báo thức**: Điều hướng trực tiếp đến trung tâm báo thức Aura (`HubRoutes.ALARMS`).
+    - 🧠 **Trí nhớ**: Điều hướng trực tiếp đến Knowledge Graph & Memory Hub (`HubRoutes.MEMORY`).
+  - Thiết kế 4 bộ vector drawable độc bản: `ic_shortcut_chat.xml`, `ic_shortcut_voice.xml`, `ic_shortcut_alarm.xml`, `ic_shortcut_memory.xml`.
+  - Mở rộng `MainActivity.kt` với `EXTRA_INITIAL_ROUTE` và `LaunchedEffect(pendingInitialRoute)` xử lý điều hướng mượt mà cả khi khởi động lạnh (`onCreate`) và khi chạy ngầm (`onNewIntent`).
+  - Kiểm thử: `AppShortcutsContractTest.kt`.
+- **Trụ cột 3: Đọc Lời Chào & Điểm Tin Buổi Sáng Bằng Giọng Nói (`AuraAlarmActivity.kt`)**:
+  - Tích hợp `AuraVoiceManager` vào màn hình báo thức khóa màn hình `AuraAlarmActivity`.
+  - Khi tắt báo thức, màn hình chuyển sang Morning Briefing card và Aura tự động cất giọng nói tiếng Việt tự nhiên, ấm áp chào buổi sáng và chúc ngày mới tràn đầy năng lượng.
+  - Bổ sung nút Loa cyber tương tác trực tiếp (`AuraIcons.VolumeUp` / `VolumeOff`): phát sáng màu ngọc lục bảo khi đang nói, cho phép chạm để tắt giọng đọc hoặc phát lại lời chào tùy thích.
+  - Tự động dừng đọc và giải phóng tài nguyên âm thanh khi người dùng nhấn "BẮT ĐẦU NGÀY MỚI CÙNG AURA" hoặc thoát màn hình.
+  - Kiểm thử: `MorningBriefingContractTest.kt`.
+- **Trụ cột 4: Triệt Tiêu 100% Thư Viện Stock Icons Nặng Khỏi Gradle**:
+  - Thay thế toàn bộ 4 vị trí còn sót lại của `androidx.compose.material.icons` trong `FloatingChatService.kt` sang `AuraIcons.ChatBubble` và `AuraIcons.Close`.
+  - Thiết kế lại bong bóng nổi `FloatingBubbleUI` và `CloseTargetUI` theo chuẩn Cyberpunk kính mờ viền neon (`#0D1117`, cyan `#00E5FF`, magenta `#E11D48`).
+  - Gỡ bỏ hoàn toàn dòng phụ thuộc `implementation(libs.androidx.compose.material.icons)` (`material-icons-extended`) khỏi `android/app/build.gradle.kts`. Xác minh `git grep "androidx.compose.material.icons" android/` trả về đúng 0 kết quả trong mã nguồn.
+- **Trụ cột 5: Kiểm Thử Toàn Diện & Đóng Gói Sẵn Sàng**:
+  - Android JVM Tests: 481/481 tests passed (100% BUILD SUCCESSFUL trên toàn bộ 22 task).
+  - Python Tests: 45/45 tests passed.
+  - Đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (`app-debug.apk`: 20.2 MB).
+
 ## Comprehensive Codebase Audit, UI Jank Elimination & Performance Optimization DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Tối ưu Xử lý Ảnh & Subsampling Trên Luồng Phụ (`ChatComponents.kt`)**:
