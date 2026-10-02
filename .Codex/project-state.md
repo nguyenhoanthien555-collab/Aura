@@ -20,9 +20,16 @@
    - Desktop PC directives: `desktop.set_clipboard` and `desktop.get_clipboard` implemented in `tools/builtins/desktop.py` with 64-bit safe Win32 ctypes (`OpenClipboard`, `GlobalAlloc`, `GlobalLock`, `SetClipboardData`, `GetClipboardData`).
    - Registered capabilities `android.clipboard` and `desktop.clipboard` in `core/capabilities/factory.py`, added to `tools/factory.py` (preserving device boundary invariant), and allowed in `server/runtime.py`.
    - Enriched `prompts/system.md` (Section 9) for cross-device relay instructions.
-5. **Testing & Verification**:
-   - Android unit tests: `AuraVoiceManagerTest.kt`, `DirectReplyContractTest.kt`, `DeviceTaskDispatcherTest.kt` (471/471 passed, 100%).
-   - Python unit tests: `tests/test_clipboard_sync.py` (6 passed), `tests/test_multimodal_vlm.py` (4 passed), `tests/test_android_task_tools.py` (15 passed), `tests/test_device_boundary.py` (14 passed).
+5. **Stage E: Glanceable Cyber HUD Home-Screen AppWidget**:
+   - `android/app/src/main/java/com/aura/companion/widget/AuraCyberWidgetProvider.kt`: Native `AppWidgetProvider` + `RemoteViews` for zero-latency, 100% offline home-screen intelligence.
+   - Handset battery level % and charging state (`⚡`) gathered locally via `BatteryManager`.
+   - Next scheduled alarm dynamically rendered from offline `AlarmStore(context)`.
+   - 1-tap quick actions: `[ 💬 Chat ]` (launches `MainActivity`), `[ 🎙️ Nói ]` (instant Vietnamese voice recognition via `EXTRA_START_VOICE = true`), and `[ 🔄 ]` (manual widget refresh).
+   - Cyberpunk bespoke XML drawables (`bg_cyber_widget.xml`, `bg_cyber_badge.xml`, `bg_cyber_btn_cyan.xml`, `bg_cyber_btn_purple.xml`) with `#00E5FF` / `#B388FF` neon glow on dark glassmorphic card (zero third-party icon libraries).
+   - Lifecycle triggers: `APPWIDGET_UPDATE`, `ACTION_REFRESH`, `BOOT_COMPLETED`, and `NEXT_ALARM_CLOCK_CHANGED`.
+6. **Testing & Verification**:
+   - Android unit tests: `AuraCyberWidgetProviderTest.kt`, `AuraVoiceManagerTest.kt`, `DirectReplyContractTest.kt`, `DeviceTaskDispatcherTest.kt` (476/476 passed, 100%).
+   - Python unit tests: `tests/test_clipboard_sync.py` (6 passed), `tests/test_multimodal_vlm.py` (4 passed), `tests/test_android_task_tools.py` (15 passed), `tests/test_android_alarm_tools.py` (8 passed), `tests/test_device_boundary.py` (14 passed).
    - Debug APK packaged: `:app:assembleDebug` (20.15 MB).
 
 ## Intelligent Offline Cyber Alarm & Morning Briefing System (2026-10-02)

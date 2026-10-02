@@ -25,9 +25,19 @@
   - Registered `android.clipboard` and `desktop.clipboard` in `core/capabilities/factory.py`, wired into `tools/factory.py` (strictly preserving the stock cloud boundary invariant), and allowed in `server/runtime.py`.
   - Enriched system instructions in `prompts/system.md` (Section 9) guiding cross-device data relays.
   - Tested: `tests/test_clipboard_sync.py` (6/6 passed), `tests/test_android_task_tools.py` (15/15 passed), `tests/test_device_boundary.py` (14/14 passed).
-- **Pillar 5: Comprehensive Verification & Packaging**:
-  - Android JVM Unit Tests: 471/471 passed (100% BUILD SUCCESSFUL).
-  - Python Unit Tests: 37/37 passed across boundary, clipboard, task tools, and multimodal VLM.
+- **Pillar 5: Glanceable Cyber HUD Home-Screen AppWidget**:
+  - Implemented `AuraCyberWidgetProvider.kt` standard Android `AppWidgetProvider` with `RemoteViews` for zero-latency, offline home-screen intelligence.
+  - Telemetry & Alarm Glances: Handset battery % with charging status (`⚡`) sampled locally via `BatteryManager`, and next scheduled alarm formatted dynamically from offline `AlarmStore(context)`.
+  - 1-Tap Quick Actions:
+    - `[ 💬 Chat ]`: Instant launch into `MainActivity` foreground chat.
+    - `[ 🎙️ Nói ]`: Instant voice input trigger passing `EXTRA_START_VOICE = true` to `MainActivity`, launching native Vietnamese speech recognition directly from home-screen.
+    - `[ 🔄 ]`: 1-tap manual telemetry and alarm refresh broadcasting `ACTION_REFRESH`.
+  - Cyberpunk Aesthetics: Custom XML drawables (`bg_cyber_widget.xml`, `bg_cyber_badge.xml`, `bg_cyber_btn_cyan.xml`, `bg_cyber_btn_purple.xml`) matching glowing cyan `#00E5FF` and purple `#B388FF` palette on `#0D1117` glassmorphic background (zero external icon or layout libraries).
+  - Broadcast Triggers: Auto-updates on `ACTION_APPWIDGET_UPDATE`, `ACTION_REFRESH`, `ACTION_BOOT_COMPLETED`, and `ACTION_NEXT_ALARM_CLOCK_CHANGED`.
+  - Tested: `AuraCyberWidgetProviderTest.kt` (5 unit tests covering empty/disabled/enabled alarm formatting, label handling, and activity/widget contract constants).
+- **Pillar 6: Comprehensive Verification & Packaging**:
+  - Android JVM Unit Tests: 476/476 passed (100% BUILD SUCCESSFUL across 22 actionable tasks).
+  - Python Unit Tests: 45/45 passed across boundary, clipboard, task tools, alarms, and multimodal VLM.
   - Packaged Debug APK: `:app:assembleDebug` BUILD SUCCESSFUL (`app-debug.apk`: 20.15 MB).
 
 ## 2026-10-02 — Intelligent Offline Cyber Alarm & Morning Briefing System DELIVERED

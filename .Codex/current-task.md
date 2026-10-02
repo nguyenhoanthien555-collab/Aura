@@ -29,9 +29,19 @@
   - Đấu nối vào `_pc_tools()` trong `tools/factory.py` (bảo toàn 100% ranh giới thiết bị cloud khi không có allowlist) và cấp quyền trong `server/runtime.py`.
   - Bổ sung hướng dẫn Mục 9 trong `prompts/system.md` hướng dẫn Aura chủ động luân chuyển clipboard giữa PC và Điện thoại.
   - Kiểm thử: `tests/test_clipboard_sync.py` (6/6 passed), `tests/test_android_task_tools.py` (15/15 passed), `tests/test_device_boundary.py` (14/14 passed).
-- **Trụ cột 5: Kiểm thử Toàn diện & Đóng gói Sẵn sàng**:
-  - Android JVM Tests: 471/471 passed (100% BUILD SUCCESSFUL).
-  - Python Tests: 37/37 passed across boundary, clipboard, task tools, and multimodal VLM.
+- **Trụ cột 5: Tiện ích Màn hình chính Cyber HUD (Glanceable Cyber HUD Home-Screen AppWidget)**:
+  - Khởi tạo `AuraCyberWidgetProvider.kt` trên nền tảng `AppWidgetProvider` native và `RemoteViews`, đảm bảo tốc độ phản hồi 0-latency và vận hành trơn tru hoàn toàn ngoại tuyến.
+  - Telemetry & Báo thức thời gian thực: Tự động đo mức pin % điện thoại kèm trạng thái sạc nhanh/chậm (`⚡`) qua `BatteryManager`, và trích xuất hiển thị báo thức gần nhất từ `AlarmStore(context)`.
+  - Bộ 3 nút thao tác 1 chạm trực quan:
+    - `[ 💬 Chat ]`: Khởi động tức thì `MainActivity` vào màn hình chat trực tiếp.
+    - `[ 🎙️ Nói ]`: Kích hoạt nhận diện giọng nói tiếng Việt ngay từ màn hình chính thông qua cờ `EXTRA_START_VOICE = true`.
+    - `[ 🔄 ]`: Nút làm mới dữ liệu telemetry và báo thức tức thời qua broadcast `ACTION_REFRESH`.
+  - Ngôn ngữ Cyberpunk đồng nhất: Thiết kế 4 bộ drawable XML bespoke (`bg_cyber_widget.xml`, `bg_cyber_badge.xml`, `bg_cyber_btn_cyan.xml`, `bg_cyber_btn_purple.xml`) với nền kính mờ `#0D1117` và viền phát sáng cyan `#00E5FF` / tím `#B388FF` (hoàn toàn không dùng clipart hay thư viện ngoài).
+  - Tự động lắng nghe và cập nhật theo các sự kiện hệ thống: `APPWIDGET_UPDATE`, `ACTION_REFRESH`, `BOOT_COMPLETED`, và `NEXT_ALARM_CLOCK_CHANGED`.
+  - Kiểm thử: `AuraCyberWidgetProviderTest.kt` (5 unit tests xác minh logic định dạng báo thức, nhãn tùy chỉnh, và hợp đồng intent).
+- **Trụ cột 6: Kiểm thử Toàn diện & Đóng gói Sẵn sàng**:
+  - Android JVM Tests: 476/476 passed (100% BUILD SUCCESSFUL trên toàn bộ 22 task).
+  - Python Tests: 45/45 passed across boundary, clipboard, task tools, alarms, and multimodal VLM.
   - Đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (`app-debug.apk`: 20.15 MB).
 
 ## Intelligent Offline Cyber Alarm & Morning Briefing System DELIVERED (2026-10-02)

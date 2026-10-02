@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
      * `LaunchedEffect` below.
      */
     private var pendingMessage by mutableStateOf<String?>(null)
+    private var pendingStartVoice by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,6 +123,13 @@ class MainActivity : ComponentActivity() {
                     pendingMessage?.let { message ->
                         chatViewModel.showCompanionMessage(message)
                         pendingMessage = null
+                    }
+                }
+
+                LaunchedEffect(pendingStartVoice) {
+                    if (pendingStartVoice) {
+                        pendingStartVoice = false
+                        chatViewModel.startVoiceInput()
                     }
                 }
 
@@ -336,12 +344,16 @@ class MainActivity : ComponentActivity() {
      * rotation does not replay a notification the user already saw.
      */
     private fun takeNotificationMessage(intent: Intent?) {
+        val message = intent?.getStringExtra(EXTRA_MESSAGE)
+        if (message != null) {
+            intent.removeExtra(EXTRA_MESSAGE)
+            pendingMessage = message
+        }
 
-        val message = intent?.getStringExtra(EXTRA_MESSAGE) ?: return
-
-        intent.removeExtra(EXTRA_MESSAGE)
-
-        pendingMessage = message
+        if (intent?.getBooleanExtra(EXTRA_START_VOICE, false) == true) {
+            intent.removeExtra(EXTRA_START_VOICE)
+            pendingStartVoice = true
+        }
     }
 
     /**
@@ -394,5 +406,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val ROUTE_CHAT = "chat"
         const val EXTRA_MESSAGE = "aura_message"
+        const val EXTRA_START_VOICE = "start_voice"
     }
 }

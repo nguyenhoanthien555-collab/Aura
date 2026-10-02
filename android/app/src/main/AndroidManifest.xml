@@ -173,6 +173,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- Aura Cyber HUD Home-Screen AppWidget -->
+        <receiver
+            android:name=".widget.AuraCyberWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.aura.companion.widget.ACTION_REFRESH" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aura_cyber_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>
