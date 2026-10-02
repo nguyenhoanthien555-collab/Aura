@@ -91,11 +91,12 @@ class AuraStreamClient(
                     activeWebSocket.set(webSocket)
                     // The server reads exactly one frame, then replies.
                     // `context` rides along when the caller has one - the
+                    val hasEgress = settings.current.chatgptSessionToken.isNotBlank()
                     val augmentedContext = JsonObject(
                         context + mapOf(
-                            "has_chatgpt_egress" to JsonPrimitive(settings.current.chatgptSessionToken.isNotBlank()),
+                            "has_chatgpt_egress" to JsonPrimitive(hasEgress),
                             "client" to JsonPrimitive("android"),
-                        )
+                        ) + (if (hasEgress) mapOf("preferred_provider" to JsonPrimitive("chatgpt_web")) else emptyMap())
                     )
                     webSocket.send(
                         ApiFactory.json.encodeToString(
@@ -293,6 +294,7 @@ class AuraStreamClient(
                 when (str("error")) {
                     "message_too_long" -> AuraError.ServerFailure(413)
                     "empty_message", "invalid_json" -> AuraError.ServerFailure(422)
+                    "rate_limited" -> AuraError.RateLimited
                     else -> AuraError.ServerFailure(500)
                 }
             )

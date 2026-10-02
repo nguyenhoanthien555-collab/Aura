@@ -3,7 +3,7 @@ app:
   version: 0.2.0
 
 llm:
-  provider: gemini
+  provider: chatgpt_web
 
   # Gemini's model. Gemini is the default provider, so this is the primary
   # model. Older pinned names (gemini-1.5/2.0/2.5) are being retired; the

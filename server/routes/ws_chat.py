@@ -268,7 +268,12 @@ async def chat_stream(
             active_llm = getattr(conv, "llm", None) if conv else None
             configured_provider = getattr(active_llm, "provider_name", "")
             active_provider = getattr(active_llm, "active_provider_name", configured_provider)
-            is_chatgpt_chosen = (configured_provider == "chatgpt_web" or active_provider == "chatgpt_web")
+            is_chatgpt_chosen = (
+                configured_provider == "chatgpt_web"
+                or active_provider == "chatgpt_web"
+                or stream_context.get("preferred_provider") == "chatgpt_web"
+                or bool(stream_context.get("has_chatgpt_egress"))
+            )
 
             if is_chatgpt_chosen and stream_context.get("has_chatgpt_egress") and conv:
                 try:

@@ -69,6 +69,15 @@ class ChatViewModel(
 
     private var probe: Job? = null
     private var currentSendJob: Job? = null
+    private var errorDismissJob: Job? = null
+
+    private fun scheduleErrorAutoDismiss(delayMs: Long = 8000L) {
+        errorDismissJob?.cancel()
+        errorDismissJob = viewModelScope.launch {
+            delay(delayMs)
+            _state.update { it.copy(error = null) }
+        }
+    }
 
     fun toggleThinkingMode() {
         _state.update { it.copy(isThinkingEnabled = !it.isThinkingEnabled) }
@@ -273,6 +282,7 @@ class ChatViewModel(
     }
 
     fun dismissError() {
+        errorDismissJob?.cancel()
         _state.update { it.copy(error = null) }
     }
 
@@ -656,6 +666,9 @@ class ChatViewModel(
 
         if (!AuraAccessibilityService.isEnabled()) return false
 
+        // When using ChatGPT Web Phone Egress Tunnel, tool actions are executed inline during conversation streaming
+        if (settings.current.chatgptSessionToken.isNotBlank()) return false
+
         return when (val result = repository.send(text, IntentRouter.PROBE_CONTEXT)) {
             is AuraResult.Ok -> IntentRouter.isAction(result.value.reply)
             is AuraResult.Failed -> false
@@ -828,8 +841,23 @@ class ChatViewModel(
 
         slowNotice.cancel()
 
-        // Nothing arrived and no reaction was processed: let the caller try the REST path.
-        if (reply.isEmpty() && !reacted) return false
+        // Nothing arrived and no reaction was processed: let the caller try the REST path only if not rate limited.
+        if (reply.isEmpty() && !reacted) {
+            if (failure is AuraError.RateLimited) {
+                _state.update { current ->
+                    current.copy(
+                        messages = current.messages.map {
+                            if (it.id == outgoingId) it.copy(failed = true) else it
+                        },
+                        isSending = false,
+                        error = failure,
+                    )
+                }
+                scheduleErrorAutoDismiss()
+                return true
+            }
+            return false
+        }
 
         // Text arrived, so this turn is streaming's to finish. Settle the
         // bubble here rather than only in the Complete branch: a socket can
@@ -902,6 +930,9 @@ class ChatViewModel(
                             result.error.userMessage
                         ),
                     )
+                }
+                if (result.error is AuraError.RateLimited) {
+                    scheduleErrorAutoDismiss()
                 }
             }
         }

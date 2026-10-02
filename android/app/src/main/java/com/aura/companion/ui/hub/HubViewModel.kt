@@ -840,6 +840,10 @@ class HubViewModel(
 
         viewModelScope.launch {
 
+            if (provider == "chatgpt_web") {
+                settings.setChatgptSessionToken(key)
+            }
+
             when (val result = repository.setProviderKey(provider, key)) {
 
                 is AuraResult.Ok -> {
