@@ -24,8 +24,9 @@ place that converts between them, and it converts in one direction only.
 """
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
+import time
 from datetime import datetime
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 
 
 def timestamp_now() -> str:
@@ -652,3 +653,15 @@ class EntityRelation(Base):
     confidence: Mapped[float] = mapped_column(Float(), default=1.0)
     source: Mapped[str] = mapped_column(String(32), default="user")
     created_at: Mapped[str] = mapped_column(default=timestamp_now)
+
+
+class UserToolConsent(Base):
+    """
+    Persistent record of tools approved by the user (or auto-approved after 30s timeout).
+    Once a tool name is recorded here, it can run freely without requesting confirmation.
+    """
+    __tablename__ = "user_tool_consents"
+
+    tool_name: Mapped[str] = mapped_column(String(128), primary_key=True)
+    approved_at: Mapped[float] = mapped_column(Float(), default=time.time)
+    auto_approved: Mapped[bool] = mapped_column(Boolean(), default=False)

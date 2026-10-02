@@ -1,5 +1,29 @@
 # Progress
 
+## 2026-10-02 — Inline Tool Consent, Realtime Provider Indicator & Wi-Fi Wireless ADB Pairing DELIVERED
+
+- **Pillar 1: Inline Tool Consent Flow (`server/tool_consent.py`, `tools/executor.py`, `server/routes/ws_chat.py`, `ChatComponents.kt`, `ChatScreen.kt`, `ChatViewModel.kt`)**:
+  - Eliminated rigid tool policy allowlist gates. Production and runtime configurations default to open-by-default posture for registered tools.
+  - Interactive in-chat consent: when a tool is invoked for the first time, server emits `tool_consent_request` over WebSocket; Android renders `ToolConsentCard` right above the message composer.
+  - Displays tool name in monospace, purpose description, 30s auto-approve countdown badge, and `[Cho phép]` / `[Từ chối]` actions.
+  - Permanent SQLite persistence (`user_tool_consents` table): approved tools are remembered indefinitely across server and app restarts.
+  - Immediate denial: rejecting a tool halts execution cleanly with truthful feedback.
+- **Pillar 2: Realtime Provider Vector Indicator in Top HUD Capsule (`AuraIcons.kt`, `AuraCyberCore.kt`, `AuraStreamClient.kt`, `core/trace.py`)**:
+  - Server reports real winning LLM provider in `complete` frame (`provider` field) across standard streams and phone egress relay.
+  - Designed 4 handcrafted pure-Compose geometric vector icons in `AuraIcons.kt`:
+    - `AuraIcons.ChatGPT`: OpenAI signature rosette spiral knot in emerald green `#10A37F`.
+    - `AuraIcons.Gemini`: Google DeepMind 4-pointed diamond star in sky blue `#38BDF8`.
+    - `AuraIcons.OpenRouter`: Constellation multi-node routing network in indigo `#818CF8`.
+    - `AuraIcons.Claude`: Radiant 8-ray sunburst in warm amber `#D97706`.
+  - Upgraded `AuraCyberCoreCapsule`: replaced static "Sẵn sàng" text with the live vector branding icon of the winning provider: `[AURA] [●] [icon provider]`.
+- **Pillar 3: Wireless Wi-Fi ADB Pairing & Live Hardware Verification**:
+  - Paired ADB via Wi-Fi with OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) at `192.168.101.8:35527`.
+  - Packaged debug APK (`:app:assembleDebug`) and streamed installation wirelessly (`Success`).
+  - Captured live device screenshot confirming the emerald ChatGPT icon rendered natively in the top cyber capsule.
+- **Pillar 4: Comprehensive Test Suite & Integrity Verification**:
+  - Python tests: 111/111 passed across tool consent, stream calling, and providers (100% PASS RATE).
+  - Android JVM tests: 488/488 passed across 22 tasks (100% BUILD SUCCESSFUL).
+
 ## 2026-10-02 — Phone Egress Relay Tunnel for ChatGPT Web, Tool Policy Preservation & Residential IP Verification DELIVERED
 
 - **Pillar 1: Phone Egress Relay Tunnel (`server/routes/ws_chat.py`, `ChatGPTWebClient.kt`, `AuraStreamClient.kt`)**:

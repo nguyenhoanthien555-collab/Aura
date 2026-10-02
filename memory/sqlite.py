@@ -77,6 +77,7 @@ from memory.models import (
     CompanionMemoryRecord,
     EntityNode,
     EntityRelation,
+    UserToolConsent,
 )
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -296,6 +297,20 @@ def init_companion_tables(bind=None):
         target,
         tables=[
             CompanionMemoryRecord.__table__,
+        ],
+    )
+
+
+def init_consent_tables(bind=None):
+    """
+    Create user tool consent tables (UserToolConsent), if missing.
+    Additive and idempotent.
+    """
+    target = bind or engine
+    Base.metadata.create_all(
+        target,
+        tables=[
+            UserToolConsent.__table__,
         ],
     )
 

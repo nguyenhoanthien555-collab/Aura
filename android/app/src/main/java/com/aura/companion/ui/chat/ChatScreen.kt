@@ -397,6 +397,16 @@ fun ChatScreen(
                 }
             }
 
+            AnimatedVisibility(visible = state.pendingToolConsent != null) {
+                state.pendingToolConsent?.let { consent ->
+                    ToolConsentCard(
+                        consent = consent,
+                        onApprove = { viewModel.approveToolConsent(consent.requestId) },
+                        onDeny = { viewModel.denyToolConsent(consent.requestId) },
+                    )
+                }
+            }
+
             Composer(
                 draft = state.draft,
                 canSend = state.canSend,

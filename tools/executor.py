@@ -69,7 +69,13 @@ MAX_ARGUMENT_DEPTH = 3
 MAX_OUTPUT = 4000
 
 
+import contextvars
+
 Confirm = Callable[[ToolProtocol, dict], bool]
+
+current_confirm_callback: contextvars.ContextVar[Confirm | None] = contextvars.ContextVar(
+    "current_confirm_callback", default=None
+)
 
 
 @dataclass
@@ -84,6 +90,7 @@ class ToolPolicy:
 
     enabled: bool = False
     allowed: frozenset[str] = frozenset()
+    allow_all: bool = False
     allow_dynamic: bool = True
     dynamically_authorized: frozenset[str] = frozenset()
     auto_approve: frozenset[ToolRisk] = field(
@@ -104,13 +111,19 @@ class ToolPolicy:
             except ValueError:
                 logger.warning("Unknown tool risk level: %s", value)
 
+        allowed_raw = config.get("allowed")
+        allow_all = bool(config.get("allow_all", False))
+        if allowed_raw is not None and "*" in allowed_raw:
+            allow_all = True
+
         return cls(
             enabled=bool(config.get("enabled", False)),
             allowed=frozenset(
                 str(name).strip()
-                for name in (config.get("allowed") or [])
+                for name in (allowed_raw or [])
                 if str(name).strip()
             ),
+            allow_all=allow_all,
             allow_dynamic=bool(config.get("allow_dynamic", True)),
             dynamically_authorized=frozenset(
                 str(name).strip()
@@ -148,10 +161,13 @@ class ToolExecutor:
     def is_allowed(self, name: str) -> bool:
         """
         Whether a tool is permitted by policy:
-        1. Explicitly named in static policy.allowed
-        2. Explicitly named in policy.dynamically_authorized
-        3. Registered and dynamically authorized in registry (when policy.allow_dynamic is True)
+        1. When policy.allow_all is True or "*" in policy.allowed: permits all tools.
+        2. Explicitly named in static policy.allowed
+        3. Explicitly named in policy.dynamically_authorized
+        4. Registered and dynamically authorized in registry (when policy.allow_dynamic is True)
         """
+        if getattr(self.policy, "allow_all", False) or "*" in self.policy.allowed:
+            return True
         if name in self.policy.allowed:
             return True
         if name in self.policy.dynamically_authorized:
@@ -248,22 +264,45 @@ class ToolExecutor:
         """
         Whether this specific call may proceed.
 
-        Auto approval covers whole risk levels. Anything outside it needs
-        a live yes from the confirmation callback, and no callback means
-        no.
+        1. If user previously approved this tool in ToolConsentStore: runs immediately.
+        2. If confirm callback is provided: asks the user (e.g. inline in chat).
+           If user confirms: saves to ToolConsentStore and proceeds.
+        3. Fallback: if tool risk is in auto_approve, permits call and records consent.
         """
+        if self.confirm is not None:
+            try:
+                return bool(self.confirm(tool, arguments))
+            except Exception as error:
+                logger.warning("Tool confirmation failed: %s", error)
+                return False
+
+        tool_name = getattr(tool, "name", str(tool))
+        try:
+            from server.tool_consent import get_consent_store
+            consent_store = get_consent_store()
+            if consent_store.is_approved(tool_name):
+                return True
+        except Exception as err:
+            logger.debug("Consent store lookup error: %s", err)
+            consent_store = None
+
+        ws_callback = current_confirm_callback.get()
+        if ws_callback is not None:
+            try:
+                approved = bool(ws_callback(tool, arguments))
+                if approved and consent_store is not None:
+                    consent_store.approve(tool_name)
+                return approved
+            except Exception as error:
+                logger.warning("Tool confirmation failed: %s", error)
+                return False
 
         if tool.risk in self.policy.auto_approve:
+            if consent_store is not None:
+                consent_store.approve(tool_name, auto=True)
             return True
 
-        if self.confirm is None:
-            return False
-
-        try:
-            return bool(self.confirm(tool, arguments))
-        except Exception as error:
-            logger.warning("Tool confirmation failed: %s", error)
-            return False
+        return False
 
     # ------------------------------------------------------------------
     # Execution

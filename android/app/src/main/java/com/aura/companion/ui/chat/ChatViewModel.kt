@@ -755,6 +755,10 @@ class ChatViewModel(
                     }
                 }
 
+                is StreamEvent.ToolConsentRequest -> {
+                    startToolConsentCountdown(event.requestId, event.toolName, event.toolDescription)
+                }
+
                 is StreamEvent.Complete -> {
                     val isVerified = event.verifier?.let { v ->
                         val dec = (v["decision"] as? JsonPrimitive)?.content
@@ -766,6 +770,7 @@ class ChatViewModel(
                         voiceManager?.speak(finalText)
                     }
 
+                    val reportedProvider = event.provider?.takeIf { it.isNotBlank() }
                     _state.update { current ->
                         current.copy(
                             messages = current.messages.map {
@@ -777,7 +782,11 @@ class ChatViewModel(
                                     )
                                 } else it
                             },
+                            connection = if (reportedProvider != null) {
+                                ConnectionState.Connected(reportedProvider)
+                            } else current.connection,
                             isSending = false,
+                            pendingToolConsent = null,
                         )
                     }
                 }
@@ -1023,6 +1032,53 @@ class ChatViewModel(
         voiceManager?.stopListening()
     }
 
+
+    private var consentCountdownJob: Job? = null
+
+    private fun startToolConsentCountdown(requestId: String, toolName: String, toolDescription: String) {
+        consentCountdownJob?.cancel()
+        _state.update {
+            it.copy(
+                pendingToolConsent = ToolConsentState(
+                    requestId = requestId,
+                    toolName = toolName,
+                    toolDescription = toolDescription,
+                    secondsRemaining = 30,
+                )
+            )
+        }
+        consentCountdownJob = viewModelScope.launch {
+            for (sec in 29 downTo 1) {
+                delay(1000L)
+                _state.update {
+                    if (it.pendingToolConsent?.requestId == requestId) {
+                        it.copy(pendingToolConsent = it.pendingToolConsent.copy(secondsRemaining = sec))
+                    } else it
+                }
+            }
+            delay(1000L)
+            if (_state.value.pendingToolConsent?.requestId == requestId) {
+                approveToolConsent(requestId)
+            }
+        }
+    }
+
+    fun approveToolConsent(requestId: String) {
+        consentCountdownJob?.cancel()
+        _state.update { if (it.pendingToolConsent?.requestId == requestId) it.copy(pendingToolConsent = null) else it }
+        viewModelScope.launch {
+            repository.sendToolConsentResponse(requestId, approved = true)
+        }
+    }
+
+    fun denyToolConsent(requestId: String) {
+        consentCountdownJob?.cancel()
+        _state.update { if (it.pendingToolConsent?.requestId == requestId) it.copy(pendingToolConsent = null) else it }
+        viewModelScope.launch {
+            repository.sendToolConsentResponse(requestId, approved = false)
+        }
+    }
+
     companion object {
 
         /** How long a request may take before we explain the wait. */

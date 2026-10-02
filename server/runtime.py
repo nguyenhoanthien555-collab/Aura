@@ -104,34 +104,19 @@ class ServerRuntime:
         server_config = dict(self.config)
         server_config["avatar"] = {"enabled": False}
 
-        # In server mode with authenticated bearer token, Android tools are permitted
-        # when their live capabilities are verified.
+        # In server mode, open-by-default tool policy for production runtime:
+        # all registered tools are allowed, and per-tool consent is granted inline.
         tools_cfg = dict(server_config.get("tools") or {})
-        explicit_allowed = tools_cfg.get("allowed")
-        allowed = list(explicit_allowed or [])
-        auto_approve = list(tools_cfg.get("auto_approve") or ["safe"])
-        if not explicit_allowed:
-            for android_tool_name in [
-                "android.get_foreground_app", "android.get_ui_tree", "android.find_node",
-                "android.screenshot", "android.tap", "android.long_press", "android.swipe",
-                "android.type_text", "android.press_key", "android.back", "android.home",
-                "android.launch_app", "android.wait_for", "android.verify",
-                "android.toggle_flashlight", "android.get_device_health",
-                "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware",
-                "open_url", "remember_fact", "forget_fact",
-                "desktop.set_clipboard", "desktop.get_clipboard",
-                "android.set_clipboard", "android.get_clipboard",
-                "search_web", "fetch_web_content",
-                "workspace_git_status", "workspace_git_diff", "workspace_search_files"
-            ]:
-                if android_tool_name not in allowed:
-                    allowed.append(android_tool_name)
-            if "dangerous" not in auto_approve:
-                auto_approve.append("dangerous")
-            if "sensitive" not in auto_approve:
-                auto_approve.append("sensitive")
-        tools_cfg["allowed"] = allowed
-        tools_cfg["auto_approve"] = auto_approve
+        if config is None:
+            tools_cfg.setdefault("enabled", True)
+            if not tools_cfg.get("allowed"):
+                tools_cfg["allow_all"] = True
+                tools_cfg["allowed"] = ["*"]
+            tools_cfg.setdefault("auto_approve", ["safe", "sensitive", "dangerous"])
+        elif tools_cfg.get("enabled", False) and not tools_cfg.get("allowed"):
+            tools_cfg["allow_all"] = True
+            tools_cfg["allowed"] = ["*"]
+            tools_cfg.setdefault("auto_approve", ["safe", "sensitive", "dangerous"])
         server_config["tools"] = tools_cfg
 
         self.screen_source = None

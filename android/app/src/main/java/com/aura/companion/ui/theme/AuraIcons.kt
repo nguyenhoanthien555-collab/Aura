@@ -1753,5 +1753,139 @@ object AuraIcons {
             close()
         }
     }
+
+    // ----------------------------------------------------------------------
+    // AI Provider Icons (Handcrafted Pure Compose Vectors)
+    // ----------------------------------------------------------------------
+
+    /** ChatGPT / OpenAI iconic spiral rosette knot in pure vector geometry. */
+    val ChatGPT: ImageVector by lazy {
+        icon("ChatGPT") {
+            moveTo(20.5f, 10.3f)
+            lineTo(20.5f, 7.7f)
+            lineTo(15.7f, 5.0f)
+            lineTo(13.5f, 6.3f)
+            lineTo(16.5f, 8.0f)
+            lineTo(16.5f, 11.5f)
+            lineTo(18.0f, 10.6f)
+            close()
+
+            moveTo(11.0f, 4.0f)
+            lineTo(8.5f, 4.0f)
+            lineTo(6.0f, 8.3f)
+            lineTo(7.3f, 10.5f)
+            lineTo(9.0f, 7.5f)
+            lineTo(12.0f, 7.5f)
+            lineTo(12.0f, 5.7f)
+            close()
+
+            moveTo(4.5f, 9.7f)
+            lineTo(3.2f, 11.9f)
+            lineTo(5.7f, 16.2f)
+            lineTo(7.9f, 14.9f)
+            lineTo(6.5f, 12.5f)
+            lineTo(8.2f, 9.5f)
+            lineTo(6.7f, 8.6f)
+            close()
+
+            moveTo(7.5f, 19.5f)
+            lineTo(10.0f, 19.5f)
+            lineTo(12.5f, 15.2f)
+            lineTo(11.2f, 13.0f)
+            lineTo(9.5f, 16.0f)
+            lineTo(6.5f, 16.0f)
+            lineTo(6.5f, 17.8f)
+            close()
+
+            moveTo(19.5f, 14.3f)
+            lineTo(20.8f, 12.1f)
+            lineTo(18.3f, 7.8f)
+            lineTo(16.1f, 9.1f)
+            lineTo(17.5f, 11.5f)
+            lineTo(15.8f, 14.5f)
+            lineTo(17.3f, 15.4f)
+            close()
+
+            moveTo(16.5f, 4.5f)
+            lineTo(14.0f, 4.5f)
+            lineTo(11.5f, 8.8f)
+            lineTo(12.8f, 11.0f)
+            lineTo(14.5f, 8.0f)
+            lineTo(17.5f, 8.0f)
+            close()
+
+            moveTo(12.0f, 10.0f)
+            lineTo(14.0f, 11.2f)
+            lineTo(14.0f, 13.5f)
+            lineTo(12.0f, 14.7f)
+            lineTo(10.0f, 13.5f)
+            lineTo(10.0f, 11.2f)
+            close()
+        }
+    }
+
+    /** Google Gemini iconic 4-pointed hypocycloid diamond star. */
+    val Gemini: ImageVector by lazy {
+        icon("Gemini") {
+            moveTo(12.0f, 2.0f)
+            curveTo(12.0f, 7.5f, 16.5f, 12.0f, 22.0f, 12.0f)
+            curveTo(16.5f, 12.0f, 12.0f, 16.5f, 12.0f, 22.0f)
+            curveTo(12.0f, 16.5f, 7.5f, 12.0f, 2.0f, 12.0f)
+            curveTo(7.5f, 12.0f, 12.0f, 7.5f, 12.0f, 2.0f)
+            close()
+        }
+    }
+
+    /** OpenRouter interconnected multi-node routing constellation. */
+    val OpenRouter: ImageVector by lazy {
+        icon("OpenRouter") {
+            moveTo(12.0f, 3.0f)
+            lineTo(19.8f, 7.5f)
+            lineTo(19.8f, 16.5f)
+            lineTo(12.0f, 21.0f)
+            lineTo(4.2f, 16.5f)
+            lineTo(4.2f, 7.5f)
+            close()
+
+            moveTo(12.0f, 6.0f)
+            lineTo(6.8f, 9.0f)
+            lineTo(6.8f, 15.0f)
+            lineTo(12.0f, 18.0f)
+            lineTo(17.2f, 15.0f)
+            lineTo(17.2f, 9.0f)
+            close()
+
+            moveTo(12.0f, 9.5f)
+            lineTo(14.5f, 11.0f)
+            lineTo(14.5f, 13.0f)
+            lineTo(12.0f, 14.5f)
+            lineTo(9.5f, 13.0f)
+            lineTo(9.5f, 11.0f)
+            close()
+        }
+    }
+
+    /** Anthropic Claude radiant 8-ray sunburst. */
+    val Claude: ImageVector by lazy {
+        icon("Claude") {
+            moveTo(12.0f, 3.0f)
+            lineTo(13.8f, 8.2f)
+            lineTo(19.0f, 5.0f)
+            lineTo(15.8f, 10.2f)
+            lineTo(21.0f, 12.0f)
+            lineTo(15.8f, 13.8f)
+            lineTo(19.0f, 19.0f)
+            lineTo(13.8f, 15.8f)
+            lineTo(12.0f, 21.0f)
+            lineTo(10.2f, 15.8f)
+            lineTo(5.0f, 19.0f)
+            lineTo(8.2f, 13.8f)
+            lineTo(3.0f, 12.0f)
+            lineTo(8.2f, 10.2f)
+            lineTo(5.0f, 5.0f)
+            lineTo(10.2f, 8.2f)
+            close()
+        }
+    }
 }
 

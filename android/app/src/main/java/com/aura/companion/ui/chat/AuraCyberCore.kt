@@ -189,22 +189,103 @@ fun AuraCyberCoreCapsule(
 
             Spacer(Modifier.width(4.dp))
 
-            val statusText = when (val c = state.connection) {
-                is ConnectionState.Connected -> "Sẵn sàng"
-                is ConnectionState.Connecting -> "Đang kết nối..."
-                is ConnectionState.WakingUp -> "Đang đánh thức..."
-                is ConnectionState.OnDevice -> "On-Device"
-                is ConnectionState.Unavailable -> "Mất kết nối"
-                is ConnectionState.Unknown -> "Chưa khởi tạo"
+            when (val c = state.connection) {
+                is ConnectionState.Connected -> {
+                    val provider = c.provider
+                    val providerIcon = when {
+                        provider.contains("chatgpt", ignoreCase = true) -> AuraIcons.ChatGPT
+                        provider.contains("gemini", ignoreCase = true) -> AuraIcons.Gemini
+                        provider.contains("openrouter", ignoreCase = true) -> AuraIcons.OpenRouter
+                        provider.contains("claude", ignoreCase = true) -> AuraIcons.Claude
+                        else -> AuraIcons.Brain
+                    }
+                    val providerTint = when {
+                        provider.contains("chatgpt", ignoreCase = true) -> Color(0xFF10A37F)
+                        provider.contains("gemini", ignoreCase = true) -> Color(0xFF38BDF8)
+                        provider.contains("openrouter", ignoreCase = true) -> Color(0xFF818CF8)
+                        provider.contains("claude", ignoreCase = true) -> Color(0xFFD97706)
+                        else -> Color(0xFFC084FC)
+                    }
+                    if (state.isSending) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f, fill = false),
+                        ) {
+                            Icon(
+                                imageVector = providerIcon,
+                                contentDescription = provider,
+                                tint = providerTint,
+                                modifier = Modifier.size(13.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Đang nghĩ...",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = providerIcon,
+                            contentDescription = provider,
+                            tint = providerTint,
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                }
+                is ConnectionState.Connecting -> {
+                    Text(
+                        text = "Đang kết nối...",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                is ConnectionState.WakingUp -> {
+                    Text(
+                        text = "Đang đánh thức...",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                is ConnectionState.OnDevice -> {
+                    Text(
+                        text = "On-Device",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                is ConnectionState.Unavailable -> {
+                    Text(
+                        text = "Mất kết nối",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                is ConnectionState.Unknown -> {
+                    Text(
+                        text = "Chưa khởi tạo",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
             }
-            Text(
-                text = if (state.isSending) "Đang suy nghĩ..." else statusText,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
 
             Spacer(Modifier.weight(1f))
 

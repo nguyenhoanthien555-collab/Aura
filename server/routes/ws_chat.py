@@ -12,6 +12,7 @@ long generation must not stall `/api/health`.
 """
 import asyncio
 import json
+import threading
 import time
 import uuid
 
@@ -25,6 +26,8 @@ from fastapi import (
     status,
 )
 from starlette.concurrency import iterate_in_threadpool
+
+from tools.executor import current_confirm_callback
 
 from core.logger import logger
 from core.trace import emit_trace, provider_label, stream_reconciliation
@@ -192,6 +195,72 @@ async def chat_stream(
                 stream_context["image"] = request.get("image")
                 stream_context["image_mime"] = request.get("image_mime") or "image/jpeg"
 
+            loop = asyncio.get_running_loop()
+            pending_consents: dict[str, tuple[threading.Event, dict]] = {}
+
+            from events.types import AgentInterruptedEvent
+            interrupted_signal = [False]
+
+            def on_interrupt(event: AgentInterruptedEvent):
+                interrupted_signal[0] = True
+
+            if runtime.bus is not None:
+                runtime.bus.subscribe(AgentInterruptedEvent, on_interrupt)
+
+            def ws_confirm_handler(tool, arguments) -> bool:
+                tool_name = getattr(tool, "name", str(tool))
+                tool_desc = getattr(tool, "description", "")
+                req_id = str(uuid.uuid4())
+                event = threading.Event()
+                res = {"approved": False}
+                pending_consents[req_id] = (event, res)
+
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(
+                        websocket.send_json({
+                            "type": "tool_consent_request",
+                            "request_id": req_id,
+                            "tool_name": tool_name,
+                            "tool_description": tool_desc,
+                            "session_id": session_id,
+                        }),
+                        loop,
+                    )
+                    fut.result(timeout=5.0)
+                except Exception as send_err:
+                    logger.warning("Failed to send tool_consent_request: %s", send_err)
+                    return True
+
+                signaled = event.wait(timeout=30.0)
+                pending_consents.pop(req_id, None)
+
+                if signaled:
+                    logger.info("User decided tool consent for '%s': %s", tool_name, res["approved"])
+                    return bool(res["approved"])
+                else:
+                    logger.info("Tool consent for '%s' timed out (30s) -> auto-approved", tool_name)
+                    return True
+
+            async def ws_reader():
+                while True:
+                    try:
+                        raw_msg = await websocket.receive_text()
+                        data = json.loads(raw_msg)
+                        mtype = data.get("type")
+                        if mtype == "tool_consent_response":
+                            rid = data.get("request_id")
+                            appr = bool(data.get("approved", False))
+                            if rid in pending_consents:
+                                ev, rdict = pending_consents[rid]
+                                rdict["approved"] = appr
+                                ev.set()
+                        elif mtype == "interrupt":
+                            interrupted_signal[0] = True
+                    except asyncio.CancelledError:
+                        break
+                    except Exception:
+                        break
+
             # ------------------------------------------------------------------
             # Phone Egress Relay Tunnel (Residential IP for ChatGPT Web)
             # ------------------------------------------------------------------
@@ -227,7 +296,14 @@ async def chat_stream(
                                 chunk_index += 1
                         elif ftype == "chatgpt_egress_done":
                             full_text = client_msg.get("text", "".join(egress_chunks))
-                            full_text = conv._resolve_tools(full_text, turn)
+                            reader_task = asyncio.create_task(ws_reader())
+                            token = current_confirm_callback.set(ws_confirm_handler)
+                            try:
+                                full_text = await loop.run_in_executor(None, conv._resolve_tools, full_text, turn)
+                            finally:
+                                current_confirm_callback.reset(token)
+                                reader_task.cancel()
+
                             verifier_summary = None
                             if getattr(conv, "verifier", None):
                                 full_text, verifier_summary = conv._verify_final(
@@ -244,6 +320,7 @@ async def chat_stream(
                                 "first_chunk_seconds": (first_chunk_at - received_at) if first_chunk_at else None,
                                 "text": full_text,
                                 "verifier": verifier_summary,
+                                "provider": "chatgpt_web",
                             })
                             return
                         elif ftype == "chatgpt_egress_error":
@@ -257,57 +334,53 @@ async def chat_stream(
                 source="text",
                 context=stream_context,
             )
-
-            from events.types import AgentInterruptedEvent
-            interrupted_signal = [False]
-
-            def on_interrupt(event: AgentInterruptedEvent):
-                interrupted_signal[0] = True
-
-            if runtime.bus is not None:
-                runtime.bus.subscribe(AgentInterruptedEvent, on_interrupt)
-
-            async for fragment in iterate_in_threadpool(fragments):
-                if interrupted_signal[0]:
-                    await websocket.send_json({
-                        "type": "interrupted",
-                        "session_id": session_id,
-                        "message_id": message_id,
-                        "message": "Em đã dừng lại ngay lập tức theo lệnh của anh rồi!",
-                    })
-                    break
-                
-                while not reaction_queue.empty():
-                    try:
-                        emoji = reaction_queue.get_nowait()
+            reader_task = asyncio.create_task(ws_reader())
+            token = current_confirm_callback.set(ws_confirm_handler)
+            try:
+                async for fragment in iterate_in_threadpool(fragments):
+                    if interrupted_signal[0]:
                         await websocket.send_json({
-                            "type": "reaction",
+                            "type": "interrupted",
                             "session_id": session_id,
                             "message_id": message_id,
-                            "emoji": emoji,
+                            "message": "Em đã dừng lại ngay lập tức theo lệnh của anh rồi!",
                         })
-                    except queue.Empty:
                         break
-
-                if not fragment:
-                    continue
-
-                produced_fragments.append(fragment)
-
-                if first_chunk_at is None:
-                    first_chunk_at = time.time()
-
-                await websocket.send_json({
-                    "type": "chunk",
-                    "session_id": session_id,
-                    "message_id": message_id,
-                    "chunk": fragment,
-                    "index": chunk_index,
-                })
-
-                delivered_fragments.append(fragment)
-                chunk_index += 1
                 
+                    while not reaction_queue.empty():
+                        try:
+                            emoji = reaction_queue.get_nowait()
+                            await websocket.send_json({
+                                "type": "reaction",
+                                "session_id": session_id,
+                                "message_id": message_id,
+                                "emoji": emoji,
+                            })
+                        except queue.Empty:
+                            break
+
+                    if not fragment:
+                        continue
+
+                    produced_fragments.append(fragment)
+
+                    if first_chunk_at is None:
+                        first_chunk_at = time.time()
+
+                    await websocket.send_json({
+                        "type": "chunk",
+                        "session_id": session_id,
+                        "message_id": message_id,
+                        "chunk": fragment,
+                        "index": chunk_index,
+                    })
+
+                    delivered_fragments.append(fragment)
+                    chunk_index += 1
+            finally:
+                current_confirm_callback.reset(token)
+                reader_task.cancel()
+
             # One final drain in case the tool was the last thing to execute
             while not reaction_queue.empty():
                 try:
@@ -376,6 +449,7 @@ async def chat_stream(
                 ),
                 "total_chunks": chunk_index,
                 "stream": reconciliation,
+                "provider": _stream_provider() or "aura",
             }
 
             if final is not None and final.text:

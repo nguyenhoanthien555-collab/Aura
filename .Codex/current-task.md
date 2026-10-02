@@ -1,5 +1,33 @@
 # Current task
 
+## Inline Tool Consent, Realtime Provider Indicator & Wi-Fi Wireless ADB Pairing DELIVERED (2026-10-02)
+
+Following the user requirement to eliminate restrictive tool policy blocks, prompt first-time inline tool consent directly in chat, and visually display the active LLM provider icon in real time:
+
+- **Trụ cột 1: Thẻ Xin Quyền Công Cụ Tương Tác Trực Tiếp Trong Chat (Inline Tool Consent Flow - `server/tool_consent.py`, `tools/executor.py`, `server/routes/ws_chat.py`, `ChatComponents.kt`, `ChatScreen.kt`, `ChatViewModel.kt`)**:
+  - Gỡ bỏ hoàn toàn rào cản chính sách cứng nhắc: không còn danh sách `allowed` hạn chế và kiểm tra rủi ro `auto_approve` gây chặn các công cụ phần cứng Android (`android.get_device_health`, `android.toggle_flashlight`, v.v.). Mặc định mở toàn bộ công cụ đã đăng ký.
+  - Khi một công cụ được kích hoạt lần đầu tiên, hệ thống gửi frame WebSocket `tool_consent_request` xuống Android và hiển thị thẻ Cyber `ToolConsentCard` ngay phía trên ô soạn thảo tin nhắn (`Composer`).
+  - Thẻ hiển thị: Biểu tượng khiên bảo mật, tên công cụ định dạng monospace, mô tả ngắn gọn, huy hiệu đếm ngược 30 giây (`⏱ 30s`), và 2 nút hành động `[Cho phép]` / `[Từ chối]`.
+  - Cơ chế tự động duyệt: Nếu sau 30 giây người dùng không tương tác, hệ thống tự động duyệt và lưu vĩnh viễn quyền vào bảng SQLite `user_tool_consents`. Lần chạy sau sẽ không hỏi lại.
+  - Hỗ trợ hủy tức thì: Nếu người dùng bấm `[Từ chối]`, hệ thống lập tức hủy lệnh gọi tool và thông báo trung thực cho người dùng.
+- **Trụ cột 2: Chỉ Báo Provider Thời Gian Thực Trên Dải Cyber Status Strip (`AuraIcons.kt`, `AuraCyberCore.kt`, `AuraStreamClient.kt`, `server/routes/ws_chat.py`, `core/trace.py`)**:
+  - Máy chủ gửi trường `"provider"` thực tế trong frame `complete` (kể cả stream WebSocket thông thường hay kênh Phone Egress Relay Tunnel cho `chatgpt_web`).
+  - Hàm `provider_label` trong `core/trace.py` ưu tiên trích xuất `active_provider_name` giúp phản ánh trung thực provider chiến thắng sau chuỗi failover.
+  - Thiết kế 4 biểu tượng vector thương hiệu chuẩn bằng mã nguồn Compose thuần túy trong `AuraIcons.kt`:
+    - `AuraIcons.ChatGPT`: Vòng xoáy xoắn ốc hoa hồng đặc trưng của OpenAI, phát sáng màu xanh ngọc lục bảo `#10A37F`.
+    - `AuraIcons.Gemini`: Ngôi sao kim cương 4 cánh cong của Google DeepMind, phát sáng màu xanh da trời `#38BDF8`.
+    - `AuraIcons.OpenRouter`: Chòm sao đa giác kết nối mạng nơ-ron, màu tím chàm `#818CF8`.
+    - `AuraIcons.Claude`: Vầng thái dương 8 tia tỏa sáng của Anthropic, màu hổ phách `#D97706`.
+  - Tái cấu trúc viên nang `AuraCyberCoreCapsule`: Thay thế hoàn toàn dòng chữ tĩnh *"Sẵn sàng"* bằng icon vector của chính provider vừa trả lời. Bố cục tối giản: `[AURA] [●] [icon provider]`.
+- **Trụ cột 3: Ghép Nối Không Dây & Cài Đặt Thực Tế Thiết Bị Qua Wi-Fi (`adb pair` & `adb connect`)**:
+  - Ghép nối thành công ADB Wi-Fi với thiết bị OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`) tại `192.168.101.8:35527`.
+  - Đóng gói APK `:app:assembleDebug` và nạp trực tiếp qua Wi-Fi (`Performing Streamed Install -> Success`).
+  - Khởi động ứng dụng và chụp ảnh màn hình xác thực thực tế: Icon ChatGPT hiển thị sắc nét, chuẩn nhận diện thương hiệu trên dải trạng thái.
+- **Trụ cột 4: Kiểm Thử Toàn Diện & Đảm Bảo Tính Toàn Vẹn**:
+  - Python tests: 111/111 passed (100% PASS RATE).
+  - Android JVM tests: 488/488 passed (100% BUILD SUCCESSFUL).
+
+
 ## Phone Egress Relay Tunnel for ChatGPT Web, Tool Policy Preservation & Residential IP Verification DELIVERED (2026-10-02)
 
 Following the user requirement to utilize ChatGPT Web (free clone account with zero-token usage cost) as Aura's always-on brain without VPN blocks or keeping the PC on:

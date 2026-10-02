@@ -430,6 +430,9 @@ def _warn_about_policy(executor: ToolExecutor) -> None:
     if not policy.enabled:
         return
 
+    if getattr(policy, "allow_all", False) or "*" in policy.allowed:
+        return
+
     if not policy.allowed:
         logger.warning(
             "tools.enabled is true but tools.allowed is empty, so no tool "

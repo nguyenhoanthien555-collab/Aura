@@ -33,10 +33,18 @@ data class ChatUiState(
     val isHandsFreeMode: Boolean = false,
     val attachedImageBase64: String? = null,
     val attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
+    val pendingToolConsent: ToolConsentState? = null,
 ) {
     val canSend: Boolean
         get() = (draft.isNotBlank() || attachedImageBase64 != null) && !isSending && isConfigured
 }
+
+data class ToolConsentState(
+    val requestId: String,
+    val toolName: String,
+    val toolDescription: String,
+    val secondsRemaining: Int = 30,
+)
 
 data class ChatMessage(
     val id: String,

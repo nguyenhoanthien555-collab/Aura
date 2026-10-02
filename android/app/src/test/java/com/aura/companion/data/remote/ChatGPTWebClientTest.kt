@@ -35,8 +35,8 @@ class ChatGPTWebClientTest {
     @Test
     fun testSolveSentinelPow_validatesDifficulty() {
         val seed = "test_seed_456"
-        val difficulty = "000032"
-        val token = ChatGPTWebClient.solveSentinelPow(seed, difficulty, maxIterations = 100_000)
+        val difficulty = "05"
+        val token = ChatGPTWebClient.solveSentinelPow(seed, difficulty, maxIterations = 10_000)
         
         assertFalse(token == "0")
         

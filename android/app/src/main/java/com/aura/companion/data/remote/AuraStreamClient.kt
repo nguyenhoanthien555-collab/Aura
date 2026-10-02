@@ -9,8 +9,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -42,6 +44,17 @@ import java.util.concurrent.atomic.AtomicReference
 class AuraStreamClient(
     private val settings: SettingsProvider,
 ) {
+    private val activeWebSocket = AtomicReference<WebSocket?>(null)
+
+    fun sendToolConsentResponse(requestId: String, approved: Boolean): Boolean {
+        val socket = activeWebSocket.get() ?: return false
+        val frame = buildJsonObject {
+            put("type", "tool_consent_response")
+            put("request_id", requestId)
+            put("approved", approved)
+        }
+        return socket.send(frame.toString())
+    }
 
     /**
      * Send `message` and emit the reply as it arrives.
@@ -75,6 +88,7 @@ class AuraStreamClient(
 
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocketRef.set(webSocket)
+                    activeWebSocket.set(webSocket)
                     // The server reads exactly one frame, then replies.
                     // `context` rides along when the caller has one - the
                     val augmentedContext = JsonObject(
@@ -154,6 +168,7 @@ class AuraStreamClient(
                     t: Throwable,
                     response: Response?,
                 ) {
+                    activeWebSocket.set(null)
                     trySend(StreamEvent.Failed(errorFor(t, response)))
                     close()
                 }
@@ -165,12 +180,14 @@ class AuraStreamClient(
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     // WebSocket fully closed - now safe to terminate the flow
+                    activeWebSocket.set(null)
                     close()
                 }
             },
         )
 
         awaitClose {
+            activeWebSocket.set(null)
             webSocketRef.get()?.close(NORMAL_CLOSURE, null)
             socket.cancel()
         }
@@ -251,6 +268,13 @@ class AuraStreamClient(
                 firstChunkSeconds = num("first_chunk_seconds"),
                 text = str("text"),
                 verifier = frame["verifier"] as? JsonObject,
+                provider = str("provider"),
+            )
+
+            "tool_consent_request" -> StreamEvent.ToolConsentRequest(
+                requestId = str("request_id").orEmpty(),
+                toolName = str("tool_name").orEmpty(),
+                toolDescription = str("tool_description").orEmpty(),
             )
 
             "reaction" -> StreamEvent.Reaction(
@@ -341,6 +365,12 @@ sealed interface StreamEvent {
         val emoji: String,
     ) : StreamEvent
 
+    data class ToolConsentRequest(
+        val requestId: String,
+        val toolName: String,
+        val toolDescription: String,
+    ) : StreamEvent
+
     /**
      * The reply finished.
      *
@@ -355,6 +385,7 @@ sealed interface StreamEvent {
         val firstChunkSeconds: Double?,
         val text: String? = null,
         val verifier: JsonObject? = null,
+        val provider: String? = null,
     ) : StreamEvent
 
     /** Terminal failure. Nothing further will arrive. */

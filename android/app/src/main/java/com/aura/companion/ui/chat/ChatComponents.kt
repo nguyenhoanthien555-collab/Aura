@@ -33,6 +33,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -923,6 +925,172 @@ private suspend fun processImageUri(
             Pair(finalBitmap.asImageBitmap(), base64)
         } catch (_: Exception) {
             null
+        }
+    }
+}
+
+@Composable
+fun ToolConsentCard(
+    consent: ToolConsentState,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF0F172A).copy(alpha = 0.95f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
+        tonalElevation = 6.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(Color(0xFF0284C7).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = AuraIcons.Shield,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    Text(
+                        text = "Yêu cầu cấp quyền công cụ",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color(0xFFF1F5F9),
+                    )
+                }
+
+                // Countdown badge
+                androidx.compose.material3.Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFF59E0B).copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                ) {
+                    Text(
+                        text = "⏱ ${consent.secondsRemaining}s",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                        ),
+                        color = Color(0xFFFBBF24),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF1E293B).copy(alpha = 0.8f),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Build,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = consent.toolName,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                        ),
+                        color = Color(0xFF38BDF8),
+                    )
+                }
+            }
+
+            if (consent.toolDescription.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = consent.toolDescription,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = Color(0xFF94A3B8),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Deny Button
+                OutlinedButton(
+                    onClick = onDeny,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFFF87171),
+                    ),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Từ chối",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                    )
+                }
+
+                // Approve Button
+                Button(
+                    onClick = onApprove,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0284C7),
+                        contentColor = Color.White,
+                    ),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Cho phép",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
+            }
         }
     }
 }

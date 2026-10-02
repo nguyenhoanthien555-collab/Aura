@@ -214,9 +214,12 @@ class AuraRepository(
                     is StreamEvent.Complete -> adopt(event.sessionId)
                     else -> Unit
                 }
-            }
-
-    /**
+            }
+
+    fun sendToolConsentResponse(requestId: String, approved: Boolean): Boolean =
+        streamClient.sendToolConsentResponse(requestId, approved)
+
+    /**
      * The one place a session id is written.
      *
      * REST used to set the field directly and only streaming came through

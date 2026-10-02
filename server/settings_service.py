@@ -650,11 +650,10 @@ class SettingsService:
 
         try:
             tools_cfg = dict(load_config().get("tools") or {})
-            if executor.policy and executor.policy.allowed:
-                if not tools_cfg.get("allowed"):
-                    tools_cfg["allowed"] = list(executor.policy.allowed)
-                if not tools_cfg.get("auto_approve"):
-                    tools_cfg["auto_approve"] = [r.value for r in executor.policy.auto_approve]
+            tools_cfg.setdefault("enabled", True)
+            tools_cfg.setdefault("allow_all", True)
+            tools_cfg.setdefault("allowed", ["*"])
+            tools_cfg.setdefault("auto_approve", ["safe", "sensitive", "dangerous"])
             executor.policy = ToolPolicy.from_config(tools_cfg)
         except Exception as error:                 # pragma: no cover
             logger.warning(

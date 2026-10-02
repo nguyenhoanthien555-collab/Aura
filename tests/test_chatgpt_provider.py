@@ -43,10 +43,13 @@ def test_chatgpt_capabilities_registered():
 
 def test_chatgpt_router_instantiation():
     """Verify BrainRouter resolves chatgpt provider when key is provided."""
+    from brain.providers.fallback import FallbackProvider
+
     router = BrainRouter(provider_name="chatgpt")
     assert router.provider_name == "chatgpt"
-    assert isinstance(router.provider, ChatGPTProvider)
-    assert router.provider.model == "gpt-4o"
+    actual = router.provider.providers[0] if isinstance(router.provider, FallbackProvider) else router.provider
+    assert isinstance(actual, ChatGPTProvider)
+    assert actual.model == "gpt-4o"
 
 
 def test_chatgpt_generate_mock():

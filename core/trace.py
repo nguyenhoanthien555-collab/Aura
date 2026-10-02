@@ -99,7 +99,7 @@ def provider_label(llm) -> str:
     if llm is None:
         return ""
 
-    direct = getattr(llm, "provider_name", None)
+    direct = getattr(llm, "active_provider_name", None) or getattr(llm, "provider_name", None)
 
     if direct:
         return str(direct)
@@ -107,7 +107,7 @@ def provider_label(llm) -> str:
     inner = getattr(llm, "llm", None) or getattr(llm, "provider", None)
 
     if inner is not None:
-        return str(getattr(inner, "provider_name", "") or "")
+        return str(getattr(inner, "active_provider_name", None) or getattr(inner, "provider_name", "") or "")
 
     return ""
 
