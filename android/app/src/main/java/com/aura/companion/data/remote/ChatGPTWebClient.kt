@@ -147,10 +147,18 @@ object ChatGPTWebClient {
         }
     }
 
+    private val activeCall = java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>(null)
+
+    fun cancelCurrentCall() {
+        activeCall.get()?.cancel()
+        activeCall.set(null)
+    }
+
     suspend fun streamConversation(
         prompt: String,
         sessionToken: String,
         model: String = "auto",
+        thinkingEffort: String = "low",
         onChunk: (String) -> Unit,
     ): Result<String> = withContext(Dispatchers.IO) {
         val session = verifySession(sessionToken)
@@ -213,6 +221,7 @@ object ChatGPTWebClient {
             ],
             "parent_message_id": "$parentId",
             "model": "$model",
+            "thinking_effort": "$thinkingEffort",
             "timezone_offset_min": -420,
             "suggestions": [],
             "history_and_training_disabled": false,
@@ -240,8 +249,11 @@ object ChatGPTWebClient {
         val fullTextBuilder = StringBuilder()
         var lastLength = 0
 
+        val call = httpClient.newCall(reqBuilder.build())
+        activeCall.set(call)
+
         try {
-            httpClient.newCall(reqBuilder.build()).execute().use { response ->
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     val err = response.body?.string().orEmpty()
                     return@withContext Result.failure(IllegalStateException("HTTP ${response.code}: $err"))
@@ -293,6 +305,8 @@ object ChatGPTWebClient {
             Result.success(cleaned)
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            activeCall.set(null)
         }
     }
 

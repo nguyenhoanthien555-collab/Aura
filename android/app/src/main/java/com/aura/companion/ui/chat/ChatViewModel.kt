@@ -11,6 +11,7 @@ import com.aura.companion.data.AuraRepository
 import com.aura.companion.data.AuraResult
 import com.aura.companion.data.chat.Transcript
 import com.aura.companion.data.local.DeviceTelemetryProbe
+import com.aura.companion.data.remote.ChatGPTWebClient
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.settings.SettingsProvider
 import com.aura.companion.voice.AuraVoiceManager
@@ -67,6 +68,31 @@ class ChatViewModel(
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private var probe: Job? = null
+    private var currentSendJob: Job? = null
+
+    fun toggleThinkingMode() {
+        _state.update { it.copy(isThinkingEnabled = !it.isThinkingEnabled) }
+    }
+
+    fun cancelCurrentTurn() {
+        currentSendJob?.cancel()
+        currentSendJob = null
+        AuraAccessibilityService.stopAgentTask()
+        voiceManager?.stopSpeaking()
+        voiceManager?.stopListening()
+        ChatGPTWebClient.cancelCurrentCall()
+        _state.update { current ->
+            current.copy(
+                messages = current.messages.map {
+                    if (it.streaming) it.copy(streaming = false) else it
+                },
+                isSending = false,
+                isAgentRunning = false,
+                isHandsFreeMode = false,
+                agentStatusText = "",
+            )
+        }
+    }
 
     /**
      * What the store already holds, so a launch does not rewrite it.
@@ -512,7 +538,8 @@ class ChatViewModel(
             )
         }
 
-        viewModelScope.launch {
+        currentSendJob?.cancel()
+        currentSendJob = viewModelScope.launch {
 
             // Only a message that actually asks for something to happen
             // on the phone goes into the agent loop. Deciding this needs
@@ -592,6 +619,8 @@ class ChatViewModel(
             entries["image"] = JsonPrimitive(attachedImageB64)
             entries["image_mime"] = JsonPrimitive("image/jpeg")
         }
+
+        entries["is_thinking_enabled"] = JsonPrimitive(_state.value.isThinkingEnabled)
 
         return JsonObject(entries)
     }
@@ -927,17 +956,7 @@ class ChatViewModel(
     }
 
     fun interruptAgent() {
-        AuraAccessibilityService.stopAgentTask()
-        voiceManager?.stopSpeaking()
-        voiceManager?.stopListening()
-        _state.update {
-            it.copy(
-                isSending = false,
-                isAgentRunning = false,
-                isHandsFreeMode = false,
-                agentStatusText = "Tớ dừng lại theo lời cậu rồi nè!",
-            )
-        }
+        cancelCurrentTurn()
     }
 
     // ------------------------------------------------------------------

@@ -73,6 +73,37 @@ object AuraIcons {
         }
     }
 
+    /** Universal solid square stop button (YouTube / ChatGPT stop). */
+    val SquareStop: ImageVector by lazy {
+        icon("SquareStop") {
+            moveTo(6.5f, 6.5f)
+            lineTo(17.5f, 6.5f)
+            lineTo(17.5f, 17.5f)
+            lineTo(6.5f, 17.5f)
+            close()
+        }
+    }
+
+    /** Cybernetic glowing lightbulb node for Thinking mode toggle. */
+    val Lightbulb: ImageVector by lazy {
+        icon("Lightbulb") {
+            moveTo(12.0f, 2.0f)
+            curveTo(7.58f, 2.0f, 4.0f, 5.58f, 4.0f, 10.0f)
+            curveTo(4.0f, 12.76f, 5.4f, 15.19f, 7.54f, 16.63f)
+            lineTo(8.5f, 18.0f)
+            lineTo(15.5f, 18.0f)
+            lineTo(16.46f, 16.63f)
+            curveTo(18.6f, 15.19f, 20.0f, 12.76f, 20.0f, 10.0f)
+            curveTo(20.0f, 5.58f, 16.42f, 2.0f, 12.0f, 2.0f)
+            close()
+            moveTo(9.0f, 19.5f)
+            lineTo(15.0f, 19.5f)
+            lineTo(14.0f, 21.5f)
+            lineTo(10.0f, 21.5f)
+            close()
+        }
+    }
+
     /** Hexagonal chat capsule with inner communicative voice slit. */
     val ChatBubble: ImageVector by lazy {
         icon("ChatBubble") {

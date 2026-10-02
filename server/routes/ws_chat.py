@@ -278,12 +278,22 @@ async def chat_stream(
                         "Core Intelligence: Google Gemini 2.5 Flash / Flash Lite as primary LLM + 11 configurable cloud providers, native Google GenAI `text-embedding-004` semantic embeddings.",
                         "Core Intelligence: OpenAI GPT-5.6 Luna 🌙 (vận hành qua kết nối dân cư điện thoại của Hoàn Thiện).",
                     )
-                    luna_directive = (
-                        "\n\n[HƯỚNG DẪN CỐT LÕI TỪ HOÀN THIỆN]\n"
-                        "- Bạn là GPT-5.6 Luna 🌙 trong hình hài người bạn tri kỷ Aura của Hoàn Thiện.\n"
-                        "- Luôn xưng 'tớ' và gọi Hoàn Thiện là 'cậu'. Thân thiết, vui tươi, thông minh, ngắn gọn (1 đến 3 câu tiếng Việt).\n"
-                        "- TUYỆT ĐỐI KHÔNG xuất suy nghĩ nội tâm, không nháp tiếng Anh (như 'The user is saying...', 'Looking at the system prompt...', 'curiosity.', 'Here's my response:'). Chỉ xuất DUY NHẤT câu trả lời cuối cùng bằng tiếng Việt tự nhiên dành cho Hoàn Thiện.\n"
-                    )
+                    is_thinking = bool(stream_context.get("is_thinking_enabled", False))
+                    thinking_effort = "high" if is_thinking else "low"
+
+                    if is_thinking:
+                        luna_directive = (
+                            "\n\n[HƯỚNG DẪN CỐT LÕI TỪ HOÀN THIỆN - CHẾ ĐỘ SUY NGHĨ SÂU (THINKING MODE ON)]\n"
+                            "- Bạn là GPT-5.6 Luna 🌙 trong hình hài người bạn tri kỷ Aura của Hoàn Thiện.\n"
+                            "- Luôn xưng 'tớ' và gọi Hoàn Thiện là 'cậu'. Hãy suy nghĩ thấu đáo, phân tích kỹ lưỡng, và đưa ra câu trả lời xuất sắc, chi tiết, chính xác cho Hoàn Thiện.\n"
+                        )
+                    else:
+                        luna_directive = (
+                            "\n\n[HƯỚNG DẪN CỐT LÕI TỪ HOÀN THIỆN - PHẢN HỒI NHANH (THINKING MODE OFF)]\n"
+                            "- Bạn là GPT-5.6 Luna 🌙 trong hình hài người bạn tri kỷ Aura của Hoàn Thiện.\n"
+                            "- Luôn xưng 'tớ' và gọi Hoàn Thiện là 'cậu'. Thân thiết, vui tươi, thông minh, ngắn gọn (1 đến 3 câu tiếng Việt).\n"
+                            "- TUYỆT ĐỐI KHÔNG xuất suy nghĩ nội tâm, không nháp tiếng Anh. Chỉ xuất DUY NHẤT câu trả lời cuối cùng bằng tiếng Việt tự nhiên dành cho Hoàn Thiện.\n"
+                        )
                     if luna_directive not in prompt:
                         prompt += luna_directive
 
@@ -291,6 +301,7 @@ async def chat_stream(
                         "type": "chatgpt_egress_request",
                         "prompt": prompt,
                         "model": "auto",
+                        "thinking_effort": thinking_effort,
                         "session_id": session_id,
                         "message_id": message_id,
                     })

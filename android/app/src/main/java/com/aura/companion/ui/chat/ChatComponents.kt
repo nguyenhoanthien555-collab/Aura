@@ -588,6 +588,9 @@ fun Composer(
     isSending: Boolean,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
+    onStop: () -> Unit = {},
+    isThinkingEnabled: Boolean = false,
+    onToggleThinking: () -> Unit = {},
     isListening: Boolean = false,
     speechRmsDb: Float = 0f,
     attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
@@ -734,6 +737,30 @@ fun Composer(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
+                IconButton(
+                    onClick = onToggleThinking,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(
+                            color = if (isThinkingEnabled) Color(0x33FACC15) else Color(0xFF1E1B4B).copy(alpha = 0.6f),
+                            shape = CircleShape,
+                        )
+                        .border(
+                            1.dp,
+                            if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                            CircleShape,
+                        ),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Lightbulb,
+                        contentDescription = if (isThinkingEnabled) "Tắt chế độ suy nghĩ sâu (Thinking)" else "Bật chế độ suy nghĩ sâu (Thinking)",
+                        tint = if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
                 BasicTextField(
                     value = draft,
                     onValueChange = onDraftChanged,
@@ -806,21 +833,26 @@ fun Composer(
                 }
 
                 FilledIconButton(
-                    onClick = onSend,
-                    enabled = canSend,
+                    onClick = if (isSending) onStop else onSend,
+                    enabled = isSending || canSend,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color(0xFF7C3AED),
+                        containerColor = if (isSending) Color(0xFF9333EA) else Color(0xFF7C3AED),
                         contentColor = Color.White,
                         disabledContainerColor = Color(0xFF1E1B4B).copy(alpha = 0.5f),
                         disabledContentColor = Color(0xFF475569),
                     ),
-                    modifier = Modifier.size(42.dp),
+                    modifier = Modifier
+                        .size(42.dp)
+                        .then(
+                            if (isSending) Modifier.border(1.5.dp, Color(0xFFC084FC), CircleShape) else Modifier
+                        ),
                 ) {
                     if (isSending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White,
+                        Icon(
+                            imageVector = AuraIcons.SquareStop,
+                            contentDescription = "Dừng lại",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
                         )
                     } else {
                         Icon(

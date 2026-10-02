@@ -343,60 +343,6 @@ fun ChatScreen(
                 }
             }
 
-            AnimatedVisibility(visible = state.isAgentRunning || state.isSending) {
-                androidx.compose.material3.Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(12.dp),
-                    tonalElevation = 3.dp,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
-                            Text(
-                                text = state.agentStatusText.ifBlank { "Aura đang xử lý..." },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Button(
-                            onClick = viewModel::interruptAgent,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(8.dp),
-                        ) {
-                            Icon(
-                                imageVector = AuraIcons.Stop,
-                                contentDescription = "Dừng lại",
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Dừng lại", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-
             AnimatedVisibility(visible = state.pendingToolConsent != null) {
                 state.pendingToolConsent?.let { consent ->
                     ToolConsentCard(
@@ -411,6 +357,9 @@ fun ChatScreen(
                 draft = state.draft,
                 canSend = state.canSend,
                 isSending = state.isSending,
+                onStop = viewModel::cancelCurrentTurn,
+                isThinkingEnabled = state.isThinkingEnabled,
+                onToggleThinking = viewModel::toggleThinkingMode,
                 isListening = state.isListening,
                 speechRmsDb = state.speechRmsDb,
                 attachedImageBitmap = state.attachedImageBitmap,

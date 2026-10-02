@@ -34,6 +34,7 @@ data class ChatUiState(
     val attachedImageBase64: String? = null,
     val attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
     val pendingToolConsent: ToolConsentState? = null,
+    val isThinkingEnabled: Boolean = false,
 ) {
     val canSend: Boolean
         get() = (draft.isNotBlank() || attachedImageBase64 != null) && !isSending && isConfigured

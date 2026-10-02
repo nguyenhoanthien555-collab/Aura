@@ -112,6 +112,7 @@ class AuraStreamClient(
                     if (parsedJson != null && (parsedJson["type"] as? JsonPrimitive)?.content == "chatgpt_egress_request") {
                         val prompt = (parsedJson["prompt"] as? JsonPrimitive)?.content.orEmpty()
                         val model = (parsedJson["model"] as? JsonPrimitive)?.content ?: "auto"
+                        val thinkingEffort = (parsedJson["thinking_effort"] as? JsonPrimitive)?.content ?: "low"
                         val sessionToken = settings.current.chatgptSessionToken
                         if (sessionToken.isBlank()) {
                             val errFrame = JsonObject(mapOf(
@@ -122,7 +123,7 @@ class AuraStreamClient(
                         } else {
                             launch(Dispatchers.IO) {
                                 var chunkIndex = 0
-                                val res = ChatGPTWebClient.streamConversation(prompt, sessionToken, model) { chunk ->
+                                val res = ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
                                     trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
                                     val frame = JsonObject(mapOf(
                                         "type" to JsonPrimitive("chatgpt_egress_chunk"),
@@ -190,6 +191,7 @@ class AuraStreamClient(
             activeWebSocket.set(null)
             webSocketRef.get()?.close(NORMAL_CLOSURE, null)
             socket.cancel()
+            ChatGPTWebClient.cancelCurrentCall()
         }
     }
 
