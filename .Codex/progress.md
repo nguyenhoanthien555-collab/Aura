@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-10-02 — OpenAI GPT-5.6 Luna 🌙 Intelligence Integration, Thought Suppression & Prompt Identity Grounding DELIVERED
+
+- **Pillar 1: Elimination of Leaked Internal Thoughts & Drafting Preambles (`ChatGPTWebClient.kt`, `ChatGPTWebClientTest.kt`)**:
+  - Filtered SSE chunks having `author.name == "thought"` and `content_type != "text"` to prevent reasoning blocks from reaching the user interface.
+  - Implemented `cleanLunaResponse()`: Strips preambles (`Here's my response: "..."`, `curiosity.`, `thought.`), cuts off trailing self-reconsideration text (`Actually, let me reconsider...`), and trims quotes.
+  - Added dedicated unit tests in `ChatGPTWebClientTest.kt` verifying preamble stripping, keyword sanitization, and text preservation (100% passed).
+- **Pillar 2: Hub UI & Telemetry Identity (`ModelsSection.kt`)**:
+  - Dynamically labeled `GPT-5.6 Luna 🌙` with subtitle *"Mô hình thiên thể OpenAI siêu tốc & lanh lẹ"* when `chatgpt_web` is active.
+- **Pillar 3: Server Prompt Framing & Anti-Thinking Directives (`server/routes/ws_chat.py`)**:
+  - Replaced legacy Gemini system prompt header with `Core Intelligence: OpenAI GPT-5.6 Luna 🌙 (vận hành qua kết nối dân cư điện thoại của Hoàn Thiện).`
+  - Injected strict conciseness directives (*cậu - tớ*, 1-3 natural Vietnamese sentences, zero reasoning scratchpad leaks).
+  - Pushed to `feature/aura-identity` for automated Render Cloud CI/CD deployment.
+- **Pillar 4: Verification & Physical Deployment**:
+  - Android JVM tests: 491/491 passed (100% BUILD SUCCESSFUL).
+  - Python tests: 15/15 targeted passed.
+  - Live hardware verification on OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`): verified emerald ChatGPT icon on cyber status capsule.
+
 ## 2026-10-02 — Inline Tool Consent, Realtime Provider Indicator & Wi-Fi Wireless ADB Pairing DELIVERED
 
 - **Pillar 1: Inline Tool Consent Flow (`server/tool_consent.py`, `tools/executor.py`, `server/routes/ws_chat.py`, `ChatComponents.kt`, `ChatScreen.kt`, `ChatViewModel.kt`)**:

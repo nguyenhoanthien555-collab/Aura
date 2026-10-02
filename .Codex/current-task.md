@@ -1,5 +1,25 @@
 # Current task
 
+## OpenAI GPT-5.6 Luna 🌙 Intelligence Integration, Thought Suppression & Prompt Identity Grounding (2026-10-02)
+
+Following the user request to transition Aura's brain to OpenAI GPT-5.6 Luna 🌙, suppress internal reasoning leaks ("curiosity.", "Here's my response:", etc.), and resolve identity confusion:
+
+- **Trụ cột 1: Triệt Tiêu 100% Leaked Internal Thoughts & Nháp Tiếng Anh (`ChatGPTWebClient.kt`, `ChatGPTWebClientTest.kt`)**:
+  - Lọc bỏ tận gốc các chunk SSE từ ChatGPT Web có `author.name == "thought"` hoặc `content_type != "text"`, không để token reasoning tràn xuống giao diện người dùng.
+  - Xây dựng thuật toán `cleanLunaResponse()`: Bóc tách tự động các đoạn dẫn nhập siêu ngôn ngữ (`Here's my response: "..."`, `curiosity.`, `thought.`), tự động cắt bỏ phần tự phản hồi suy nghĩ phía sau (`Actually, let me reconsider...`), và unwrap dấu ngoặc kép bọc ngoài.
+  - Viết bộ unit test chuyên biệt `ChatGPTWebClientTest.kt` kiểm thử 3 kịch bản: bóc tách lời dẫn, lọc từ khóa suy nghĩ và bảo toàn văn bản bình thường (100% pass).
+- **Trụ cột 2: Định Danh Giao Diện Hub & Telemetry (`ModelsSection.kt`)**:
+  - Hiển thị trực quan nhãn `GPT-5.6 Luna 🌙` kèm phụ đề *"Mô hình thiên thể OpenAI siêu tốc & lanh lẹ"* tại Hub -> AI & Models khi đang chọn `chatgpt_web`.
+- **Trụ cột 3: Khắc Phục Prompt Framing & Chỉ Thị Chống Suy Nghĩ Máy Chủ (`server/routes/ws_chat.py`)**:
+  - Khắc phục nguyên nhân gốc rễ khiến Aura tự nhận là Gemini: Bản cập nhật `server/routes/ws_chat.py` thay thế dòng hệ thống cũ thành `Core Intelligence: OpenAI GPT-5.6 Luna 🌙 (vận hành qua kết nối dân cư điện thoại của Hoàn Thiện).`
+  - Đính kèm chỉ thị nghiêm ngặt: xưng "tớ" gọi "cậu", thân thiết, vui tươi, 1-3 câu ngắn gọn, TUYỆT ĐỐI KHÔNG xuất suy nghĩ nội tâm hoặc nháp tiếng Anh.
+  - Đẩy commit lên branch `feature/aura-identity` kích hoạt Render Cloud tự động triển khai.
+- **Trụ cột 4: Kiểm Thử & Xác Thực Thực Tế**:
+  - Python tests: 15/15 targeted passed.
+  - Android JVM tests: 491/491 passed.
+  - APK debug cài đặt thành công trên OPPO Reno6 5G (`IBCQMB4PTGNZJVTO`).
+  - Chụp ảnh màn hình thực tế xác nhận dải capsule hiển thị chuẩn icon OpenAI màu xanh ngọc lục bảo.
+
 ## Inline Tool Consent, Realtime Provider Indicator & Wi-Fi Wireless ADB Pairing DELIVERED (2026-10-02)
 
 Following the user requirement to eliminate restrictive tool policy blocks, prompt first-time inline tool consent directly in chat, and visually display the active LLM provider icon in real time:
