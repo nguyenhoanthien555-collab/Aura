@@ -303,7 +303,7 @@ class SettingsContractTest {
         // as a control this server "does not support". `llm.gemini_model` is
         // the one model path in the count; the per-provider model settings the
         // picker writes through are reported in the providers document.
-        assertEquals(58, configurable.size)
+        assertEquals(60, configurable.size)
 
         listOf(
             "llm.provider", "llm.gemini_model", "llm.anthropic_model", "llm.qwen_model",
@@ -1173,7 +1173,7 @@ class SettingsContractTest {
         assertEquals("gemini", body.active)
         assertTrue(body.ready)
         assertFalse(body.inFallback)
-        assertEquals(12, body.providers.size)
+        assertEquals(14, body.providers.size)
         assertEquals("unconfigured", body.providers.getValue("custom").state)
 
         // Gemini has a key on this host, so it is the active provider - the one

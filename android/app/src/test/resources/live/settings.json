@@ -2,6 +2,8 @@
   "configurable": [
     "llm.anthropic_model",
     "llm.cerebras_model",
+    "llm.chatgpt_model",
+    "llm.chatgpt_web_model",
     "llm.custom_base_url",
     "llm.custom_model",
     "llm.deepseek_model",
@@ -75,6 +77,8 @@
     "llm": {
       "anthropic_model": "claude-sonnet-5",
       "cerebras_model": "llama-3.3-70b",
+      "chatgpt_model": "gpt-4o",
+      "chatgpt_web_model": "auto",
       "cloud_model": "gemini-flash-latest",
       "custom_base_url": "",
       "custom_model": "",
@@ -268,6 +272,8 @@
     "available": {
       "anthropic": "",
       "cerebras": "",
+      "chatgpt": "",
+      "chatgpt_web": "",
       "custom": "",
       "deepseek": "",
       "gemini": "••••••••yiaw",

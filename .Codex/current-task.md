@@ -1,6 +1,33 @@
 # Current task
 
-## Forensic Security & Architectural Hardening PASS COMPLETED (2026-10-02)
+## ChatGPT Web Provider, Resilient Web Search & Runtime Hardening DELIVERED (2026-10-02)
+
+Following the user requirement to utilize ChatGPT Web (free clone account with zero-token usage cost) as Aura's always-on brain and fix web search timeouts:
+
+- **Trụ cột 1: Nhà cung cấp ChatGPT Web Không Giới Hạn Chi Phí (`brain/providers/chatgpt_web.py`, `brain/router.py`)**:
+  - Triển khai `ChatGPTWebProvider(LLM, StreamingLLM)` kết nối trực tiếp vào `https://chatgpt.com/backend-api/conversation`.
+  - Cơ chế xác thực an toàn qua session token `CHATGPT_SESSION_TOKEN` (lấy từ cookie `__Secure-next-auth.session-token` của tài khoản clone).
+  - Tự động luân chuyển phiên 24/7 (Session Rollover): Tự động gọi `https://chatgpt.com/api/auth/session` làm mới access token mỗi 12 giờ.
+  - Tích hợp bộ giải thuật Proof-of-Work (Sentinel PoW challenge solver) bằng Python thuần (`hashlib.sha256`), vượt qua cổng xác thực `/backend-api/sentinel/chat-requirements` trực tiếp từ container Render Cloud mà không phụ thuộc vào trình duyệt headless hay dịch vụ bên ngoài.
+  - Đăng ký provider `"chatgpt_web": "CHATGPT_SESSION_TOKEN"` trong `PROVIDER_KEYS` của `brain/router.py`. Hỗ trợ cấu hình `llm.provider: chatgpt_web` hoặc fallback tự động sang `gemini -> groq -> mistral -> openrouter` nếu session hết hạn.
+  - Kiểm thử: `tests/test_chatgpt_web_provider.py` (8/8 passed 100%).
+- **Trụ cột 2: Khắc phục Triệt để Timeout Tìm kiếm Web (`tools/builtins/web.py`)**:
+  - Chuyển đổi endpoint tìm kiếm chính từ `lite.duckduckgo.com` (gặp lỗi SSL handshake hang `_ssl.c:999` trên môi trường Python/Render) sang `https://html.duckduckgo.com/html/`.
+  - Bộ bóc tách HTML chịu lỗi cao: trích xuất URL đích (giải mã chuyển hướng `uddg=`), tiêu đề và đoạn trích tóm tắt đầy đủ, loại bỏ quảng cáo và kết quả rác.
+  - Tốc độ phản hồi < 1.5 giây, bảo toàn fallback an toàn sang `lite` nếu cần.
+  - Kiểm thử: `tests/test_web_tools.py` (13/13 passed 100%).
+- **Trụ cột 3: Khắc phục Lỗi Thiếu Import `os` & Giới Hạn Allowed Tools (`server/runtime.py`)**:
+  - Bổ sung `import os` bị thiếu tại `server/runtime.py` gây crash `NameError: name 'os' is not defined` trong `_reflect_turn()`.
+  - Tôn trọng danh sách công cụ được cấp quyền cụ thể của người quản trị (`explicit_allowed`), không tự động chèn 20 công cụ ngầm khi người dùng chủ động cấu hình giới hạn công cụ.
+- **Trụ cột 4: Đồng bộ Hợp đồng DTO & Test Fixture Android (`SettingsContractTest.kt`, fixtures)**:
+  - Cập nhật các fixture Android với các provider mới (`chatgpt`, `chatgpt_web`).
+  - Cập nhật số lượng provider (14) và số lượng thiết lập tùy biến (60) trong `SettingsContractTest.kt`.
+  - Android JVM Tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+- **Trụ cột 5: Đóng Gói APK & Triển Khai Thiết Bị Oppo CPH2251**:
+  - Biên dịch APK `:app:assembleDebug` thành công.
+  - Cài đặt trực tiếp qua ADB lên thiết bị Oppo Reno6 5G (`IBCQMB4PTGNZJVTO`) thành công (`Success`).
+
+
 
 Following the forensic audit (`AURA_FORENSIC_AUDIT.md`), all identified security vulnerabilities and architectural gaps have been resolved without rewriting core systems:
 

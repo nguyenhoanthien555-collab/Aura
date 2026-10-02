@@ -230,3 +230,39 @@ def test_web_search_ddg_unquotes_tracking_redirect():
         # Must have extracted the clean destination URL
         assert res.data["results"][0]["url"] == "https://python.org/download"
 
+
+def test_web_search_html_duckduckgo_format():
+    """Verify html.duckduckgo.com format parsing with snippets and ads filtered out."""
+    mock_html = """
+    <html><body>
+    <div class="result results_links results_links_deep result--ad">
+        <div class="result__body">
+            <h2 class="result__title"><a href="https://duckduckgo.com/y.js?ad_domain=example.com">Ad Title</a></h2>
+            <a class="result__snippet">Ad text here.</a>
+        </div>
+    </div>
+    <div class="result results_links results_links_deep web-result">
+        <div class="result__body">
+            <h2 class="result__title"><a href="/l/?uddg=https%3A%2F%2Fnews.ycombinator.com%2F">Hacker News</a></h2>
+            <a class="result__snippet">Anything that good hackers would find interesting.</a>
+        </div>
+    </div>
+    </body></html>
+    """
+    tool = WebSearchTool(tavily_api_key=None)
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = mock_html
+        mock_client.post.return_value = mock_resp
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+
+        res = tool.execute(query="hacker news", limit=1)
+        assert res.ok
+        assert len(res.data["results"]) == 1
+        assert res.data["results"][0]["title"] == "Hacker News"
+        assert res.data["results"][0]["url"] == "https://news.ycombinator.com/"
+        assert "good hackers" in res.data["results"][0]["snippet"]
+

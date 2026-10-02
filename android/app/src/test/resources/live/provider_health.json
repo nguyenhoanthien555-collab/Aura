@@ -18,6 +18,18 @@
       "in_chain": false,
       "state": "unconfigured"
     },
+    "chatgpt": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
+    "chatgpt_web": {
+      "configured": false,
+      "healthy": false,
+      "in_chain": false,
+      "state": "unconfigured"
+    },
     "custom": {
       "configured": false,
       "healthy": false,

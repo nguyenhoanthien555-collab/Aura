@@ -263,6 +263,24 @@ PROVIDER_CAPABILITIES = {
         "api_key_env": "OPENAI_API_KEY",
         "model_setting": "llm.openai_model",
     },
+    "chatgpt": {
+        "label": "ChatGPT (OpenAI API)",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1"],
+        "api_base": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "model_setting": "llm.chatgpt_model",
+    },
+    "chatgpt_web": {
+        "label": "ChatGPT Web (Clone Account)",
+        "chat": True, "streaming": True, "tools": True, "vision": False,
+        "keyless": False,
+        "models": ["auto"],
+        "api_base": "https://chatgpt.com/backend-api",
+        "api_key_env": "CHATGPT_SESSION_TOKEN",
+        "model_setting": "llm.chatgpt_web_model",
+    },
     "anthropic": {
         "label": "Anthropic Claude",
         "chat": True, "streaming": True, "tools": True, "vision": False,
@@ -364,6 +382,8 @@ PROVIDER_CAPABILITIES = {
 # leaving the server.
 PROVIDER_BASE_URL_ENV = {
     "openai": "OPENAI_BASE_URL",
+    "chatgpt": "CHATGPT_BASE_URL",
+    "chatgpt_web": "CHATGPT_WEB_BASE_URL",
     "anthropic": "ANTHROPIC_BASE_URL",
     "cerebras": "CEREBRAS_BASE_URL",
     "groq": "GROQ_BASE_URL",

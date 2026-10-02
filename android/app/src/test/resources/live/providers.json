@@ -62,8 +62,57 @@
       "vision": false
     },
     {
+      "api_base": "https://api.openai.com/v1",
+      "api_base_overridden": false,
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url_env": "CHATGPT_BASE_URL",
+      "chat": true,
+      "configured": false,
+      "is_fallback": false,
+      "is_primary": false,
+      "key_masked": "",
+      "key_source": "",
+      "keyless": false,
+      "label": "ChatGPT (OpenAI API)",
+      "model": "gpt-4o",
+      "model_setting": "llm.chatgpt_model",
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "o3-mini",
+        "o1"
+      ],
+      "name": "chatgpt",
+      "streaming": true,
+      "tools": true,
+      "vision": false
+    },
+    {
+      "api_base": "https://chatgpt.com/backend-api",
+      "api_base_overridden": false,
+      "api_key_env": "CHATGPT_SESSION_TOKEN",
+      "base_url_env": "CHATGPT_WEB_BASE_URL",
+      "chat": true,
+      "configured": false,
+      "is_fallback": false,
+      "is_primary": false,
+      "key_masked": "",
+      "key_source": "",
+      "keyless": false,
+      "label": "ChatGPT Web (Clone Account)",
+      "model": "auto",
+      "model_setting": "llm.chatgpt_web_model",
+      "models": [
+        "auto"
+      ],
+      "name": "chatgpt_web",
+      "streaming": true,
+      "tools": true,
+      "vision": false
+    },
+    {
       "api_base": "https://api.anthropic.com/v1",
-      "api_base_overridden": true,
+      "api_base_overridden": false,
       "api_key_env": "ANTHROPIC_API_KEY",
       "base_url_env": "ANTHROPIC_BASE_URL",
       "chat": true,

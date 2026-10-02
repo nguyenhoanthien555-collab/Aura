@@ -151,59 +151,133 @@ class WebSearchTool(Tool):
             except Exception as tavily_err:
                 logger.warning("Tavily search failed (%s), falling back to DuckDuckGo", tavily_err)
 
-        # 2. Keyless DuckDuckGo Lite path
-        try:
-            headers = {"User-Agent": DEFAULT_USER_AGENT}
-            with httpx.Client(timeout=10.0, headers=headers, follow_redirects=True) as client:
-                resp = client.post("https://lite.duckduckgo.com/lite/", data={"q": query_str})
-                if resp.status_code != 200:
-                    return fail(
-                        f"Search provider returned status code {resp.status_code}",
-                        tool=self.name,
+        # 2. Keyless DuckDuckGo path (prefer html.duckduckgo.com to avoid TLS handshake hangs on cloud)
+        endpoints = [
+            ("https://html.duckduckgo.com/html/", "html"),
+            ("https://lite.duckduckgo.com/lite/", "lite"),
+        ]
+        headers = {"User-Agent": DEFAULT_USER_AGENT}
+        last_error = None
+
+        for endpoint_url, engine_type in endpoints:
+            try:
+                with httpx.Client(timeout=8.0, headers=headers, follow_redirects=True) as client:
+                    resp = client.post(endpoint_url, data={"q": query_str})
+                    if resp.status_code != 200:
+                        last_error = f"Search provider ({engine_type}) returned status {resp.status_code}"
+                        continue
+
+                    html_content = resp.text
+                    results = []
+
+                    # Parse html.duckduckgo.com format
+                    web_blocks = re.findall(
+                        r'<div[^>]+class=[\'"][^\'"]*(?:web-result|result__body)[^\'"]*[\'"][^>]*>(.*?)</div>\s*</div>',
+                        html_content,
+                        re.DOTALL | re.IGNORECASE,
+                    )
+                    if not web_blocks:
+                        # Fallback block matching
+                        web_blocks = re.findall(
+                            r'<div[^>]+class=[\'"][^\'"]*result__body[^\'"]*[\'"][^>]*>(.*?)(?:</div>|$)',
+                            html_content,
+                            re.DOTALL | re.IGNORECASE,
+                        )
+
+                    for block in web_blocks:
+                        title_match = re.search(
+                            r'<h2[^>]+class=[\'"][^\'"]*result__title[^\'"]*[\'"][^>]*>\s*<a[^>]+href=[\'"]([^\'"]+)[\'"][^>]*>(.*?)</a>',
+                            block,
+                            re.DOTALL | re.IGNORECASE,
+                        )
+                        if not title_match:
+                            title_match = re.search(
+                                r'<a[^>]+class=[\'"][^\'"]*result__a[^\'"]*[\'"][^>]*href=[\'"]([^\'"]+)[\'"][^>]*>(.*?)</a>',
+                                block,
+                                re.DOTALL | re.IGNORECASE,
+                            )
+                        if title_match:
+                            raw_url, raw_title = title_match.group(1), title_match.group(2)
+                            # Skip ad links
+                            if "ad_domain=" in raw_url or "y.js" in raw_url:
+                                continue
+
+                            clean_title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
+                            snippet_match = re.search(
+                                r'<a[^>]+class=[\'"][^\'"]*result__snippet[^\'"]*[\'"][^>]*>(.*?)</a>',
+                                block,
+                                re.DOTALL | re.IGNORECASE,
+                            )
+                            clean_snippet = (
+                                html.unescape(re.sub(r"<[^>]+>", "", snippet_match.group(1)).strip())
+                                if snippet_match
+                                else "(No preview snippet available)"
+                            )
+
+                            clean_url = raw_url.strip()
+                            if "/l/?" in clean_url or "uddg=" in clean_url:
+                                try:
+                                    parsed_q = parse_qs(urlparse(clean_url).query)
+                                    if "uddg" in parsed_q:
+                                        clean_url = parsed_q["uddg"][0]
+                                except Exception:
+                                    pass
+
+                            results.append({"title": clean_title, "url": clean_url, "snippet": clean_snippet})
+                            if len(results) >= n_limit:
+                                break
+
+                    # If html format found results, return them
+                    if results:
+                        lines = [f"Found web search results for '{query_str}':\n"]
+                        for idx, item in enumerate(results, 1):
+                            lines.append(f"{idx}. {item['title']}\n   URL: {item['url']}\n   Snippet: {item['snippet']}\n")
+                        return ok("\n".join(lines).strip(), tool=self.name, data={"results": results})
+
+                    # If not found via html blocks, try lite.duckduckgo.com parser format
+                    links = []
+                    for m in re.finditer(r"<a\s+([^>]+)>(.*?)</a>", html_content, re.DOTALL | re.IGNORECASE):
+                        attrs_str, link_text = m.group(1), m.group(2)
+                        if "result-link" in attrs_str:
+                            href_match = re.search(r"href=['\"]([^'\"]+)['\"]", attrs_str)
+                            if href_match:
+                                links.append((href_match.group(1), link_text))
+                    snippets = re.findall(
+                        r"<td[^>]+class=['\"][^'\"]*result-snippet[^'\"]*['\"][^>]*>(.*?)</td>",
+                        html_content,
+                        re.DOTALL | re.IGNORECASE,
                     )
 
-                html_content = resp.text
-                links = []
-                for m in re.finditer(r"<a\s+([^>]+)>(.*?)</a>", html_content, re.DOTALL | re.IGNORECASE):
-                    attrs_str, link_text = m.group(1), m.group(2)
-                    if "result-link" in attrs_str:
-                        href_match = re.search(r"href=['\"]([^'\"]+)['\"]", attrs_str)
-                        if href_match:
-                            links.append((href_match.group(1), link_text))
-                snippets = re.findall(
-                    r"<td[^>]+class=['\"][^'\"]*result-snippet[^'\"]*['\"][^>]*>(.*?)</td>",
-                    html_content,
-                    re.DOTALL | re.IGNORECASE,
-                )
+                    if links:
+                        lines = [f"Found web search results for '{query_str}':\n"]
+                        for idx, (raw_url, raw_title) in enumerate(links[:n_limit], 1):
+                            clean_title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
+                            s = snippets[idx - 1] if idx - 1 < len(snippets) else ""
+                            clean_snippet = html.unescape(re.sub(r"<[^>]+>", "", s).strip()) or "(No preview snippet available)"
 
-                if not links:
-                    return ok(f"No web results found for query: '{query_str}'", tool=self.name, data={"results": []})
+                            clean_url = raw_url.strip()
+                            if "/l/?" in clean_url or "uddg=" in clean_url:
+                                try:
+                                    parsed_q = parse_qs(urlparse(clean_url).query)
+                                    if "uddg" in parsed_q:
+                                        clean_url = parsed_q["uddg"][0]
+                                except Exception:
+                                    pass
 
-                results = []
-                lines = [f"Found web search results for '{query_str}':\n"]
-                for idx, (raw_url, raw_title) in enumerate(links[:n_limit], 1):
-                    clean_title = html.unescape(re.sub(r"<[^>]+>", "", raw_title).strip())
-                    s = snippets[idx - 1] if idx - 1 < len(snippets) else ""
-                    clean_snippet = html.unescape(re.sub(r"<[^>]+>", "", s).strip()) or "(No preview snippet available)"
+                            results.append({"title": clean_title, "url": clean_url, "snippet": clean_snippet})
+                            lines.append(f"{idx}. {clean_title}\n   URL: {clean_url}\n   Snippet: {clean_snippet}\n")
+                        return ok("\n".join(lines).strip(), tool=self.name, data={"results": results})
 
-                    # Clean tracking redirects like /l/?kh=-1&uddg=https%3A%2F%2F...
-                    clean_url = raw_url.strip()
-                    if "/l/?" in clean_url or "uddg=" in clean_url:
-                        try:
-                            parsed_q = parse_qs(urlparse(clean_url).query)
-                            if "uddg" in parsed_q:
-                                clean_url = parsed_q["uddg"][0]
-                        except Exception:
-                            pass
+            except Exception as endpoint_err:
+                logger.debug("Search endpoint %s failed: %s", endpoint_url, endpoint_err)
+                last_error = str(endpoint_err)
+                continue
 
-                    results.append({"title": clean_title, "url": clean_url, "snippet": clean_snippet})
-                    lines.append(f"{idx}. {clean_title}\n   URL: {clean_url}\n   Snippet: {clean_snippet}\n")
+        if last_error:
+            logger.error("WebSearchTool execution failed across endpoints: %s", last_error)
+            return fail(f"Search request failed: {last_error}", tool=self.name)
 
-                return ok("\n".join(lines).strip(), tool=self.name, data={"results": results})
-
-        except Exception as error:
-            logger.error("WebSearchTool execution failed: %s", error)
-            return fail(f"Search request failed: {error}", tool=self.name)
+        return ok(f"No web results found for query: '{query_str}'", tool=self.name, data={"results": []})
 
 
 class FetchWebContentTool(Tool):

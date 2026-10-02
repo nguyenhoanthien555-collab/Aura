@@ -58,6 +58,7 @@ PROVIDER_KEYS = {
     "deepseek": "DEEPSEEK_API_KEY",
     "qwen": "QWEN_API_KEY",
     "custom": "CUSTOM_API_KEY",
+    "chatgpt_web": "CHATGPT_SESSION_TOKEN",
 }
 
 # Providers with no vendor endpoint of their own, mapped to the variable
@@ -455,6 +456,16 @@ class BrainRouter:
                 model=config.get("fallback_model") or config.get("openrouter_model") or "openrouter/free",
                 timeout=float(config.get("timeout", 45.0)),
                 max_tokens=int(config.get("max_output_tokens", 768)),
+            )
+
+        if name == "chatgpt_web":
+            if not os.getenv("CHATGPT_SESSION_TOKEN"):
+                return None
+            from brain.providers.chatgpt_web import ChatGPTWebProvider
+            return ChatGPTWebProvider(
+                session_token=os.getenv("CHATGPT_SESSION_TOKEN"),
+                model=config.get("chatgpt_web_model") or "auto",
+                timeout=float(config.get("timeout", 60.0)),
             )
 
         spec = HTTP_CHAT_PROVIDERS.get(name)
