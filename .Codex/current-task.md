@@ -1,5 +1,36 @@
 # Current task
 
+## Cloud Failover Stream, Semantic Memory Tables, High-Fidelity Edge TTS & Alarm Quick-Access Hub DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Chế độ Streaming Đa Provider & Failover Mượt mà (`brain/providers/fallback.py`, `brain/router.py`)**:
+  - Triển khai phương thức stream dạng generator trên `FallbackProvider`.
+  - Tự động luân chuyển mượt mà qua danh sách nhà cung cấp (`gemini -> groq -> mistral -> openrouter`) khi một provider gặp sự cố đứt gãy giữa chừng hoặc không hỗ trợ stream gốc, đồng thời tự động bọc lót câu trả lời đơn mảnh từ `generate()`.
+  - Khắc phục triệt để lỗi `AttributeError: Provider ... does not support stream`.
+  - Kiểm thử: `tests/test_fallback_stream.py` (5/5 passed).
+- **Trụ cột 2: Khởi tạo Tự động Bảng Semantic Vectors SQLite (`memory/sqlite.py`, `memory/semantic.py`)**:
+  - Gắn `SemanticVector.__table__` vào `init_pipeline_tables()` và bổ sung `init_semantic_tables()`.
+  - Đảm bảo bảng `semantic_vectors` luôn được khởi tạo ngay khi server Render khởi động, loại bỏ hoàn toàn lỗi `sqlite3.OperationalError: no such table: semantic_vectors`.
+  - Kiểm thử: `tests/test_semantic_memory.py` (43/43 passed).
+- **Trụ cột 3: Chống Crash Bong Bóng Chat Nổi & Tương thích Android 14 FGS (`FloatingChatService.kt`, `AndroidManifest.xml`, `NotificationsSection.kt`)**:
+  - Bổ sung thuộc tính bắt buộc của Android 14 `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" .../>` trong `AndroidManifest.xml`.
+  - Thêm tiền kiểm `Settings.canDrawOverlays(this)` ngay khi tạo `FloatingChatService`. Nếu chưa có quyền, tự động điều hướng người dùng tới cài đặt thay vì làm sập ứng dụng.
+  - Hoàn thiện vòng đời service (`ON_START`, `ON_RESUME`, `ON_PAUSE`, `ON_STOP`, `ON_DESTROY`), bọc `addView` / `removeView` an toàn trong try-catch.
+- **Trụ cột 4: Nâng cấp Giọng nói Neural Microsoft Edge Cao cấp (`AuraVoiceManager.kt`, `server/routes/voice.py`, `AuraApplication.kt`, `AuraAlarmActivity.kt`)**:
+  - Nâng cấp giọng đọc của Aura từ Android TTS robot sang giọng đọc AI neural tự nhiên `zh-CN-XiaoxiaoNeural` thông qua endpoint `/api/voice/tts`.
+  - Xử lý bất đồng bộ, stream và phát audio qua `MediaPlayer` với bộ nhớ đệm tạm thời an toàn.
+  - Kết nối chặt chẽ vào chuỗi đàm thoại rảnh tay Walkie-talkie qua `onSpeechDoneListener`.
+  - Đảm bảo khả năng phục hồi 100% ngoại tuyến: khi mất mạng hoặc server bận, tự động chuyển về Android `TextToSpeech` cục bộ mà không gián đoạn người dùng.
+  - Kiểm thử: `tests/test_server_voice_route.py` (4/4 passed).
+- **Trụ cột 5: Truy cập Báo thức 1 Chạm & Tab Báo thức Độc lập trên Cyber Dock (`ChatScreen.kt`, `AuraCyberDock.kt`, `MainActivity.kt`, `AlarmSection.kt`)**:
+  - Bổ sung nút Báo thức độc bản (`AuraIcons.Alarm`) ngay trên thanh tiêu đề `ChatScreen.kt`.
+  - Nâng cấp thanh điều hướng `AuraCyberDock.kt` lên 5 tab chính với tab "Báo thức" riêng biệt cho trải nghiệm công thái học tối ưu.
+  - Bổ sung thẻ chỉ lệnh giọng nói và hướng dẫn báo thức trong `AlarmSection.kt`.
+- **Trụ cột 6: Kiểm thử Toàn diện & Triển khai Trực tiếp Thiết bị Oppo CPH2251**:
+  - Python tests: 101/101 passed.
+  - Android tests: 22/22 tasks passed.
+  - Đóng gói APK (`:app:assembleDebug`) và cài đặt thành công qua ADB (`Success`).
+  - Xác nhận tiến trình `PID 17760` chạy ổn định với 0 crash, chụp và kiểm tra ảnh màn hình thực tế.
+
 ## Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Nhận thức Toàn diện Codebase & Kiến trúc Ba Node (`prompts/system.md`)**:

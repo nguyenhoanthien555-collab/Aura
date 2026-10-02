@@ -41,6 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
+import android.widget.Toast
 import com.aura.companion.R
 
 /**
@@ -56,6 +62,7 @@ import com.aura.companion.R
 fun ChatScreen(
     viewModel: ChatViewModel,
     onOpenSettings: () -> Unit,
+    onOpenAlarms: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
 
@@ -91,8 +98,33 @@ fun ChatScreen(
                 },
                 actions = {
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    IconButton(onClick = onOpenAlarms) {
+                        Icon(
+                            imageVector = AuraIcons.Alarm,
+                            contentDescription = "Báo thức Aura",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = {
-                        context.startService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                            context.startActivity(intent)
+                            Toast.makeText(context, "Vui lòng cấp quyền 'Hiển thị trên ứng dụng khác' cho Aura", Toast.LENGTH_LONG).show()
+                        } else {
+                            try {
+                                val intent = Intent(context, com.aura.companion.floating.FloatingChatService::class.java)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    context.startForegroundService(intent)
+                                } else {
+                                    context.startService(intent)
+                                }
+                            } catch (e: Exception) {
+                                Log.e("ChatScreen", "Failed to start FloatingChatService", e)
+                            }
+                        }
                     }) {
                         Icon(
                             imageVector = AuraIcons.ChatBubble,

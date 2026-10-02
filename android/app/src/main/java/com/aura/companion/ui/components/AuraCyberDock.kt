@@ -103,6 +103,13 @@ fun AuraCyberDock(
                     modifier = Modifier.weight(1f),
                 )
                 DockTabItem(
+                    label = "Báo thức",
+                    icon = AuraIcons.Alarm,
+                    selected = currentRoute == HubRoutes.ALARMS,
+                    onClick = { onNavigate(HubRoutes.ALARMS) },
+                    modifier = Modifier.weight(1f),
+                )
+                DockTabItem(
                     label = "Trí nhớ",
                     icon = AuraIcons.KnowledgeGraph,
                     selected = currentRoute == HubRoutes.MEMORY,

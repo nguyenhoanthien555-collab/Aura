@@ -72,3 +72,5 @@ websockets>=12.0
 # The avatar needs tkinter, which ships with the official Python
 # installer. Without a display it degrades to a null renderer.
 # ----------------------------------------------------------------------
+edge-tts>=6.1.0
+

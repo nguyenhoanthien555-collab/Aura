@@ -1,5 +1,27 @@
 # AURA project state
 
+## Cloud Failover Stream, Semantic Memory Tables, High-Fidelity Edge TTS & Alarm Quick-Access Hub DELIVERED (2026-10-02)
+1. **Multi-Provider Fallback Streaming (`brain/providers/fallback.py`, `brain/router.py`)**:
+   - Generator streaming on `FallbackProvider` seamlessly failover across providers (`gemini -> groq -> mistral -> openrouter`) if any provider fails mid-stream or lacks stream support.
+   - Eliminates `AttributeError: Provider ... does not support stream`.
+2. **SQLite Semantic Vectors Auto-Init (`memory/sqlite.py`, `memory/semantic.py`)**:
+   - `SemanticVector.__table__` bound to `init_pipeline_tables()` and `init_semantic_tables()`.
+   - Eliminates `sqlite3.OperationalError: no such table: semantic_vectors` on fresh deployments.
+3. **Floating Chat Bubble Crash Guard (`FloatingChatService.kt`, `AndroidManifest.xml`, `NotificationsSection.kt`)**:
+   - Added Android 14 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` in manifest.
+   - Added `Settings.canDrawOverlays(this)` pre-flight check preventing `WindowManager.BadTokenException`.
+   - Complete service lifecycle progression and safe `addView` / `removeView`.
+4. **High-Fidelity Neural Voice Synthesis (`AuraVoiceManager.kt`, `server/routes/voice.py`)**:
+   - Upgraded to Microsoft Edge neural voice `zh-CN-XiaoxiaoNeural` with `/api/voice/tts`.
+   - Asynchronous streaming and caching with `MediaPlayer` playback.
+   - 100% offline resilience falling back to native Android `TextToSpeech` when offline or unreachable.
+5. **Alarm Ergonomic 1-Tap Access & Dedicated Cyber Dock Tab (`ChatScreen.kt`, `AuraCyberDock.kt`, `MainActivity.kt`, `AlarmSection.kt`)**:
+   - 1-tap Alarm shortcut on `ChatScreen` TopAppBar.
+   - 5th tab on `AuraCyberDock` ("Báo thức") for direct switching.
+   - Guidance card with sample voice commands and audio ladder details in `AlarmSection`.
+6. **Physical Hardware Deployment**:
+   - Installed to Oppo CPH2251 (`IBCQMB4PTGNZJVTO`) with PID 17760 active and verified.
+
 ## Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED (2026-10-02)
 1. **Total Codebase & Architectural Self-Awareness Grounding (`prompts/system.md`)**:
    - Explicit Tri-Node Topology: Render Cloud host (`https://aura-xwm4.onrender.com/`), Oppo Android Companion (`CPH2251`, ColorOS 13), MSI Katana Workstation (Windows 11).

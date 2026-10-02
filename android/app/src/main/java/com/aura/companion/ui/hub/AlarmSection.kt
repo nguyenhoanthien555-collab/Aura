@@ -157,6 +157,9 @@ fun AlarmSection(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        AlarmGuidanceCard()
     }
 
     if (showAddDialog) {
@@ -610,3 +613,129 @@ private fun AddAlarmDialog(
         }
     }
 }
+
+@Composable
+private fun AlarmGuidanceCard() {
+    val shape = RoundedCornerShape(16.dp)
+    Card(
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.6f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                Brush.horizontalGradient(listOf(AuraNeonCyan.copy(alpha = 0.35f), Color(0xFF8B5CF6).copy(alpha = 0.25f))),
+                shape
+            )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = AuraIcons.Spark,
+                    contentDescription = null,
+                    tint = AuraNeonCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "HƯỚNG DẪN RA LỆNH GIỌNG NÓI & BÁO THỨC",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = AuraNeonCyan,
+                    letterSpacing = 1.sp
+                )
+            }
+
+            Text(
+                text = "Anh có thể ra lệnh trực tiếp bằng tiếng Việt qua giọng nói hoặc khung chat mà không cần thao tác tay:",
+                fontSize = 13.sp,
+                color = Color(0xFFCBD5E1),
+                lineHeight = 18.sp
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF030712).copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DirectiveExampleItem(
+                    command = "Aura ơi, đặt báo thức 7:00 sáng mai",
+                    description = "Đặt báo thức 1 lần vào khung giờ mong muốn"
+                )
+                DirectiveExampleItem(
+                    command = "Đặt báo thức 6:30 từ thứ 2 đến thứ 6",
+                    description = "Lập lịch lặp lại hàng tuần"
+                )
+                DirectiveExampleItem(
+                    command = "Aura ơi, danh sách báo thức hiện tại",
+                    description = "Kiểm tra toàn bộ báo thức đang bật/tắt"
+                )
+                DirectiveExampleItem(
+                    command = "Hủy báo thức lúc 7:00",
+                    description = "Hủy hoặc tắt báo thức chỉ định"
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Icon(
+                    imageVector = AuraIcons.Info,
+                    contentDescription = null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Thang âm lượng leo thang 2 giai đoạn: 0–3 phút đầu rung nhẹ & âm lượng ~45%; sau 3 phút tự động đạt 100% âm lượng tối đa. Khi tắt báo thức, Aura tự động cất giọng chào buổi sáng.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8),
+                    lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectiveExampleItem(
+    command: String,
+    description: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = AuraIcons.Mic,
+            contentDescription = null,
+            tint = AuraNeonCyan,
+            modifier = Modifier.size(14.dp).padding(top = 2.dp)
+        )
+        Column {
+            Text(
+                text = "\"$command\"",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                color = Color.White
+            )
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = Color(0xFF9CA3AF)
+            )
+        }
+    }
+}
+

@@ -129,3 +129,83 @@ class FallbackProvider:
         if isinstance(last_error, Exception):
             raise last_error
         raise ProviderUnavailableError("No cloud provider is configured or supports function calling")
+
+    def stream(self, prompt: str, **kwargs):
+        """Stream response, attempting each provider in order until one successfully streams."""
+        last_error = None
+        for index, provider in enumerate(self.providers):
+            p_name = getattr(provider, "provider_name", type(provider).__name__)
+            logger.info("Provider selected for stream: %s", p_name)
+
+            # 1. Try real stream if provider supports it
+            if hasattr(provider, "stream"):
+                chunks_yielded = 0
+                try:
+                    if kwargs:
+                        try:
+                            stream_iter = provider.stream(prompt, **kwargs)
+                        except TypeError:
+                            stream_iter = provider.stream(prompt)
+                    else:
+                        stream_iter = provider.stream(prompt)
+
+                    for chunk in stream_iter:
+                        if chunk:
+                            chunks_yielded += 1
+                            yield chunk
+
+                    self.active_provider_name = p_name
+                    self.attempts.append((p_name, "ok", ""))
+                    return
+                except Exception as error:
+                    last_error = error
+                    category = _category_of(error)
+                    self.attempts.append((p_name, category, type(error).__name__))
+                    logger.warning(
+                        "Provider failed stream: %s | Failure category: %s | %s: %s",
+                        p_name,
+                        category,
+                        type(error).__name__,
+                        str(error),
+                    )
+                    # If we already yielded chunks to the client, we cannot rewind the stream
+                    if chunks_yielded > 0:
+                        raise
+                    if category == ACCOUNT_LIMIT:
+                        break
+                    continue
+
+            # 2. If provider only supports generate, yield its reply as single piece
+            if hasattr(provider, "generate"):
+                try:
+                    if kwargs:
+                        try:
+                            reply = provider.generate(prompt, **kwargs)
+                        except TypeError:
+                            reply = provider.generate(prompt)
+                    else:
+                        reply = provider.generate(prompt)
+
+                    self.active_provider_name = p_name
+                    self.attempts.append((p_name, "ok", ""))
+                    if reply:
+                        yield reply
+                    return
+                except Exception as error:
+                    last_error = error
+                    category = _category_of(error)
+                    self.attempts.append((p_name, category, type(error).__name__))
+                    logger.warning(
+                        "Provider failed generate in stream: %s | Failure category: %s | %s: %s",
+                        p_name,
+                        category,
+                        type(error).__name__,
+                        str(error),
+                    )
+                    if category == ACCOUNT_LIMIT:
+                        break
+                    continue
+
+        if isinstance(last_error, Exception):
+            raise last_error
+        raise ProviderUnavailableError("No cloud provider is configured or supports streaming")

@@ -9,6 +9,8 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -81,8 +83,22 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
     override fun onCreate() {
         super.onCreate()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.w("FloatingChatService", "Cannot start floating service: SYSTEM_ALERT_WINDOW permission missing")
+            stopSelf()
+            return
+        }
+
+        try {
+            startForegroundService()
+        } catch (e: Exception) {
+            Log.w("FloatingChatService", "Could not start foreground notification: ${e.message}")
+        }
+
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val metrics = resources.displayMetrics
@@ -128,8 +144,14 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
                 }
             }
         }
-        windowManager.addView(closeTargetView, closeParams)
-        closeTargetView.visibility = android.view.View.GONE
+        try {
+            windowManager.addView(closeTargetView, closeParams)
+            closeTargetView.visibility = android.view.View.GONE
+        } catch (e: Exception) {
+            Log.e("FloatingChatService", "Failed to add closeTargetView: ${e.message}")
+            stopSelf()
+            return
+        }
 
         composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@FloatingChatService)
@@ -243,10 +265,13 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
             }
         }
 
-        windowManager.addView(composeView, params)
-        startForegroundService()
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        try {
+            windowManager.addView(composeView, params)
+        } catch (e: Exception) {
+            Log.e("FloatingChatService", "Failed to add composeView: ${e.message}")
+            stopSelf()
+            return
+        }
     }
 
     private fun startForegroundService() {
@@ -268,12 +293,22 @@ class FloatingChatService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
     override fun onDestroy() {
         super.onDestroy()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         if (::composeView.isInitialized) {
-            windowManager.removeView(composeView)
+            try {
+                windowManager.removeView(composeView)
+            } catch (e: Exception) {
+                Log.w("FloatingChatService", "Failed to remove composeView: ${e.message}")
+            }
         }
         if (::closeTargetView.isInitialized) {
-            windowManager.removeView(closeTargetView)
+            try {
+                windowManager.removeView(closeTargetView)
+            } catch (e: Exception) {
+                Log.w("FloatingChatService", "Failed to remove closeTargetView: ${e.message}")
+            }
         }
     }
 

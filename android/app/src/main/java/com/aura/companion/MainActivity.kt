@@ -165,6 +165,7 @@ class MainActivity : ComponentActivity() {
                         ChatScreen(
                             viewModel = chatViewModel,
                             onOpenSettings = { navController.navigate(HubRoutes.HUB) },
+                            onOpenAlarms = { navController.navigate(HubRoutes.ALARMS) },
                             bottomBar = {
                                 AuraCyberDock(
                                     currentRoute = ROUTE_CHAT,
@@ -246,7 +247,15 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(HubRoutes.ALARMS) {
-                        AlarmSection(onBack = back)
+                        AlarmSection(
+                            onBack = back,
+                            bottomBar = {
+                                AuraCyberDock(
+                                    currentRoute = HubRoutes.ALARMS,
+                                    onNavigate = navigateTab,
+                                )
+                            },
+                        )
                     }
 
                     composable(HubRoutes.VISION) {

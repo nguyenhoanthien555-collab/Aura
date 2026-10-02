@@ -159,7 +159,19 @@ def init_pipeline_tables(bind=None):
 
     Base.metadata.create_all(
         bind or engine,
-        tables=[EpisodicMemory.__table__, UserModelEntry.__table__],
+        tables=[
+            EpisodicMemory.__table__,
+            UserModelEntry.__table__,
+            SemanticVector.__table__,
+        ],
+    )
+
+
+def init_semantic_tables(bind=None):
+    """Create the semantic vector tables, if missing."""
+    Base.metadata.create_all(
+        bind or engine,
+        tables=[SemanticVector.__table__],
     )
 
 

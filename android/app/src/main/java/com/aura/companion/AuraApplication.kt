@@ -99,7 +99,11 @@ class AppContainer(application: Application) {
     private val appContext get() = context
 
     val voiceManager: com.aura.companion.voice.AuraVoiceManager by lazy {
-        com.aura.companion.voice.AuraVoiceManager(application)
+        com.aura.companion.voice.AuraVoiceManager(
+            context = application,
+            serverUrlProvider = { settings.current.serverUrl },
+            tokenProvider = { settings.current.authToken }
+        )
     }
 
     /**

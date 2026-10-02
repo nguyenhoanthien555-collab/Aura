@@ -99,7 +99,11 @@ class AuraAlarmActivity : ComponentActivity() {
         audioPlayer = AlarmAudioPlayer(this).apply {
             start(stage1TimeoutSeconds = 180) // 3-minute escalation ladder
         }
-        voiceManager = AuraVoiceManager(this)
+        voiceManager = AuraVoiceManager(
+            context = this,
+            serverUrlProvider = { (application as? com.aura.companion.AuraApplication)?.container?.settings?.current?.serverUrl ?: "" },
+            tokenProvider = { (application as? com.aura.companion.AuraApplication)?.container?.settings?.current?.authToken ?: "" }
+        )
 
         setContent {
             val isSpeaking by (voiceManager?.isSpeaking ?: MutableStateFlow(false)).collectAsState()

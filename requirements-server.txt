@@ -40,6 +40,7 @@ pillow==11.1.0
 # Timezone database for zoneinfo on Windows; see requirements.txt.
 tzdata==2026.3
 psutil==7.2.2
+edge-tts>=6.1.0
 
 # Testing (not installed in the final image; kept here for CI)
 pytest==8.3.4

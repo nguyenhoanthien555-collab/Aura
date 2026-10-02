@@ -91,9 +91,22 @@ fun NotificationsSection(
                     if (isChecked && !canDrawOverlays) {
                         onOpenOverlaySettings()
                     } else if (isChecked) {
-                        context.startService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
+                        try {
+                            val intent = android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java)
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                context.startForegroundService(intent)
+                            } else {
+                                context.startService(intent)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("NotificationsSection", "Failed to start FloatingChatService", e)
+                        }
                     } else {
-                        context.stopService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
+                        try {
+                            context.stopService(android.content.Intent(context, com.aura.companion.floating.FloatingChatService::class.java))
+                        } catch (e: Exception) {
+                            android.util.Log.e("NotificationsSection", "Failed to stop FloatingChatService", e)
+                        }
                     }
                 },
             )

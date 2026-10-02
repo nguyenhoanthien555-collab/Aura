@@ -2,6 +2,8 @@ package com.aura.companion.voice
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,17 +13,34 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.net.URLEncoder
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 /**
  * Mobile Voice Engine for Aura Companion.
  * Provides on-device Text-to-Speech (TTS) and Speech-to-Text (STT) for hands-free audio conversation.
  * Optimized for natural Vietnamese (vi-VN) with English (en-US) fallback.
  */
-class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
+class AuraVoiceManager(
+    private val context: Context,
+    private val serverUrlProvider: (() -> String)? = null,
+    private val tokenProvider: (() -> String)? = null,
+) : TextToSpeech.OnInitListener {
 
     companion object {
         private const val TAG = "AuraVoiceManager"
@@ -59,6 +78,17 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
 
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // --- Neural Cloud Speech & Local Audio Player ---
+    private val voiceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var activeTtsJob: Job? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private val httpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
 
     // --- Text-to-Speech (TTS) ---
     private var tts: TextToSpeech? = null
@@ -143,12 +173,37 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
     }
 
     /**
-     * Speaks the given text using Android's native TTS engine.
-     * Automatically strips markdown formatting, emojis, and code fences for natural speech cadence.
+     * Speaks the given text.
+     * Prioritizes high-fidelity Microsoft Edge neural TTS (zh-CN-XiaoxiaoNeural) via server.
+     * Automatically and transparently falls back to on-device Android TextToSpeech if offline or on error.
      */
     fun speak(text: String, queueMode: Int = TextToSpeech.QUEUE_FLUSH) {
+        val cleaned = cleanForSpeech(text)
+        if (cleaned.isBlank()) return
+
+        stopSpeaking()
+
+        val serverUrl = serverUrlProvider?.invoke()?.trimEnd('/')
+        if (!serverUrl.isNullOrBlank() && (serverUrl.startsWith("http://") || serverUrl.startsWith("https://"))) {
+            activeTtsJob = voiceScope.launch {
+                val success = synthesizeAndPlayCloud(cleaned, serverUrl)
+                if (!success) {
+                    withContext(Dispatchers.Main) {
+                        speakNative(cleaned, queueMode)
+                    }
+                }
+            }
+        } else {
+            speakNative(cleaned, queueMode)
+        }
+    }
+
+    /**
+     * Speaks the given text using Android's native on-device TTS engine.
+     */
+    fun speakNative(text: String, queueMode: Int = TextToSpeech.QUEUE_FLUSH) {
         if (!isTtsInitialized || tts == null) {
-            Log.w(TAG, "Cannot speak: TTS not initialized yet")
+            Log.w(TAG, "Cannot speak natively: TTS not initialized yet")
             return
         }
 
@@ -168,8 +223,136 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
         }
     }
 
+    private suspend fun synthesizeAndPlayCloud(text: String, serverUrl: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            var tempFile: File? = null
+            try {
+                val encodedText = URLEncoder.encode(text, "UTF-8")
+                val token = tokenProvider?.invoke()?.trim()
+                val url = "$serverUrl/api/voice/tts?text=$encodedText&voice=zh-CN-XiaoxiaoNeural"
+
+                val requestBuilder = Request.Builder()
+                    .url(url)
+                    .get()
+
+                if (!token.isNullOrBlank()) {
+                    requestBuilder.addHeader("Authorization", "Bearer $token")
+                }
+
+                val response = httpClient.newCall(requestBuilder.build()).execute()
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Cloud TTS returned non-200 status: ${response.code}")
+                    response.close()
+                    return@withContext false
+                }
+
+                val body = response.body ?: run {
+                    response.close()
+                    return@withContext false
+                }
+
+                tempFile = File(context.cacheDir, "aura_tts_${System.currentTimeMillis()}.mp3")
+                FileOutputStream(tempFile).use { fos ->
+                    body.byteStream().use { bis ->
+                        bis.copyTo(fos)
+                    }
+                }
+                response.close()
+
+                if (tempFile.length() == 0L) {
+                    tempFile.delete()
+                    return@withContext false
+                }
+
+                val audioFile = tempFile
+                withContext(Dispatchers.Main) {
+                    playAudioFile(audioFile)
+                }
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Cloud TTS synthesis failed, will fallback to native TTS: ${e.message}")
+                try {
+                    tempFile?.delete()
+                } catch (_: Exception) {}
+                false
+            }
+        }
+    }
+
+    private fun playAudioFile(file: File) {
+        try {
+            stopSpeaking()
+            val mp = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .build()
+                )
+                setOnCompletionListener { player ->
+                    try {
+                        player.release()
+                    } catch (_: Exception) {}
+                    if (mediaPlayer == player) {
+                        mediaPlayer = null
+                    }
+                    _isSpeaking.value = false
+                    try {
+                        file.delete()
+                    } catch (_: Exception) {}
+                    mainHandler.postDelayed({
+                        onSpeechDoneListener?.invoke()
+                    }, 400L)
+                }
+                setOnErrorListener { player, what, extra ->
+                    Log.w(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    try {
+                        player.release()
+                    } catch (_: Exception) {}
+                    if (mediaPlayer == player) {
+                        mediaPlayer = null
+                    }
+                    _isSpeaking.value = false
+                    try {
+                        file.delete()
+                    } catch (_: Exception) {}
+                    true
+                }
+                prepare()
+                start()
+            }
+            mediaPlayer = mp
+            _isSpeaking.value = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start MediaPlayer for synthesized speech", e)
+            try {
+                file.delete()
+            } catch (_: Exception) {}
+            _isSpeaking.value = false
+        }
+    }
+
     /** Stops any currently ongoing speech playback immediately. */
     fun stopSpeaking() {
+        activeTtsJob?.cancel()
+        activeTtsJob = null
+
+        mainHandler.post {
+            try {
+                mediaPlayer?.let { mp ->
+                    if (mp.isPlaying) {
+                        mp.stop()
+                    }
+                    mp.release()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception during mediaPlayer stop", e)
+            } finally {
+                mediaPlayer = null
+            }
+        }
+
         try {
             tts?.stop()
         } catch (e: Exception) {
@@ -316,6 +499,7 @@ class AuraVoiceManager(private val context: Context) : TextToSpeech.OnInitListen
         onSpeechDoneListener = null
         stopSpeaking()
         stopListening()
+        voiceScope.cancel()
         try {
             tts?.shutdown()
         } catch (e: Exception) {

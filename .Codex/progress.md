@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-10-02 — Cloud Failover Stream, Semantic Memory Tables, High-Fidelity Edge TTS & Alarm Quick-Access Hub DELIVERED
+
+- **Pillar 1: Render Cloud Multi-Provider Fallback Streaming (`brain/providers/fallback.py`, `brain/router.py`)**:
+  - Implemented full generator streaming `stream(self, prompt: str, **kwargs)` on `FallbackProvider`.
+  - Seamless failover across provider chains (e.g. `gemini -> groq -> mistral -> openrouter`) if any provider fails mid-stream or does not support streaming, with fallback to single-piece `generate()`.
+  - Added safe streaming fallback in `BrainRouter.stream()`.
+  - Tested: `tests/test_fallback_stream.py` (5/5 passed).
+- **Pillar 2: SQLite Semantic Vectors Table Auto-Init (`memory/sqlite.py`, `memory/semantic.py`)**:
+  - Bound `SemanticVector.__table__` to `init_pipeline_tables()` and added `init_semantic_tables()`.
+  - Guaranteed `semantic_vectors` table is created on server boot, completely eliminating `sqlite3.OperationalError: no such table: semantic_vectors` on fresh Render.com instances.
+  - Tested: `tests/test_semantic_memory.py` (43/43 passed).
+- **Pillar 3: Floating Chat Bubble Crash Guard & Android 14 FGS Compatibility (`FloatingChatService.kt`, `AndroidManifest.xml`, `NotificationsSection.kt`)**:
+  - Added Android 14 required `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" .../>` in `AndroidManifest.xml`.
+  - Added `Settings.canDrawOverlays(this)` pre-flight guard at `onCreate()` entry. If permission is missing, prompts overlay management settings instead of crashing.
+  - Full lifecycle progression (`ON_START`, `ON_RESUME`, `ON_PAUSE`, `ON_STOP`, `ON_DESTROY`), and try-catch wrapped `addView` / `removeView`.
+  - Wrapped service start in try-catch with `startForegroundService` on Android O+.
+- **Pillar 4: High-Fidelity Microsoft Edge Neural Voice Synthesis (`AuraVoiceManager.kt`, `server/routes/voice.py`, `AuraApplication.kt`, `AuraAlarmActivity.kt`)**:
+  - Upgraded voice synthesis from robotic system TTS to natural neural voice (`zh-CN-XiaoxiaoNeural`) via `/api/voice/tts`.
+  - Fast asynchronous fetch and local playback via Android `MediaPlayer` with temporary file cache.
+  - Chained into `onSpeechDoneListener` (400ms delay) for the Hands-Free Walkie-Talkie voice loop.
+  - Complete offline resilience: on any network failure or offline mode, automatically falls back to native Android `TextToSpeech`.
+  - Tested: `tests/test_server_voice_route.py` (4/4 passed), `tests/test_voice_edge.py` (28/28 passed).
+- **Pillar 5: Alarm Ergonomic 1-Tap Access & Dedicated Cyber Dock Tab (`ChatScreen.kt`, `AuraCyberDock.kt`, `MainActivity.kt`, `AlarmSection.kt`)**:
+  - Added 1-tap Alarm icon button (`AuraIcons.Alarm`) to `ChatScreen.kt` TopAppBar.
+  - Promoted Alarms to a dedicated 5th tab ("Báo thức") in `AuraCyberDock.kt` for instant one-touch access.
+  - Added Cyberpunk Voice & Chat Directives guidance card in `AlarmSection.kt` explaining Vietnamese voice commands and the 2-stage audio ladder.
+- **Pillar 6: Comprehensive Verification & Physical Device Deployment (Oppo CPH2251)**:
+  - Python tests: 101/101 passed across stream failover, semantic memory, voice route, device boundary, and alarms.
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+  - Packaged debug APK (`:app:assembleDebug`) and installed to connected Oppo hardware (`IBCQMB4PTGNZJVTO`) via ADB (`Success`).
+  - Verified live process (`PID 17760`) with zero crashes and captured live screenshots.
+
 ## 2026-10-02 — Codebase Self-Awareness, Hands-Free Voice Loop & Extended Hardware Directives DELIVERED
 
 - **Pillar 1: Complete Codebase & Feature Self-Awareness Grounding (`prompts/system.md`)**:

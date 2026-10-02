@@ -143,7 +143,11 @@
         <service
             android:name=".floating.FloatingChatService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating messenger-style chat bubble for continuous AI companion assistance" />
+        </service>
 
         <!-- Full-screen Lockscreen Cyber Alarm Activity -->
         <activity

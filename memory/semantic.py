@@ -52,7 +52,7 @@ from core.temporal import local_now
 from memory.embeddings import EmbeddingUnavailableError
 from memory.models import EpisodicMemory, SemanticVector, timestamp_now
 from memory.retrieval import RankedRetriever, tokenize
-from memory.sqlite import SessionLocal, db_lock, init_database
+from memory.sqlite import SessionLocal, db_lock, init_database, init_pipeline_tables
 
 from core.trace import emit_trace
 
@@ -188,7 +188,13 @@ class SemanticIndexer:
 
         if session is None:
             init_database()
+            init_pipeline_tables()
             session = SessionLocal()
+        else:
+            try:
+                init_pipeline_tables(session.get_bind())
+            except Exception:
+                init_pipeline_tables()
 
         self.session = session
         self.store = store

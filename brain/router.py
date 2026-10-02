@@ -553,6 +553,18 @@ class BrainRouter:
                 except TypeError:
                     pass
             return self.provider.stream(prompt)
+        if hasattr(self.provider, "generate"):
+            def _fallback_stream():
+                if kwargs:
+                    try:
+                        reply = self.provider.generate(prompt, **kwargs)
+                    except TypeError:
+                        reply = self.provider.generate(prompt)
+                else:
+                    reply = self.provider.generate(prompt)
+                if reply:
+                    yield reply
+            return _fallback_stream()
         raise AttributeError(f"Provider {self.active_chain()} does not support stream")
 
     def generate_with_tools(self, system: str, messages: list, tools: list, **kwargs):
