@@ -1,5 +1,31 @@
 # Current task
 
+## MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Cổng kết nối Giao thức Ngữ cảnh Mô hình (MCP Gateway - `server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:
+  - Triển khai toàn diện cổng giao tiếp MCP chuẩn (Model Context Protocol 2024-11-05), mở rộng năng lực của Aura (PC, Workspace, Memory, Android Handset) tới các mô hình AI bên ngoài (ChatGPT, Claude, Cursor, v.v.).
+  - Các endpoint cốt lõi:
+    - `POST /api/mcp`: Điểm cuối JSON-RPC 2.0 trực tiếp (`initialize`, `ping`, `notifications/initialized`, `tools/list`, `tools/call`).
+    - `GET /api/mcp/sse`: Kênh Server-Sent Events vận chuyển thời gian thực cho client chuẩn MCP.
+    - `POST /api/mcp/messages`: Nhận yêu cầu JSON-RPC từ các phiên SSE đang kết nối.
+    - `GET /api/mcp/tools`: Điểm cuối REST truy vấn danh mục công cụ và số lượng.
+  - Cơ chế bảo mật kép: Hỗ trợ cả `Authorization: Bearer <token>` và tham số query `?token=<token>`.
+  - Runner cầu nối STDIO `scripts/run_mcp_bridge.py`: Chạy cả chế độ in-process cục bộ và chế độ chuyển tiếp từ xa (`--remote https://aura-xwm4.onrender.com --token <TOKEN>`).
+  - Kiểm thử: `tests/test_mcp_gateway.py` (8/8 passed).
+- **Trụ cột 2: Tích hợp ChatGPT Trở thành Main Brain Provider (`brain/providers/chatgpt.py`, `brain/router.py`, `brain/providers/capabilities.py`, `core/config.py`, `core/settings_store.py`)**:
+  - `ChatGPTProvider`: Kế thừa `OpenAICompatibleProvider`, model mặc định `gpt-4o`, sử dụng `max_completion_tokens`, vận hành bằng `urllib` stdlib thuần túy hermetic zero-dependency.
+  - Đăng ký `"chatgpt": "OPENAI_API_KEY"` trong `PROVIDER_KEYS` và `HTTP_CHAT_PROVIDERS`.
+  - Khai báo năng lực Function Calling trong `brain/providers/capabilities.py`.
+  - Bổ sung cấu hình `"chatgpt_model": "gpt-4o"` vào `DEFAULT_CONFIG["llm"]` và `core/settings_store.py` (`llm.chatgpt_model`).
+  - Kiểm thử: `tests/test_chatgpt_provider.py` (7/7 passed), `tests/test_cloud_providers.py` (101/101 passed), `tests/test_provider_resolution.py` (27/27 passed).
+- **Trụ cột 3: Xác minh Bằng chứng Thực tế Claim -> Evidence (`tests/test_chatgpt_evidence_verification.py`)**:
+  - Đấu nối postcondition bằng chứng từ công cụ thiết bị Android và PC (`Evidence(kind=POSTCONDITION, verified=True)`) vào bộ máy thẩm định `ResponseVerifier`.
+  - Bảo đảm sự trung thực tuyệt đối: Tuyên bố có bằng chứng xác nhận -> `VERIFIED`; không có bằng chứng -> giảm mức độ tin cậy `INFERRED`; công cụ lỗi -> `CONTRADICTED` và tự động sửa câu trả lời.
+  - Kiểm thử: `tests/test_chatgpt_evidence_verification.py` (4/4 passed).
+- **Trụ cột 4: Kiểm thử Toàn diện & Xác thực Tính toàn vẹn**:
+  - Python tests: 147/147 passed (100%).
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+
 ## Multi-Provider Cloud Failover Resilience, Android UI Ergonomic Redesign & Spacious 4-Tab Cyber Dock DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Xử lý Triệt để Lỗi Sập Render Server & Cloud Failover Chịu Lỗi Cao (`brain/providers/`)**:

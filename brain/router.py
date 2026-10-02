@@ -51,6 +51,7 @@ PROVIDER_KEYS = {
     "mistral": "MISTRAL_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "chatgpt": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "cerebras": "CEREBRAS_API_KEY",
     "xai": "XAI_API_KEY",
@@ -90,6 +91,7 @@ KEYLESS_PROVIDERS: tuple[str, ...] = ()
 # phone as "unknown provider" and looks like a typo by the operator.
 HTTP_CHAT_PROVIDERS = {
     "openai": ("brain.providers.openai", "OpenAIProvider", "openai_model"),
+    "chatgpt": ("brain.providers.chatgpt", "ChatGPTProvider", "chatgpt_model"),
     "anthropic": (
         "brain.providers.anthropic", "AnthropicProvider", "anthropic_model",
     ),

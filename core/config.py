@@ -63,6 +63,7 @@ DEFAULT_CONFIG = {
         # `tests/test_cloud_providers.py`. All are free text on purpose - a
         # hardcoded list here would reject a model released this morning.
         "openai_model": "gpt-5.1",
+        "chatgpt_model": "gpt-4o",
         "anthropic_model": "claude-sonnet-5",
         "cerebras_model": "llama-3.3-70b",
         "xai_model": "grok-4",

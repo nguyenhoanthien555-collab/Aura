@@ -44,6 +44,7 @@ from brain.providers.http_chat import (
     provider_message,
 )
 from brain.providers.openai import OpenAIProvider
+from brain.providers.chatgpt import ChatGPTProvider
 from brain.providers.openai_compatible import OpenAICompatibleProvider
 from brain.providers.qwen import QwenProvider
 from brain.providers.xai import XAIProvider
@@ -57,6 +58,7 @@ from core.config import DEFAULT_CONFIG
 # untested.
 COMPATIBLE = (
     OpenAIProvider,
+    ChatGPTProvider,
     CerebrasProvider,
     XAIProvider,
     DeepSeekProvider,

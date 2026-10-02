@@ -28,6 +28,7 @@ from server.routes import system as system_routes
 from server.routes import confirmations as confirmations_routes
 from server.routes import memory as memory_routes
 from server.routes import voice as voice_routes
+from server.routes import mcp as mcp_routes
 from core.logger import logger
 
 
@@ -95,6 +96,7 @@ app.include_router(system_routes.router)
 app.include_router(confirmations_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(voice_routes.router)
+app.include_router(mcp_routes.router)
 
 
 @app.get("/")

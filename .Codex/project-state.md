@@ -1,5 +1,25 @@
 # AURA project state
 
+## MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED (2026-10-02)
+1. **MCP (Model Context Protocol) Cloud Gateway (`server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:
+   - Full MCP 2024-11-05 protocol gateway exposing Aura tools (PC, Workspace, Memory, Android Companion) to external reasoning engines (ChatGPT, Claude, Cursor).
+   - `POST /api/mcp`: Direct JSON-RPC 2.0 endpoint (`initialize`, `ping`, `notifications/initialized`, `tools/list`, `tools/call` via `ToolExecutor`).
+   - `GET /api/mcp/sse`: Server-Sent Events transport with session multiplexing and keepalive.
+   - `POST /api/mcp/messages`: SSE JSON-RPC message receiver.
+   - `GET /api/mcp/tools`: REST tool inspector.
+   - Token authentication via Bearer header or `?token=...` query param.
+   - Standalone STDIO bridge runner `scripts/run_mcp_bridge.py` supporting local in-process and remote relay modes.
+2. **ChatGPT Main Brain Provider (`brain/providers/chatgpt.py`, `brain/router.py`, `brain/providers/capabilities.py`, `core/config.py`, `core/settings_store.py`)**:
+   - `ChatGPTProvider` inheriting `OpenAICompatibleProvider`, defaulting to `gpt-4o` with `max_completion_tokens`.
+   - Registered `"chatgpt": "OPENAI_API_KEY"` in router and capability registry.
+   - Configured `"chatgpt_model": "gpt-4o"` in `DEFAULT_CONFIG["llm"]` and settings store.
+3. **Claim -> Evidence ResponseVerifier Integration (`tests/test_chatgpt_evidence_verification.py`)**:
+   - Grounded tool outputs in `Evidence(kind=POSTCONDITION, verified=True)`.
+   - Positive action claims pass as `VERIFIED` only with evidence; unverified are hedged (`INFERRED`); failures are contradicted and repaired.
+4. **Verification**:
+   - Python tests: 147 passed in 14.72s.
+   - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+
 ## Multi-Provider Cloud Failover Resilience, Android UI Ergonomic Redesign & Spacious 4-Tab Cyber Dock DELIVERED (2026-10-02)
 1. **Render Cloud Multi-Provider Failover Hardening (`brain/providers/`)**:
    - `brain/providers/groq.py`: Added `User-Agent: Aura/1.0 (Linux; Android Companion Client)` in `_request()`. Handled HTTP 401/403 as `ProviderUnavailableError` allowing continuous failover down the chain.

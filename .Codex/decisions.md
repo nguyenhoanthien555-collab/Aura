@@ -1,5 +1,13 @@
 # Architectural decisions
 
+## 2026-10-02 MCP Gateway & ChatGPT Main Brain Architecture
+
+- **MCP Gateway Topology**: Aura Cloud serves as an MCP (Model Context Protocol 2024-11-05) Gateway exposing tools across PC, Workspace, Memory, and Android Companion via JSON-RPC 2.0 (`POST /api/mcp`) and Server-Sent Events (`GET /api/mcp/sse`).
+- **Bridge Runner**: `scripts/run_mcp_bridge.py` operates as an STDIO adapter for clients requiring local subprocess pipes (Claude Desktop, Cursor, local Codex). It supports both in-process local execution and remote HTTP relay (`--remote https://aura-xwm4.onrender.com --token <TOKEN>`), preserving the 24/7 always-online Render deployment.
+- **ChatGPT Main Brain Provider**: `ChatGPTProvider` inherits `OpenAICompatibleProvider` with default model `gpt-4o` and `max_completion_tokens`. It lives alongside `OpenAIProvider` without mutating existing configurations (`openai_model` remains `gpt-5.1` for backward compatibility, while `chatgpt_model` defaults to `gpt-4o`).
+- **Tool Execution & Safety Gating**: All MCP tool invocations pass through `ToolExecutor` and respect `ToolPolicy` and `CapabilityRegistry`. Tool failure or refusal returns an MCP-compliant `isError: True` with structured status instead of unhandled HTTP 500, enabling LLM reasoners to inspect errors and recover gracefully.
+- **Claim -> Evidence Verifier**: The `ResponseVerifier` and `EvidenceLedger` verify ChatGPT assertions against actual tool execution postconditions (`Evidence(kind=POSTCONDITION, verified=True)`). Claims without positive evidence are hedged as `INFERRED`; claims contradicted by failed tool executions are repaired.
+
 ## 2026-08-28 hybrid semantic memory (AURA 2.0 contract Phase 2)
 
 - Semantic recall is added BESIDE the existing lexical retrieval, at the

@@ -1,5 +1,31 @@
 # Progress
 
+## 2026-10-02 — MCP Gateway, ChatGPT Main Brain Provider & Claim->Evidence Verification DELIVERED
+
+- **Pillar 1: Model Context Protocol (MCP) Cloud Gateway (`server/routes/mcp.py`, `scripts/run_mcp_bridge.py`, `server/main.py`)**:
+  - Implemented full MCP 2024-11-05 protocol gateway exposing Aura's capabilities across PC, Workspace, Memory, and Android mobile device.
+  - Endpoints:
+    - `POST /api/mcp`: Standard JSON-RPC 2.0 endpoint handling `initialize`, `ping`, `notifications/initialized`, `tools/list` (schema export), and `tools/call` (gated execution via `ToolExecutor`).
+    - `GET /api/mcp/sse`: Server-Sent Events transport supporting SSE clients with connection keepalive and event channels.
+    - `POST /api/mcp/messages`: Inbound JSON-RPC dispatcher for active SSE sessions.
+    - `GET /api/mcp/tools`: REST inspector returning tool catalogue and counts.
+  - Dual-mode authentication: Bearer header and query param (`?token=...`).
+  - Bridge runner `scripts/run_mcp_bridge.py`: STDIO runner for Claude Desktop, Cursor, or ChatGPT desktop, supporting both local in-process mode and remote relay mode (`--remote https://aura-xwm4.onrender.com --token <TOKEN>`).
+  - Tested: `tests/test_mcp_gateway.py` (8/8 passed).
+- **Pillar 2: ChatGPT Main Brain Provider Integration (`brain/providers/chatgpt.py`, `brain/router.py`, `brain/providers/capabilities.py`, `core/config.py`, `core/settings_store.py`)**:
+  - `ChatGPTProvider`: Implemented provider inheriting `OpenAICompatibleProvider` with default model `gpt-4o`, `token_field = "max_completion_tokens"`, using standard `urllib` without external dependencies.
+  - Registered `"chatgpt": "OPENAI_API_KEY"` in `PROVIDER_KEYS` and `HTTP_CHAT_PROVIDERS`.
+  - Registered function calling capability in `brain/providers/capabilities.py`.
+  - Configured `"chatgpt_model": "gpt-4o"` in `DEFAULT_CONFIG["llm"]` and `core/settings_store.py` (`llm.chatgpt_model`).
+  - Tested: `tests/test_chatgpt_provider.py` (7/7 passed), `tests/test_cloud_providers.py` (101/101 passed), `tests/test_provider_resolution.py` (27/27 passed).
+- **Pillar 3: Claim -> Evidence ResponseVerifier Integration (`tests/test_chatgpt_evidence_verification.py`)**:
+  - Grounded ChatGPT claims in verified postconditions from Android and PC tool executions (`Evidence(kind=POSTCONDITION, verified=True)`).
+  - Verified truthfulness: postcondition confirmed claims pass as `VERIFIED`; unverified claims are hedged (`INFERRED`); failed tool executions are marked `CONTRADICTED` and auto-repaired.
+  - Tested: `tests/test_chatgpt_evidence_verification.py` (4/4 passed).
+- **Pillar 4: Comprehensive Verification & Regression**:
+  - Python tests: 147 passed in 14.72s.
+  - Android JVM tests: 22/22 tasks passed (100% BUILD SUCCESSFUL).
+
 ## 2026-10-02 — Multi-Provider Cloud Failover Resilience, Android UI Ergonomic Redesign & Spacious 4-Tab Cyber Dock DELIVERED
 
 - **Pillar 1: Render Cloud Multi-Provider Failover Hardening (`brain/providers/`)**:
