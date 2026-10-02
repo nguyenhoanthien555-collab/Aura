@@ -85,21 +85,9 @@ def format_chatgpt_cookie(raw_token: str) -> str:
         cookies = []
         for idx, part in enumerate(parts):
             cookies.append(f"__Secure-next-auth.session-token.{idx}={part}")
-        merged = "".join(parts)
-        cookies.append(f"__Secure-next-auth.session-token={merged}")
         return "; ".join(cookies)
 
-    single = parts[0]
-    if len(single) > 3800:
-        c0 = single[:3800]
-        c1 = single[3800:]
-        return (
-            f"__Secure-next-auth.session-token={single}; "
-            f"__Secure-next-auth.session-token.0={c0}; "
-            f"__Secure-next-auth.session-token.1={c1}"
-        )
-
-    return f"__Secure-next-auth.session-token={single}"
+    return f"__Secure-next-auth.session-token={parts[0]}"
 
 
 class ChatGPTWebProvider(LLM, StreamingLLM):

@@ -190,7 +190,6 @@ def test_format_chatgpt_cookie():
     formatted = format_chatgpt_cookie(chunks_semi)
     assert "__Secure-next-auth.session-token.0=val0" in formatted
     assert "__Secure-next-auth.session-token.1=val1" in formatted
-    assert "__Secure-next-auth.session-token=val0val1" in formatted
 
     # Single short token
     assert format_chatgpt_cookie("short_token") == "__Secure-next-auth.session-token=short_token"
