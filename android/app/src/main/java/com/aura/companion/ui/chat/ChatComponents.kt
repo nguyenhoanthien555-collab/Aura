@@ -2,6 +2,11 @@ package com.aura.companion.ui.chat
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -633,7 +639,9 @@ fun Composer(
         }
     }
 
-    val composerShape = RoundedCornerShape(26.dp)
+    var isDrawerOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val composerShape = CutCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -702,64 +710,76 @@ fun Composer(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+            AnimatedVisibility(
+                visible = isDrawerOpen,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
             ) {
-                IconButton(
-                    onClick = {
+                AuraActionDrawer(
+                    isThinkingEnabled = isThinkingEnabled,
+                    onToggleThinking = onToggleThinking,
+                    isProcessingImage = isProcessingImage,
+                    onOpenPhotoPicker = {
+                        isDrawerOpen = false
                         if (!isProcessingImage) {
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         }
                     },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(Color(0xFF1E1B4B).copy(alpha = 0.6f), CircleShape)
-                        .border(1.dp, Color(0xFF06B6D4).copy(alpha = 0.35f), CircleShape),
-                ) {
-                    if (isProcessingImage) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = Color(0xFF38BDF8),
-                        )
-                    } else {
-                        Icon(
-                            imageVector = AuraIcons.Camera,
-                            contentDescription = "Đính kèm ảnh",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
+                    onQuickPrompt = { prompt ->
+                        isDrawerOpen = false
+                        onDraftChanged(prompt)
+                    },
+                    onClose = { isDrawerOpen = false },
+                )
+            }
 
-                Spacer(modifier = Modifier.width(4.dp))
-
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                // The Aura Action Drawer trigger
                 IconButton(
-                    onClick = onToggleThinking,
+                    onClick = { isDrawerOpen = !isDrawerOpen },
                     modifier = Modifier
                         .size(38.dp)
                         .background(
-                            color = if (isThinkingEnabled) Color(0x33FACC15) else Color(0xFF1E1B4B).copy(alpha = 0.6f),
+                            color = if (isDrawerOpen) Color(0xFF7C3AED).copy(alpha = 0.85f)
+                            else if (isThinkingEnabled) Color(0x33FACC15)
+                            else Color(0xFF1E1B4B).copy(alpha = 0.6f),
                             shape = CircleShape,
                         )
                         .border(
                             1.dp,
-                            if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                            if (isDrawerOpen) Color(0xFFC084FC)
+                            else if (isThinkingEnabled) Color(0xFFFACC15)
+                            else Color(0xFF8B5CF6).copy(alpha = 0.35f),
                             CircleShape,
                         ),
                 ) {
-                    Icon(
-                        imageVector = AuraIcons.Lightbulb,
-                        contentDescription = if (isThinkingEnabled) "Tắt chế độ suy nghĩ sâu (Thinking)" else "Bật chế độ suy nghĩ sâu (Thinking)",
-                        tint = if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF94A3B8),
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isDrawerOpen) AuraIcons.Close else AuraIcons.Add,
+                            contentDescription = if (isDrawerOpen) "Đóng ngăn kéo" else "Mở ngăn kéo chức năng Aura",
+                            tint = if (isDrawerOpen) Color.White
+                            else if (isThinkingEnabled) Color(0xFFFACC15)
+                            else Color(0xFF38BDF8),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        if (isThinkingEnabled && !isDrawerOpen) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .align(Alignment.TopEnd)
+                                    .background(Color(0xFFFACC15), CircleShape)
+                                    .border(1.dp, Color(0xFF1E1B4B), CircleShape)
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 BasicTextField(
                     value = draft,
@@ -863,6 +883,248 @@ fun Composer(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Aura's futuristic, sci-fi action drawer (Ngăn kéo chức năng Aura).
+ *
+ * Houses the Thinking Mode switch, multimodal camera attachments,
+ * hardware telemetry shortcuts, and fast memory retention controls.
+ */
+@Composable
+private fun AuraActionDrawer(
+    isThinkingEnabled: Boolean,
+    onToggleThinking: () -> Unit,
+    isProcessingImage: Boolean,
+    onOpenPhotoPicker: () -> Unit,
+    onQuickPrompt: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val drawerShape = CutCornerShape(topStart = 14.dp, bottomEnd = 14.dp, topEnd = 4.dp, bottomStart = 4.dp)
+    Surface(
+        shape = drawerShape,
+        color = Color(0xFF0F0E1D).copy(alpha = 0.96f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            Brush.horizontalGradient(
+                listOf(
+                    Color(0xFF8B5CF6).copy(alpha = 0.5f),
+                    Color(0xFF06B6D4).copy(alpha = 0.5f),
+                )
+            )
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(Color(0xFF00E5FF), CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "AURA // ACTION DRAWER",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                        ),
+                        color = Color(0xFF38BDF8),
+                    )
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Close,
+                        contentDescription = "Đóng",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+
+            // PRIMARY FEATURE: Thinking Mode Cyber Card
+            val thinkingCardShape = CutCornerShape(topStart = 10.dp, bottomEnd = 10.dp, topEnd = 2.dp, bottomStart = 2.dp)
+            Surface(
+                shape = thinkingCardShape,
+                color = if (isThinkingEnabled) Color(0xFF2A2308).copy(alpha = 0.85f) else Color(0xFF1E1B4B).copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleThinking),
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(
+                                    if (isThinkingEnabled) Color(0x33FACC15) else Color(0xFF1E1B4B),
+                                    CircleShape,
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF64748B).copy(alpha = 0.5f),
+                                    CircleShape,
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = AuraIcons.Lightbulb,
+                                contentDescription = null,
+                                tint = if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF94A3B8),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Suy nghĩ sâu (Thinking Mode)",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (isThinkingEnabled) Color(0xFFFACC15) else Color.White,
+                            )
+                            Text(
+                                text = if (isThinkingEnabled)
+                                    "Bật: Phân tích sâu đa bước • Phù hợp việc khó"
+                                else
+                                    "Tắt: Phản hồi nhanh 1-2s • Tối ưu tốc độ trò chuyện",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = Color(0xFF94A3B8),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Surface(
+                        shape = CutCornerShape(6.dp),
+                        color = if (isThinkingEnabled) Color(0xFFFACC15) else Color(0xFF1E293B),
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.75.dp,
+                            if (isThinkingEnabled) Color(0xFFFEF08A) else Color(0xFF475569),
+                        ),
+                    ) {
+                        Text(
+                            text = if (isThinkingEnabled) "BẬT" else "TẮT",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            color = if (isThinkingEnabled) Color(0xFF0F172A) else Color(0xFF94A3B8),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+
+            // QUICK ACTIONS ROW
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                QuickActionChip(
+                    icon = AuraIcons.Camera,
+                    label = "Gửi ảnh",
+                    tint = Color(0xFF38BDF8),
+                    isLoading = isProcessingImage,
+                    onClick = onOpenPhotoPicker,
+                    modifier = Modifier.weight(1f),
+                )
+                QuickActionChip(
+                    icon = AuraIcons.MonitorHeart,
+                    label = "Đo máy",
+                    tint = Color(0xFF34D399),
+                    onClick = { onQuickPrompt("Kiểm tra thông số phần cứng Laptop & Điện thoại") },
+                    modifier = Modifier.weight(1f),
+                )
+                QuickActionChip(
+                    icon = AuraIcons.Memory,
+                    label = "Trí nhớ",
+                    tint = Color(0xFFC084FC),
+                    onClick = { onQuickPrompt("Xem danh sách ký ức & tri thức đã ghi nhớ") },
+                    modifier = Modifier.weight(1f),
+                )
+                QuickActionChip(
+                    icon = AuraIcons.Alarm,
+                    label = "Báo thức",
+                    tint = Color(0xFFF59E0B),
+                    onClick = { onQuickPrompt("Đặt báo thức") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
+) {
+    val chipShape = CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+    Surface(
+        shape = chipShape,
+        color = Color(0xFF1E1B4B).copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(0.75.dp, tint.copy(alpha = 0.35f)),
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = tint,
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = tint,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = Color.White,
+                maxLines = 1,
+            )
         }
     }
 }

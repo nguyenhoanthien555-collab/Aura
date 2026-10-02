@@ -8,6 +8,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.clickable
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aura.companion.ui.theme.AuraMotion
 import com.aura.companion.ui.theme.auraGlassEdge
 import com.aura.companion.ui.theme.auraGlassBlur
@@ -113,19 +117,18 @@ fun SectionHeader(
         modifier = modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // A short rounded accent bar before the title: a small, consistent
-        // modern cue that reads the same across all 18 hub sections.
+        // High-tech cyber indicator notch
         Box(
             modifier = Modifier
                 .padding(top = 3.dp, end = 10.dp)
-                .width(3.dp)
-                .height(if (subtitle != null) 30.dp else 15.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .width(4.dp)
+                .height(if (subtitle != null) 32.dp else 16.dp)
+                .clip(CutCornerShape(2.dp))
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.tertiary,
+                            Color(0xFF00E5FF),
+                            Color(0xFF8B5CF6),
                         )
                     )
                 ),
@@ -133,9 +136,11 @@ fun SectionHeader(
         Column {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                ),
+                color = Color(0xFF38BDF8),
             )
 
             if (subtitle != null) {
@@ -143,7 +148,7 @@ fun SectionHeader(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFF94A3B8),
                 )
             }
         }
@@ -151,23 +156,33 @@ fun SectionHeader(
 }
 
 /**
- * The rounded surface every group of rows sits on.
+ * High-tech Sci-Fi Cyber Deck Surface.
  *
- * Carries the hub's own hairline edge ([auraGlassEdge]) rather than an
- * elevation shadow: the front page's tiles are already glass, and a settings
- * card that was a flat tonal block read as a different app one tap in.
+ * Replaces generic rounded cards with precision cut corners,
+ * dual-color gradient hairline borders, and glassmorphic depth.
  */
 @Composable
 fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = CutCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .auraGlassBlur(shape),
+            .clip(shape)
+            .border(
+                1.dp,
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                        Color(0xFF06B6D4).copy(alpha = 0.35f),
+                    )
+                ),
+                shape,
+            )
+            .auraGlassBlur(shape, tint = Color(0xFF131224).copy(alpha = 0.85f)),
     ) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
     }
@@ -399,13 +414,28 @@ private fun SettingRowFrame(
     ) {
 
         if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(16.dp))
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        Color(0xFF1E1B4B).copy(alpha = 0.5f),
+                        CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
+                    )
+                    .border(
+                        0.75.dp,
+                        Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                        CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF38BDF8),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
         }
 
         Column(modifier = Modifier.weight(1f)) {
@@ -472,12 +502,16 @@ fun StatusDot(tone: StatusTone, modifier: Modifier = Modifier, size: Dp = 8.dp) 
 @Composable
 fun Badge(text: String, tone: StatusTone = StatusTone.Neutral) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = tone.contentColour().copy(alpha = 0.14f),
+        shape = CutCornerShape(4.dp),
+        color = tone.contentColour().copy(alpha = 0.16f),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, tone.contentColour().copy(alpha = 0.4f)),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+            ),
             color = tone.contentColour(),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
@@ -501,11 +535,13 @@ fun NoticeCard(
     tone: StatusTone = StatusTone.Neutral,
     icon: ImageVector? = null,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = CutCornerShape(topStart = 12.dp, bottomEnd = 12.dp, topEnd = 3.dp, bottomStart = 3.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .clip(shape)
+            .border(0.75.dp, tone.contentColour().copy(alpha = 0.4f), shape)
             .auraGlassBlur(shape, tint = tone.contentColour().copy(alpha = 0.15f)),
     ) {
         Row(

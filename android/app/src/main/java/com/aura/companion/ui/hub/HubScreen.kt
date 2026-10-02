@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.aura.companion.ui.theme.AuraIcons
@@ -253,11 +254,11 @@ private fun HeroCard(
     state: HubUiState,
     reduced: Boolean,
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = CutCornerShape(topStart = 18.dp, bottomEnd = 18.dp, topEnd = 4.dp, bottomStart = 4.dp)
     val borderGradient = Brush.horizontalGradient(
         listOf(
-            Color(0xFF8B5CF6).copy(alpha = 0.5f),
-            Color(0xFF06B6D4).copy(alpha = 0.5f),
+            Color(0xFF8B5CF6).copy(alpha = 0.55f),
+            Color(0xFF06B6D4).copy(alpha = 0.55f),
         )
     )
 
@@ -268,14 +269,57 @@ private fun HeroCard(
             .border(1.dp, borderGradient, shape)
             .auraGlassBlur(
                 shape = shape,
-                tint = Color(0xFF131224).copy(alpha = 0.75f),
+                tint = Color(0xFF131224).copy(alpha = 0.85f),
             )
             .background(brush = auraHeroBrush(), shape = shape, alpha = 0.4f)
-            .padding(18.dp),
+            .padding(16.dp),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Technical HUD Header Strip
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFF00E5FF), CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "SYS // TRI-NODE LINK MATRIX",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                        ),
+                        color = Color(0xFF38BDF8),
+                    )
+                }
+
+                Surface(
+                    shape = CutCornerShape(4.dp),
+                    color = Color(0xFF10A37F).copy(alpha = 0.2f),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF10A37F)),
+                ) {
+                    Text(
+                        text = "GPT-5.6 LUNA 🌙",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        color = Color(0xFF34D399),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+
             // Dual Device Synced Mesh Graphic
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -296,10 +340,12 @@ private fun HeroCard(
                     else -> "Cloud Node"
                 }
 
+                val nodeShape = CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF0369A1).copy(alpha = 0.18f),
-                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF38BDF8).copy(alpha = 0.4f)),
+                    shape = nodeShape,
+                    color = Color(0xFF0369A1).copy(alpha = 0.22f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF38BDF8).copy(alpha = 0.45f)),
                     modifier = Modifier.weight(1f),
                 ) {
                     Row(
@@ -316,7 +362,10 @@ private fun HeroCard(
                         Column {
                             Text(
                                 text = hostTitle,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                ),
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -374,9 +423,9 @@ private fun HeroCard(
 
                 // Phone Node
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF065F46).copy(alpha = 0.18f),
-                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF34D399).copy(alpha = 0.4f)),
+                    shape = nodeShape,
+                    color = Color(0xFF065F46).copy(alpha = 0.22f),
+                    border = androidx.compose.foundation.BorderStroke(0.75.dp, Color(0xFF34D399).copy(alpha = 0.45f)),
                     modifier = Modifier.weight(1f),
                 ) {
                     Row(
@@ -393,7 +442,10 @@ private fun HeroCard(
                         Column {
                             Text(
                                 text = state.phoneTelemetry?.let { "${it.batteryPercent}% ${if (it.isCharging) "⚡" else ""}" } ?: "Handset",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                ),
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -542,7 +594,7 @@ private fun CompactStatusChip(
     reduced: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
     val colour = animateColorAsState(
         targetValue = tile.tone.contentColour(),
         animationSpec = tween(AuraMotion.scaled(AuraMotion.Standard, reduced)),
@@ -552,6 +604,7 @@ private fun CompactStatusChip(
     Box(
         modifier = Modifier
             .clip(shape)
+            .border(0.75.dp, colour.copy(alpha = 0.45f), shape)
             .auraGlassBlur(
                 shape = shape,
                 tint = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
@@ -585,6 +638,7 @@ private fun CompactStatusChip(
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
                 ),
                 color = colour,
                 maxLines = 1,
@@ -632,7 +686,7 @@ private data class HubGroup(
  */
 private val HUB_GROUPS = listOf(
     HubGroup(
-        title = "Intelligence",
+        title = "// 01. INTELLIGENCE MATRIX",
         subtitle = "How Aura thinks and what it remembers",
         entries = listOf(
             HubEntry(
@@ -654,7 +708,7 @@ private val HUB_GROUPS = listOf(
         ),
     ),
     HubGroup(
-        title = "Presence",
+        title = "// 02. PRESENCE & DAEMON",
         subtitle = "What Aura may see, and when it may speak first",
         entries = listOf(
             HubEntry(
@@ -676,7 +730,7 @@ private val HUB_GROUPS = listOf(
         ),
     ),
     HubGroup(
-        title = "Control",
+        title = "// 03. SYSTEM CAPABILITIES & TOOLS",
         subtitle = "What Aura is allowed to do, and what it reports",
         entries = listOf(
             HubEntry(
@@ -698,7 +752,7 @@ private val HUB_GROUPS = listOf(
         ),
     ),
     HubGroup(
-        title = "Server & app",
+        title = "// 04. NETWORK & DIAGNOSTICS",
         subtitle = null,
         entries = listOf(
             HubEntry(
@@ -732,11 +786,22 @@ private val HUB_GROUPS = listOf(
 @Composable
 fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 
-    val shape = RoundedCornerShape(20.dp)
+    val shape = CutCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .clip(shape)
+            .border(
+                1.dp,
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                        Color(0xFF06B6D4).copy(alpha = 0.35f),
+                    )
+                ),
+                shape,
+            )
             .auraGlass(shape = shape),
     ) {
         content()

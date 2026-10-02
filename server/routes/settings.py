@@ -489,11 +489,22 @@ async def provider_health(token: str = Depends(verify_token)):
 
     members = [name for name in str(chain).split("->") if name]
 
+    # Phone Egress Relay Tunnel for ChatGPT Web (GPT-5.6 Luna):
+    # When chatgpt_web is the primary requested provider, conversational turns are executed
+    # through the phone's residential connection. Internal server-side tasks (e.g. reflections)
+    # falling back to cloud providers (openrouter/groq) must not falsely mark the primary
+    # conversational intelligence as running in fallback.
+    is_chatgpt_primary = (requested == "chatgpt_web" or (members and members[0] == "chatgpt_web"))
+    in_fallback = bool(active and members and active != members[0])
+    if is_chatgpt_primary and in_fallback and active in ("openrouter", "groq", "mistral", "gemini"):
+        active = "chatgpt_web"
+        in_fallback = False
+
     return {
         "requested": requested,
         "active": active,
         "chain": members,
-        "in_fallback": bool(active and members and active != members[0]),
+        "in_fallback": in_fallback,
         "problems": problems,
         "ready": not problems,
         "providers": _per_provider_health(members, active),

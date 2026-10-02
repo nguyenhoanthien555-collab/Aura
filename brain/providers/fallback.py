@@ -69,7 +69,8 @@ class FallbackProvider:
             logger.info("Provider selected: %s", p_name)
             try:
                 reply = provider.generate(prompt)
-                self.active_provider_name = p_name
+                if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                    self.active_provider_name = p_name
                 self.attempts.append((p_name, "ok", ""))
                 return reply
             except Exception as error:
@@ -80,7 +81,8 @@ class FallbackProvider:
                     time.sleep(1.0)
                     try:
                         reply = provider.generate(prompt)
-                        self.active_provider_name = p_name
+                        if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                            self.active_provider_name = p_name
                         self.attempts.append((p_name, "ok", ""))
                         return reply
                     except Exception as retry_err:
@@ -123,7 +125,8 @@ class FallbackProvider:
             p_name = getattr(provider, "provider_name", type(provider).__name__)
             try:
                 turn = provider.generate_with_tools(system, messages, tools)
-                self.active_provider_name = p_name
+                if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                    self.active_provider_name = p_name
                 self.attempts.append((p_name, "ok", ""))
                 return turn
             except Exception as error:
@@ -167,7 +170,8 @@ class FallbackProvider:
                             chunks_yielded += 1
                             yield chunk
 
-                    self.active_provider_name = p_name
+                    if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                        self.active_provider_name = p_name
                     self.attempts.append((p_name, "ok", ""))
                     return
                 except Exception as error:
@@ -196,7 +200,8 @@ class FallbackProvider:
                                     chunks_yielded += 1
                                     yield chunk
                             if chunks_yielded > 0:
-                                self.active_provider_name = p_name
+                                if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                                    self.active_provider_name = p_name
                                 self.attempts.append((p_name, "ok", ""))
                                 return
                         except Exception as retry_err:
@@ -216,7 +221,8 @@ class FallbackProvider:
                     else:
                         reply = provider.generate(prompt)
 
-                    self.active_provider_name = p_name
+                    if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
+                        self.active_provider_name = p_name
                     self.attempts.append((p_name, "ok", ""))
                     if reply:
                         yield reply

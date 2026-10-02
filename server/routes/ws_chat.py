@@ -266,9 +266,11 @@ async def chat_stream(
             # ------------------------------------------------------------------
             conv = getattr(getattr(runtime, "engine", None), "conversation", None)
             active_llm = getattr(conv, "llm", None) if conv else None
-            active_provider = getattr(active_llm, "active_provider_name", getattr(active_llm, "provider_name", ""))
+            configured_provider = getattr(active_llm, "provider_name", "")
+            active_provider = getattr(active_llm, "active_provider_name", configured_provider)
+            is_chatgpt_chosen = (configured_provider == "chatgpt_web" or active_provider == "chatgpt_web")
 
-            if active_provider == "chatgpt_web" and stream_context.get("has_chatgpt_egress") and conv:
+            if is_chatgpt_chosen and stream_context.get("has_chatgpt_egress") and conv:
                 try:
                     user_msg, prompt, turn, _task = conv._prepare(
                         message, None, "text", stream_context, session_id=session_id
@@ -335,6 +337,12 @@ async def chat_stream(
                                     conv._voiced(conv._styled(full_text), turn), turn
                                 )
                             conv._remember(user_msg, full_text, session_id=session_id)
+                            # Anchor active provider status back to chatgpt_web
+                            if getattr(conv, "llm", None):
+                                llm_router = getattr(conv, "llm", None)
+                                provider_obj = getattr(llm_router, "provider", None)
+                                if hasattr(provider_obj, "active_provider_name"):
+                                    provider_obj.active_provider_name = "chatgpt_web"
                             elapsed = time.time() - received_at
                             await websocket.send_json({
                                 "type": "complete",
