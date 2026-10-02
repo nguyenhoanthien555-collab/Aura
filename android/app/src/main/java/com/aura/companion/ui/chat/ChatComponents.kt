@@ -1,5 +1,8 @@
 package com.aura.companion.ui.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -34,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -74,6 +80,15 @@ import java.util.Locale
  * action rather than disappearing - losing what someone typed because the
  * signal dropped is the fastest way to make an app untrustworthy.
  */
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -86,6 +101,7 @@ fun MessageBubble(
     message: ChatMessage,
     onRetry: () -> Unit,
     onReact: (String) -> Unit,
+    onSpeak: ((String) -> Unit)? = null,
 ) {
     val fromUser = message.author == ChatMessage.Author.USER
     val clipboardManager = LocalClipboardManager.current
@@ -154,7 +170,31 @@ fun MessageBubble(
                             ),
                             color = Color(0xFF38BDF8),
                         )
+                        if (onSpeak != null && !message.streaming && message.text.isNotBlank()) {
+                            Spacer(Modifier.weight(1f))
+                            Icon(
+                                imageVector = AuraIcons.VolumeUp,
+                                contentDescription = "Phát âm câu trả lời",
+                                tint = Color(0xFF38BDF8).copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(13.dp)
+                                    .clickable { onSpeak(message.text) },
+                            )
+                        }
                     }
+                }
+
+                if (message.imageBitmap != null) {
+                    Image(
+                        bitmap = message.imageBitmap,
+                        contentDescription = "Ảnh đính kèm",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .padding(bottom = 6.dp),
+                        contentScale = ContentScale.Crop,
+                    )
                 }
 
                 val codeBg = if (fromUser) Color(0xFF3B0764).copy(alpha = 0.5f) else Color(0xFF1E293B).copy(alpha = 0.6f)
@@ -541,7 +581,74 @@ fun Composer(
     isSending: Boolean,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
+    isListening: Boolean = false,
+    speechRmsDb: Float = 0f,
+    attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
+    onStartVoice: (() -> Unit)? = null,
+    onStopVoice: (() -> Unit)? = null,
+    onAttachImage: ((androidx.compose.ui.graphics.ImageBitmap, String) -> Unit)? = null,
+    onClearAttachment: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            onStartVoice?.invoke()
+        } else {
+            Toast.makeText(context, "Cần cấp quyền Micro để trò chuyện bằng giọng nói", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val stream = context.contentResolver.openInputStream(uri)
+                val originalBitmap = BitmapFactory.decodeStream(stream)
+                stream?.close()
+                if (originalBitmap != null) {
+                    val maxDim = 1024
+                    val width = originalBitmap.width
+                    val height = originalBitmap.height
+                    val scaledBitmap = if (width > maxDim || height > maxDim) {
+                        val ratio = width.toFloat() / height.toFloat()
+                        val (targetW, targetH) = if (ratio > 1f) {
+                            maxDim to (maxDim / ratio).toInt()
+                        } else {
+                            (maxDim * ratio).toInt() to maxDim
+                        }
+                        Bitmap.createScaledBitmap(originalBitmap, targetW, targetH, true)
+                    } else {
+                        originalBitmap
+                    }
+                    val outputStream = ByteArrayOutputStream()
+                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                    val bytes = outputStream.toByteArray()
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    onAttachImage?.invoke(scaledBitmap.asImageBitmap(), base64)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Không thể đọc hình ảnh", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+    val dynamicMicScale = if (isListening) {
+        (1f + (speechRmsDb.coerceIn(0f, 10f) / 35f) * pulseScale).coerceIn(1f, 1.4f)
+    } else 1f
+
     val composerShape = RoundedCornerShape(26.dp)
     Box(
         modifier = Modifier
@@ -565,58 +672,184 @@ fun Composer(
             )
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            BasicTextField(
-                value = draft,
-                onValueChange = onDraftChanged,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = Color.White,
-                ),
-                cursorBrush = SolidColor(Color(0xFF8B5CF6)),
-                maxLines = 5,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-                decorationBox = { innerTextField ->
-                    if (draft.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.composer_hint),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color(0xFF64748B),
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (attachedImageBitmap != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF06B6D4).copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    ) {
+                        Image(
+                            bitmap = attachedImageBitmap,
+                            contentDescription = "Ảnh đính kèm",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(2.dp)
+                                .size(16.dp)
+                                .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                                .clickable { onClearAttachment?.invoke() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = AuraIcons.Close,
+                                contentDescription = "Xoá ảnh",
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Ảnh đính kèm sẵn sàng gửi",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF38BDF8),
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                IconButton(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color(0xFF1E1B4B).copy(alpha = 0.6f), CircleShape)
+                        .border(1.dp, Color(0xFF06B6D4).copy(alpha = 0.35f), CircleShape),
+                ) {
+                    Icon(
+                        imageVector = AuraIcons.Camera,
+                        contentDescription = "Đính kèm ảnh",
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                BasicTextField(
+                    value = draft,
+                    onValueChange = onDraftChanged,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = Color.White,
+                    ),
+                    cursorBrush = SolidColor(Color(0xFF8B5CF6)),
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+                    decorationBox = { innerTextField ->
+                        if (draft.isEmpty()) {
+                            Text(
+                                text = if (isListening) "Aura đang lắng nghe bạn nói..." else stringResource(R.string.composer_hint),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isListening) Color(0xFF38BDF8) else Color(0xFF64748B),
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+
+                if (onStartVoice != null) {
+                    Box(
+                        modifier = Modifier.size(42.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (isListening) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .scale(dynamicMicScale)
+                                    .background(
+                                        Brush.radialGradient(
+                                            listOf(Color(0xFFE11D48).copy(alpha = 0.6f), Color.Transparent)
+                                        ),
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                if (isListening) {
+                                    onStopVoice?.invoke()
+                                } else {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.RECORD_AUDIO
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                                    if (hasPermission) {
+                                        onStartVoice.invoke()
+                                    } else {
+                                        micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(
+                                    color = if (isListening) Color(0xFFE11D48).copy(alpha = 0.85f) else Color(0xFF1E1B4B).copy(alpha = 0.6f),
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isListening) Color(0xFFFB7185) else Color(0xFF8B5CF6).copy(alpha = 0.35f),
+                                    CircleShape
+                                ),
+                        ) {
+                            Icon(
+                                imageVector = if (isListening) AuraIcons.Mic else AuraIcons.Mic,
+                                contentDescription = if (isListening) "Đang nghe" else "Nói chuyện",
+                                tint = if (isListening) Color.White else Color(0xFFA78BFA),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                FilledIconButton(
+                    onClick = onSend,
+                    enabled = canSend,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color(0xFF7C3AED),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFF1E1B4B).copy(alpha = 0.5f),
+                        disabledContentColor = Color(0xFF475569),
+                    ),
+                    modifier = Modifier.size(42.dp),
+                ) {
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AuraIcons.Send,
+                            contentDescription = stringResource(R.string.action_send),
+                            modifier = Modifier.size(18.dp),
                         )
                     }
-                    innerTextField()
-                }
-            )
-
-            FilledIconButton(
-                onClick = onSend,
-                enabled = canSend,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = Color(0xFF7C3AED),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF1E1B4B).copy(alpha = 0.5f),
-                    disabledContentColor = Color(0xFF475569),
-                ),
-                modifier = Modifier.size(42.dp),
-            ) {
-                if (isSending) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = Color.White,
-                    )
-                } else {
-                    Icon(
-                        imageVector = AuraIcons.Send,
-                        contentDescription = stringResource(R.string.action_send),
-                        modifier = Modifier.size(18.dp),
-                    )
                 }
             }
         }

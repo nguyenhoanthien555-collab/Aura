@@ -51,6 +51,9 @@ async def chat(request: ChatRequest, token: str = Depends(verify_token)):
         chat_context = dict(request.context or {})
         chat_context.setdefault("message_id", message_id)
         chat_context.setdefault("session_id", session.session_id)
+        if request.image:
+            chat_context["image"] = request.image
+            chat_context["image_mime"] = request.image_mime or "image/jpeg"
         if request.metadata:
             for k in ("client", "device", "platform"):
                 if k in request.metadata and k not in chat_context:

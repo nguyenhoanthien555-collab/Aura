@@ -98,6 +98,31 @@ class NotificationWorker(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val replyIntent = Intent(context, DirectReplyReceiver::class.java).apply {
+            action = DirectReplyReceiver.ACTION_DIRECT_REPLY
+            putExtra(DirectReplyReceiver.EXTRA_NOTIFICATION_ID, notification.notificationId.hashCode())
+        }
+
+        val replyPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notification.notificationId.hashCode(),
+            replyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+
+        val remoteInput = androidx.core.app.RemoteInput.Builder(DirectReplyReceiver.KEY_TEXT_REPLY)
+            .setLabel("Trả lời Aura...")
+            .build()
+
+        val replyAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_notification,
+            "Trả lời",
+            replyPendingIntent,
+        )
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(true)
+            .build()
+
         val built = NotificationCompat.Builder(context, AuraApplication.COMPANION_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.app_name))
@@ -112,6 +137,7 @@ class NotificationWorker(
             )
             .setAutoCancel(true)
             .setContentIntent(pending)
+            .addAction(replyAction)
             .build()
 
         runCatching {

@@ -98,6 +98,10 @@ class AppContainer(application: Application) {
     val context: android.content.Context = application.applicationContext
     private val appContext get() = context
 
+    val voiceManager: com.aura.companion.voice.AuraVoiceManager by lazy {
+        com.aura.companion.voice.AuraVoiceManager(application)
+    }
+
     /**
      * Is there a network that can actually carry a request right now?
      *

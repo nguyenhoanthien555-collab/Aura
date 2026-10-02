@@ -125,6 +125,22 @@ class DeviceTaskDispatcherTest {
                 put("status", "canceled")
             }
         )
+
+        override suspend fun setClipboard(text: String): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("status", "copied")
+                put("length", text.length)
+                put("preview", text.take(60))
+            }
+        )
+
+        override suspend fun getClipboard(): Result<JsonObject> = Result.success(
+            buildJsonObject {
+                put("has_clip", true)
+                put("text", "mock_clipboard_content")
+                put("length", 22)
+            }
+        )
     }
 
     private fun directive(tool: String, arguments: JsonObject): ToolCallDirective =
@@ -269,5 +285,35 @@ class DeviceTaskDispatcherTest {
         assertEquals(true, report.postcondition?.get("verified")?.jsonPrimitive?.contentOrNull?.toBoolean())
         assertEquals("cancel_alarm", report.postcondition?.get("action")?.jsonPrimitive?.contentOrNull)
         assertEquals("alarm_123", report.postcondition?.get("alarm_id")?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun `set_clipboard executes with verified postcondition`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.set_clipboard", buildJsonObject {
+            put("text", "https://aura.ai/docs")
+        })
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals("copied", report.result?.get("status")?.jsonPrimitive?.contentOrNull)
+        assertEquals(true, report.postcondition?.get("verified")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals("set_clipboard", report.postcondition?.get("action")?.jsonPrimitive?.contentOrNull)
+        assertEquals(20, report.postcondition?.get("length")?.jsonPrimitive?.contentOrNull?.toInt())
+    }
+
+    @Test
+    fun `get_clipboard returns clipboard text`() = runBlocking {
+        val fakeHandler = FakeDeviceTaskHandler()
+        val dispatcher = DeviceTaskDispatcher(fakeHandler)
+
+        val call = directive("android.get_clipboard", buildJsonObject {})
+
+        val report = dispatcher.execute(call)
+        assertTrue(report.ok)
+        assertEquals(true, report.result?.get("has_clip")?.jsonPrimitive?.contentOrNull?.toBoolean())
+        assertEquals("mock_clipboard_content", report.result?.get("text")?.jsonPrimitive?.contentOrNull)
     }
 }

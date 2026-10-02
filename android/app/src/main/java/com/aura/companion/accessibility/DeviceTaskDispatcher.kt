@@ -1,6 +1,8 @@
 package com.aura.companion.accessibility
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -103,6 +105,20 @@ object DeviceTaskToolCatalog {
             mutating = true,
             requiredPermission = "",
         ),
+        TaskToolSpec(
+            name = "android.set_clipboard",
+            required = setOf("text"),
+            optional = emptySet(),
+            mutating = true,
+            requiredPermission = "",
+        ),
+        TaskToolSpec(
+            name = "android.get_clipboard",
+            required = emptySet(),
+            optional = emptySet(),
+            mutating = false,
+            requiredPermission = "",
+        ),
     ).associateBy { it.name }
 
     fun isTaskTool(tool: String): Boolean = tool in TOOLS
@@ -147,6 +163,8 @@ interface DeviceTaskHandler {
     suspend fun setAlarm(hour: Int, minute: Int, label: String, repeatDays: List<Int>): Result<JsonObject>
     suspend fun listAlarms(): Result<JsonObject>
     suspend fun cancelAlarm(alarmId: String): Result<JsonObject>
+    suspend fun setClipboard(text: String): Result<JsonObject>
+    suspend fun getClipboard(): Result<JsonObject>
 }
 
 /**
@@ -418,6 +436,29 @@ class AndroidDeviceTaskHandler(
         }
     }
 
+    override suspend fun setClipboard(text: String): Result<JsonObject> = runCatching {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("Aura", text)
+        clipboard.setPrimaryClip(clip)
+        buildJsonObject {
+            put("status", "copied")
+            put("length", text.length)
+            put("preview", text.take(60))
+        }
+    }
+
+    override suspend fun getClipboard(): Result<JsonObject> = runCatching {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        val item = if (clip != null && clip.itemCount > 0) clip.getItemAt(0) else null
+        val text = item?.coerceToText(context)?.toString() ?: ""
+        buildJsonObject {
+            put("has_clip", text.isNotEmpty())
+            put("text", text)
+            put("length", text.length)
+        }
+    }
+
     private fun parseTimeToMillis(isoOrEpoch: String): Long {
         return try {
             isoOrEpoch.toLong()
@@ -541,6 +582,25 @@ class DeviceTaskDispatcher(
                             put("alarm_id", alarmId)
                         },
                     )
+                }
+
+                "android.set_clipboard" -> {
+                    val text = directive.arguments["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val res = handler.setClipboard(text).getOrThrow()
+                    success(
+                        directive = directive,
+                        result = res,
+                        postcondition = buildJsonObject {
+                            put("verified", true)
+                            put("action", "set_clipboard")
+                            put("length", text.length)
+                        },
+                    )
+                }
+
+                "android.get_clipboard" -> {
+                    val res = handler.getClipboard().getOrThrow()
+                    success(directive = directive, result = res)
                 }
 
                 else -> failure(directive, "TOOL_NOT_FOUND", "Task tool not supported: ${directive.tool}")

@@ -1,5 +1,39 @@
 # Current task
 
+## Next-Gen Sensory Omnipresent Companion Upgrade DELIVERED (2026-10-02)
+
+- **Trụ cột 1: Đàm thoại Giọng nói Hai chiều Di động (Mobile Voice Engine - STT & TTS)**:
+  - Tích hợp Android `TextToSpeech` chuẩn native trong `AuraVoiceManager.kt` với ngôn ngữ tiếng Việt `Locale("vi", "VN")` (fallback `Locale.US`), hỗ trợ tùy chỉnh tốc độ nói và âm sắc.
+  - Tích hợp `SpeechRecognizer` nhận diện giọng nói tiếng Việt, tự động chuẩn hóa văn bản và lọc nhiễu, theo dõi cường độ âm thanh `speechRmsDb` theo thời gian thực.
+  - Giao diện người dùng độc bản: Nút Micro cyber pulsing lượn sóng động trong `Composer`, nút Loa phát lại từng câu thoại trong `MessageBubble`, và công tắc Loa toàn cục trên thanh tiêu đề `ChatScreen`.
+  - Icon bespoke: `AuraIcons.VolumeUp`, `VolumeOff`, `Mic`, `MicOff` (100% vector hình học, không dùng stock icons).
+  - Tự động đọc câu trả lời khi Aura phản hồi (nếu bật chế độ TTS).
+  - Kiểm thử: `AuraVoiceManagerTest.kt`.
+- **Trụ cột 2: Thị giác Đa phương thức trong Chat (Multimodal Camera & Vision in Chat)**:
+  - Tích hợp nút Camera độc bản `AuraIcons.Camera` trong `Composer` kích hoạt bộ chọn ảnh `ActivityResultContracts.PickVisualMedia()` (cho phép chụp ảnh camera hoặc chọn từ thư viện ảnh).
+  - Tự động downscale ảnh tối ưu (<= 1024px) và mã hóa JPEG Base64 mượt mà.
+  - Dải thumbnail xem trước ảnh đính kèm nổi phía trên ô soạn thảo kèm nút đóng cyber `Close`.
+  - Hiển thị ảnh kèm theo ngay trong bong bóng chat của người dùng (`MessageBubble`).
+  - Phía server & brain: Mở rộng `ChatRequest` (`image`, `image_mime`), cập nhật `/api/chat` và WebSocket streaming `/api/chat/ws`, trích xuất `types.Part.from_bytes` chuyển trực tiếp vào Gemini Multimodal Vision API (`gemini.py`).
+  - Kiểm thử: `tests/test_multimodal_vlm.py` (4/4 tests passed).
+- **Trụ cột 3: Thông báo Tương tác & Trả lời Trực tiếp (Actionable Direct-Reply Notifications)**:
+  - Khởi tạo `DirectReplyReceiver.kt` kế thừa `BroadcastReceiver` xử lý `RemoteInput.getResultsFromIntent(intent)`.
+  - Hỗ trợ trả lời Aura trực tiếp từ khay thông báo Android mà không cần mở ứng dụng.
+  - Phản hồi tức thì trên thông báo ("Aura đang lắng nghe..."), chuyển lời nhắn vào `AuraRepository.send()`, lưu trữ lịch sử vào `TranscriptStore`, và cập nhật câu trả lời của Aura lên thông báo.
+  - `NotificationWorker.kt` gắn kèm hành động `RemoteInput` ("Trả lời") với cờ `FLAG_MUTABLE` vào tất cả các thông báo chủ động của Aura.
+  - Kiểm thử: `DirectReplyContractTest.kt` (2/2 tests passed).
+- **Trụ cột 4: Cầu nối & Đồng bộ Clipboard Đa thiết bị (Cross-Device Clipboard Sync)**:
+  - Android directives: `android.set_clipboard` (đưa văn bản vào clipboard điện thoại qua `ClipboardManager`) và `android.get_clipboard` (đọc văn bản từ clipboard điện thoại).
+  - PC directives: `desktop.set_clipboard` và `desktop.get_clipboard` hỗ trợ Windows 64-bit qua ctypes Win32 an toàn (`OpenClipboard`, `GlobalAlloc`, `GlobalLock`, `SetClipboardData`, `GetClipboardData`) với UTF-16 Unicode toàn diện.
+  - Đăng ký capabilities `android.clipboard` và `desktop.clipboard` trong `core/capabilities/factory.py`.
+  - Đấu nối vào `_pc_tools()` trong `tools/factory.py` (bảo toàn 100% ranh giới thiết bị cloud khi không có allowlist) và cấp quyền trong `server/runtime.py`.
+  - Bổ sung hướng dẫn Mục 9 trong `prompts/system.md` hướng dẫn Aura chủ động luân chuyển clipboard giữa PC và Điện thoại.
+  - Kiểm thử: `tests/test_clipboard_sync.py` (6/6 passed), `tests/test_android_task_tools.py` (15/15 passed), `tests/test_device_boundary.py` (14/14 passed).
+- **Trụ cột 5: Kiểm thử Toàn diện & Đóng gói Sẵn sàng**:
+  - Android JVM Tests: 471/471 passed (100% BUILD SUCCESSFUL).
+  - Python Tests: 37/37 passed across boundary, clipboard, task tools, and multimodal VLM.
+  - Đóng gói APK: `:app:assembleDebug` BUILD SUCCESSFUL (`app-debug.apk`: 20.15 MB).
+
 ## Intelligent Offline Cyber Alarm & Morning Briefing System DELIVERED (2026-10-02)
 
 - **Trụ cột 1: Đảm bảo Độc lập & Bền bỉ 100% Offline (Zero-Cloud Offline Reliability)**:

@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                         container.transcript,
                         container::isOnline,
                         container.context,
+                        container.voiceManager,
                     )
                 )
 

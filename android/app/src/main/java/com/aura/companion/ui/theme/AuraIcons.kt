@@ -420,6 +420,58 @@ object AuraIcons {
         }
     }
 
+    /** Muted speaker horn with cancel cross. */
+    val VolumeOff: ImageVector by lazy {
+        icon("VolumeOff") {
+            moveTo(3.0f, 9.0f)
+            lineTo(7.0f, 9.0f)
+            lineTo(12.0f, 4.0f)
+            lineTo(12.0f, 20.0f)
+            lineTo(7.0f, 15.0f)
+            lineTo(3.0f, 15.0f)
+            close()
+            // Mute cross stroke 1
+            moveTo(16.0f, 9.0f)
+            lineTo(22.0f, 15.0f)
+            lineTo(20.6f, 16.4f)
+            lineTo(14.6f, 10.4f)
+            close()
+            // Mute cross stroke 2
+            moveTo(22.0f, 10.4f)
+            lineTo(16.0f, 16.4f)
+            lineTo(14.6f, 15.0f)
+            lineTo(20.6f, 9.0f)
+            close()
+        }
+    }
+
+    /** Muted microphone with diagonal strike. */
+    val MicOff: ImageVector by lazy {
+        icon("MicOff") {
+            // Cut diagonal strike
+            moveTo(4.41f, 3.0f)
+            lineTo(3.0f, 4.41f)
+            lineTo(7.5f, 8.91f)
+            lineTo(7.5f, 11.0f)
+            lineTo(9.0f, 11.0f)
+            lineTo(9.0f, 10.41f)
+            lineTo(14.59f, 16.0f)
+            curveTo(13.82f, 16.59f, 12.95f, 16.91f, 12.0f, 16.91f)
+            lineTo(12.0f, 20.0f)
+            lineTo(8.0f, 20.0f)
+            lineTo(8.0f, 21.5f)
+            lineTo(16.0f, 21.5f)
+            lineTo(16.0f, 20.0f)
+            lineTo(13.5f, 20.0f)
+            lineTo(13.5f, 16.91f)
+            curveTo(15.2f, 16.62f, 16.65f, 15.65f, 17.47f, 14.28f)
+            lineTo(19.59f, 16.4f)
+            lineTo(21.0f, 14.99f)
+            close()
+        }
+    }
+
+
     /** Dual break lightning spark: proactive unprompted insight. */
     val Bolt: ImageVector by lazy {
         icon("Bolt") {

@@ -14,6 +14,7 @@ def register_core_capabilities(config=None):
     registry.register(Capability(capability_id="desktop.input", name="Input Synthesis", description="Mouse and keyboard control", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "click_mouse"}))
     registry.register(Capability(capability_id="desktop.applications", name="Open Applications", description="Launch local applications", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "open_application"}))
     registry.register(Capability(capability_id="desktop.open_url", name="Open URL", description="Open a web link in the default browser", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "open_url"}))
+    registry.register(Capability(capability_id="desktop.clipboard", name="Desktop Clipboard", description="Read and write to host desktop clipboard", category="desktop", required_permissions=["desktop.control"], discovery_metadata={"tool": "desktop.set_clipboard"}))
     registry.register(Capability(capability_id="desktop.commands", name="Run Commands", description="Execute local shell commands", category="desktop", required_permissions=["desktop.commands"], discovery_metadata={"tool": "run_command"}))
 
     # Vision capabilities
@@ -94,6 +95,7 @@ def register_core_capabilities(config=None):
         ("android.calendar", "Android Calendar Management", "Create and query calendar events on the device.", ["android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"], "android.create_calendar_event"),
         ("android.contacts", "Android Contacts Search", "Search address book and device contacts.", ["android.permission.READ_CONTACTS"], "android.search_contacts"),
         ("android.alarm", "Android Cyber Alarm System", "Set, list, and cancel alarms on the device.", [], "android.set_alarm"),
+        ("android.clipboard", "Android Clipboard Sync", "Set or get text from device system clipboard.", [], "android.set_clipboard"),
     ]
 
 
@@ -119,6 +121,11 @@ def register_core_capabilities(config=None):
         return {"healthy": False, "reason": "Input synthesizer unavailable on host", "state": "UNAVAILABLE"}
 
     health.register_check("desktop.input", check_desktop_input)
+
+    def check_desktop_clipboard():
+        return {"healthy": True, "reason": "", "state": "AVAILABLE"}
+
+    health.register_check("desktop.clipboard", check_desktop_clipboard)
 
     def check_sandbox_available():
         return {"healthy": True, "reason": "", "state": "AVAILABLE"}

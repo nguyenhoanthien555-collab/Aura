@@ -22,6 +22,8 @@ class ChatRequest(BaseModel):
         min_length=1,
         max_length=settings.max_message_length,
     )
+    image: Optional[str] = Field(default=None, description="Base64 encoded image attachment")
+    image_mime: Optional[str] = Field(default="image/jpeg", description="MIME type of image attachment")
     context: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

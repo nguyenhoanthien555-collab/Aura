@@ -1,5 +1,35 @@
 # Progress
 
+## 2026-10-02 — Next-Gen Sensory Omnipresent Companion Upgrade DELIVERED
+
+- **Pillar 1: Two-Way Mobile Voice Engine (STT & TTS)**:
+  - Integrated native Android `TextToSpeech` in `AuraVoiceManager.kt` with Vietnamese language support (`Locale("vi", "VN")`), English US fallback, configurable speech rate, and speech queue management.
+  - Integrated `SpeechRecognizer` for Vietnamese voice input, real-time audio RMS dB level monitoring, and auto-sanitization.
+  - Bespoke Cyber UI: Dynamic pulsing wave microphone button in `Composer`, individual sentence replay speaker icon on `MessageBubble`, and global volume toggle in `ChatScreen` TopAppBar.
+  - Zero stock icons: Crafted static `AuraIcons.VolumeUp`, `VolumeOff`, `Mic`, `MicOff` Compose vector icons.
+  - Automated speech playback on response completion when TTS mode is active.
+- **Pillar 2: Multimodal Camera & Vision in Chat**:
+  - Added bespoke `AuraIcons.Camera` launcher in `Composer` invoking `ActivityResultContracts.PickVisualMedia()` for instant camera photo captures or gallery selection.
+  - Client-side auto-downscaling (<= 1024px) and JPEG Base64 encoding.
+  - Floating image preview strip above composer with cyber `Close` button; attached photo rendered inside user's chat bubble.
+  - Backend & Brain grounding: Extended `ChatRequest` with `image` and `image_mime`, wired `/api/chat` and WebSocket streaming `/api/chat/ws`, and packed `types.Part.from_bytes` into Gemini VLM multimodal requests.
+  - Tested: `tests/test_multimodal_vlm.py` (4/4 passed).
+- **Pillar 3: Actionable Direct-Reply Notifications**:
+  - Created `DirectReplyReceiver.kt` handling `RemoteInput` from the Android system notification shade.
+  - Immediate notification feedback ("Aura đang lắng nghe..."), background dispatch to `AuraRepository.send()`, transcript persistence via `TranscriptStore`, and notification update with Aura's reply.
+  - Attached `RemoteInput` ("Trả lời") with `FLAG_MUTABLE` to all companion notifications in `NotificationWorker.kt`.
+  - Tested: `DirectReplyContractTest.kt` (2/2 passed).
+- **Pillar 4: Cross-Device Clipboard Synchronization**:
+  - Android directives: `android.set_clipboard` and `android.get_clipboard` implemented in `DeviceTaskDispatcher.kt` using `ClipboardManager` and `ClipData`.
+  - Desktop PC directives: `desktop.set_clipboard` and `desktop.get_clipboard` implemented in `tools/builtins/desktop.py` with 64-bit safe Win32 ctypes (`OpenClipboard`, `GlobalAlloc`, `GlobalLock`, `SetClipboardData`, `GetClipboardData`).
+  - Registered `android.clipboard` and `desktop.clipboard` in `core/capabilities/factory.py`, wired into `tools/factory.py` (strictly preserving the stock cloud boundary invariant), and allowed in `server/runtime.py`.
+  - Enriched system instructions in `prompts/system.md` (Section 9) guiding cross-device data relays.
+  - Tested: `tests/test_clipboard_sync.py` (6/6 passed), `tests/test_android_task_tools.py` (15/15 passed), `tests/test_device_boundary.py` (14/14 passed).
+- **Pillar 5: Comprehensive Verification & Packaging**:
+  - Android JVM Unit Tests: 471/471 passed (100% BUILD SUCCESSFUL).
+  - Python Unit Tests: 37/37 passed across boundary, clipboard, task tools, and multimodal VLM.
+  - Packaged Debug APK: `:app:assembleDebug` BUILD SUCCESSFUL (`app-debug.apk`: 20.15 MB).
+
 ## 2026-10-02 — Intelligent Offline Cyber Alarm & Morning Briefing System DELIVERED
 
 - **Pillar 1: 100% Offline Operational Reliability & Persistence**:

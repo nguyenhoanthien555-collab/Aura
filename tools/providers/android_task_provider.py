@@ -202,10 +202,37 @@ class CancelAlarm(_Mutation):
     )
 
 
+class AndroidSetClipboard(_Mutation):
+    name = "android.set_clipboard"
+    capability = "android.clipboard"
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.IDEMPOTENT
+    description = (
+        "Set text content into the Android device clipboard. "
+        "Allows copying links, code, notes, or messages to the phone."
+    )
+    parameters = (
+        Parameter(
+            name="text",
+            type="string",
+            description="The text content to copy into the Android clipboard.",
+        ),
+    )
+
+
+class AndroidGetClipboard(_Read):
+    name = "android.get_clipboard"
+    capability = "android.clipboard"
+    description = (
+        "Read the current text content from the Android device clipboard."
+    )
+    parameters = ()
+
+
 class AndroidTaskProvider(CapabilityProvider):
     """
     Capability provider for Android personal task management tools
-    (SMS, Calendar, Contacts, Alarms).
+    (SMS, Calendar, Contacts, Alarms, Clipboard).
     """
 
     namespace = "android"
@@ -219,6 +246,8 @@ class AndroidTaskProvider(CapabilityProvider):
         SetAlarm,
         ListAlarms,
         CancelAlarm,
+        AndroidSetClipboard,
+        AndroidGetClipboard,
     )
 
     _CAPABILITY_NAMES = {
@@ -226,6 +255,7 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.calendar": "Android Calendar Management",
         "android.contacts": "Android Contacts Search",
         "android.alarm": "Android Cyber Alarm System",
+        "android.clipboard": "Android Clipboard Sync",
     }
 
     _CAPABILITY_KEYWORDS = {
@@ -233,6 +263,7 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.calendar": ["calendar", "event", "schedule", "meeting", "reminder", "lịch", "cuộc hẹn"],
         "android.contacts": ["contact", "person", "phone", "number", "email", "address", "danh bạ"],
         "android.alarm": ["alarm", "wake", "wake up", "timer", "báo thức", "đánh thức", "gọi dậy", "hẹn giờ"],
+        "android.clipboard": ["clipboard", "copy", "paste", "clip", "khay nhớ tạm", "sao chép", "dán"],
     }
 
     _CAPABILITY_PERMISSIONS = {
@@ -240,6 +271,7 @@ class AndroidTaskProvider(CapabilityProvider):
         "android.calendar": ["android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"],
         "android.contacts": ["android.permission.READ_CONTACTS"],
         "android.alarm": [],
+        "android.clipboard": [],
     }
 
     def __init__(self, bridge: DeviceBridge | None = None):
@@ -373,5 +405,7 @@ __all__ = [
     "SetAlarm",
     "ListAlarms",
     "CancelAlarm",
+    "AndroidSetClipboard",
+    "AndroidGetClipboard",
 ]
 

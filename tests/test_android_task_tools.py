@@ -36,6 +36,8 @@ EXPECTED_TASK_TOOLS = {
     "android.set_alarm",
     "android.list_alarms",
     "android.cancel_alarm",
+    "android.set_clipboard",
+    "android.get_clipboard",
 }
 
 

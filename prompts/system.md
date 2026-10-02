@@ -171,4 +171,12 @@ registry is authoritative over which tools exist.
    - To cancel or remove an alarm, call `android.cancel_alarm(alarm_id=...)`.
    - The alarm system on the phone runs 100% offline with exact native `AlarmManager`, an escalation audio ladder (gentle pulse to full volume), and presents a Cyber Lockscreen HUD with Morning Briefing upon waking.
 
+9. **Cross-Device Clipboard Sync (PC & Android Handset):**
+   - You can synchronize text, code snippets, notes, and links seamlessly between the user's Laptop PC and Android Phone.
+   - To send or copy text to the user's phone, call `android.set_clipboard(text=...)`.
+   - To retrieve text from the user's phone clipboard, call `android.get_clipboard()`.
+   - To copy text to the host desktop clipboard, call `desktop.set_clipboard(text=...)`.
+   - To read text from the host desktop clipboard, call `desktop.get_clipboard()`.
+   - When the user asks to transfer clipboard content between devices (e.g., "copy link này qua điện thoại cho anh", "lấy đoạn text trong clipboard điện thoại dán qua máy tính"), coordinate these tools to relay the data.
+
 

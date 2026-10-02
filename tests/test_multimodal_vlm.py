@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests for Local Multimodal VLM Processor, Zero-File In-RAM Vision, and Verifier Grounding.
 """
 
@@ -39,3 +39,32 @@ def test_response_verifier_accepts_vlm_evidence():
 
     assert "chưa có công cụ thực thi" not in outcome.repaired_text
     assert "Visual Studio Code" in outcome.repaired_text
+
+
+def test_conversation_vision_context_from_user_attachment():
+    """Test that ConversationManager recognizes user attached image as user_attachment vision source."""
+    from unittest.mock import MagicMock
+    from brain.conversation import ConversationManager
+
+    cm = ConversationManager(llm=MagicMock(), memory=MagicMock(), builder=MagicMock())
+    vis_ctx = cm._vision_context(context={"image": "fake_base64_data", "image_mime": "image/png"})
+
+    assert vis_ctx is not None
+    assert vis_ctx.source == "user_attachment"
+    assert "User attached a camera photo or image" in vis_ctx.description
+
+
+def test_gemini_provider_extracts_image_part(monkeypatch):
+    """Test that GeminiProvider correctly parses base64 and builds image Part."""
+    from brain.providers.gemini import GeminiProvider
+
+    monkeypatch.setenv("GEMINI_API_KEY", "mock_key")
+    provider = GeminiProvider(model="gemini-2.5-flash")
+    raw_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+    b64_str = base64.b64encode(raw_bytes).decode("ascii")
+
+    part = provider._extract_image_part({"image": b64_str, "image_mime": "image/png"})
+    assert part is not None
+    assert part.inline_data.data == raw_bytes
+    assert part.inline_data.mime_type == "image/png"
+

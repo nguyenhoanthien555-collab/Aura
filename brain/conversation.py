@@ -1479,6 +1479,14 @@ class ConversationManager:
             self._emit(TaskStuckEvent(goal=plan.goal, step=was))
 
     def _vision_context(self, context: dict | None = None):
+        # 0. User attached image (Multimodal Camera/Gallery)
+        if (context or {}).get("image"):
+            from vision.context import VisionContext
+            return VisionContext(
+                source="user_attachment",
+                description="User attached a camera photo or image with this message for visual analysis.",
+            )
+
         # 1. Direct mobile / Android context
         app = (context or {}).get("app")
         if app and isinstance(app, dict):

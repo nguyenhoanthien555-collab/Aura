@@ -164,6 +164,7 @@ class LoopbackDeviceBridge:
                 "is_enabled": True,
             },
         ]
+        self.clipboard: str = ""
 
 
     def status(self) -> dict:
@@ -593,6 +594,28 @@ class LoopbackDeviceBridge:
                 "action": "cancel_alarm",
                 "alarm_id": target_id,
             },
+        )
+
+    # ------------------------------------------------------------------
+    # Clipboard Sync Tools
+    # ------------------------------------------------------------------
+
+    def _do_set_clipboard(self, text: str = "", **_):
+        self.clipboard = str(text or "")
+        return (
+            {"text": self.clipboard, "length": len(self.clipboard), "action": "set_clipboard"},
+            {
+                "verified": True,
+                "action": "set_clipboard",
+                "length": len(self.clipboard),
+            },
+        )
+
+    def _do_get_clipboard(self, **_):
+        text = getattr(self, "clipboard", "")
+        return (
+            {"text": text, "length": len(text)},
+            None,
         )
 
 

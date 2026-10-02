@@ -285,6 +285,14 @@ def _pc_tools(config: dict = None) -> list[ToolProtocol]:
         from tools.builtins.desktop import OpenUrlTool
         tools.append(OpenUrlTool())
 
+    if "desktop.set_clipboard" in allowed or "set_clipboard" in allowed:
+        from tools.builtins.desktop import DesktopSetClipboardTool
+        tools.append(DesktopSetClipboardTool())
+
+    if "desktop.get_clipboard" in allowed or "get_clipboard" in allowed:
+        from tools.builtins.desktop import DesktopGetClipboardTool
+        tools.append(DesktopGetClipboardTool())
+
     processes = default_process_source()
 
     if processes is not None:

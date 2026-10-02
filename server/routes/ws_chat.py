@@ -186,11 +186,16 @@ async def chat_stream(
 
             runtime.bus.subscribe(StreamFinishedEvent, on_finished)
 
+            stream_context = dict(request.get("context") or {})
+            if request.get("image"):
+                stream_context["image"] = request.get("image")
+                stream_context["image_mime"] = request.get("image_mime") or "image/jpeg"
+
             fragments = runtime.chat_stream(
                 message,
                 session_id=session_id,
                 source="text",
-                context=request.get("context"),
+                context=stream_context,
             )
 
             from events.types import AgentInterruptedEvent

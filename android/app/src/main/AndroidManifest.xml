@@ -43,6 +43,12 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!--
+        Aura Mobile Voice Engine.
+        Audio recording for Speech-to-Text (STT) input.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
         What `open_app` needs to exist at all.
 
         Since Android 11 (API 30) a package query is filtered to apps the
@@ -65,7 +71,11 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
+
 
     <application
         android:name=".AuraApplication"
@@ -151,6 +161,15 @@
                 <action android:name="com.aura.companion.ALARM_TRIGGER" />
                 <action android:name="com.aura.companion.ALARM_DISMISS" />
                 <action android:name="com.aura.companion.ALARM_SNOOZE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- BroadcastReceiver for Notification Direct Reply -->
+        <receiver
+            android:name=".work.DirectReplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.aura.companion.ACTION_DIRECT_REPLY" />
             </intent-filter>
         </receiver>
 

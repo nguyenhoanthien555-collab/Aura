@@ -762,6 +762,190 @@ class OpenUrlTool(Tool):
             return fail(f"Error opening URL: {error}", tool=self.name)
 
 
+_MEMORY_CLIPBOARD = ""
+_CLIPBOARD_BOUND = False
+
+
+def _ensure_clipboard_signatures():
+    global _CLIPBOARD_BOUND
+    if _CLIPBOARD_BOUND or os.name != "nt":
+        return
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+        user32.OpenClipboard.restype = ctypes.c_bool
+
+        user32.CloseClipboard.argtypes = []
+        user32.CloseClipboard.restype = ctypes.c_bool
+
+        user32.EmptyClipboard.argtypes = []
+        user32.EmptyClipboard.restype = ctypes.c_bool
+
+        user32.IsClipboardFormatAvailable.argtypes = [ctypes.c_uint]
+        user32.IsClipboardFormatAvailable.restype = ctypes.c_bool
+
+        user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+        user32.SetClipboardData.restype = ctypes.c_void_p
+
+        user32.GetClipboardData.argtypes = [ctypes.c_uint]
+        user32.GetClipboardData.restype = ctypes.c_void_p
+
+        kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+        kernel32.GlobalAlloc.restype = ctypes.c_void_p
+
+        kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalLock.restype = ctypes.c_void_p
+
+        kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalUnlock.restype = ctypes.c_bool
+
+        _CLIPBOARD_BOUND = True
+    except Exception as e:
+        logger.debug("Failed to bind clipboard signatures: %s", e)
+
+
+def _win32_set_clipboard(text: str) -> bool:
+    import ctypes
+
+    _ensure_clipboard_signatures()
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    CF_UNICODETEXT = 13
+    GMEM_MOVEABLE = 0x0002
+
+    if not user32.OpenClipboard(None):
+        return False
+    try:
+        user32.EmptyClipboard()
+        encoded = text.encode("utf-16le") + b"\x00\x00"
+        h = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(encoded))
+        if not h:
+            return False
+        p = kernel32.GlobalLock(h)
+        if not p:
+            return False
+        ctypes.memmove(p, encoded, len(encoded))
+        kernel32.GlobalUnlock(h)
+        user32.SetClipboardData(CF_UNICODETEXT, h)
+        return True
+    finally:
+        user32.CloseClipboard()
+
+
+def _win32_get_clipboard() -> str:
+    import ctypes
+
+    _ensure_clipboard_signatures()
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    CF_UNICODETEXT = 13
+
+    if not user32.OpenClipboard(None):
+        return ""
+    try:
+        if not user32.IsClipboardFormatAvailable(CF_UNICODETEXT):
+            return ""
+        h = user32.GetClipboardData(CF_UNICODETEXT)
+        if not h:
+            return ""
+        p = kernel32.GlobalLock(h)
+        if not p:
+            return ""
+        try:
+            return ctypes.c_wchar_p(p).value or ""
+        finally:
+            kernel32.GlobalUnlock(h)
+    finally:
+        user32.CloseClipboard()
+
+
+def _set_desktop_clipboard(text: str) -> bool:
+    global _MEMORY_CLIPBOARD
+    _MEMORY_CLIPBOARD = text
+    import sys
+    if sys.platform == "win32":
+        try:
+            return _win32_set_clipboard(text)
+        except Exception as e:
+            logger.warning("Win32 clipboard set failed: %s", e)
+            return True
+    return True
+
+
+def _get_desktop_clipboard() -> str:
+    import sys
+    if sys.platform == "win32":
+        try:
+            val = _win32_get_clipboard()
+            if val:
+                return val
+        except Exception as e:
+            logger.warning("Win32 clipboard get failed: %s", e)
+    return _MEMORY_CLIPBOARD
+
+
+class DesktopSetClipboardTool(Tool):
+    name = "desktop.set_clipboard"
+    capability = "desktop.clipboard"
+    description = (
+        "Copy text to the host desktop clipboard. "
+        "Useful for placing links, code, tokens, or responses onto the host PC clipboard."
+    )
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.IDEMPOTENT
+    parameters = (
+        Parameter(
+            name="text",
+            type="string",
+            description="Text content to place onto the host desktop clipboard.",
+        ),
+    )
+
+    def execute(self, text: str) -> ToolResult:
+        if not isinstance(text, str):
+            text = str(text)
+        try:
+            ok_status = _set_desktop_clipboard(text)
+            if not ok_status:
+                return fail("Failed to open host desktop clipboard", tool=self.name)
+            return ok(
+                f"Copied {len(text)} characters to desktop clipboard",
+                data={"length": len(text), "status": "copied", "preview": text[:60]},
+                tool=self.name,
+            )
+        except Exception as error:
+            logger.error("Error setting desktop clipboard: %s", error)
+            return fail(f"Failed to set clipboard: {error}", tool=self.name)
+
+
+class DesktopGetClipboardTool(Tool):
+    name = "desktop.get_clipboard"
+    capability = "desktop.clipboard"
+    description = (
+        "Read the current text content from the host desktop clipboard."
+    )
+    risk = ToolRisk.SAFE
+    side_effect = SideEffect.READ_ONLY
+    parameters = ()
+
+    def execute(self) -> ToolResult:
+        try:
+            text = _get_desktop_clipboard()
+            return ok(
+                f"Read {len(text)} characters from desktop clipboard",
+                data={"text": text, "length": len(text), "has_clip": bool(text)},
+                tool=self.name,
+            )
+        except Exception as error:
+            logger.error("Error reading desktop clipboard: %s", error)
+            return fail(f"Failed to read clipboard: {error}", tool=self.name)
+
+
 def _as_pid(pid) -> int:
     """
     A pid the caller asked for, or 0 meaning "they did not ask".
@@ -796,6 +980,8 @@ __all__ = [
     "ListWindowsTool",
     "MockWindowSource",
     "OpenUrlTool",
+    "DesktopSetClipboardTool",
+    "DesktopGetClipboardTool",
     "WindowInfo",
     "WindowSource",
     "WindowsWindowSource",

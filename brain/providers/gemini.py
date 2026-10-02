@@ -84,14 +84,38 @@ class GeminiProvider(BaseProvider):
 
         return config
 
-    def generate(self, prompt: str) -> str:
+    def _extract_image_part(self, context: dict | None):
+        if not context or not context.get("image"):
+            return None
+        import base64
+        from google.genai import types
+        try:
+            raw_b64 = context["image"]
+            mime = context.get("image_mime") or "image/jpeg"
+            img_bytes = base64.b64decode(raw_b64)
+            return types.Part.from_bytes(data=img_bytes, mime_type=mime)
+        except Exception as e:
+            logger.warning("Failed to decode image part for Gemini: %s", e)
+            return None
+
+    def generate(self, prompt: str, context: dict | None = None) -> str:
         from brain.providers.base import split_prompt_to_messages
         system_instruction, canonical_messages = split_prompt_to_messages(prompt)
 
+        image_part = self._extract_image_part(context)
+
         contents = []
-        for msg in canonical_messages:
+        user_attached = False
+        for i, msg in enumerate(canonical_messages):
             role = "user" if msg.role == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": msg.content}]})
+            parts = [{"text": msg.content}]
+            if image_part and not user_attached and i == len(canonical_messages) - 1 and role == "user":
+                parts.append(image_part)
+                user_attached = True
+            contents.append({"role": role, "parts": parts})
+
+        if image_part and not user_attached:
+            contents.append({"role": "user", "parts": [image_part]})
 
         try:
             response = self.client.models.generate_content(
@@ -172,14 +196,24 @@ class GeminiProvider(BaseProvider):
             raise ProviderUnavailableError("Gemini is unavailable") from error
         raise error
 
-    def stream(self, prompt: str):
+    def stream(self, prompt: str, context: dict | None = None):
         from brain.providers.base import split_prompt_to_messages
         system_instruction, canonical_messages = split_prompt_to_messages(prompt)
 
+        image_part = self._extract_image_part(context)
+
         contents = []
-        for msg in canonical_messages:
+        user_attached = False
+        for i, msg in enumerate(canonical_messages):
             role = "user" if msg.role == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": msg.content}]})
+            parts = [{"text": msg.content}]
+            if image_part and not user_attached and i == len(canonical_messages) - 1 and role == "user":
+                parts.append(image_part)
+                user_attached = True
+            contents.append({"role": role, "parts": parts})
+
+        if image_part and not user_attached:
+            contents.append({"role": "user", "parts": [image_part]})
 
         stream = self.client.models.generate_content_stream(
             model=self.model,

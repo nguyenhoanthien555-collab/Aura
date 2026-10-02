@@ -13,6 +13,7 @@ import com.aura.companion.data.chat.Transcript
 import com.aura.companion.data.local.DeviceTelemetryProbe
 import com.aura.companion.data.remote.StreamEvent
 import com.aura.companion.data.settings.SettingsProvider
+import com.aura.companion.voice.AuraVoiceManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,7 @@ class ChatViewModel(
     private val transcript: Transcript = Transcript.None,
     private val isOnline: () -> Boolean = { true },
     private val context: Context? = null,
+    private val voiceManager: AuraVoiceManager? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -86,6 +88,24 @@ class ChatViewModel(
         keep()
         observeTranscript()
         checkConnection()
+
+        if (voiceManager != null) {
+            viewModelScope.launch {
+                voiceManager.isSpeaking.collect { speaking ->
+                    _state.update { it.copy(isSpeaking = speaking) }
+                }
+            }
+            viewModelScope.launch {
+                voiceManager.isListening.collect { listening ->
+                    _state.update { it.copy(isListening = listening) }
+                }
+            }
+            viewModelScope.launch {
+                voiceManager.rmsDb.collect { rms ->
+                    _state.update { it.copy(speechRmsDb = rms) }
+                }
+            }
+        }
 
         viewModelScope.launch {
             while (isActive) {
@@ -423,11 +443,31 @@ class ChatViewModel(
         // TODO: Call backend to persist reaction
     }
 
+    fun attachImage(bitmap: androidx.compose.ui.graphics.ImageBitmap, base64: String) {
+        _state.update {
+            it.copy(
+                attachedImageBitmap = bitmap,
+                attachedImageBase64 = base64,
+            )
+        }
+    }
+
+    fun clearAttachment() {
+        _state.update {
+            it.copy(
+                attachedImageBitmap = null,
+                attachedImageBase64 = null,
+            )
+        }
+    }
+
     fun send() {
 
         val text = _state.value.draft.trim()
+        val attachedImageB64 = _state.value.attachedImageBase64
+        val attachedImageBmp = _state.value.attachedImageBitmap
 
-        if (text.isEmpty() || _state.value.isSending) return
+        if ((text.isEmpty() && attachedImageB64 == null) || _state.value.isSending) return
 
         if (!settings.current.isConfigured) {
             _state.update { it.copy(error = AuraError.NotConfigured) }
@@ -444,16 +484,21 @@ class ChatViewModel(
             return
         }
 
+        val messageText = if (text.isNotBlank()) text else "Phân tích và cho tôi biết về hình ảnh này."
+
         val outgoing = ChatMessage(
             id = UUID.randomUUID().toString(),
-            text = text,
+            text = messageText,
             author = ChatMessage.Author.USER,
+            imageBitmap = attachedImageBmp,
         )
 
         _state.update {
             it.copy(
                 messages = it.messages + outgoing,
                 draft = "",
+                attachedImageBase64 = null,
+                attachedImageBitmap = null,
                 isSending = true,
                 error = null,
             )
@@ -465,7 +510,7 @@ class ChatViewModel(
             // on the phone goes into the agent loop. Deciding this needs
             // a server round-trip, so it happens here rather than in
             // `send` itself, which is not suspending.
-            if (wantsDeviceAction(text) && startAgentTask(text)) {
+            if (attachedImageB64 == null && wantsDeviceAction(messageText) && startAgentTask(messageText)) {
                 return@launch
             }
 
@@ -479,9 +524,9 @@ class ChatViewModel(
             // The phone knows which app is in front of the owner; the
             // server does not unless this message says so. Built once per
             // turn and used by whichever transport answers.
-            val context = conversationContext()
+            val context = conversationContext(attachedImageB64)
 
-            val streamed = streamReply(text, slowNotice, outgoing.id, context)
+            val streamed = streamReply(messageText, slowNotice, outgoing.id, context)
 
             // Falling back rather than reporting a failure: a proxy that
             // will not carry a WebSocket is a deployment property, not
@@ -490,7 +535,7 @@ class ChatViewModel(
             // continues and the only visible difference is that the reply
             // arrives whole instead of growing.
             if (!streamed) {
-                sendOverRest(outgoing.id, text, slowNotice, context)
+                sendOverRest(outgoing.id, messageText, slowNotice, context)
             }
         }
     }
@@ -516,13 +561,13 @@ class ChatViewModel(
      * Empty when the accessibility service is not connected, so an older
      * or un-permissioned install sends exactly what it always sent.
      */
-    private fun conversationContext(): JsonObject {
+    private fun conversationContext(attachedImageB64: String? = null): JsonObject {
+
+        val entries = mutableMapOf<String, JsonElement>()
 
         val app = AuraAccessibilityService.currentForegroundApp()
-            ?: return JsonObject(emptyMap())
-
-        val entries = mutableMapOf<String, JsonElement>(
-            "app" to JsonObject(
+        if (app != null) {
+            entries["app"] = JsonObject(
                 buildMap {
                     put("package", JsonPrimitive(app.packageName))
                     if (app.label.isNotBlank()) put("label", JsonPrimitive(app.label))
@@ -531,9 +576,14 @@ class ChatViewModel(
                     }
                 }
             )
-        )
+        }
 
         screenNote()?.let { entries["screen_note"] = JsonPrimitive(it) }
+
+        if (attachedImageB64 != null) {
+            entries["image"] = JsonPrimitive(attachedImageB64)
+            entries["image_mime"] = JsonPrimitive("image/jpeg")
+        }
 
         return JsonObject(entries)
     }
@@ -703,12 +753,17 @@ class ChatViewModel(
                         dec == "pass" || dec == "repair"
                     } ?: false
 
+                    val finalText = event.text?.takeIf { t -> t.isNotBlank() } ?: reply
+                    if (_state.value.isTtsEnabled && finalText.isNotBlank()) {
+                        voiceManager?.speak(finalText)
+                    }
+
                     _state.update { current ->
                         current.copy(
                             messages = current.messages.map {
                                 if (it.id == messageId) {
                                     it.copy(
-                                        text = event.text?.takeIf { t -> t.isNotBlank() } ?: it.text,
+                                        text = finalText,
                                         streaming = false,
                                         verified = if (isVerified) true else null,
                                     )
@@ -765,6 +820,9 @@ class ChatViewModel(
 
             is AuraResult.Ok -> {
                 slowNotice.cancel()
+                if (_state.value.isTtsEnabled && result.value.reply.isNotBlank()) {
+                    voiceManager?.speak(result.value.reply)
+                }
                 _state.update { current ->
                     current.copy(
                         messages = current.messages + ChatMessage(
@@ -853,6 +911,8 @@ class ChatViewModel(
 
     fun interruptAgent() {
         AuraAccessibilityService.stopAgentTask()
+        voiceManager?.stopSpeaking()
+        voiceManager?.stopListening()
         _state.update {
             it.copy(
                 isSending = false,
@@ -860,6 +920,54 @@ class ChatViewModel(
                 agentStatusText = "Tớ dừng lại theo lời cậu rồi nè!",
             )
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Voice Engine Controls (TTS & STT)
+    // ------------------------------------------------------------------
+
+    fun toggleTts() {
+        val next = !_state.value.isTtsEnabled
+        _state.update { it.copy(isTtsEnabled = next) }
+        if (!next && voiceManager?.isSpeaking?.value == true) {
+            voiceManager.stopSpeaking()
+        }
+    }
+
+    fun speak(text: String) {
+        voiceManager?.speak(text)
+    }
+
+    fun stopSpeaking() {
+        voiceManager?.stopSpeaking()
+    }
+
+    fun startVoiceInput() {
+        voiceManager?.startListening(
+            onResult = { recognized ->
+                _state.update { current ->
+                    val combined = if (current.draft.isBlank()) recognized else "${current.draft} $recognized"
+                    current.copy(draft = combined)
+                }
+            },
+            onError = { errorMsg ->
+                _state.update { it.copy(error = AuraError.Unavailable(errorMsg)) }
+            }
+        )
+    }
+
+    fun stopVoiceInput() {
+        voiceManager?.stopListening()
+    }
+
+    fun cancelVoiceInput() {
+        voiceManager?.cancelListening()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        voiceManager?.stopSpeaking()
+        voiceManager?.stopListening()
     }
 
     companion object {
@@ -873,11 +981,12 @@ class ChatViewModel(
             transcript: Transcript = Transcript.None,
             isOnline: () -> Boolean = { true },
             context: Context? = null,
+            voiceManager: AuraVoiceManager? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
 
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                ChatViewModel(repository, settings, transcript, isOnline, context) as T
+                ChatViewModel(repository, settings, transcript, isOnline, context, voiceManager) as T
         }
     }
 }

@@ -1,5 +1,30 @@
 # AURA project state
 
+## Next-Gen Sensory Omnipresent Companion Upgrade (2026-10-02)
+1. **Stage A: Mobile Voice Engine (2-Way Vietnamese STT/TTS)**:
+   - Android `TextToSpeech` engine with `Locale("vi", "VN")` and English US fallback in `android/app/src/main/java/com/aura/companion/voice/AuraVoiceManager.kt`.
+   - Android `SpeechRecognizer` with `RECORD_AUDIO` permission, auto text sanitization, dynamic speech RMS dB tracking.
+   - Handcrafted Compose vector icons `AuraIcons.VolumeUp`, `VolumeOff`, `Mic`, `MicOff` (zero external dependencies).
+   - Cyber animated pulsing wave microphone in `Composer`, speaker replay icon on Aura messages, and global TTS toggle in TopAppBar.
+2. **Stage B: Multimodal Camera & Vision in Chat**:
+   - Camera and gallery image picker via `ActivityResultContracts.PickVisualMedia()` directly inside `ChatComponents.kt`.
+   - Automatic image downscaling (<= 1024px) and Base64 JPEG encoding.
+   - Image thumbnail preview strip above composer with cyber `Close` button; rendered image inside user message bubbles.
+   - Server-side grounding: `server/models.py` (`image`, `image_mime` in `ChatRequest`), `server/routes/chat.py`, `server/routes/ws_chat.py`, `brain/conversation.py`, and `brain/providers/gemini.py` packing `types.Part.from_bytes` into Gemini VLM multimodal requests.
+3. **Stage C: Actionable Direct-Reply Notifications**:
+   - `android/app/src/main/java/com/aura/companion/work/DirectReplyReceiver.kt`: `BroadcastReceiver` handling `RemoteInput` from Android notification shade.
+   - Dispatches background replies directly to `AuraRepository.send()`, updates notification with feedback, and records messages into `TranscriptStore`.
+   - `NotificationWorker.kt` attaches `RemoteInput` ("Trả lời") with `FLAG_MUTABLE` to all companion proactive alerts.
+4. **Stage D: Cross-Device Clipboard Sync (PC & Android Handset)**:
+   - Android directives: `android.set_clipboard` and `android.get_clipboard` implemented in `DeviceTaskDispatcher.kt` using `ClipboardManager` and `ClipData`.
+   - Desktop PC directives: `desktop.set_clipboard` and `desktop.get_clipboard` implemented in `tools/builtins/desktop.py` with 64-bit safe Win32 ctypes (`OpenClipboard`, `GlobalAlloc`, `GlobalLock`, `SetClipboardData`, `GetClipboardData`).
+   - Registered capabilities `android.clipboard` and `desktop.clipboard` in `core/capabilities/factory.py`, added to `tools/factory.py` (preserving device boundary invariant), and allowed in `server/runtime.py`.
+   - Enriched `prompts/system.md` (Section 9) for cross-device relay instructions.
+5. **Testing & Verification**:
+   - Android unit tests: `AuraVoiceManagerTest.kt`, `DirectReplyContractTest.kt`, `DeviceTaskDispatcherTest.kt` (471/471 passed, 100%).
+   - Python unit tests: `tests/test_clipboard_sync.py` (6 passed), `tests/test_multimodal_vlm.py` (4 passed), `tests/test_android_task_tools.py` (15 passed), `tests/test_device_boundary.py` (14 passed).
+   - Debug APK packaged: `:app:assembleDebug` (20.15 MB).
+
 ## Intelligent Offline Cyber Alarm & Morning Briefing System (2026-10-02)
 1. **100% Offline Operational Integrity**:
    - Implemented native `AlarmManager.setAlarmClock()` in `android/app/src/main/java/com/aura/companion/alarm/` (`AlarmScheduler.kt`, `AuraAlarmReceiver.kt`).

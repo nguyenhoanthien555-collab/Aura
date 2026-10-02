@@ -115,6 +115,9 @@ class ServerRuntime:
             "android.launch_app", "android.wait_for", "android.verify",
             "python_sandbox", "create_custom_tool", "system_information", "rescan_system_hardware",
             "open_url", "remember_fact", "forget_fact",
+            "desktop.set_clipboard", "desktop.get_clipboard",
+            "set_clipboard", "get_clipboard",
+            "android.set_clipboard", "android.get_clipboard",
             "search_web", "fetch_web_content",
             "workspace_git_status", "workspace_git_diff", "workspace_search_files"
         ]:

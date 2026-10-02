@@ -97,6 +97,13 @@ fun ChatScreen(
                             contentDescription = "Floating Bubble",
                         )
                     }
+                    IconButton(onClick = viewModel::toggleTts) {
+                        Icon(
+                            imageVector = if (state.isTtsEnabled) AuraIcons.VolumeUp else AuraIcons.VolumeOff,
+                            contentDescription = if (state.isTtsEnabled) "Tắt đọc giọng nói" else "Bật đọc giọng nói",
+                            tint = if (state.isTtsEnabled) androidx.compose.ui.graphics.Color(0xFF38BDF8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (state.messages.isNotEmpty()) {
                         IconButton(onClick = viewModel::newConversation) {
                             Icon(
@@ -188,7 +195,8 @@ fun ChatScreen(
                                 MessageBubble(
                                     message = message,
                                     onRetry = { viewModel.retry(message.id) },
-                                    onReact = { emoji -> viewModel.react(message.id, emoji) }
+                                    onReact = { emoji -> viewModel.react(message.id, emoji) },
+                                    onSpeak = { text -> viewModel.speak(text) },
                                 )
                             }
                         }
@@ -262,8 +270,15 @@ fun ChatScreen(
                 draft = state.draft,
                 canSend = state.canSend,
                 isSending = state.isSending,
+                isListening = state.isListening,
+                speechRmsDb = state.speechRmsDb,
+                attachedImageBitmap = state.attachedImageBitmap,
                 onDraftChanged = viewModel::onDraftChanged,
                 onSend = viewModel::send,
+                onStartVoice = viewModel::startVoiceInput,
+                onStopVoice = viewModel::stopVoiceInput,
+                onAttachImage = viewModel::attachImage,
+                onClearAttachment = viewModel::clearAttachment,
             )
         }
     }

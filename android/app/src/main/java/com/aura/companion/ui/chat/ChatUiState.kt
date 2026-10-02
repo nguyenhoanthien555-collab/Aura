@@ -26,9 +26,15 @@ data class ChatUiState(
     val hostTelemetry: HostTelemetryDto? = null,
     val phoneTelemetry: PhoneTelemetry? = null,
     val pingMs: Long = 0L,
+    val isSpeaking: Boolean = false,
+    val isListening: Boolean = false,
+    val speechRmsDb: Float = 0f,
+    val isTtsEnabled: Boolean = false,
+    val attachedImageBase64: String? = null,
+    val attachedImageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
 ) {
     val canSend: Boolean
-        get() = draft.isNotBlank() && !isSending && isConfigured
+        get() = (draft.isNotBlank() || attachedImageBase64 != null) && !isSending && isConfigured
 }
 
 data class ChatMessage(
@@ -48,6 +54,7 @@ data class ChatMessage(
     val streaming: Boolean = false,
     val reactions: Map<String, String> = emptyMap(),
     val verified: Boolean? = null,
+    val imageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null,
 ) {
     enum class Author { USER, AURA }
 }
