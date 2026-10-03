@@ -1,5 +1,21 @@
 # AURA project state
 
+## Android Invisible WebView Bridge for ChatGPT Web Turnstile Bypass & GPT-5.6 Luna 24/7 (2026-10-03)
+1. **Root Cause Analysis (OpenAI Sentinel Turnstile Bytecode)**:
+   - Client calls via `OkHttp` triggered `HTTP 403: {"detail":"Unusual activity has been detected from your device. Try again later."}` due to missing Cloudflare Turnstile token (`openai-sentinel-turnstile-token`).
+   - Phone egress relay failure triggered Render datacenter fallback (Cloudflare 403), falling back to Gemini and exhausting daily quota (429 Too Many Requests).
+2. **Architecture & Implementation (`ChatGPTWebViewBridge.kt`)**:
+   - Implemented `ChatGPTWebViewBridge` embedding an invisible `android.webkit.WebView` powered by native Android Chromium.
+   - Automatically loads and keeps `https://chatgpt.com/` warm with session cookies synced via `CookieManager`.
+   - Executes streaming turns by evaluating JavaScript `fetch('/backend-api/conversation')` in the live browser DOM, automatically inheriting Turnstile tokens, genuine Chrome headers, and residential IP context.
+   - Delivers SSE chunk deltas to Kotlin via `@JavascriptInterface AuraBridgeInterface` and cleans preambles via `cleanLunaResponse()`.
+   - Wired into `AuraApplication.onCreate()` for early initialization and integrated into `AuraStreamClient.kt` as primary egress handler.
+3. **Verification & Physical Deployment**:
+   - Android JVM tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 2m 49s`).
+   - Packaged APK: `:app:assembleDebug` (`BUILD SUCCESSFUL in 48s`).
+   - Streamed installation via Wi-Fi ADB to OPPO Reno6 5G (`CPH2251`): `Performing Streamed Install -> Success`.
+   - App launched with active WebView bridge.
+
 ## ChatGPT Web Phone Egress HTTP 422 Elimination & Clean OpenAI Payload Grounding (2026-10-03)
 1. **Root Cause Analysis & Schema Invariant**:
    - Phone Egress session verification was 100% successful (valid JWT accessToken obtained on Android).

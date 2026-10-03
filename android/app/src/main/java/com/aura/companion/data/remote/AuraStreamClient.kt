@@ -124,7 +124,8 @@ class AuraStreamClient(
                         } else {
                             launch(Dispatchers.IO) {
                                 var chunkIndex = 0
-                                val res = ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
+                                // Prioritize WebView Bridge (solves Cloudflare Turnstile & OpenAI Sentinel naturally)
+                                val webViewRes = ChatGPTWebViewBridge.streamConversation(prompt, sessionToken, model) { chunk ->
                                     trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
                                     val frame = JsonObject(mapOf(
                                         "type" to JsonPrimitive("chatgpt_egress_chunk"),
@@ -132,7 +133,22 @@ class AuraStreamClient(
                                     ))
                                     webSocket.send(frame.toString())
                                 }
-                                res.onSuccess { fullText ->
+
+                                val finalRes = if (webViewRes.isSuccess) {
+                                    webViewRes
+                                } else {
+                                    // Fallback to direct OkHttp client if WebView bridge failed to initialize
+                                    ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
+                                        trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
+                                        val frame = JsonObject(mapOf(
+                                            "type" to JsonPrimitive("chatgpt_egress_chunk"),
+                                            "chunk" to JsonPrimitive(chunk)
+                                        ))
+                                        webSocket.send(frame.toString())
+                                    }
+                                }
+
+                                finalRes.onSuccess { fullText ->
                                     val doneFrame = JsonObject(mapOf(
                                         "type" to JsonPrimitive("chatgpt_egress_done"),
                                         "text" to JsonPrimitive(fullText)
