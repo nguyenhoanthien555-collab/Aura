@@ -73,4 +73,11 @@ class ChatGPTWebClientTest {
         val cleaned = ChatGPTWebClient.cleanLunaResponse(normal)
         assertEquals(normal, cleaned)
     }
+
+    @Test
+    fun testCleanLunaResponse_preservesInnerQuotes() {
+        val raw = "Here's my response:\n\n\"Chào Hoàn Thiện! Cậu có thể gọi tớ là \"Aura\" nhé.\""
+        val cleaned = ChatGPTWebClient.cleanLunaResponse(raw)
+        assertEquals("Chào Hoàn Thiện! Cậu có thể gọi tớ là \"Aura\" nhé.", cleaned)
+    }
 }

@@ -920,6 +920,6 @@ class TestDecisionsAndModes:
         verifier = ResponseVerifier(capability_provider=lambda words: ("UNKNOWN", False, ""))
         result = verifier.verify(text, ledger)
 
-        hedge = "Tôi chưa chắc chắn có thể thực hiện thao tác đó."
+        hedge = "Tớ chưa chắc chắn có thể thực hiện thao tác đó."
         # The hedge must appear at most once, never duplicated consecutively
         assert result.repaired_text.count(hedge) <= 1

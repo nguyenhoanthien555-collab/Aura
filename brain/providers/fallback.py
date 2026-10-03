@@ -282,6 +282,8 @@ class FallbackProvider:
                         except Exception as retry_err:
                             error = retry_err
                             self.cooldowns.record(p_name, error, fp)
+                            if chunks_yielded > 0:
+                                raise
 
                     if category == ACCOUNT_LIMIT:
                         break

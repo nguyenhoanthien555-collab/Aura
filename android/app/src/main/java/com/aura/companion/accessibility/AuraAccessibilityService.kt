@@ -62,8 +62,17 @@ class AuraAccessibilityService : AccessibilityService() {
         // cancelled before replacement, and service teardown cancels scope.
         devicePollerJob?.cancel()
         val dispatcher = AccessibilityToolDispatcher(this)
-        devicePollerJob = scope.launch {
-            DeviceInvocationPoller(repository, settings, dispatcher).pollForever()
+        devicePollerJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                try {
+                    DeviceInvocationPoller(repository, settings, dispatcher).pollForever()
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    Log.w("AuraAgentService", "Device poller error, restarting in 3s: ${e.message}", e)
+                    delay(3000L)
+                }
+            }
         }
 
         syncJob?.cancel()

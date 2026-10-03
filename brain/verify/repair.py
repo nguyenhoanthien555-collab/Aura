@@ -185,10 +185,10 @@ def _hedge_sentence(claim: Claim) -> str:
 
     if is_vi:
         if is_screen:
-            return "Tôi hiện không thể quan sát hay xác nhận trạng thái màn hình khi chưa có công cụ thực thi."
+            return "Tớ hiện không thể quan sát hay xác nhận trạng thái màn hình khi chưa có công cụ thực thi."
         if claim.type == ClaimType.ACTION:
-            return "Tôi chưa thể xác nhận thao tác này đã diễn ra."
-        return "Tôi chưa thể xác nhận " + _unassert(claim.sentence)
+            return "Tớ chưa thể xác nhận thao tác này đã diễn ra."
+        return "Tớ chưa thể xác nhận " + _unassert(claim.sentence)
 
     if claim.type == ClaimType.ACTION:
 
@@ -239,7 +239,7 @@ def _unassert(sentence: str) -> str:
     if not clause:
         return "that is the case."
 
-    if not clause.startswith(("I ", "I'", "Tôi", "Em")):
+    if not clause.startswith(("I ", "I'", "Tôi", "Em", "Tớ", "tớ")):
         clause = clause[0].lower() + clause[1:]
 
     return clause + "."
@@ -253,7 +253,7 @@ def _repair_sentence(claim: Claim, reason: str = "") -> str:
 
     if is_vi:
         if "partial" in lowered_reason:
-            return "Thao tác chỉ hoàn thành một phần - tôi chưa thể xác nhận phần còn lại."
+            return "Thao tác chỉ hoàn thành một phần - tớ chưa thể xác nhận phần còn lại."
         if "denied" in lowered_reason:
             return "Thao tác đã bị từ chối trước khi có thể thực thi."
         if "unavailable" in lowered_reason:
@@ -366,14 +366,14 @@ def repair_claims(
         if state is ClaimState.CONTRADICTED:
             if claim.type == ClaimType.CAPABILITY:
                 if _is_vietnamese(claim.sentence):
-                    replacement = "Tôi không thể thực hiện thao tác đó lúc này - tính năng này hiện chưa khả dụng."
+                    replacement = "Tớ không thể thực hiện thao tác đó lúc này - tính năng này hiện chưa khả dụng."
                 else:
                     replacement = "I can't do that right now - that capability isn't available."
             else:
                 replacement = _repair_sentence(claim, reason)
         elif claim.type == ClaimType.CAPABILITY:
             if _is_vietnamese(claim.sentence):
-                replacement = "Tôi chưa chắc chắn có thể thực hiện thao tác đó."
+                replacement = "Tớ chưa chắc chắn có thể thực hiện thao tác đó."
             else:
                 replacement = "I'm not entirely sure I can do that."
         elif claim.type == ClaimType.MEMORY_DERIVED:
@@ -387,7 +387,7 @@ def repair_claims(
                 )
         elif state is ClaimState.INFERRED:
             if _is_vietnamese(claim.sentence):
-                replacement = "Theo như tôi ghi nhận, " + _lower_first(
+                replacement = "Theo như tớ ghi nhận, " + _lower_first(
                     claim.sentence
                 )
             else:
@@ -426,7 +426,7 @@ def _lower_first(sentence: str) -> str:
     if not sentence:
         return sentence
 
-    if sentence.startswith(("I ", "I'", "Tôi", "Em")):
+    if sentence.startswith(("I ", "I'", "Tôi", "Em", "Tớ", "tớ")):
         return sentence
 
     return sentence[0].lower() + sentence[1:]

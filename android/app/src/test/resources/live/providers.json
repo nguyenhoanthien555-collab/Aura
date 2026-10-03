@@ -1,5 +1,5 @@
 {
-  "active_chain": "gemini",
+  "active_chain": "chatgpt_web",
   "fallback_providers": [
     "groq",
     "mistral",
@@ -9,7 +9,7 @@
     "persistence_note": "",
     "persistent": true
   },
-  "primary": "gemini",
+  "primary": "chatgpt_web",
   "providers": [
     {
       "api_base": "https://generativelanguage.googleapis.com",
@@ -19,7 +19,7 @@
       "chat": true,
       "configured": true,
       "is_fallback": false,
-      "is_primary": true,
+      "is_primary": false,
       "key_masked": "••••••••yiaw",
       "key_source": "environment",
       "keyless": false,
@@ -93,11 +93,11 @@
       "api_key_env": "CHATGPT_SESSION_TOKEN",
       "base_url_env": "CHATGPT_WEB_BASE_URL",
       "chat": true,
-      "configured": false,
+      "configured": true,
       "is_fallback": false,
-      "is_primary": false,
-      "key_masked": "",
-      "key_source": "",
+      "is_primary": true,
+      "key_masked": "••••••••L2kw",
+      "key_source": "environment",
       "keyless": false,
       "label": "ChatGPT Web (Clone Account)",
       "model": "auto",

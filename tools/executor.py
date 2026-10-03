@@ -298,8 +298,6 @@ class ToolExecutor:
                 return False
 
         if tool.risk in self.policy.auto_approve:
-            if consent_store is not None:
-                consent_store.approve(tool_name, auto=True)
             return True
 
         return False

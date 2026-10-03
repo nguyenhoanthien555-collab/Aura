@@ -204,7 +204,7 @@ class SettingsContractTest {
         // (`llm.gemini_model`) is the model Gemini is built with; a fresh host
         // reaches no provider until the owner adds a key.
         val llm = body.effective.llm
-        assertEquals("gemini", llm.provider)
+        assertEquals("chatgpt_web", llm.provider)
         assertEquals("gemini-flash-latest", llm.geminiModel)
         assertEquals("gpt-5.1", llm.openaiModel)
         assertEquals("claude-sonnet-5", llm.anthropicModel)
@@ -303,7 +303,7 @@ class SettingsContractTest {
         // as a control this server "does not support". `llm.gemini_model` is
         // the one model path in the count; the per-provider model settings the
         // picker writes through are reported in the providers document.
-        assertEquals(60, configurable.size)
+        assertEquals(61, configurable.size)
 
         listOf(
             "llm.provider", "llm.gemini_model", "llm.anthropic_model", "llm.qwen_model",
@@ -1169,19 +1169,17 @@ class SettingsContractTest {
         // The shipped deployment is cloud-only with Gemini primary. Every
         // provider the build knows about is reported, so the section can show
         // a row for each rather than an empty list.
-        assertEquals("gemini", body.requested)
-        assertEquals("gemini", body.active)
+        assertEquals("chatgpt_web", body.requested)
+        assertEquals("chatgpt_web", body.active)
         assertTrue(body.ready)
         assertFalse(body.inFallback)
         assertEquals(14, body.providers.size)
         assertEquals("unconfigured", body.providers.getValue("custom").state)
 
-        // Gemini has a key on this host, so it is the active provider - the one
-        // answering, not merely idle. This is the distinction the recovery UI
-        // renders.
-        val gemini = body.providers.getValue("gemini")
-        assertTrue(gemini.configured)
-        assertEquals("active", gemini.state)
+        // ChatGPT Web is configured on this host, so it is the active provider
+        val chatgptWeb = body.providers.getValue("chatgpt_web")
+        assertTrue(chatgptWeb.configured)
+        assertEquals("active", chatgptWeb.state)
 
         // `mock` needs no key, so it is configured; but it is not in the chain,
         // so it is idle rather than active - the same distinction, seen from

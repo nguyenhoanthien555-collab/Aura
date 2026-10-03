@@ -1,5 +1,39 @@
 # Current task
 
+## Comprehensive Codebase Audit, Stream Truncation, Persona Integrity, Heartbeat Sync & Ledger Continuity DELIVERED (2026-10-03)
+
+Following the user request to perform a comprehensive audit across Aura, identify and resolve all subtle bugs, stream truncation issues, persona breaks, and hardware sync gaps:
+
+- **Khắc phục Triệt để Truncation & Cắt Ngang Stream (`ChatGPTWebViewBridge.kt`, `ChatGPTWebClient.kt`)**:
+  - Tăng ngưỡng stillness từ 8 ticks (640ms) lên 30 ticks (~2.4s) và kiểm tra sự tái xuất hiện của nút gửi (`sendBtnBack`) trước khi gọi `sendDone()`. Điều này giải quyết hoàn toàn lỗi GPT-5.6 Luna ngắt quãng giữa chừng khi suy nghĩ hoặc ngắt ý dài >640ms.
+  - Sửa lỗi selector CSS `:has-text(...)` không chuẩn bằng duyệt mảng các nút trong DOM theo chuẩn JavaScript thuần.
+  - Viết lại hàm `cleanLunaResponse` bóc tách từng bước: loại bỏ lời dẫn nhập và dấu ngoặc kép ngoài cùng mà không cắt đứt khi gặp ngoặc kép bên trong nội dung, kèm unit test trong `ChatGPTWebClientTest.kt`.
+- **Chống Trùng Lặp Stream & Bảo Toàn Egress Keepalive (`AuraStreamClient.kt`, `brain/providers/fallback.py`)**:
+  - Bổ sung frame `chatgpt_egress_progress` gửi định kỳ mỗi 12s từ điện thoại lên Render server để tránh timeout 45s của server khi mô hình phản hồi dài.
+  - Khóa fallback chỉ kích hoạt khi `chunkIndex == 0` (ngăn chặn stream lặp lại hai lần khi đã yield chunk đầu tiên).
+  - Khắc phục `FallbackProvider.stream`: re-raise exception khi `chunks_yielded > 0` thay vì chuyển sang provider tiếp theo, triệt tiêu lỗi nối ghép nội dung của hai LLM khác nhau.
+- **Giám Sát Vòng Lặp Accessibility Poller (`AuraAccessibilityService.kt`)**:
+  - Chuyển `DeviceInvocationPoller` sang `Dispatchers.IO` có vòng lặp giám sát (`while (isActive)` + 3s backoff), tự động hồi phục khi xảy ra ngoại lệ mạng hoặc IPC.
+- **Triệt Tiêu Hoàn Toàn Lỗi Xưng Hô "Tôi" (`brain/verify/repair.py`)**:
+  - Thay thế toàn bộ các mẫu xưng "Tôi/tôi" thành "Tớ/tớ" để giữ trọn vẹn danh tính đồng hành thân thiết giữa Hoàn Thiện và Aura.
+  - Bổ sung `"Tớ", "tớ"` vào kiểm tra bảo toàn đại từ trong `_lower_first` và `_unassert`.
+  - Cập nhật test assertion trong `tests/test_response_verifier.py` (68/68 passed).
+- **Khắc Phục Heartbeat Kênh WebSocket Companion (`server/routes/ws_chat.py`)**:
+  - Đăng ký heartbeat cho thiết bị vào `DeviceGateway` ngay khi WebSocket kết nối hoặc nhận tin nhắn từ Android companion client.
+  - Thêm xử lý cho các frame `ping`, `heartbeat`, và `chatgpt_egress_progress`; mở rộng timeout chờ egress từ 45s lên 90s; dọn sạch buffer khi egress gặp sự cố.
+- **Bảo Toàn Hợp Đồng Sổ Cái Invocation Ledger (`brain/conversation.py`, `tests/test_phase1_1_forensic_proof.py`)**:
+  - Khôi phục `call_id = getattr(call, "call_id", None) or f"call_chat_{msg_id}_{call.name}"` và `inv_id = f"invo_chat_{msg_id}_{call.name}"` trong `ConversationManager._execute_tool_call` bảo đảm tính nhất quán của ledger trong các bài test replay/crash recovery.
+  - Sửa lỗi `StreamChunkEvent(text=reply)` trong lệnh `/compact`.
+  - Bổ sung khởi tạo bảng SQLite tường minh (`init_agent_run_tables()`, `init_sync_tables()`) trong các bài test restart/lifecycle forensic.
+  - Loại bỏ lệnh tự duyệt vĩnh viễn gây nhiễm bẩn SQLite trong `tools/executor.py`.
+- **Đồng Bộ Hóa Fixtures & Hợp Đồng Cài Đặt Android (`SettingsContractTest.kt`, fixtures)**:
+  - Đồng bộ fixtures Android bằng `AURA_WRITE_ANDROID_FIXTURES=1`.
+  - Cập nhật assertions trong `SettingsContractTest.kt` phản ánh 61 key cấu hình và provider hoạt động `chatgpt_web`.
+- **Kiểm Thử Toàn Diện & Triển Khai Thiết Bị Thực Tế**:
+  - Python tests: 194/194 passed (100%).
+  - Android JVM tests: 493/493 passed (100% BUILD SUCCESSFUL).
+  - Đóng gói APK debug và nạp thành công lên OPPO Reno6 5G (`CPH2251`) qua Wi-Fi ADB (`Success`).
+
 ## Native DOM ProseMirror Interaction for Android WebView Bridge & SettingsStore v6 DELIVERED (2026-10-03)
 
 Following the user request to resolve OpenAI Sentinel Turnstile HTTP 403 "Unusual activity has been detected from your device" and restore GPT-5.6 Luna 🌙 responses without dropping into Gemini 429 fallback:

@@ -132,6 +132,46 @@ async def chat_stream(
             })
             return
 
+        # Handle keepalive/ping frames from client
+        msg_type = request.get("type")
+        stream_context = dict(request.get("context") or {})
+        dev_id = request.get("device_id") or stream_context.get("device_id") or "android_companion"
+        client_meta = request.get("metadata") or {}
+        has_egress = bool(stream_context.get("has_chatgpt_egress"))
+        is_companion = (
+            has_egress
+            or bool(request.get("device_id"))
+            or stream_context.get("client") == "android"
+            or "companion" in str(client_meta.get("client", "")).lower()
+            or "android" in str(client_meta.get("client", "")).lower()
+        )
+
+        default_caps = {
+            "android.companion": {
+                "state": "AVAILABLE",
+                "healthy": True,
+                "reason": "Active WebSocket chat session",
+                "permissions": {"android.websocket": True},
+            },
+            "android.alarm": {"state": "AVAILABLE", "healthy": True, "reason": "Active", "permissions": {}},
+            "android.device_health": {"state": "AVAILABLE", "healthy": True, "reason": "Active", "permissions": {}},
+            "android.flashlight": {"state": "AVAILABLE", "healthy": True, "reason": "Active", "permissions": {}},
+            "android.clipboard": {"state": "AVAILABLE", "healthy": True, "reason": "Active", "permissions": {}},
+        }
+
+        if is_companion:
+            try:
+                from server.device_gateway import get_device_gateway
+                gw = get_device_gateway()
+                reported_caps = request.get("capabilities") or stream_context.get("capabilities") or default_caps
+                gw.heartbeat(dev_id, reported_caps)
+            except Exception as hb_err:
+                logger.debug("Failed to record ws companion heartbeat: %s", hb_err)
+
+        if msg_type in ("ping", "heartbeat"):
+            await websocket.send_json({"type": "pong", "time": time.time()})
+            return
+
         message = (request.get("message") or "").strip()
 
         if not message:
@@ -314,10 +354,25 @@ async def chat_stream(
                     })
                     egress_chunks = []
                     while True:
-                        raw_client = await asyncio.wait_for(websocket.receive_text(), timeout=45.0)
+                        raw_client = await asyncio.wait_for(websocket.receive_text(), timeout=90.0)
                         client_msg = json.loads(raw_client)
                         ftype = client_msg.get("type")
-                        if ftype == "chatgpt_egress_chunk":
+                        if ftype in ("ping", "heartbeat", "chatgpt_egress_progress"):
+                            try:
+                                from server.device_gateway import get_device_gateway
+                                get_device_gateway().heartbeat(dev_id, default_caps)
+                            except Exception:
+                                pass
+                            continue
+                        elif ftype == "interrupt":
+                            interrupted_signal[0] = True
+                            await websocket.send_json({
+                                "type": "interrupted",
+                                "session_id": session_id,
+                                "message_id": message_id,
+                            })
+                            return
+                        elif ftype == "chatgpt_egress_chunk":
                             chunk = client_msg.get("chunk", "")
                             if chunk:
                                 egress_chunks.append(chunk)
@@ -365,6 +420,9 @@ async def chat_stream(
                             raise RuntimeError(f"Phone egress error: {client_msg.get('error')}")
                 except Exception as egress_err:
                     logger.warning("Phone egress relay failed (%s); falling back to server LLM chain", egress_err)
+                    delivered_fragments.clear()
+                    produced_fragments.clear()
+                    chunk_index = 0
 
             fragments = runtime.chat_stream(
                 message,

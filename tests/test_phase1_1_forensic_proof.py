@@ -51,7 +51,14 @@ from memory.backup import (
     verify_database_integrity,
 )
 from memory.models import SyncInboxRecord, SyncOutboxRecord, ToolInvocationRecord
-from memory.sqlite import SessionLocal, db_lock, init_database, init_tool_invocation_tables
+from memory.sqlite import (
+    SessionLocal,
+    db_lock,
+    init_agent_run_tables,
+    init_database,
+    init_sync_tables,
+    init_tool_invocation_tables,
+)
 from server.config import settings
 from server.main import app
 from server.runtime import (
@@ -509,6 +516,7 @@ def test_agentrun_true_continuity_after_restart():
     from memory.models import AgentRunRecord
 
     init_database()
+    init_agent_run_tables()
     run_id = f"run_continuity_{uuid.uuid4().hex[:8]}"
 
     # Persist a run in 'running' state with an unresolved tool call in messages
@@ -655,6 +663,7 @@ def test_pruning_worker_real_lifecycle():
     Prunes acknowledged outbox records while strictly protecting pending records.
     """
     init_database()
+    init_sync_tables()
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
     with db_lock:
         with SessionLocal() as session:

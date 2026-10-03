@@ -316,31 +316,25 @@ object ChatGPTWebClient {
     fun cleanLunaResponse(raw: String): String {
         var text = raw.trim()
 
-        // 1. Strip meta-commentary like "Here's my response: \"...\""
-        val responseMarker = Regex(
-            """(?:Here's my response|Here is my response|My response is)[:\s]*\n*["“]?([^"”]+)["”]?""",
-            RegexOption.IGNORE_CASE
-        )
-        val match = responseMarker.find(text)
-        if (match != null && match.groupValues.size > 1) {
-            val extracted = match.groupValues[1].trim()
-            if (extracted.isNotBlank()) {
-                return extracted
-            }
-        }
+        // 1. Strip leading curiosity or thought keywords
+        text = text.replace(Regex("""^(?:curiosity|thought|thinking)\.?\s*""", RegexOption.IGNORE_CASE), "").trim()
 
-        // 2. Strip trailing reconsideration like "Actually, let me reconsider..."
-        val reconsiderIdx = text.indexOf("Actually, let me reconsider", ignoreCase = true)
+        // 2. Strip trailing reconsideration leak (e.g. "\n\nActually, let me reconsider...")
+        val reconsiderIdx = text.indexOf("\nActually, let me reconsider", ignoreCase = true)
+            .takeIf { it >= 0 } ?: text.indexOf("Actually, let me reconsider", ignoreCase = true)
         if (reconsiderIdx > 0) {
             text = text.substring(0, reconsiderIdx).trim()
         }
 
-        // 3. Strip leading curiosity or thought keywords
-        text = text.replace(Regex("""^(?:curiosity|thought|thinking)\.?\s*""", RegexOption.IGNORE_CASE), "")
+        // 3. Strip meta-commentary preamble like "Here's my response:"
+        val preamble = Regex("""^(?:Here's my response|Here is my response|My response is)[:\s]*\n*""", RegexOption.IGNORE_CASE)
+        text = text.replace(preamble, "").trim()
 
         // 4. If text is wrapped in outer quotes, unwrap
         if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("“") && text.endsWith("”"))) {
-            text = text.substring(1, text.length - 1).trim()
+            if (text.length >= 2) {
+                text = text.substring(1, text.length - 1).trim()
+            }
         }
 
         return text

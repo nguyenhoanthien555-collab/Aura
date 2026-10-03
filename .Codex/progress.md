@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-10-03 — Comprehensive Codebase Audit, Stream Truncation, Persona Integrity, Heartbeat Sync & Ledger Continuity DELIVERED
+
+- **Pillar 1: Stream Truncation & DOM Stillness Elimination (`ChatGPTWebViewBridge.kt`, `ChatGPTWebClient.kt`)**:
+  - Increased stillness idle ticks from 8 (640ms) to 30 (~2.4s) and added `sendBtnBack` reappearance checks to prevent premature `sendDone()` cuts when GPT-5.6 Luna pauses mid-sentence.
+  - Replaced invalid CSS pseudo-selector `:has-text(...)` with standard JavaScript DOM button iteration.
+  - Rewrote `cleanLunaResponse` step-by-step: stripped preamble and unwrapped outer quotes without truncating on internal quotation marks (`"` or `”`), backed by unit tests in `ChatGPTWebClientTest.kt`.
+- **Pillar 2: Stream Fallback Duplication Prevention (`AuraStreamClient.kt`, `brain/providers/fallback.py`)**:
+  - Added periodic `chatgpt_egress_progress` keepalive frames every 12s to prevent server-side egress timeouts.
+  - Guarded fallback to only trigger when `chunkIndex == 0` (preventing partial re-stream duplicates).
+  - Hardened `FallbackProvider.stream`: re-raises exception if `chunks_yielded > 0` during retry, eliminating stream corruption from chaining two different LLM outputs.
+- **Pillar 3: Device Service Poller Supervision (`AuraAccessibilityService.kt`)**:
+  - Moved `DeviceInvocationPoller` to `Dispatchers.IO` with auto-restart supervisor loop (`while (isActive)` + 3s backoff).
+- **Pillar 4: Persona Break "Tôi" -> "Tớ" Elimination (`brain/verify/repair.py`)**:
+  - Replaced all formal "Tôi/tôi" occurrences with friendly "Tớ/tớ" to uphold Aura's core companion persona.
+  - Added `"Tớ", "tớ"` to pronoun preservation checks in `_lower_first` and `_unassert`.
+  - Updated test assertion in `tests/test_response_verifier.py` (68/68 tests passing).
+- **Pillar 5: Device Gateway Heartbeat Gap Resolution (`server/routes/ws_chat.py`)**:
+  - Registered companion heartbeat in `DeviceGateway` whenever WebSocket connects or receives a message from an Android companion client.
+  - Added handlers for `ping`, `heartbeat`, and `chatgpt_egress_progress` frames; extended egress wait timeout from 45s to 90s; handled `interrupt` cleanly; cleared buffers on egress failure.
+- **Pillar 6: Tool Invocation Ledger Parity & Continuity (`brain/conversation.py`, `tests/test_phase1_1_forensic_proof.py`)**:
+  - Restored canonical `call_id = getattr(call, "call_id", None) or f"call_chat_{msg_id}_{call.name}"` and `inv_id = f"invo_chat_{msg_id}_{call.name}"` in `ConversationManager._execute_tool_call` to preserve ledger contracts across restart/replay tests.
+  - Fixed `StreamChunkEvent(text=reply)` in `/compact`.
+  - Added explicit SQLite table initialization (`init_agent_run_tables()`, `init_sync_tables()`) in forensic restart/lifecycle tests.
+  - Removed persistent SQLite auto-approve pollution in `tools/executor.py`.
+- **Pillar 7: Settings Contract & Live Fixture Synchronization (`SettingsContractTest.kt`, fixtures)**:
+  - Synchronized Android live fixtures via `AURA_WRITE_ANDROID_FIXTURES=1`.
+  - Updated `SettingsContractTest.kt` assertions to reflect `chatgpt_web` as the configured active provider and 61 configurable settings keys.
+- **Pillar 8: Comprehensive Verification & Hardware Deployment**:
+  - Python tests: 194/194 passed across forensic proof, tool calling, verifier, and settings suites (100%).
+  - Android JVM tests: 493/493 passed across 22 tasks (100% BUILD SUCCESSFUL).
+  - Debug APK built and installed via Wi-Fi ADB to OPPO Reno6 5G (`CPH2251`): `Success`.
+
 ## 2026-10-03 — Native DOM ProseMirror Interaction for Android WebView Bridge & SettingsStore v6 DELIVERED
 
 - **Pillar 1: Root Cause Diagnosis (OpenAI Sentinel Turnstile & PoW Token Requirement)**:

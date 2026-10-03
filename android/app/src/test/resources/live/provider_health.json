@@ -1,8 +1,10 @@
 {
-  "active": "gemini",
+  "active": "chatgpt_web",
   "chain": [
+    "chatgpt_web",
     "gemini"
   ],
+  "cooldowns": {},
   "in_fallback": false,
   "problems": [],
   "providers": {
@@ -25,10 +27,32 @@
       "state": "unconfigured"
     },
     "chatgpt_web": {
-      "configured": false,
-      "healthy": false,
-      "in_chain": false,
-      "state": "unconfigured"
+      "configured": true,
+      "diagnostics": {
+        "access_token_cached": false,
+        "access_token_expires_in_s": 0,
+        "auth_mode": "cookie->bearer",
+        "base_url": "https://chatgpt.com",
+        "bridge_active": false,
+        "bridge_url": "http://127.0.0.1:8765",
+        "enabled": true,
+        "endpoints": {
+          "conversation": "/backend-api/conversation",
+          "requirements": "/backend-api/sentinel/chat-requirements",
+          "session": "/api/auth/session"
+        },
+        "last_auth_reason": null,
+        "last_error_at": null,
+        "last_http_status": null,
+        "provider": "chatgpt_web",
+        "token_fingerprint": "sha256:a6151ba24b43",
+        "token_length": 4008,
+        "token_present": true,
+        "token_source": "env"
+      },
+      "healthy": true,
+      "in_chain": true,
+      "state": "active"
     },
     "custom": {
       "configured": false,
@@ -44,9 +68,9 @@
     },
     "gemini": {
       "configured": true,
-      "healthy": true,
+      "healthy": false,
       "in_chain": true,
-      "state": "active"
+      "state": "standby"
     },
     "groq": {
       "configured": false,
@@ -92,5 +116,5 @@
     }
   },
   "ready": true,
-  "requested": "gemini"
+  "requested": "chatgpt_web"
 }

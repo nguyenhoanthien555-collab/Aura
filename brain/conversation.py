@@ -365,9 +365,9 @@ class ConversationManager:
                             self.memory.save(msg.role, msg.content)
                 reply = "✓ Đã hoàn tất nén ngữ cảnh (Context Compaction)! Aura đã đúc kết các lượt trò chuyện trước đó thành bản tóm lược súc tích và giải phóng token cho các lượt trò chuyện tiếp theo."
             else:
-                reply = "Ngữ cảnh hội thoại hiện tại còn rất ngắn (chưa vượt quá ngưỡng nén), Aura đang lưu giữ trọn vẹn từng câu nói của anh."
+                reply = "Ngữ cảnh hội thoại hiện tại còn rất ngắn (chưa vượt quá ngưỡng nén), Aura đang lưu giữ trọn vẹn từng câu nói của cậu nè."
             self._emit(StreamStartedEvent())
-            self._emit(StreamChunkEvent(fragment=reply))
+            self._emit(StreamChunkEvent(text=reply))
             self._emit(StreamFinishedEvent(text=reply))
             self._emit(ResponseEvent(text=reply, streamed=True))
             yield reply

@@ -244,7 +244,10 @@ object ChatGPTWebViewBridge {
 
                             // Dismiss any modal dialogs
                             try {
-                                document.querySelectorAll("button[aria-label='Close'], button:has-text('Stay logged out')").forEach(b => b.click());
+                                document.querySelectorAll("button[aria-label='Close']").forEach(b => b.click());
+                                Array.from(document.querySelectorAll('button')).forEach(b => {
+                                    if ((b.innerText || '').includes('Stay logged out')) b.click();
+                                });
                             } catch (e) {}
 
                             const priorArticles = document.querySelectorAll('article, [data-message-author-role="assistant"]');
@@ -274,6 +277,7 @@ object ChatGPTWebViewBridge {
                                     const currentArticles = document.querySelectorAll('article, [data-message-author-role="assistant"]');
                                     const target = currentArticles.length > targetIdx ? currentArticles[targetIdx] : null;
                                     const stopBtn = document.querySelector('button[data-testid="stop-button"]');
+                                    const sendBtnBack = document.querySelector('button[data-testid="send-button"], button[aria-label*="Send"], button[data-testid*="send"]');
 
                                     if (!target) {
                                         waitAssistantTicks++;
@@ -295,7 +299,9 @@ object ChatGPTWebViewBridge {
                                         idleTicks++;
                                     }
 
-                                    const isDoneGenerating = !stopBtn && lastLen > 0 && idleTicks >= 8;
+                                    // Completion: No stop button, some text generated, and idle for >= 30 ticks (~2.4s)
+                                    // or send button returned and idle for >= 15 ticks (~1.2s)
+                                    const isDoneGenerating = !stopBtn && lastLen > 0 && (idleTicks >= 30 || (sendBtnBack && idleTicks >= 15));
                                     if (isDoneGenerating || idleTicks > 450) {
                                         clearInterval(intervalId);
                                         window.AuraBridge.sendDone(fullText);

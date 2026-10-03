@@ -3,6 +3,8 @@ package com.aura.companion.data.remote
 import com.aura.companion.data.AuraError
 import com.aura.companion.data.settings.SettingsProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -125,23 +127,21 @@ class AuraStreamClient(
                             launch(Dispatchers.IO) {
                                 android.util.Log.i("AuraStreamClient", "Received chatgpt_egress_request (prompt len=${prompt.length}, model=$model)")
                                 var chunkIndex = 0
-                                // Prioritize WebView Bridge (solves Cloudflare Turnstile & OpenAI Sentinel naturally)
-                                val webViewRes = ChatGPTWebViewBridge.streamConversation(prompt, sessionToken, model) { chunk ->
-                                    trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
-                                    val frame = JsonObject(mapOf(
-                                        "type" to JsonPrimitive("chatgpt_egress_chunk"),
-                                        "chunk" to JsonPrimitive(chunk)
-                                    ))
-                                    webSocket.send(frame.toString())
+
+                                // Periodic progress keepalive to prevent server timeout during long generations
+                                val progressJob = launch {
+                                    while (isActive) {
+                                        delay(12000L)
+                                        val progressFrame = JsonObject(mapOf(
+                                            "type" to JsonPrimitive("chatgpt_egress_progress")
+                                        ))
+                                        webSocket.send(progressFrame.toString())
+                                    }
                                 }
 
-                                android.util.Log.i("AuraStreamClient", "ChatGPTWebViewBridge result: success=${webViewRes.isSuccess}")
-                                val finalRes = if (webViewRes.isSuccess) {
-                                    webViewRes
-                                } else {
-                                    android.util.Log.w("AuraStreamClient", "WebView bridge failed, falling back to direct OkHttp client", webViewRes.exceptionOrNull())
-                                    // Fallback to direct OkHttp client if WebView bridge failed to initialize
-                                    ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
+                                val finalRes = try {
+                                    // Prioritize WebView Bridge (solves Cloudflare Turnstile & OpenAI Sentinel naturally)
+                                    val webViewRes = ChatGPTWebViewBridge.streamConversation(prompt, sessionToken, model) { chunk ->
                                         trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
                                         val frame = JsonObject(mapOf(
                                             "type" to JsonPrimitive("chatgpt_egress_chunk"),
@@ -149,6 +149,26 @@ class AuraStreamClient(
                                         ))
                                         webSocket.send(frame.toString())
                                     }
+
+                                    android.util.Log.i("AuraStreamClient", "ChatGPTWebViewBridge result: success=${webViewRes.isSuccess}")
+                                    if (webViewRes.isSuccess) {
+                                        webViewRes
+                                    } else if (chunkIndex == 0) {
+                                        android.util.Log.w("AuraStreamClient", "WebView bridge failed with 0 chunks, falling back to direct OkHttp client", webViewRes.exceptionOrNull())
+                                        // Fallback to direct OkHttp client only if 0 chunks were emitted
+                                        ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
+                                            trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
+                                            val frame = JsonObject(mapOf(
+                                                "type" to JsonPrimitive("chatgpt_egress_chunk"),
+                                                "chunk" to JsonPrimitive(chunk)
+                                            ))
+                                            webSocket.send(frame.toString())
+                                        }
+                                    } else {
+                                        webViewRes
+                                    }
+                                } finally {
+                                    progressJob.cancel()
                                 }
 
                                 finalRes.onSuccess { fullText ->
