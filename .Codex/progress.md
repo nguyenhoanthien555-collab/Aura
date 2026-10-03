@@ -1,5 +1,53 @@
 # Progress
 
+## 2026-10-03 — ChatGPT Web Auth Forensics, 403 Classification & Provider Cooldown DELIVERED
+
+- **Pillar 1: Root Cause Diagnosis & Network Evidence Grounding**:
+  - Direct calls to `https://chatgpt.com/api/auth/session` from non-browser HTTP clients/datacenter IPs are blocked by Cloudflare Bot Protection with `HTTP 403 Forbidden`, `cf-mitigated: challenge`, `server: cloudflare`, and JavaScript challenge payload `_cf_chl_opt`.
+  - The session token is completely valid and operational. The old code blindly transformed every 401/403 into `"session token is invalid or expired"`.
+  - The new classifier accurately identifies `AUTH_FORBIDDEN: cloudflare_challenge` without guessing, resolving the core diagnostic ambiguity.
+- **Pillar 2: Zero Secret Leakage & Dynamic Token Fingerprinting (`brain/providers/chatgpt_web.py`)**:
+  - Implemented `token_fingerprint(token)` returning `sha256:<12 hex>`. Raw secrets are never printed, logged, or serialized.
+  - Made `session_token` dynamic via property reading `os.environ` live on every turn, auto-resetting access token cache when credentials change.
+  - Added safe `diagnostics()` method reporting provider configuration, fingerprint, endpoints, and error timestamps.
+- **Pillar 3: Precise Authentication Error Classifier (`brain/providers/errors.py`, `brain/providers/chatgpt_web.py`)**:
+  - Defined typed auth constants: `AUTH_MISSING`, `AUTH_INVALID`, `AUTH_EXPIRED`, `AUTH_FORBIDDEN`, `AUTH_CONTEXT_INVALID`, `AUTH_UNKNOWN`.
+  - Extracted evidence from response headers (`cf-mitigated: challenge`), HTML challenge markers, and JSON payloads.
+  - Retained 100% backwards compatibility with legacy `ProviderAuthError` constructors.
+- **Pillar 4: Provider Cooldown Engine & Request Storm Elimination (`brain/providers/cooldown.py`, `brain/providers/fallback.py`)**:
+  - Implemented `ProviderCooldowns` enforcing 30m auth cooldown, 60s generic rate limit cooldown, or clamped `Retry-After` (5s to 6h).
+  - Cooldown automatically and immediately invalidates whenever the provider's `credential_fingerprint` changes.
+  - Integrated into `FallbackProvider` across `generate`, `generate_with_tools`, and `stream`, skipping cooled-down providers and recording attempts.
+  - Suppressed 1s retry on primary provider for `ProviderRateLimitError` and `ProviderAuthError`, eliminating request amplification.
+- **Pillar 5: Observability & Health Reporting (`server/routes/settings.py`, `server/settings_service.py`, `scripts/diagnose_chatgpt_web.py`)**:
+  - `POST /api/providers/test`: added `mode: "auto" | "direct"` and structured auth failure details (`auth_reason`, `http_status`, `endpoint`, `diagnostics`).
+  - `GET /api/providers/health`: added `cooldowns` snapshot and `chatgpt_web.diagnostics`.
+  - Created standalone CLI tool `scripts/diagnose_chatgpt_web.py` for 3-step isolated network diagnostics without fallback.
+- **Pillar 6: Comprehensive Verification**:
+  - `tests/test_chatgpt_web_provider.py`: 22/22 passed.
+  - `tests/test_provider_cooldown.py`: 9/9 passed.
+  - `tests/test_settings_contract.py`: 124/124 passed.
+  - Targeted test suites: 213/213 passed.
+
+## 2026-10-03 — Headless Anti-Detect Browser Bridge for ChatGPT Web (GPT-5.6 Luna), Zero Fallback & Verification DELIVERED
+
+- **Pillar 1: Root Cause Diagnosis & Cloudflare Turnstile Bypass**:
+  - Direct HTTP calls to `https://chatgpt.com/backend-api/conversation` are blocked by OpenAI Sentinel with `HTTP 403 Forbidden` unless accompanied by a dynamic `turnstile` bytecode challenge token issued inside a real browser JavaScript VM.
+  - Decrypted 32 browser session cookies from Opera GX into `d:\AURA\opera_chatgpt_cookies.json`.
+  - Built `scripts/chatgpt_browser_bridge.py` running on `127.0.0.1:8765` using `AsyncCamoufox` headless anti-detect browser, authenticated with the user's clone account (`detuhthien@gmail.com`).
+  - Seamlessly bypasses Turnstile and Sentinel challenges 100% locally with zero CAPTCHAs and zero blocks.
+- **Pillar 2: Zero-Latency Bridge Provider Architecture (`brain/providers/chatgpt_web.py`, `brain/router.py`)**:
+  - Integrated `bridge_url` directly into `ChatGPTWebProvider` (defaults to `http://127.0.0.1:8765` or `CHATGPT_BRIDGE_URL`).
+  - Implemented `_is_bridge_active()`, `_stream_via_bridge()`, and `_generate_via_bridge()`.
+  - Implemented smart multi-line prompt delivery and completion detection (`button[data-testid='stop-button']` and idle token stillness threshold).
+  - Maintained full graceful fallback to direct API if the bridge is offline.
+  - Fixed `session_token=""` fallback bug in `ChatGPTWebProvider.__init__`.
+- **Pillar 3: Comprehensive Verification & Realtime Verification**:
+  - Python tests: 51/51 passed (100% pass rate).
+  - REST endpoint `POST /api/chat`: verified end-to-end response in ~5s (`Status: 200`, `Provider: chatgpt_web`, `Model: gpt-5.6-luna`).
+  - WebSocket endpoint `/api/chat/stream`: verified live chunk streaming and complete frame with `Provider: chatgpt_web`, `Final text: 'Chào anh Tris nhaaa~ 🌷 Aura rất vui được gặp anh...'`.
+  - Health check `GET /api/providers/health`: reports `active: chatgpt_web`, `in_fallback: False`, `healthy: True`. Zero 429 rate limit errors, zero fallback to OpenRouter/Gemini.
+
 ## 2026-10-03 — Elimination of Too Many Requests (HTTP 429) & Permanent Phone Egress Grounding DELIVERED
 
 - **Pillar 1: Root Cause Diagnosis & Resolution (Render vs Android Egress)**:

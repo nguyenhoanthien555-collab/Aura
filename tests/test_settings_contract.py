@@ -1438,6 +1438,40 @@ class TestProviderTestRoute:
         assert response.json()["error"] == "invalid api key"
         assert "sk-not-a-real-key" not in response.text
 
+    def test_chatgpt_web_auth_failure_returns_typed_reason_and_contract_error(self, api, monkeypatch):
+        from brain.providers.errors import ProviderAuthError, AUTH_FORBIDDEN
+        from brain.providers.chatgpt_web import ChatGPTWebProvider
+
+        monkeypatch.setenv("CHATGPT_SESSION_TOKEN", "dummy-session-token")
+        monkeypatch.setattr(
+            ChatGPTWebProvider, "generate",
+            lambda self, prompt: (_ for _ in ()).throw(
+                ProviderAuthError(
+                    "Cloudflare 403",
+                    reason=AUTH_FORBIDDEN,
+                    http_status=403,
+                    detail="cloudflare_challenge",
+                    endpoint="/api/auth/session",
+                )
+            ),
+        )
+
+        response = api.post(
+            "/api/providers/test",
+            headers=AUTH,
+            json={"provider": "chatgpt_web", "mode": "direct"},
+        )
+
+        data = response.json()
+        assert data["ok"] is False
+        assert data["error"] == "invalid api key"
+        assert data["auth_reason"] == AUTH_FORBIDDEN
+        assert data["http_status"] == 403
+        assert data["detail"] == "cloudflare_challenge"
+        assert "diagnostics" in data
+        assert data["diagnostics"]["provider"] == "chatgpt_web"
+        assert "dummy-session-token" not in response.text
+
     def test_an_exhausted_account_is_not_reported_as_unreachable(self, api, monkeypatch):
         from brain.providers.errors import ProviderRateLimitError
         from brain.providers.openai import OpenAIProvider

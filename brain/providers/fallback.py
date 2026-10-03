@@ -1,7 +1,13 @@
 """Small failover wrapper for cloud LLM providers."""
 
+from typing import Any, Optional
 from core.logger import logger
-from brain.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+from brain.providers.cooldown import ProviderCooldowns
+from brain.providers.errors import (
+    ProviderAuthError,
+    ProviderRateLimitError,
+    ProviderUnavailableError,
+)
 
 
 # The one category that stops failover rather than continuing it, named
@@ -22,6 +28,10 @@ def _category_of(error: Exception) -> str:
     the category says plainly that it is unclassified.
     """
 
+    if isinstance(error, ProviderAuthError):
+        reason = getattr(error, "reason", "AUTH_UNKNOWN") or "AUTH_UNKNOWN"
+        return f"auth failure ({reason})"
+
     if isinstance(error, ProviderRateLimitError):
 
         if getattr(error, "is_account_limit", False):
@@ -35,6 +45,15 @@ def _category_of(error: Exception) -> str:
     return "unclassified provider error"
 
 
+def _fingerprint_of(provider: Any) -> str:
+    if hasattr(provider, "credential_fingerprint") and callable(provider.credential_fingerprint):
+        try:
+            return provider.credential_fingerprint() or ""
+        except Exception:
+            return ""
+    return ""
+
+
 class FallbackProvider:
     """Try a configured cloud provider once, then the next one.
 
@@ -42,10 +61,16 @@ class FallbackProvider:
     repaired by waiting, and each retry burns another request.
     """
 
-    def __init__(self, providers: list, provider_name: str):
+    def __init__(
+        self,
+        providers: list,
+        provider_name: str,
+        cooldowns: Optional[ProviderCooldowns] = None,
+    ):
         self.providers = providers
         self.provider_name = provider_name
         self.active_provider_name = provider_name.split("->", 1)[0]
+        self.cooldowns = cooldowns if cooldowns is not None else ProviderCooldowns()
 
         # One record per request attempt, in order: (provider, outcome,
         # error_type). The provider trace the diagnostics file wants -
@@ -66,21 +91,38 @@ class FallbackProvider:
         last_error = None
         for index, provider in enumerate(self.providers):
             p_name = getattr(provider, "provider_name", type(provider).__name__)
+            fp = _fingerprint_of(provider)
+
+            entry = self.cooldowns.check(p_name, fp)
+            if entry is not None:
+                rem = max(0, int(entry.until - self.cooldowns.clock()))
+                logger.info("Provider skipped (cooldown): %s reason=%s remaining=%ds", p_name, entry.reason, rem)
+                self.attempts.append((p_name, "cooldown", entry.reason))
+                last_error = entry.error
+                continue
+
             logger.info("Provider selected: %s", p_name)
             try:
                 reply = provider.generate(prompt)
+                self.cooldowns.clear(p_name)
                 if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                     self.active_provider_name = p_name
                 self.attempts.append((p_name, "ok", ""))
                 return reply
             except Exception as error:
-                # If primary provider had a transient error, retry once after 1s before failing over
-                if index == 0 and isinstance(error, ProviderUnavailableError):
+                # If primary provider had a transient error, retry once after 1s before failing over.
+                # Rate limits and auth errors are NOT transient and must NOT be retried.
+                if (
+                    index == 0
+                    and isinstance(error, ProviderUnavailableError)
+                    and not isinstance(error, (ProviderRateLimitError, ProviderAuthError))
+                ):
                     logger.info("Primary provider %s encountered transient error; retrying once after 1s...", p_name)
                     import time
                     time.sleep(1.0)
                     try:
                         reply = provider.generate(prompt)
+                        self.cooldowns.clear(p_name)
                         if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                             self.active_provider_name = p_name
                         self.attempts.append((p_name, "ok", ""))
@@ -89,6 +131,7 @@ class FallbackProvider:
                         error = retry_err
 
                 last_error = error
+                self.cooldowns.record(p_name, error, fp)
 
                 category = _category_of(error)
                 self.attempts.append((p_name, category, type(error).__name__))
@@ -123,14 +166,26 @@ class FallbackProvider:
             if not hasattr(provider, "generate_with_tools"):
                 continue
             p_name = getattr(provider, "provider_name", type(provider).__name__)
+            fp = _fingerprint_of(provider)
+
+            entry = self.cooldowns.check(p_name, fp)
+            if entry is not None:
+                rem = max(0, int(entry.until - self.cooldowns.clock()))
+                logger.info("Provider skipped (cooldown): %s reason=%s remaining=%ds", p_name, entry.reason, rem)
+                self.attempts.append((p_name, "cooldown", entry.reason))
+                last_error = entry.error
+                continue
+
             try:
                 turn = provider.generate_with_tools(system, messages, tools)
+                self.cooldowns.clear(p_name)
                 if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                     self.active_provider_name = p_name
                 self.attempts.append((p_name, "ok", ""))
                 return turn
             except Exception as error:
                 last_error = error
+                self.cooldowns.record(p_name, error, fp)
                 category = _category_of(error)
                 self.attempts.append((p_name, category, type(error).__name__))
                 logger.warning(
@@ -151,6 +206,16 @@ class FallbackProvider:
         last_error = None
         for index, provider in enumerate(self.providers):
             p_name = getattr(provider, "provider_name", type(provider).__name__)
+            fp = _fingerprint_of(provider)
+
+            entry = self.cooldowns.check(p_name, fp)
+            if entry is not None:
+                rem = max(0, int(entry.until - self.cooldowns.clock()))
+                logger.info("Provider skipped (cooldown): %s reason=%s remaining=%ds", p_name, entry.reason, rem)
+                self.attempts.append((p_name, "cooldown", entry.reason))
+                last_error = entry.error
+                continue
+
             logger.info("Provider selected for stream: %s", p_name)
 
             # 1. Try real stream if provider supports it
@@ -170,12 +235,18 @@ class FallbackProvider:
                             chunks_yielded += 1
                             yield chunk
 
+                    self.cooldowns.clear(p_name)
                     if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                         self.active_provider_name = p_name
                     self.attempts.append((p_name, "ok", ""))
                     return
                 except Exception as error:
                     last_error = error
+                    # If we already yielded chunks to the client, we cannot rewind the stream
+                    if chunks_yielded > 0:
+                        raise
+
+                    self.cooldowns.record(p_name, error, fp)
                     category = _category_of(error)
                     self.attempts.append((p_name, category, type(error).__name__))
                     logger.warning(
@@ -185,11 +256,14 @@ class FallbackProvider:
                         type(error).__name__,
                         str(error),
                     )
-                    # If we already yielded chunks to the client, we cannot rewind the stream
-                    if chunks_yielded > 0:
-                        raise
-                    # If primary provider transient blip before any chunks, quick retry once
-                    if index == 0 and isinstance(error, ProviderUnavailableError):
+
+                    # If primary provider transient blip before any chunks, quick retry once.
+                    # Rate limits and auth errors are NOT transient and must NOT be retried.
+                    if (
+                        index == 0
+                        and isinstance(error, ProviderUnavailableError)
+                        and not isinstance(error, (ProviderRateLimitError, ProviderAuthError))
+                    ):
                         logger.info("Primary stream provider %s encountered transient error; retrying once after 1s...", p_name)
                         import time
                         time.sleep(1.0)
@@ -200,12 +274,15 @@ class FallbackProvider:
                                     chunks_yielded += 1
                                     yield chunk
                             if chunks_yielded > 0:
+                                self.cooldowns.clear(p_name)
                                 if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                                     self.active_provider_name = p_name
                                 self.attempts.append((p_name, "ok", ""))
                                 return
                         except Exception as retry_err:
                             error = retry_err
+                            self.cooldowns.record(p_name, error, fp)
+
                     if category == ACCOUNT_LIMIT:
                         break
                     continue
@@ -221,6 +298,7 @@ class FallbackProvider:
                     else:
                         reply = provider.generate(prompt)
 
+                    self.cooldowns.clear(p_name)
                     if not (self.provider_name.startswith("chatgpt_web") and p_name != "chatgpt_web"):
                         self.active_provider_name = p_name
                     self.attempts.append((p_name, "ok", ""))
@@ -229,6 +307,7 @@ class FallbackProvider:
                     return
                 except Exception as error:
                     last_error = error
+                    self.cooldowns.record(p_name, error, fp)
                     category = _category_of(error)
                     self.attempts.append((p_name, category, type(error).__name__))
                     logger.warning(

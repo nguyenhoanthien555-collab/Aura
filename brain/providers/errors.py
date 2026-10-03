@@ -5,6 +5,14 @@ class ProviderUnavailableError(RuntimeError):
     """A transient cloud-provider failure (network, 5xx, or overload)."""
 
 
+AUTH_MISSING = "AUTH_MISSING"
+AUTH_INVALID = "AUTH_INVALID"
+AUTH_EXPIRED = "AUTH_EXPIRED"
+AUTH_FORBIDDEN = "AUTH_FORBIDDEN"
+AUTH_CONTEXT_INVALID = "AUTH_CONTEXT_INVALID"
+AUTH_UNKNOWN = "AUTH_UNKNOWN"
+
+
 class ProviderAuthError(ValueError):
     """
     A provider refused the credentials (401/403).
@@ -21,6 +29,21 @@ class ProviderAuthError(ValueError):
     `POST /api/providers/test`. Failover still continues past it: a bad
     key on the primary is exactly when the fallback earns its place.
     """
+
+    def __init__(
+        self,
+        message: str = "",
+        reason: str = AUTH_UNKNOWN,
+        http_status: int | None = None,
+        detail: str = "",
+        endpoint: str = "",
+    ):
+        super().__init__(message)
+        self.message = message
+        self.reason = reason
+        self.http_status = http_status
+        self.detail = detail
+        self.endpoint = endpoint
 
 
 class ProviderParameterError(RuntimeError):

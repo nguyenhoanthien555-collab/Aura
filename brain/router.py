@@ -473,11 +473,13 @@ class BrainRouter:
                 or os.getenv("CHATGPT_BASE_URL")
                 or "https://chatgpt.com"
             )
+            bridge_url = config.get("chatgpt_web_bridge_url") or os.getenv("CHATGPT_BRIDGE_URL")
             return ChatGPTWebProvider(
-                session_token=os.getenv("CHATGPT_SESSION_TOKEN"),
+                session_token=None,
                 model=config.get("chatgpt_web_model") or "auto",
                 timeout=float(config.get("timeout", 60.0)),
                 base_url=base_url,
+                bridge_url=bridge_url,
             )
 
         spec = HTTP_CHAT_PROVIDERS.get(name)

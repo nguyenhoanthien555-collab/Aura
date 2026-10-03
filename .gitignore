@@ -130,3 +130,12 @@ system.tmp
 tiny.dat
 data/screenshots/
 .flowseeker/
+
+# ChatGPT Web bridge / debug artifacts
+opera_chatgpt_cookies.json
+cookie_jar.txt
+sentinel.json
+chat_payload.json
+opera_test_profile/
+webview_profile/
+bridge_*.png

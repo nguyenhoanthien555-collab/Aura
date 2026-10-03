@@ -1,5 +1,24 @@
 # AURA project state
 
+## ChatGPT Web Auth Forensics, 403 Classification, Provider Cooldown & Zero-Leakage Telemetry (2026-10-03)
+1. **Root Cause Network Diagnosis Grounded in Evidence (`scripts/diagnose_chatgpt_web.py`, `brain/providers/chatgpt_web.py`)**:
+   - Captured raw responses from `/api/auth/session` proving `HTTP 403 Forbidden` is triggered by Cloudflare Bot Protection (`cf-mitigated: challenge`, `server: cloudflare`, HTML JavaScript challenge), NOT session token expiration.
+   - Refactored `_classify_auth_failure` to classify auth failures strictly based on concrete evidence (`AUTH_FORBIDDEN: cloudflare_challenge`, `AUTH_INVALID: http_401`, `AUTH_EXPIRED`, `AUTH_CONTEXT_INVALID: sentinel_missing`, `AUTH_UNKNOWN`), completely eliminating inaccurate guesses ("invalid or expired").
+2. **Zero Secret Leakage & Dynamic Fingerprinting (`brain/providers/chatgpt_web.py`)**:
+   - Implemented `token_fingerprint(token)` returning `sha256:<12 hex>`. Raw session token is never printed, logged, or serialized across telemetry or exceptions.
+   - `session_token` dynamically reads `os.environ` live on every access, auto-resetting access token cache when credentials change.
+   - Added `diagnostics()` method to `ChatGPTWebProvider` exposing safe configuration without credentials.
+3. **Provider Cooldown State Machine & Request Storm Prevention (`brain/providers/cooldown.py`, `brain/providers/fallback.py`)**:
+   - Built `ProviderCooldowns` enforcing 30m auth cooldown, 60s generic rate limit cooldown, or clamped `Retry-After` (5s to 6h).
+   - Invalidation on credential change: cooldown clears immediately when `credential_fingerprint` changes.
+   - Wired into `FallbackProvider` across `generate`, `generate_with_tools`, and `stream`, skipping cooled-down providers and recording attempts.
+   - Eliminated 1s primary retry for `ProviderRateLimitError` and `ProviderAuthError`, preventing request amplification.
+4. **Settings & Health Telemetry Integration (`server/routes/settings.py`, `server/settings_service.py`)**:
+   - `POST /api/providers/test`: supports `mode: "auto" | "direct"` and returns `auth_reason`, `http_status`, `endpoint`, and `diagnostics` while preserving `"error": "invalid api key"` contract.
+   - `GET /api/providers/health`: returns `cooldowns` snapshot and `chatgpt_web.diagnostics`.
+5. **Testing & Verification**:
+   - Python tests: 213/213 passed across targeted suites (`test_chatgpt_web_provider`, `test_provider_cooldown`, `test_settings_contract`, `test_fallback_stream`, `test_cloud_failover`, `test_provider_resolution`, `test_settings_api`, `test_security_hardening`).
+
 ## Cyber Cut-Corner HUD, Action Drawer & ChatGPT Web Phone Egress Status Preservation (2026-10-03)
 1. **Cyberpunk Cut-Corner HUD Architecture (`SettingsComponents.kt`, `HubScreen.kt`, `HubOverview.kt`)**:
    - Replaced generic rounded borders with precision `CutCornerShape` across `SettingsCard`, `HeroCard`, `CompactStatusChip`, `SurfaceCard`, `Badge`, and `NoticeCard`.

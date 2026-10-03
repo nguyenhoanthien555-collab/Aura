@@ -718,7 +718,7 @@ class SettingsService:
 # Live provider test
 # ----------------------------------------------------------------------
 
-def test_provider(provider: str, model: str | None = None) -> dict:
+def test_provider(provider: str, model: str | None = None, mode: str = "auto") -> dict:
     """
     Probe one provider with a real request and report honestly.
 
@@ -776,6 +776,9 @@ def test_provider(provider: str, model: str | None = None) -> dict:
             "error": BrainRouter._skip_reason(name),
         }
 
+    if mode == "direct" and hasattr(candidate, "bridge_url"):
+        candidate.bridge_url = ""
+
     if model:
         try:
             candidate.model = model
@@ -796,24 +799,39 @@ def test_provider(provider: str, model: str | None = None) -> dict:
         # reachable; the word is a hint, not a contract.
         ok = bool(str(reply or "").strip())
 
-        return {
+        res = {
             "provider": name,
             "ok": ok,
             "model": getattr(candidate, "model", ""),
             "latency_ms": int(elapsed * 1000),
         }
+        if hasattr(candidate, "diagnostics") and callable(candidate.diagnostics):
+            try:
+                res["diagnostics"] = candidate.diagnostics()
+            except Exception:
+                pass
+        return res
 
-    except ProviderAuthError:
+    except ProviderAuthError as error:
         # Distinguished from "unreachable" because the fix is completely
         # different and the phone shows this string. Still no detail from
         # the provider's body - only the category.
-        return {
+        res = {
             "provider": name,
             "ok": False,
             "error": "invalid api key",
-            "detail": "ProviderAuthError",
+            "detail": getattr(error, "detail", "") or "ProviderAuthError",
+            "auth_reason": getattr(error, "reason", "AUTH_UNKNOWN"),
+            "http_status": getattr(error, "http_status", None),
+            "endpoint": getattr(error, "endpoint", ""),
             "latency_ms": int((time.time() - start) * 1000),
         }
+        if hasattr(candidate, "diagnostics") and callable(candidate.diagnostics):
+            try:
+                res["diagnostics"] = candidate.diagnostics()
+            except Exception:
+                pass
+        return res
 
     except ProviderRateLimitError as error:
         return {

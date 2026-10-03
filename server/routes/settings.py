@@ -70,6 +70,7 @@ class ApiKeyBody(BaseModel):
 class ProviderTestBody(BaseModel):
     provider: str = Field(min_length=1, max_length=40)
     model: Optional[str] = Field(default=None, max_length=120)
+    mode: Optional[str] = Field(default="auto", max_length=20)
 
 
 # ----------------------------------------------------------------------
@@ -500,18 +501,24 @@ async def provider_health(token: str = Depends(verify_token)):
         active = "chatgpt_web"
         in_fallback = False
 
-    return {
+    res = {
         "requested": requested,
         "active": active,
         "chain": members,
         "in_fallback": in_fallback,
         "problems": problems,
         "ready": not problems,
-        "providers": _per_provider_health(members, active),
+        "providers": _per_provider_health(members, active, provider),
     }
+    if hasattr(provider, "cooldowns") and hasattr(provider.cooldowns, "snapshot"):
+        try:
+            res["cooldowns"] = provider.cooldowns.snapshot()
+        except Exception:
+            pass
+    return res
 
 
-def _per_provider_health(members: list[str], active: str) -> dict[str, dict]:
+def _per_provider_health(members: list[str], active: str, provider_obj: Any = None) -> dict[str, dict]:
     """
     Per-provider `configured` / `healthy`, without calling anything.
 
@@ -581,6 +588,22 @@ def _per_provider_health(members: list[str], active: str) -> dict[str, dict]:
                 "in_chain": position >= 0,
             }
 
+            if name == "chatgpt_web":
+                target_p = None
+                if hasattr(provider_obj, "providers"):
+                    for p in provider_obj.providers:
+                        if getattr(p, "provider_name", "") == "chatgpt_web":
+                            target_p = p
+                            break
+                elif getattr(provider_obj, "provider_name", "") == "chatgpt_web":
+                    target_p = provider_obj
+
+                if target_p is not None and hasattr(target_p, "diagnostics") and callable(target_p.diagnostics):
+                    try:
+                        out[name]["diagnostics"] = target_p.diagnostics()
+                    except Exception:
+                        pass
+
         except Exception as error:
             # One unreadable provider must not blank the map. A category,
             # never a message - this is rendered on a phone.
@@ -607,7 +630,7 @@ async def check_provider(body: ProviderTestBody, token: str = Depends(verify_tok
 
     from server.settings_service import test_provider
 
-    return test_provider(body.provider, body.model)
+    return test_provider(body.provider, body.model, mode=body.mode or "auto")
 
 
 # ----------------------------------------------------------------------
