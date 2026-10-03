@@ -1,22 +1,25 @@
 # Progress
 
-## 2026-10-03 — Android Invisible WebView Bridge for ChatGPT Web Turnstile Bypass & GPT-5.6 Luna 24/7 DELIVERED
+## 2026-10-03 — Native DOM ProseMirror Interaction for Android WebView Bridge & SettingsStore v6 DELIVERED
 
-- **Pillar 1: Root Cause Diagnosis (OpenAI Sentinel Turnstile Bytecode)**:
-  - Phone egress failures with `HTTP 403: {"detail":"Unusual activity has been detected from your device. Try again later."}` are caused by OpenAI Sentinel requiring Cloudflare Turnstile JavaScript tokens (`openai-sentinel-turnstile-token`).
-  - Standard non-browser HTTP clients (`OkHttp` / `httpx`) cannot execute Turnstile bytecode.
+- **Pillar 1: Root Cause Diagnosis (OpenAI Sentinel Turnstile & PoW Token Requirement)**:
+  - Phone egress failures with `HTTP 403: {"detail":"Unusual activity has been detected from your device. Try again later."}` occur because raw HTTP clients (`OkHttp` / `httpx`) and raw `fetch()` calls lack dynamic Cloudflare Turnstile tokens (`openai-sentinel-turnstile-token`) and PoW tokens.
   - When phone egress failed, Render's server LLM chain failed (Cloudflare datacenter 403), falling back to Gemini and exhausting its daily free quota (429 Too Many Requests).
-- **Pillar 2: Architecture & Implementation (`ChatGPTWebViewBridge.kt`)**:
-  - Implemented `ChatGPTWebViewBridge` embedding an invisible `android.webkit.WebView` powered by native Android Chromium.
-  - Automatically loads and keeps `https://chatgpt.com/` warm with session cookies synced via `CookieManager`.
-  - Executes streaming turns by evaluating JavaScript `fetch('/backend-api/conversation')` in the live browser DOM, automatically inheriting Turnstile tokens, genuine Chrome headers, and residential IP context.
-  - Delivers SSE chunk deltas to Kotlin via `@JavascriptInterface AuraBridgeInterface` and cleans preambles via `cleanLunaResponse()`.
-  - Wired into `AuraApplication.onCreate()` for early initialization and integrated into `AuraStreamClient.kt` as primary egress handler.
+- **Pillar 2: Architecture & Implementation (`ChatGPTWebViewBridge.kt`, `SettingsStore.kt`)**:
+  - Upgraded `ChatGPTWebViewBridge.kt` from raw `fetch()` to native DOM ProseMirror interaction:
+    - User prompt injected into `<div id="prompt-textarea" class="ProseMirror">`.
+    - Dispatches input events and clicks `<button data-testid="send-button">`.
+    - OpenAI's own client-side JavaScript handles Turnstile and Proof-of-Work natively.
+    - Observes streaming response directly on assistant message node `[data-message-author-role="assistant"]` and streams deltas to Kotlin via `@JavascriptInterface AuraBridgeInterface`.
+  - Upgraded `SettingsStore.kt` to Version 6:
+    - Seeds full active session cookie chunks from Opera GX into `EncryptedSharedPreferences`.
+    - Fallback mechanism ensures existing installs receive the active session token without losing other preferences.
 - **Pillar 3: Verification & Deployment**:
-  - Android JVM Tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 2m 49s`).
-  - Packaged APK: `:app:assembleDebug` (`BUILD SUCCESSFUL in 48s`).
+  - Android JVM Tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 18s`).
+  - Python tests: 155/155 passed across auth, cooldown, and settings contracts.
+  - Packaged APK: `:app:assembleDebug` (`BUILD SUCCESSFUL in 14s`).
   - Streamed install via Wi-Fi ADB to OPPO Reno6 5G (`CPH2251`): `Success`.
-  - App launched with active WebView bridge.
+  - App launched with active WebView bridge: `ChatGPTWebViewBridge: onPageFinished: https://chatgpt.com/` (PID 7780).
 
 ## 2026-10-03 — ChatGPT Web Phone Egress HTTP 422 Elimination & Clean OpenAI Payload Grounding DELIVERED
 

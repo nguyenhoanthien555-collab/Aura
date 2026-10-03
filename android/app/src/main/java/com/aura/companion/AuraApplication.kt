@@ -36,6 +36,7 @@ class AuraApplication : Application() {
 
         // Prime ChatGPT WebView Bridge in background to solve Turnstile and keep session warm
         val sessionToken = container.settings.current.chatgptSessionToken
+        android.util.Log.i("AuraApplication", "ChatGPT sessionToken isNotBlank=${sessionToken.isNotBlank()}, length=${sessionToken.length}")
         if (sessionToken.isNotBlank()) {
             com.aura.companion.data.remote.ChatGPTWebViewBridge.initialize(this, sessionToken)
         }

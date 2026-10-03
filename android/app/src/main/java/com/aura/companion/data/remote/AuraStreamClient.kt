@@ -123,6 +123,7 @@ class AuraStreamClient(
                             webSocket.send(errFrame.toString())
                         } else {
                             launch(Dispatchers.IO) {
+                                android.util.Log.i("AuraStreamClient", "Received chatgpt_egress_request (prompt len=${prompt.length}, model=$model)")
                                 var chunkIndex = 0
                                 // Prioritize WebView Bridge (solves Cloudflare Turnstile & OpenAI Sentinel naturally)
                                 val webViewRes = ChatGPTWebViewBridge.streamConversation(prompt, sessionToken, model) { chunk ->
@@ -134,9 +135,11 @@ class AuraStreamClient(
                                     webSocket.send(frame.toString())
                                 }
 
+                                android.util.Log.i("AuraStreamClient", "ChatGPTWebViewBridge result: success=${webViewRes.isSuccess}")
                                 val finalRes = if (webViewRes.isSuccess) {
                                     webViewRes
                                 } else {
+                                    android.util.Log.w("AuraStreamClient", "WebView bridge failed, falling back to direct OkHttp client", webViewRes.exceptionOrNull())
                                     // Fallback to direct OkHttp client if WebView bridge failed to initialize
                                     ChatGPTWebClient.streamConversation(prompt, sessionToken, model, thinkingEffort) { chunk ->
                                         trySend(StreamEvent.Chunk(text = chunk, index = chunkIndex++))
@@ -149,12 +152,14 @@ class AuraStreamClient(
                                 }
 
                                 finalRes.onSuccess { fullText ->
+                                    android.util.Log.i("AuraStreamClient", "Phone egress completed successfully with ${fullText.length} chars")
                                     val doneFrame = JsonObject(mapOf(
                                         "type" to JsonPrimitive("chatgpt_egress_done"),
                                         "text" to JsonPrimitive(fullText)
                                     ))
                                     webSocket.send(doneFrame.toString())
                                 }.onFailure { error ->
+                                    android.util.Log.e("AuraStreamClient", "Phone egress failed: ${error.message}", error)
                                     val errFrame = JsonObject(mapOf(
                                         "type" to JsonPrimitive("chatgpt_egress_error"),
                                         "error" to JsonPrimitive(error.localizedMessage ?: "Egress stream error")
