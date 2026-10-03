@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-10-03 — ChatGPT Web Phone Egress HTTP 422 Elimination & Clean OpenAI Payload Grounding DELIVERED
+
+- **Pillar 1: Root Cause Diagnosis & Schema Invariant Grounding**:
+  - Render server logs revealed: `Phone egress relay failed (Phone egress error: HTTP 422: {"detail":"Invalid conversation body"}); falling back to server LLM chain`.
+  - On the Android device, `verifySession` was 100% successful (valid JWT accessToken obtained).
+  - However, in `ChatGPTWebClient.kt:224`, the request payload included `"thinking_effort": "$thinkingEffort"`.
+  - OpenAI's `/backend-api/conversation` strictly rejects unauthorized properties on model `auto` / free web tier accounts with `HTTP 422 Unprocessable Entity: {"detail":"Invalid conversation body"}`.
+  - This 422 failure caused the phone egress relay to report an error, falling back to Render datacenter IP, which then got blocked by Cloudflare (HTTP 403).
+- **Pillar 2: Clean Payload Schema Alignment (`ChatGPTWebClient.kt`)**:
+  - Removed `"thinking_effort": "$thinkingEffort"` from `convPayload` in `ChatGPTWebClient.kt`.
+  - Preserved Thinking Mode directives via system prompt framing in `server/routes/ws_chat.py`.
+- **Pillar 3: Comprehensive Verification & On-Device Deployment**:
+  - Android JVM Tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 39s`).
+  - Packaged APK: `:app:assembleDebug` (`BUILD SUCCESSFUL in 23s`).
+  - Streamed installation via Wi-Fi ADB to OPPO Reno6 5G (`CPH2251`): `Success`.
+  - Verified app foreground launch and captured on-device screenshot.
+  - Python test suites: 337/337 passed in 260.82s (100% pass rate).
+
 ## 2026-10-03 — ChatGPT Web Auth Forensics, 403 Classification & Provider Cooldown DELIVERED
 
 - **Pillar 1: Root Cause Diagnosis & Network Evidence Grounding**:

@@ -1,5 +1,24 @@
 # Current task
 
+## ChatGPT Web Phone Egress HTTP 422 Elimination & Clean OpenAI Payload Grounding DELIVERED (2026-10-03)
+
+Following the forensic analysis of Render logs showing `Phone egress error: HTTP 422: {"detail":"Invalid conversation body"}`:
+
+- **Bản chất nguyên nhân gốc rễ (OpenAI Schema Rejection)**:
+  - Khi điện thoại thực hiện Phone Egress Relay cho `chatgpt_web`, `verifySession` thành công 100% (HTTP 200, JWT `accessToken` hợp lệ).
+  - Tuy nhiên, trong `ChatGPTWebClient.kt:224`, payload `convPayload` gửi lên `https://chatgpt.com/backend-api/conversation` chứa trường `"thinking_effort": "$thinkingEffort"`.
+  - Bộ schema validator của OpenAI cho web endpoint từ chối các trường ngoài chuẩn đối với model `auto` / tài khoản miễn phí bằng `HTTP 422 Unprocessable Entity: {"detail":"Invalid conversation body"}`.
+  - Lỗi 422 này khiến điện thoại trả về `chatgpt_egress_error`, kích hoạt fallback trên Render cloud container, và tại Render IP datacenter bị Cloudflare chặn HTTP 403.
+- **Giải pháp Đột phá Đã Triển khai**:
+  - Gỡ bỏ hoàn toàn `"thinking_effort": "$thinkingEffort"` khỏi `convPayload` trong `ChatGPTWebClient.kt`, đồng bộ chuẩn schema với `brain/providers/chatgpt_web.py`.
+  - Giữ nguyên chỉ thị Thinking Mode thông qua prompt framing ở `server/routes/ws_chat.py`.
+- **Kiểm thử Toàn diện & Nạp Trực tiếp Thiết bị**:
+  - Android JVM Tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 39s`).
+  - Đóng gói APK debug: `:app:assembleDebug` (`BUILD SUCCESSFUL in 23s`).
+  - Cài đặt trực tiếp qua Wi-Fi ADB lên OPPO Reno6 5G (`Success`).
+  - Khởi chạy app và chụp ảnh màn hình xác thực giao diện hoạt động bình thường.
+  - Python tests: 337/337 passed trong 260.82s (100% pass rate).
+
 ## ChatGPT Web Auth Forensics, 403 Classification & Provider Cooldown DELIVERED (2026-10-03)
 
 Following the forensic execution plan in `.Codex/plan-chatgpt-web-auth.md`:

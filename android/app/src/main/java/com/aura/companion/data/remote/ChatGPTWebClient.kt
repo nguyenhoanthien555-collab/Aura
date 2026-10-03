@@ -221,7 +221,6 @@ object ChatGPTWebClient {
             ],
             "parent_message_id": "$parentId",
             "model": "$model",
-            "thinking_effort": "$thinkingEffort",
             "timezone_offset_min": -420,
             "suggestions": [],
             "history_and_training_disabled": false,

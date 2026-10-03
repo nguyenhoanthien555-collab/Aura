@@ -1,5 +1,21 @@
 # AURA project state
 
+## ChatGPT Web Phone Egress HTTP 422 Elimination & Clean OpenAI Payload Grounding (2026-10-03)
+1. **Root Cause Analysis & Schema Invariant**:
+   - Phone Egress session verification was 100% successful (valid JWT accessToken obtained on Android).
+   - In `ChatGPTWebClient.kt:224`, `convPayload` sent `"thinking_effort": "$thinkingEffort"` to `https://chatgpt.com/backend-api/conversation`.
+   - OpenAI's web conversation endpoint schema strictly rejects unexpected fields on standard models with `HTTP 422 Unprocessable Entity: {"detail":"Invalid conversation body"}`.
+   - This failure caused phone egress to fail, triggering Render server-side fallback, which in turn failed due to Cloudflare IP blocks (HTTP 403).
+2. **Schema Fix (`ChatGPTWebClient.kt`)**:
+   - Removed `"thinking_effort": "$thinkingEffort"` from `convPayload` in `ChatGPTWebClient.kt`.
+   - Kept Thinking Mode guidance anchored in system prompt framing in `server/routes/ws_chat.py`.
+3. **Verification & Physical Deployment**:
+   - Android JVM tests: 22/22 tasks passed (`BUILD SUCCESSFUL in 39s`).
+   - Packaged APK: `:app:assembleDebug` (`BUILD SUCCESSFUL in 23s`).
+   - Streamed installation via Wi-Fi ADB to OPPO Reno6 5G (`CPH2251`): `Success`.
+   - Verified app foreground launch and captured on-device screenshot.
+   - Python test suites: 337/337 passed in 260.82s (100% pass rate).
+
 ## ChatGPT Web Auth Forensics, 403 Classification, Provider Cooldown & Zero-Leakage Telemetry (2026-10-03)
 1. **Root Cause Network Diagnosis Grounded in Evidence (`scripts/diagnose_chatgpt_web.py`, `brain/providers/chatgpt_web.py`)**:
    - Captured raw responses from `/api/auth/session` proving `HTTP 403 Forbidden` is triggered by Cloudflare Bot Protection (`cf-mitigated: challenge`, `server: cloudflare`, HTML JavaScript challenge), NOT session token expiration.
